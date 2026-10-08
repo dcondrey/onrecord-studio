@@ -79,14 +79,24 @@ describe('watchlist change detection', () => {
     expect(screen.queryByText('b-record')).toBeNull();
   });
 
+  it('states a watch never checked as not checked yet in every cell, never as not applicable', async () => {
+    bridge.invoke.mockImplementation((command: string) => Promise.resolve(command === 'list_watches' ? [summary('a', 'Alpha')] : []));
+    render(<WatchlistPanel />);
+    const cells = await screen.findAllByRole('gridcell', { name: /^Alpha, / });
+    const dimensionCells = cells.filter((cell) => cell.getAttribute('aria-label')?.includes(':'));
+    expect(dimensionCells).toHaveLength(6);
+    for (const cell of dimensionCells) expect(cell.getAttribute('aria-label')).toMatch(/: not checked yet\.$/);
+    expect(document.body.textContent).not.toMatch(/not applicable|n\/a/);
+  });
+
   it('never words a dimension with no data as no change', async () => {
     const missing = dimension({ dimension: 'SOURCE_HEALTH', outcome: 'NOT_MEASURED', baselineAsOf: null, observedAsOf: null, reason: 'No sync run has completed since the baseline.' });
     const same = dimension({ dimension: 'DOCUMENTS', outcome: 'UNCHANGED' });
     bridge.invoke.mockImplementation((command: string) => Promise.resolve(command === 'list_watches' ? [summary('a', 'Alpha', [same, missing])] : []));
     render(<WatchlistPanel />);
     // The matrix: 'not observed' and 'unchanged' are different cells with different words.
-    const unobserved = await screen.findByRole('img', { name: /Alpha, source: not observed\. No data this run: No sync run has completed/ });
-    const unchanged = screen.getByRole('img', { name: /Alpha, documents: Observed, no change since/ });
+    const unobserved = await screen.findByRole('gridcell', { name: /Alpha, source: not observed\. No data this run: No sync run has completed/ });
+    const unchanged = screen.getByRole('gridcell', { name: /Alpha, documents: Observed, no change since/ });
     expect(unobserved.textContent).toContain('not observed');
     expect(unchanged.textContent).toContain('same');
     expect(unobserved.querySelector('[data-absence="not-recorded"]')).toBeTruthy();
@@ -117,7 +127,7 @@ describe('watchlist change detection', () => {
     ));
     render(<WatchlistPanel />);
     await screen.findByText('document-row');
-    const cell = screen.getByRole('img', { name: /Alpha, figures: changed/ });
+    const cell = screen.getByRole('gridcell', { name: /Alpha, figures: changed/ });
     fireEvent.keyDown(cell, { key: 'Enter' });
     await screen.findByText('Changes for Alpha · Figures');
     expect(screen.getByText('figure-row')).toBeTruthy();

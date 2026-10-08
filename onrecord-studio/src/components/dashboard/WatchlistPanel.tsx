@@ -77,11 +77,18 @@ export function describeDimension(result: DimensionResult): { text: string; tone
 
 const DIMENSIONS = Object.keys(DIMENSION_LABELS) as WatchDimension[];
 
-/** One cell of the watch outcome matrix: 'not observed' and 'unchanged' never share a glyph or words. */
-function outcomeCell(label: string, dimension: WatchDimension, result: DimensionResult | undefined): StateGridCell {
+/**
+ * One cell of the watch outcome matrix: 'not observed' and 'unchanged' never share a glyph or words.
+ * Every check reports every dimension, so a cell with no result is either a watch never checked or
+ * a check recorded before the dimension existed; neither says the dimension does not apply.
+ */
+function outcomeCell(label: string, dimension: WatchDimension, lastCheckedAt: string | null, result: DimensionResult | undefined): StateGridCell {
   const where = `${label}, ${DIMENSION_LABELS[dimension].toLowerCase()}`;
+  if (lastCheckedAt === null) {
+    return { kind: 'gap', absence: absent('not-covered', 'this watch has not been checked yet'), glyph: 'bar', text: 'not checked yet', short: 'new', legend: 'Not checked yet (new)', name: `${where}: not checked yet.` };
+  }
   if (!result) {
-    return { kind: 'gap', absence: absent('not-covered', 'not applicable to this watch kind'), glyph: 'bar', text: 'n/a', name: `${where}: not applicable to this watch kind.` };
+    return { kind: 'gap', absence: absent('not-recorded', 'the last check recorded no result for this dimension'), glyph: 'bar', text: 'not in last check', short: 'n/r', legend: 'Not in the last check (n/r)', name: `${where}: the last check recorded no result for this dimension.` };
   }
   const { text } = describeDimension(result);
   const span = result.baselineAsOf || result.observedAsOf
@@ -91,16 +98,17 @@ function outcomeCell(label: string, dimension: WatchDimension, result: Dimension
     case 'CHANGED':
       return {
         kind: 'state', tone: 'lead', glyph: 'diamond', actionable: true,
-        text: `${result.changeCount} changed`, tableText: text, name: `${where}: changed, ${text}. Press Enter to list these changes.`,
+        text: `${result.changeCount} changed`, short: result.changeCount.toLocaleString('en-US'), legend: 'Changed (a lead to read)',
+        tableText: text, name: `${where}: changed, ${text}. Press Enter to list these changes.`,
         tip: { rows: [{ key: 'n', value: result.changeCount.toLocaleString('en-US'), label: result.changeCount === 1 ? 'change' : 'changes', swatch: 'rect', tone: 'lead' }, ...span] },
       };
     case 'UNCHANGED':
-      return { kind: 'state', tone: 'positive', glyph: 'check', text: 'same', tableText: text, name: `${where}: ${text}.`, tip: { rows: span, note: 'Observed and equal to the baseline.' } };
+      return { kind: 'state', tone: 'positive', glyph: 'check', text: 'same', legend: 'Observed, unchanged', tableText: text, name: `${where}: ${text}.`, tip: { rows: span, note: 'Observed and equal to the baseline.' } };
     case 'BASELINE_RECORDED':
-      return { kind: 'state', tone: 'neutral', glyph: 'triangle', text: 'baseline', tableText: text, name: `${where}: ${text}.`, tip: { rows: span, note: 'First observation; nothing to compare yet.' } };
+      return { kind: 'state', tone: 'neutral', glyph: 'triangle', text: 'baseline', short: 'base', legend: 'Baseline recorded, nothing to compare yet', tableText: text, name: `${where}: ${text}.`, tip: { rows: span, note: 'First observation; nothing to compare yet.' } };
     case 'NOT_MEASURED':
       return {
-        kind: 'gap', absence: absent('not-recorded', result.reason ?? 'the dimension could not be observed'), glyph: 'ring', text: 'not observed',
+        kind: 'gap', absence: absent('not-recorded', result.reason ?? 'the dimension could not be observed'), glyph: 'ring', text: 'not observed', short: 'n/o', legend: 'Not observed this check (n/o)',
         tableText: `not observed (${result.reason ?? 'the dimension could not be observed'})`, name: `${where}: not observed. ${text}.`,
         tip: { rows: span, note: `Not observed: ${result.reason ?? 'the dimension could not be observed'}. This is not “unchanged”.` },
       };
@@ -227,7 +235,7 @@ export default function WatchlistPanel() {
     label: watch.label,
     sublabel: KIND_LABELS[watch.kind],
     trailing: { text: relativeAge(lastCheckedAt) },
-    cells: DIMENSIONS.map((dimension) => outcomeCell(watch.label, dimension, lastDimensions.find((result) => result.dimension === dimension))),
+    cells: DIMENSIONS.map((dimension) => outcomeCell(watch.label, dimension, lastCheckedAt, lastDimensions.find((result) => result.dimension === dimension))),
   }));
   const selectedRow = summaries.findIndex((summary) => summary.watch.id === selectedId);
 
@@ -298,11 +306,6 @@ export default function WatchlistPanel() {
             setDimensionFilter(DIMENSIONS[col]);
           }}
           onEscape={() => selectWatch(null)}
-          legend={[
-            { key: 'changed', label: 'Changed (a lead to read)', swatch: 'rect', tone: 'lead' },
-            { key: 'same', label: 'Observed, unchanged', swatch: 'dot', tone: 'positive' },
-            { key: 'baseline', label: 'Baseline recorded', swatch: 'hollow', tone: 'mark' },
-          ]}
         />
       )}
       <ul className="space-y-2">

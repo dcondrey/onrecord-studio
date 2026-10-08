@@ -28,23 +28,58 @@ function acquisitionCell(item: CoverageAssessment): StateGridCell {
   const base = { actionable: true, tip: { rows: [], note: item.explanation } };
   switch (item.status) {
     case 'NOT_LOCATED':
-      return { ...base, kind: 'gap', lead: true, absence: absent('not-recorded', 'no matching record in the stored corpus'), glyph: 'ring', text: 'not found', name: `${where}: expected, not found in the stored corpus. A record to request.` };
+      return { ...base, kind: 'gap', lead: true, absence: absent('not-recorded', 'no matching record in the stored corpus'), glyph: 'ring', text: 'not found', short: 'n/f', legend: 'Expected, not found: a record to request (n/f)', name: `${where}: expected, not found in the stored corpus. A record to request.` };
     case 'MATCHES_NEED_REVIEW':
-      return { ...base, kind: 'state', tone: 'neutral', glyph: 'diamond', text: `${item.candidates.length} to review`, name: `${where}: ${item.candidates.length} possible ${item.candidates.length === 1 ? 'match needs' : 'matches need'} review.` };
+      return { ...base, kind: 'state', tone: 'neutral', glyph: 'diamond', text: `${item.candidates.length} to review`, short: item.candidates.length.toLocaleString('en-US'), legend: 'Possible matches to review', name: `${where}: ${item.candidates.length} possible ${item.candidates.length === 1 ? 'match needs' : 'matches need'} review.` };
     case 'RECEIPT_RECORDED':
-      return { ...base, kind: 'state', tone: 'positive', glyph: 'check', text: 'received', name: `${where}: receipt recorded and its cited source still verifies.` };
+      return { ...base, kind: 'state', tone: 'positive', glyph: 'check', text: 'received', short: 'rcvd', legend: 'Receipt recorded', name: `${where}: receipt recorded and its cited source still verifies.` };
     case 'SOURCE_CHANGED':
-      return { ...base, kind: 'state', tone: 'neutral', glyph: 'triangle', text: 'source changed', name: `${where}: receipt recorded, but its cited source no longer verifies.` };
+      return { ...base, kind: 'state', tone: 'neutral', glyph: 'triangle', text: 'source changed', short: 'chg', legend: 'Receipt recorded, cited source changed (chg)', name: `${where}: receipt recorded, but its cited source no longer verifies.` };
     case 'WAIVED':
-      return { ...base, kind: 'state', tone: 'neutral', glyph: 'bar', text: 'waived', name: `${where}: waived.` };
-    default:
-      return { ...base, kind: 'state', tone: 'neutral', glyph: 'circle', text: item.status, name: `${where}: ${item.status}.` };
+      return { ...base, kind: 'state', tone: 'neutral', glyph: 'bar', text: 'waived', short: 'wvd', legend: 'Waived (wvd)', name: `${where}: waived.` };
+    default: {
+      const words = item.status.replace(/_/g, ' ').toLowerCase();
+      const code = words.split(' ').filter(Boolean).map((word) => word[0]).join('').slice(0, 3);
+      return { ...base, kind: 'state', tone: 'neutral', glyph: 'circle', text: item.status, short: code, legend: `${words} (${code})`, name: `${where}: ${item.status}.` };
+    }
   }
 }
 
-/** Rows are record types grouped by agency, columns the periods; a period with no expectation is not checked. */
+/**
+ * When a period begins (ms) and how many months it spans, for ordering columns: 'yyyy',
+ * 'yyyy-mm', 'Qn yyyy' or 'yyyy Qn', and fiscal years ('FY2025-26' starts July 2025; 'FY2026' is
+ * the year ending in 2026, so it also starts July 2025). `null` for any other form.
+ */
+export function parsePeriod(period: string): { start: number; months: number } | null {
+  const text = period.trim();
+  let match = /^(\d{4})$/.exec(text);
+  if (match) return { start: Date.UTC(Number(match[1]), 0, 1), months: 12 };
+  match = /^(\d{4})-(\d{2})$/.exec(text);
+  if (match) return { start: Date.UTC(Number(match[1]), Number(match[2]) - 1, 1), months: 1 };
+  match = /^Q([1-4])\s*(\d{4})$/i.exec(text);
+  if (match) return { start: Date.UTC(Number(match[2]), (Number(match[1]) - 1) * 3, 1), months: 3 };
+  match = /^(\d{4})\s*-?\s*Q([1-4])$/i.exec(text);
+  if (match) return { start: Date.UTC(Number(match[1]), (Number(match[2]) - 1) * 3, 1), months: 3 };
+  match = /^FY\s*(\d{4})\s*[-–/]\s*(\d{2}|\d{4})$/i.exec(text);
+  if (match) return { start: Date.UTC(Number(match[1]), 6, 1), months: 12 };
+  match = /^FY\s*(\d{4})$/i.exec(text);
+  if (match) return { start: Date.UTC(Number(match[1]) - 1, 6, 1), months: 12 };
+  return null;
+}
+
+/** Periods by start, a longer period before a shorter one starting with it; unparseable ones last, as listed. */
+export function orderPeriods(periods: readonly string[]): string[] {
+  const dated = periods.flatMap((period, index) => {
+    const parsed = parsePeriod(period);
+    return parsed ? [{ period, index, ...parsed }] : [];
+  });
+  dated.sort((a, b) => a.start - b.start || b.months - a.months || a.index - b.index);
+  return [...dated.map((entry) => entry.period), ...periods.filter((period) => parsePeriod(period) === null)];
+}
+
+/** Rows are record types grouped by agency, columns the periods in time order; a period with no expectation is not checked. */
 export function acquisitionMatrix(coverage: readonly CoverageAssessment[]) {
-  const periods = [...new Set(coverage.map((item) => item.expectation.period))].sort();
+  const periods = orderPeriods([...new Set(coverage.map((item) => item.expectation.period))]);
   const keyed = new Map<string, CoverageAssessment[]>();
   for (const item of coverage) {
     const key = `${item.expectation.agency}\u0000${item.expectation.recordType}`;
@@ -62,7 +97,7 @@ export function acquisitionMatrix(coverage: readonly CoverageAssessment[]) {
         items: byPeriod,
         cells: byPeriod.map((item, j) => item
           ? acquisitionCell(item)
-          : { kind: 'gap' as const, absence: absent('not-covered', 'no record of this type is expected for this period'), glyph: 'bar' as const, text: 'not expected', name: `${agency}, ${recordType}, ${periods[j]}: no record expected for this period.` }),
+          : { kind: 'gap' as const, absence: absent('not-covered', 'no record of this type is expected for this period'), glyph: 'bar' as const, text: 'not expected', short: 'n/e', legend: 'No record expected for this period (n/e)', name: `${agency}, ${recordType}, ${periods[j]}: no record expected for this period.` }),
       };
     });
   const missing = coverage.filter((item) => item.status === 'NOT_LOCATED').length;
@@ -166,11 +201,6 @@ export default function MonitoringPanel({ caseId = null, topic = 'homelessness' 
           setExpandedId((current) => (current === id ? null : id));
         }}
         onEscape={() => setExpandedId(null)}
-        legend={[
-          { key: 'missing', label: 'Expected, not found (a record to request)', swatch: 'slot-dashed', tone: 'lead' },
-          { key: 'received', label: 'Receipt recorded', swatch: 'dot', tone: 'positive' },
-          { key: 'other', label: 'To review, changed or waived', swatch: 'hollow', tone: 'mark' },
-        ]}
       />}
       {(coverageView === 'list' ? status.coverage : expandedItem ? [expandedItem] : []).map(item => <article key={item.expectation.id} className={panelClass}>
         <div className="text-body text-warning">{item.status.replace(/_/g, ' ')} · {item.expectation.agency} · {item.expectation.period}</div>
