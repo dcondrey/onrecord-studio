@@ -143,7 +143,7 @@ await import('./src/main');
 // the app shell, so it never appears in the app's navigation or bundle. The stub keeps settle(),
 // drain() and applyTheme() working without a store or IPC.
 const galleryEntry = `const scenario = JSON.parse(new URLSearchParams(location.search).get('scenario') || '{}');
-const review = { calls: [], gaps: [], handlerErrors: [], injected: [], hung: [], plugins: [], inflight: 0, lastActivity: performance.now() };
+const review = { calls: [], gaps: [], handlerErrors: [], sqlMisses: [], injected: [], hung: [], plugins: [], inflight: 0, lastActivity: performance.now() };
 review.store = { getState: () => ({ setTheme: (theme) => { document.documentElement.dataset.theme = theme; } }) };
 window.__uiReview = review;
 document.documentElement.dataset.theme = scenario.theme || 'light';
