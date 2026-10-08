@@ -52,8 +52,8 @@ export default function CaseSwitcher() {
         onClick={() => { setOpen((current) => !current); setLoads((count) => count + 1); }}
         title={active ? `Working: ${active.title}` : 'Choose the case you are working'}
         className={cn(
-          'motion-press focus-ring flex h-9 max-w-[14rem] items-center gap-1.5 rounded-xl border px-2.5 text-label font-medium transition',
-          active ? 'border-highlight/30 bg-highlight/10 text-highlight' : activeMissing ? 'border-warning/30 bg-warning/10 text-warning' : 'border-control bg-surface/70 text-muted hover:text-fg',
+          'motion-press focus-ring flex h-8 min-w-8 max-w-[14rem] items-center justify-center gap-1.5 rounded-lg px-2 text-control transition-colors hover:bg-raised',
+          active ? 'text-accent' : activeMissing ? 'text-warning' : 'text-fg-secondary hover:text-fg',
         )}
       >
         <Icon name="briefcase" className="h-4 w-4 shrink-0" />
