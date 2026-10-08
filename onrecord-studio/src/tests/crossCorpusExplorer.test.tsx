@@ -98,23 +98,23 @@ describe('CrossCorpusExplorer', () => {
     expect(screen.queryByText(/headline for bd-1/)).toBeNull();
   });
 
-  it('counts each finding in its portal × detector cell', async () => {
+  it('counts findings per detector and lists only detectors that fired', async () => {
     bridge.rows = [
       makeFinding('cc-1', 'CROSS_CORPUS_SHARED_LANGUAGE', 'city-a'),
       makeFinding('cc-2', 'CROSS_CORPUS_SHARED_LANGUAGE', 'city-a'),
       makeFinding('cc-3', 'CROSS_CORPUS_TEMPORAL_SHIFT', 'city-b'),
     ];
     render(<CrossCorpusExplorer />);
-    const heatmap = await screen.findByRole('region', { name: 'Jurisdiction × detector heatmap' });
-    expect(heatmap.textContent).toContain('city-a · Shared language: 2');
-    expect(heatmap.textContent).toContain('city-b · Temporal shift: 1');
-    expect(heatmap.textContent).toContain('city-b · Shared language: 0');
+    const summary = await screen.findByRole('list', { name: 'Findings by detector' });
+    expect(summary.textContent).toContain('Shared language: 2');
+    expect(summary.textContent).toContain('Temporal shift: 1');
+    expect(summary.textContent).not.toContain('Orphan topic');
   });
 
   it('reports a failed load instead of claiming no patterns exist', async () => {
     bridge.fail = true;
     render(<CrossCorpusExplorer />);
-    await screen.findByText(/Cross-corpus findings unavailable/);
+    await screen.findByText(/Cross-corpus findings could not be read/);
     expect(screen.queryByText(/No cross-corpus patterns surfaced yet/)).toBeNull();
   });
 });
