@@ -119,7 +119,7 @@ export default function OverviewDashboard() {
                   ? (analyticsUpdatedAt ? `Stale: the last refresh failed. Last updated ${formatRelativeTime(analyticsUpdatedAt)}.` : 'Analytics couldn’t be calculated.')
                   : analyticsUpdatedAt ? `Updated ${formatRelativeTime(analyticsUpdatedAt)}` : 'How quickly and completely agencies answer requests.'}
                 actions={(
-                  <Button aria-expanded={showAnalytics} aria-controls="response-analytics-body" onClick={() => setShowAnalytics((visible) => !visible)}>
+                  <Button aria-expanded={showAnalytics} aria-controls="response-analytics-body" aria-label={showAnalytics ? 'Hide response analytics' : 'Show response analytics'} onClick={() => setShowAnalytics((visible) => !visible)}>
                     {showAnalytics ? 'Hide' : 'Show'}
                   </Button>
                 )}

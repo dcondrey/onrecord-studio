@@ -39,7 +39,6 @@ import { formatMatchCount, MATCH_BASIS_LABELS, matchBasis, SEARCH_PAGE_SIZE } fr
 import { formatShortDate } from '../objects/labels';
 import VirtualList from '../ui/VirtualList';
 import PageHeader from '../ui/PageHeader';
-import SegmentedControl from '../ui/SegmentedControl';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
 import InlineError from '../ui/InlineError';
@@ -312,13 +311,22 @@ export default function MainLayout() {
           title="Evidence"
           summary={<span className="inline-flex items-center gap-1.5"><Icon name="shield" size="xs" className="text-success" /> Sensitive fields are masked locally before they reach this view.</span>}
           actions={(
-            <SegmentedControl
-              label="Evidence view"
-              mode="filter"
-              value={evidenceMode}
-              onChange={setEvidenceMode}
-              options={[{ value: 'records', label: 'Records' }, { value: 'timeline', label: 'Timeline' }]}
-            />
+            <div role="group" aria-label="Evidence view" className="inline-flex h-8 items-center gap-0.5 rounded-lg bg-raised p-0.5">
+              {(['records', 'timeline'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-pressed={evidenceMode === mode}
+                  onClick={() => setEvidenceMode(mode)}
+                  className={cn(
+                    'focus-ring inline-flex h-full items-center rounded-md px-3 text-control transition-colors duration-fast',
+                    evidenceMode === mode ? 'bg-canvas text-fg shadow-panel' : 'text-fg-secondary hover:text-fg',
+                  )}
+                >
+                  {mode === 'records' ? 'Records' : 'Timeline'}
+                </button>
+              ))}
+            </div>
           )}
         />
       </div>
