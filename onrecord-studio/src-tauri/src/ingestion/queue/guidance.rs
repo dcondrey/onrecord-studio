@@ -310,19 +310,8 @@ pub(super) fn guidance_allows_url(
     {
         return Err(FrontierExclusion::Guidance);
     }
-    if !guidance.allowed_hostnames.is_empty() {
-        let host_allowed = reqwest::Url::parse(value)
-            .ok()
-            .and_then(|url| url.host_str().map(str::to_ascii_lowercase))
-            .is_some_and(|host| {
-                guidance.allowed_hostnames.iter().any(|allowed| {
-                    let allowed = allowed.to_ascii_lowercase();
-                    host == allowed || host.ends_with(&format!(".{allowed}"))
-                })
-            });
-        if !host_allowed {
-            return Err(FrontierExclusion::Guidance);
-        }
+    if !guidance.allowed_hostnames.is_empty() && !guidance_explicitly_allows_host(guidance, value) {
+        return Err(FrontierExclusion::Guidance);
     }
     if let Some(filename) = filename_from_url(value) {
         let filename_lower = filename.to_ascii_lowercase();
@@ -410,15 +399,18 @@ pub(super) fn guidance_explicitly_allows_host(guidance: &SourceGuidance, value: 
     if guidance.allowed_hostnames.is_empty() {
         return false;
     }
-    reqwest::Url::parse(value)
-        .ok()
-        .and_then(|url| url.host_str().map(str::to_ascii_lowercase))
-        .is_some_and(|host| {
-            guidance.allowed_hostnames.iter().any(|allowed| {
-                let allowed = allowed.to_ascii_lowercase();
-                host == allowed || host.ends_with(&format!(".{allowed}"))
-            })
-        })
+    url_host(value).is_some_and(|host| {
+        guidance
+            .allowed_hostnames
+            .iter()
+            .any(|allowed| host_within(&host, &allowed.to_ascii_lowercase()))
+    })
+}
+
+/// `host` is `domain` or one of its subdomains. Both are lowercase.
+fn host_within(host: &str, domain: &str) -> bool {
+    host.strip_suffix(domain)
+        .is_some_and(|prefix| prefix.is_empty() || prefix.ends_with('.'))
 }
 
 /// Whether a payload hosted at `candidate_url` may be downloaded for a source rooted at
@@ -443,10 +435,7 @@ pub(super) fn download_host_allowed(
 pub(super) fn is_supported_external_data_platform(value: &str) -> bool {
     // Host policy fetches, caches, and enforces robots rules before any supported external host is
     // crawled. This list decides only which off-source platforms are eligible for that policy.
-    let Some(host) = reqwest::Url::parse(value)
-        .ok()
-        .and_then(|url| url.host_str().map(str::to_ascii_lowercase))
-    else {
+    let Some(host) = url_host(value) else {
         return false;
     };
     [
@@ -467,5 +456,5 @@ pub(super) fn is_supported_external_data_platform(value: &str) -> bool {
         "onedrive.live.com",
     ]
     .iter()
-    .any(|platform| host == *platform || host.ends_with(&format!(".{platform}")))
+    .any(|platform| host_within(&host, platform))
 }
