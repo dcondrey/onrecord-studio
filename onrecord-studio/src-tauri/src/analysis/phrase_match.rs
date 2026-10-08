@@ -24,10 +24,14 @@ pub(crate) fn words(connector: &str) -> Vec<Word> {
     for character in connector.chars() {
         if character.is_alphanumeric() || (matches!(character, '\'' | '’') && !current.is_empty())
         {
-            current.extend(character.to_lowercase());
+            if character == '’' {
+                current.push('\'');
+            } else {
+                current.extend(character.to_lowercase());
+            }
         } else if !current.is_empty() {
             words.push(Word {
-                text: std::mem::take(&mut current).replace('’', "'"),
+                text: std::mem::take(&mut current),
                 followed_by: Some(character),
             });
         }
@@ -82,4 +86,18 @@ pub(crate) fn find_phrases(words: &[Word], phrases: Phrases) -> Vec<usize> {
     found.sort_unstable();
     found.dedup();
     found
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn curly_apostrophe_in_final_word_matches_straight_cue() {
+        let tokens = words("they didn’t");
+        let last = tokens.last().expect("final word");
+        assert_eq!(last.text, "didn't");
+        assert_eq!(last.followed_by, None);
+        assert!(has_phrase(&tokens, &[&["didn't"]]));
+    }
 }
