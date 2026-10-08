@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { invokeCommand, formatNativeError } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
+import { useRankedLeads } from '../../hooks/useRankedLeads';
 import { useAppStore } from '../../store/useAppStore';
-import type { IntentAnswer, IntentOption } from '../../types';
+import type { IntentAnswer, IntentOption, StoryLead } from '../../types';
+import { points } from '../../utils/attentionFactors';
+import ScoreSpark, { scoreSentence, sparkFactors } from '../charts/figures/ScoreSpark';
 import IntentAnswerView from './IntentAnswerView';
 import { cn } from '../../utils/cn';
 import Icon, { type IconName } from '../ui/icons';
@@ -11,28 +14,41 @@ import Skeleton from '../ui/Skeleton';
 import { openHelp } from '../help/helpEvents';
 import { openSourceConnector } from './sourceEvents';
 import { OBJECT_ICONS } from '../objects/ObjectLink';
-import { familyIcon } from '../ui/FamilyBadge';
 import { useObjectSearch, type ObjectGroup } from './useObjectSearch';
 import { contrastCommandRegistry, motionCommandRegistry, scoreCommand, themeCommandRegistry, workspaceCommandRegistry } from '../../commands/registry';
 
 export const OPEN_COMMAND_PALETTE_EVENT = 'onrecord:open-command-palette';
 
 const INTENT_ROW_LIMIT = 10;
-/** Queued leads listed with an empty query; a query searches the whole queue. */
-const QUEUE_ROWS_SHOWN = 4;
+/** Leads listed with an empty query; a query searches every lead the palette holds. */
+const LEAD_ROWS_SHOWN = 3;
+const ASK_DETAIL = 'Answered from findings, the entity graph and document text. No AI model is used.';
+
+/**
+ * Questions the intent router answers with nothing to fill in (analysis/intent.rs), offered before
+ * anything is typed. Each runs the same deterministic query as typing it.
+ */
+export const SUGGESTED_QUESTIONS = ['which agencies changed behavior', 'same denial language across agencies', 'show contradictions'] as const;
+
+/** Opens the palette; with a query, the palette asks it at once, exactly as if it had been typed and run. */
+export function openCommandPalette(query?: string) {
+  window.dispatchEvent(new CustomEvent(OPEN_COMMAND_PALETTE_EVENT, { detail: query ? { query } : null }));
+}
 
 interface CommandAction {
   id: string;
   label: string;
   detail: string;
-  group: 'Ask' | 'Leads' | 'Navigate' | 'Create' | 'Help' | 'Appearance' | 'Accessibility' | ObjectGroup;
+  group: 'Ask' | 'Leads' | 'Questions' | 'Navigate' | 'Create' | 'Help' | 'Appearance' | 'Accessibility' | 'Search' | ObjectGroup;
   icon: IconName;
   keywords: string;
   shortcut?: string;
   /** The row starts work whose result the palette shows, so choosing it must not close the palette. */
   keepOpen?: boolean;
-  /** A setting row whose value is the one in force. */
+  /** A setting row whose value is the one in force, or the lead on the stage. */
   current?: boolean;
+  /** A ranked lead: the row shows its rank and its attention score at sparkline scale. */
+  lead?: { rank: number; lead: StoryLead; scaleMax: number };
   perform: () => void;
 }
 
@@ -42,7 +58,7 @@ const SETTING_GROUPS = new Set<CommandAction['group']>(['Appearance', 'Accessibi
 export default function CommandPalette() {
   const [isOpen, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
   const modifier = isApplePlatform() ? '⌘' : 'Ctrl';
@@ -53,6 +69,10 @@ export default function CommandPalette() {
   const setContrast = useAppStore((state) => state.setContrast);
   const toggleSidebarCollapsed = useAppStore((state) => state.toggleSidebarCollapsed);
   const openSubjectDossier = useAppStore((state) => state.openSubjectDossier);
+  const setOverviewPerspective = useAppStore((state) => state.setOverviewPerspective);
+  const openCasework = useAppStore((state) => state.openCasework);
+  const requestAnalysisPanel = useAppStore((state) => state.requestAnalysisPanel);
+  const setSearchFilters = useAppStore((state) => state.setSearchFilters);
   const theme = useAppStore((state) => state.theme);
   const motion = useAppStore((state) => state.motion);
   const contrast = useAppStore((state) => state.contrast);
@@ -70,6 +90,8 @@ export default function CommandPalette() {
   // A chosen suggestion changes the query, and that change invalidates any answer in flight. The
   // suggestion is asked from the effect that handles the change, after the invalidation.
   const askOnQuery = useRef<string | null>(null);
+  // With no workbench on screen, the palette reads the same ranking the workbenches queue.
+  const topLeads = useRankedLeads(isOpen && !workbenchQueue);
 
   const clearAnswer = () => {
     answerGate.invalidate();
@@ -97,17 +119,23 @@ export default function CommandPalette() {
       });
   };
 
-  const chooseOption = (option: IntentOption) => {
-    askOnQuery.current = option.example;
-    setQuery(option.example);
+  /** Asks `text` through the query change, so whatever was asked about the previous text is dropped first. */
+  const ask = (text: string) => {
+    if (text === query) runIntent(text.trim());
+    else {
+      askOnQuery.current = text;
+      setQuery(text);
+    }
   };
+
+  const chooseOption = (option: IntentOption) => ask(option.example);
 
   const openPalette = () => {
     previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     clearAnswer();
     setMode('commands');
     setQuery('');
-    setSelectedIndex(0);
+    setSelectedId(null);
     setOpen(true);
   };
 
@@ -118,11 +146,49 @@ export default function CommandPalette() {
     window.requestAnimationFrame(() => previousFocus.current?.focus());
   };
 
-  // The visible workbench's queue: step through it, or jump to any lead in it. Each row selects
-  // the lead in the workbench that listed it, so the stage, not a popover, shows it.
-  const leadActions = useMemo<CommandAction[]>(() => {
+  // Every lead the palette can list, in rank order: the visible workbench's queue, or the top of the
+  // ranking when no workbench is on screen. Choosing one puts it on a workbench's stage.
+  const leadRows = useMemo<CommandAction[]>(() => {
+    if (workbenchQueue) {
+      const { surface, leads } = workbenchQueue;
+      const scaleMax = leads[0]?.lead.publicInterest.totalBasisPoints ?? 1;
+      return leads.map((queued) => ({
+        id: `lead-${queued.id}`,
+        label: queued.headline,
+        detail: queued.kind,
+        group: 'Leads' as const,
+        icon: 'flag' as const,
+        keywords: `lead ${queued.kind} ${queued.rank}`,
+        current: queued.id === workbenchQueue.current,
+        lead: { rank: queued.rank, lead: queued.lead, scaleMax },
+        perform: () => {
+          selectWorkbenchLead(surface, queued.id);
+          setWorkspaceView(surface);
+        },
+      }));
+    }
+    const top = topLeads.leads.slice(0, LEAD_ROWS_SHOWN);
+    const scaleMax = top[0]?.publicInterest.totalBasisPoints ?? 1;
+    return top.map((lead, index) => ({
+      id: `lead-${lead.findingId}`,
+      label: lead.headline,
+      detail: '',
+      group: 'Leads' as const,
+      icon: 'flag' as const,
+      keywords: 'lead',
+      lead: { rank: index + 1, lead, scaleMax },
+      perform: () => {
+        setWorkspaceView('overview');
+        setOverviewPerspective('leads');
+        selectWorkbenchLead('overview', lead.findingId);
+      },
+    }));
+  }, [selectWorkbenchLead, setOverviewPerspective, setWorkspaceView, topLeads.leads, workbenchQueue]);
+
+  // Next and previous along the visible queue, named by the lead each one lands on.
+  const stepRows = useMemo<CommandAction[]>(() => {
     if (!workbenchQueue || workbenchQueue.leads.length === 0) return [];
-    const { surface, leads } = workbenchQueue;
+    const { leads } = workbenchQueue;
     // -1 when the stage shows something outside the queue (the deadline ledger): Next is lead 1.
     const at = leads.findIndex((lead) => lead.id === workbenchQueue.current);
     const step = (delta: 1 | -1, label: string, key: string, icon: IconName): CommandAction | null => {
@@ -138,24 +204,22 @@ export default function CommandPalette() {
         perform: () => useAppStore.getState().stepWorkbenchLead(delta),
       } : null;
     };
-    const steps = [step(1, 'Next lead', 'j', 'forward'), step(-1, 'Previous lead', 'k', 'back')].filter((action): action is CommandAction => action !== null);
-    return [...steps, ...leads.map((lead, index) => ({
-      id: `lead-${lead.id}`,
-      label: lead.headline,
-      detail: lead.kind,
-      group: 'Leads' as const,
-      icon: familyIcon(lead.kind),
-      keywords: `lead ${lead.kind} ${index + 1}`,
-      current: index === at,
-      perform: () => {
-        selectWorkbenchLead(surface, lead.id);
-        setWorkspaceView(surface);
-      },
-    }))];
-  }, [selectWorkbenchLead, setWorkspaceView, workbenchQueue]);
+    return [step(1, 'Next lead', 'j', 'forward'), step(-1, 'Previous lead', 'k', 'back')].filter((action): action is CommandAction => action !== null);
+  }, [workbenchQueue]);
+
+  const questionRows = useMemo<CommandAction[]>(() => SUGGESTED_QUESTIONS.map((question, index) => ({
+    id: `question-${index}`,
+    label: `Ask: ${question}`,
+    detail: ASK_DETAIL,
+    group: 'Questions' as const,
+    icon: 'search' as const,
+    keywords: question,
+    keepOpen: true,
+    perform: () => ask(question),
+  // `ask` closes over the query and stable setters; the rows are rebuilt as the query changes.
+  })), [query]);
 
   const actions = useMemo<CommandAction[]>(() => [
-    ...leadActions,
     ...workspaceCommandRegistry.map((command) => ({
       id: command.id,
       label: `Go to ${command.navigationLabel}`,
@@ -166,6 +230,81 @@ export default function CommandPalette() {
       shortcut: `${modifier}${command.shortcutIndex}`,
       perform: () => setWorkspaceView(command.view),
     })),
+    {
+      id: 'overview-following',
+      label: 'Overview: Following',
+      detail: 'Watchlists and standing searches',
+      group: 'Navigate',
+      icon: 'activity',
+      keywords: 'following watchlist watch standing search alerts',
+      perform: () => {
+        setWorkspaceView('overview');
+        setOverviewPerspective('following');
+      },
+    },
+    {
+      id: 'overview-analytics',
+      label: 'Overview: Analytics',
+      detail: 'Response times, the deadline ledger and period comparison',
+      group: 'Navigate',
+      icon: 'bars',
+      keywords: 'analytics response time deadline ledger statutory misses period comparison',
+      perform: () => {
+        setWorkspaceView('overview');
+        setOverviewPerspective('analytics');
+      },
+    },
+    {
+      id: 'overview-casework',
+      label: 'Overview: Casework',
+      detail: 'Cases, spending, coverage, evidence review and organization filings',
+      group: 'Navigate',
+      icon: 'briefcase',
+      keywords: 'casework case cases investigation track requests commitments',
+      perform: () => openCasework(''),
+    },
+    {
+      id: 'casework-spending',
+      label: 'Casework: Spending',
+      detail: 'Reconcile payments, contracts and funds',
+      group: 'Navigate',
+      icon: 'briefcase',
+      keywords: 'spending payments vendors contracts funds payee lease lessee money',
+      perform: () => openCasework('', 'Spending'),
+    },
+    {
+      id: 'casework-filings',
+      label: 'Casework: Organization filings',
+      detail: 'An organization’s public filings and the payments it received',
+      group: 'Navigate',
+      icon: 'building',
+      keywords: 'organization filings nonprofit 990 irs payee operator vendor',
+      perform: () => openCasework('', 'Organization filings'),
+    },
+    {
+      id: 'analysis-budget',
+      label: 'Analysis: Budget versus actuals',
+      detail: 'Adopted budget against actual spending for a fiscal year',
+      group: 'Navigate',
+      icon: 'bars',
+      keywords: 'budget actuals adopted spending fiscal year compare department fund',
+      perform: () => {
+        setWorkspaceView('analysis');
+        requestAnalysisPanel('budget');
+      },
+    },
+    {
+      id: 'analysis-pack',
+      label: 'Analysis: Import a data pack',
+      detail: 'Download published tables into the analysis library',
+      group: 'Navigate',
+      icon: 'database',
+      keywords: 'pack data pack import download published tables dataset',
+      perform: () => {
+        setWorkspaceView('analysis');
+        requestAnalysisPanel('pack');
+      },
+    },
     {
       id: 'open-timeline',
       label: 'Show evidence timeline',
@@ -282,7 +421,7 @@ export default function CommandPalette() {
       current: contrast === command.contrast,
       perform: () => setContrast(command.contrast),
     })),
-  ], [audioAlertsEnabled, contrast, leadActions, modifier, motion, setAudioAlertsEnabled, setContrast, setEvidenceMode, setMotion, setTheme, setWorkspaceView, theme, toggleSidebarCollapsed]);
+  ], [audioAlertsEnabled, contrast, modifier, motion, openCasework, requestAnalysisPanel, setAudioAlertsEnabled, setContrast, setEvidenceMode, setMotion, setOverviewPerspective, setTheme, setWorkspaceView, theme, toggleSidebarCollapsed]);
 
   // A stored finding the visible workbench queues opens on its stage, where J and K continue from it.
   const stageFinding = (id: string) => {
@@ -300,9 +439,9 @@ export default function CommandPalette() {
     setWorkspaceView('overview');
   };
 
-  const objectResults = useObjectSearch(isOpen && mode === 'commands' ? query : '');
+  const objectSearch = useObjectSearch(isOpen && mode === 'commands' ? query : '');
   const inspect = useAppStore((state) => state.inspect);
-  const objectActions = useMemo<CommandAction[]>(() => objectResults.map((result) => ({
+  const objectActions = useMemo<CommandAction[]>(() => objectSearch.results.map((result) => ({
     id: `object-${result.key}`,
     label: result.label,
     detail: result.detail,
@@ -310,56 +449,87 @@ export default function CommandPalette() {
     icon: OBJECT_ICONS[result.target.kind],
     keywords: '',
     perform: () => inspect(result.target, 'view'),
-  })), [inspect, objectResults]);
+  })), [inspect, objectSearch.results]);
 
-  const filteredActions = useMemo(() => {
-    if (mode === 'dossier') return [];
-    const normalized = query.trim().toLocaleLowerCase();
+  const trimmedQuery = query.trim();
+  const normalized = trimmedQuery.toLocaleLowerCase();
+  const searching = normalized !== '' && objectSearch.pending;
+
+  const { filteredActions, noMatches } = useMemo(() => {
+    if (mode === 'dossier') return { filteredActions: [], noMatches: false };
     if (!normalized) {
-      let queued = 0;
-      return actions.filter((action) => {
-        if (SETTING_GROUPS.has(action.group)) return false;
-        if (action.group !== 'Leads' || action.id.startsWith('lead-step-')) return true;
-        // The selected lead is already on the stage; list the next few after it.
-        if (action.current) return false;
-        queued += 1;
-        return queued <= QUEUE_ROWS_SHOWN;
-      });
+      // The lead on the stage is already shown; list the few after it.
+      const at = leadRows.findIndex((row) => row.current);
+      const upcoming = leadRows.slice(at + 1, at + 1 + LEAD_ROWS_SHOWN);
+      return { filteredActions: [...stepRows, ...upcoming, ...questionRows, ...actions.filter((action) => !SETTING_GROUPS.has(action.group))], noMatches: false };
     }
-    const matches = groupContiguously(actions
+    const matches = groupContiguously([...stepRows, ...leadRows, ...actions]
       .map((action) => ({ action, score: scoreCommand(normalized, action.label, `${action.detail} ${action.group}`, action.keywords) }))
       .filter((entry): entry is { action: CommandAction; score: number } => entry.score !== null)
       .sort((left, right) => right.score - left.score || left.action.label.localeCompare(right.action.label))
       .map(({ action }) => action));
-    if (!isQuestionLike(normalized)) return [...matches, ...objectActions];
-    const ask: CommandAction = {
+    const nothing = matches.length === 0 && objectActions.length === 0 && !objectSearch.pending;
+    const fallback: CommandAction[] = nothing ? [{
+      id: 'search-all-records',
+      label: `Search all records for “${trimmedQuery}”`,
+      detail: 'Open Evidence with this text as the search',
+      group: 'Search',
+      icon: 'evidence',
+      keywords: '',
+      perform: () => {
+        setSearchFilters(trimmedQuery, null, null, null);
+        setWorkspaceView('evidence');
+      },
+    }] : [];
+    if (!isQuestionLike(normalized)) return { filteredActions: [...matches, ...objectActions, ...fallback], noMatches: nothing };
+    const askRow: CommandAction = {
       id: 'ask-intent',
-      label: `Ask: ${query.trim()}`,
-      detail: 'Answered from findings, the entity graph and document text. No AI model is used.',
+      label: `Ask: ${trimmedQuery}`,
+      detail: ASK_DETAIL,
       group: 'Ask',
       icon: 'search',
       keywords: '',
       keepOpen: true,
-      perform: () => runIntent(query.trim()),
+      perform: () => runIntent(trimmedQuery),
     };
     // A sentence is a question first; a word or two that also names a view stays a view jump.
-    return normalized.split(/\s+/).length >= 3 || normalized.endsWith('?') ? [ask, ...matches, ...objectActions] : [...matches, ...objectActions, ask];
+    const sentence = normalized.split(/\s+/).length >= 3 || normalized.endsWith('?');
+    return {
+      filteredActions: sentence ? [askRow, ...matches, ...objectActions, ...fallback] : [...matches, ...objectActions, askRow, ...fallback],
+      noMatches: nothing,
+    };
     // runIntent closes over the gate and setters only, all stable.
-  }, [actions, mode, objectActions, query]);
+  }, [actions, leadRows, mode, normalized, objectActions, objectSearch.pending, questionRows, setSearchFilters, setWorkspaceView, stepRows, trimmedQuery]);
+
+  // Selection follows the row, not its position, so a group that arrives after the palette opens
+  // never moves it. With nothing chosen, an empty query selects the first navigation row (opening
+  // the palette and pressing Return still goes to the overview) and a typed query its first row.
+  const chosenIndex = selectedId === null ? -1 : filteredActions.findIndex((action) => action.id === selectedId);
+  const selectedIndex = chosenIndex >= 0 ? chosenIndex : normalized ? 0 : Math.max(0, filteredActions.findIndex((action) => action.group === 'Navigate'));
+  const select = (index: number) => setSelectedId(filteredActions[index]?.id ?? null);
 
   useEffect(() => {
-    const openFromEvent = () => openPalette();
+    const openFromEvent = (event: Event) => {
+      const asked = (event as CustomEvent<{ query?: unknown } | null>).detail?.query;
+      openPalette();
+      if (typeof asked !== 'string' || !asked.trim()) return;
+      // openPalette clears the field; setting the same text back changes nothing, so it is asked here.
+      setQuery(asked);
+      if (asked === query) runIntent(asked.trim());
+      else askOnQuery.current = asked;
+    };
     window.addEventListener(OPEN_COMMAND_PALETTE_EVENT, openFromEvent);
     return () => window.removeEventListener(OPEN_COMMAND_PALETTE_EVENT, openFromEvent);
   });
 
-  useEffect(() => {
-    if (!isOpen) return;
-    window.requestAnimationFrame(() => inputRef.current?.focus());
+  // Focus moves before the browser paints the palette, so a key typed straight after the shortcut
+  // lands in the field instead of the page behind it.
+  useLayoutEffect(() => {
+    if (isOpen) inputRef.current?.focus();
   }, [isOpen]);
 
   useEffect(() => {
-    setSelectedIndex(0);
+    setSelectedId(null);
     // Whatever was asked about the previous text says nothing about this text.
     clearAnswer();
     if (askOnQuery.current === query) {
@@ -422,10 +592,10 @@ export default function CommandPalette() {
         return;
       } else if (event.key === 'ArrowDown') {
         event.preventDefault();
-        setSelectedIndex((index) => filteredActions.length ? (index + 1) % filteredActions.length : 0);
+        select(filteredActions.length ? (selectedIndex + 1) % filteredActions.length : 0);
       } else if (event.key === 'ArrowUp') {
         event.preventDefault();
-        setSelectedIndex((index) => filteredActions.length ? (index - 1 + filteredActions.length) % filteredActions.length : 0);
+        select(filteredActions.length ? (selectedIndex - 1 + filteredActions.length) % filteredActions.length : 0);
       } else if (event.key === 'Enter' && filteredActions[selectedIndex]) {
         event.preventDefault();
         const chosen = filteredActions[selectedIndex];
@@ -446,6 +616,7 @@ export default function CommandPalette() {
 
   const answering = asking || askError !== null || answer !== null;
   const groups = groupRuns(filteredActions);
+  const groupTitle = (group: CommandAction['group']) => (group === 'Leads' && !workbenchQueue ? 'Top leads' : group);
 
   // The input owns focus and drives the options through aria-activedescendant, so options are not
   // Tab stops. Tab cycles only between the input and any buttons an answer shows.
@@ -471,7 +642,7 @@ export default function CommandPalette() {
         onKeyDown={trapTab}
       >
         <h2 id="command-palette-title" className="sr-only">Command palette</h2>
-        <div className="flex h-14 items-center gap-3 border-b border-line px-4">
+        <div className="flex h-16 items-center gap-3 border-b border-line px-5">
           {mode === 'dossier' ? (
             <span className="shrink-0 text-control text-fg-secondary">Dossier</span>
           ) : (
@@ -483,7 +654,7 @@ export default function CommandPalette() {
             onChange={(event) => setQuery(event.target.value)}
             placeholder={mode === 'dossier' ? 'Name, email, organization or entity ID' : 'Search findings, records, agencies and commands, or ask a question'}
             aria-label={mode === 'dossier' ? 'Subject for the dossier: name, email, organization or entity ID' : 'Search findings, records, agencies, entities, passages and commands, or ask a question'}
-            className="h-full min-w-0 flex-1 border-0 bg-transparent text-heading font-normal text-fg outline-none placeholder:text-muted"
+            className="h-full min-w-0 flex-1 border-0 bg-transparent text-headline font-normal tracking-[-0.012em] text-fg outline-none placeholder:text-muted"
             role="combobox"
             aria-expanded={mode === 'commands' && !answering}
             aria-controls="command-results"
@@ -526,15 +697,17 @@ export default function CommandPalette() {
         )}
         {!answering && mode === 'commands' && (
           <div id="command-results" className="max-h-[min(60vh,480px)] overflow-y-auto p-2" role="listbox" aria-label="Commands">
-            {filteredActions.length === 0 ? (
-              <div className="px-4 py-10 text-center" role="presentation">
-                <Icon name="search" size="lg" className="mx-auto text-muted" />
-                <p className="mt-3 text-heading text-fg-secondary">No matching commands</p>
-                <p className="mt-1 text-body text-muted">Try an agency, a finding, a phrase from a document, or a view name.</p>
-              </div>
-            ) : groups.map(({ group, start, items }) => (
-              <div key={`${group}-${start}`} role="group" aria-label={group}>
-                <div role="presentation" className="px-3 pb-1 pt-2 text-overline uppercase text-muted">{group}</div>
+            {noMatches && (
+              <p role="presentation" className="px-3 pb-1 pt-3 text-heading text-fg-secondary">No matches for “{trimmedQuery}”</p>
+            )}
+            {groups.map(({ group, start, items }) => (
+              <div key={`${group}-${start}`} role="group" aria-label={groupTitle(group)}>
+                {group !== 'Search' && (
+                  <div role="presentation" className="flex items-center gap-3 px-3 pb-1.5 pt-3 text-overline uppercase text-muted">
+                    {groupTitle(group)}
+                    <span aria-hidden="true" className="h-px flex-1 bg-line" />
+                  </div>
+                )}
                 {items.map((action, offset) => {
                   const index = start + offset;
                   const selected = selectedIndex === index;
@@ -546,28 +719,39 @@ export default function CommandPalette() {
                       role="option"
                       tabIndex={-1}
                       aria-selected={selected}
-                      onMouseEnter={() => setSelectedIndex(index)}
+                      onMouseEnter={() => setSelectedId(action.id)}
                       onClick={() => {
                         if (!action.keepOpen) closePalette();
                         action.perform();
                       }}
                       className={cn(
-                        'flex h-11 w-full items-center gap-3 rounded-lg px-3 text-left outline-none transition-colors',
+                        'flex w-full items-center gap-3 rounded-lg px-3 text-left outline-none transition-colors',
+                        action.lead ? 'h-12' : 'h-10',
                         selected ? 'command-row-selected text-fg' : 'text-fg-secondary',
                       )}
                     >
-                      <Icon name={action.icon} size="md" className="shrink-0 text-muted" />
-                      <span className="flex min-w-0 flex-1 items-baseline gap-2">
-                        <span className={cn('text-control text-fg', action.group === 'Leads' && !action.shortcut ? 'min-w-0 truncate' : 'shrink-0')}>{action.label}</span>
-                        <span className={cn('text-caption text-muted', action.group === 'Leads' && !action.shortcut ? 'shrink-0' : 'min-w-0 truncate')}>{action.detail}</span>
-                      </span>
-                      {action.current && <span className="shrink-0 text-caption text-muted">{action.group === 'Leads' ? 'On stage' : 'Current'}</span>}
-                      {action.shortcut && <Keycap>{action.shortcut}</Keycap>}
+                      {action.lead ? <LeadRow action={action} lead={action.lead} /> : (
+                        <>
+                          <Icon name={action.icon} size="md" className="shrink-0 text-muted" />
+                          <span className="flex min-w-0 flex-1 items-baseline gap-2">
+                            <span className="min-w-0 max-w-[75%] shrink-0 truncate text-control text-fg">{action.label}</span>
+                            <span className="min-w-0 truncate text-caption text-muted">{action.detail}</span>
+                          </span>
+                          {action.current && <span className="shrink-0 text-caption text-muted">Current</span>}
+                          {action.shortcut && <Keycap>{action.shortcut}</Keycap>}
+                        </>
+                      )}
                     </button>
                   );
                 })}
               </div>
             ))}
+            {searching && (
+              <div role="status" className="flex h-10 items-center gap-3 px-3 text-caption text-muted">
+                <span aria-hidden="true" className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-line-strong border-t-accent" />
+                Searching findings, records and passages…
+              </div>
+            )}
           </div>
         )}
         <footer className="flex items-center justify-end gap-4 border-t border-line-strong/70 bg-raised/60 px-4 py-2.5 text-caption text-muted">
@@ -583,6 +767,19 @@ export default function CommandPalette() {
         </footer>
       </section>
     </div>
+  );
+}
+
+/** A ranked lead as a palette row: its rank, its headline, and its score at sparkline scale. */
+function LeadRow({ action, lead }: { action: CommandAction; lead: NonNullable<CommandAction['lead']> }) {
+  return (
+    <>
+      <span aria-hidden="true" className="w-6 shrink-0 text-center text-headline tabular-nums text-muted">{lead.rank}</span>
+      <span className="min-w-0 flex-1 truncate text-control text-fg">{action.label}</span>
+      {action.current && <span className="shrink-0 text-caption text-muted">On stage</span>}
+      <ScoreSpark width={72} scaleMax={lead.scaleMax} label={`Rank ${lead.rank}. ${scoreSentence(lead.lead)}`} factors={sparkFactors(lead.lead)} />
+      <span aria-hidden="true" className="w-6 shrink-0 text-right text-caption font-medium tabular-nums text-fg-secondary">{points(lead.lead.publicInterest.totalBasisPoints)}</span>
+    </>
   );
 }
 

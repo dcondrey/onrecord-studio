@@ -58,9 +58,9 @@ describe('useObjectSearch', () => {
     rerender({ query: 'shelter' });
     await waitFor(() => expect(pending.has('shelter')).toBe(true));
     await act(async () => pending.get('shelter')!([record('Shelter beds')]));
-    await waitFor(() => expect(result.current.map((row) => row.label)).toEqual(['Shelter beds']));
+    await waitFor(() => expect(result.current.results.map((row) => row.label)).toEqual(['Shelter beds']));
     await act(async () => pending.get('shel')!([record('Stale result')]));
-    expect(result.current.map((row) => row.label)).toEqual(['Shelter beds']);
+    expect(result.current.results.map((row) => row.label)).toEqual(['Shelter beds']);
   });
 
   it('retries a failed snapshot read instead of holding it as an empty corpus', async () => {
@@ -69,8 +69,8 @@ describe('useObjectSearch', () => {
     const { result, rerender } = renderHook(({ query }) => useObjectSearch(query), { initialProps: { query: 'budget' } });
     await waitFor(() => expect(ipc.findingsFailures).toBe(0));
     await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(result.current).toEqual([]);
+    expect(result.current.results).toEqual([]);
     rerender({ query: 'budget memo' });
-    await waitFor(() => expect(result.current.map((row) => row.label)).toEqual(['Budget memo withheld']));
+    await waitFor(() => expect(result.current.results.map((row) => row.label)).toEqual(['Budget memo withheld']));
   });
 });
