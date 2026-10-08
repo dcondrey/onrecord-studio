@@ -3806,14 +3806,6 @@ mod tests {
     }
 
     #[test]
-    fn blocks_non_public_network_ranges() {
-        assert!(!is_public_ipv4(Ipv4Addr::new(127, 0, 0, 1)));
-        assert!(!is_public_ipv4(Ipv4Addr::new(169, 254, 1, 1)));
-        assert!(!is_public_ipv4(Ipv4Addr::new(100, 64, 0, 1)));
-        assert!(is_public_ipv4(Ipv4Addr::new(8, 8, 8, 8)));
-    }
-
-    #[test]
     fn detects_nested_request_collections() {
         let value = serde_json::json!({"data": {"requests": []}, "meta": {}});
         let layout = detect_json_layout(&value).unwrap();
@@ -4260,35 +4252,6 @@ mod tests {
         assert_eq!(items[0].name, "Annual Report.pdf");
         assert!(!items[0].is_folder);
     }
-    #[test]
-    fn ipv6_wrappers_do_not_launder_a_private_destination() {
-        // Each of these reaches an IPv4 address that `is_public_ipv4` rejects, spelled so that
-        // `to_ipv4_mapped` returns None and the old prefix checks all pass.
-        for candidate in [
-            "64:ff9b::7f00:1",                      // NAT64 well-known prefix, 127.0.0.1
-            "64:ff9b::a00:1",                       // NAT64 well-known prefix, 10.0.0.1
-            "64:ff9b:1::808:808", // RFC 8215 local-use prefix, regardless of tail bytes
-            "2001:0:4136:e378:8000:63bf:3fff:fdd2", // Teredo transition address
-            "2002:c0a8:1::",      // 6to4, 192.168.0.1
-            "::7f00:1",           // deprecated IPv4-compatible, 127.0.0.1
-            "::ffff:169.254.169.254", // link-local metadata service, for contrast
-        ] {
-            let address: Ipv6Addr = candidate.parse().expect("fixture address should parse");
-            assert!(
-                !is_public_ipv6(address),
-                "{candidate} must not be treated as public"
-            );
-        }
-        assert!(is_public_ipv6(
-            "64:ff9b::5db8:d822".parse().expect("fixture should parse")
-        ));
-        assert!(is_public_ipv6(
-            "2606:4700:4700::1111"
-                .parse()
-                .expect("fixture should parse")
-        ));
-    }
-
     #[tokio::test]
     async fn validation_pins_the_addresses_it_approved() {
         let dns = PinnedDnsResolver::default();
@@ -4494,7 +4457,9 @@ mod url_security_tests {
 
     // SECURITY(security): IPv4 ranges that are not globally routable must all be refused. The
     // documentation and benchmark ranges are included because they are reachable inside some
-    // corporate networks.
+    // corporate networks. Inside 192.0.0.0/16 only 192.0.0.0/24 (IETF Protocol Assignments) and
+    // 192.0.2.0/24 (TEST-NET-1) are reserved; over-blocking the rest of the /16 would refuse a
+    // legitimate portal hosted there.
     #[test]
     fn non_routable_ipv4_ranges_are_not_public() {
         for octets in [
@@ -4524,24 +4489,13 @@ mod url_security_tests {
             [93, 184, 216, 34],
             [1, 1, 1, 1],
             [172, 32, 0, 1],
+            [192, 0, 1, 1],
+            [192, 0, 3, 1],
+            [192, 0, 255, 1],
         ] {
             let address = Ipv4Addr::from(octets);
             assert!(is_public_ipv4(address), "{address} should be public");
         }
-    }
-
-    // SECURITY(security): only 192.0.0.0/24 (IETF Protocol Assignments) and 192.0.2.0/24
-    // (TEST-NET-1) are reserved inside 192.0.0.0/16; every other address in that block is
-    // ordinary allocated unicast space. Over-blocking the whole /16 would refuse a legitimate
-    // portal hosted there, which is exactly as much a correctness bug as under-blocking is a
-    // security one.
-    #[test]
-    fn only_the_reserved_192_0_slash24s_are_non_public() {
-        assert!(!is_public_ipv4(Ipv4Addr::new(192, 0, 0, 1)));
-        assert!(!is_public_ipv4(Ipv4Addr::new(192, 0, 2, 1)));
-        assert!(is_public_ipv4(Ipv4Addr::new(192, 0, 1, 1)));
-        assert!(is_public_ipv4(Ipv4Addr::new(192, 0, 3, 1)));
-        assert!(is_public_ipv4(Ipv4Addr::new(192, 0, 255, 1)));
     }
 
     // SECURITY(security): an IPv6 wrapper must not launder a private IPv4 destination. Each of
@@ -4560,26 +4514,28 @@ mod url_security_tests {
             "::127.0.0.1",
             "64:ff9b::127.0.0.1",
             "64:ff9b::169.254.169.254",
+            "64:ff9b::a00:1",
+            // RFC 8215 local-use prefix, whatever its tail bytes
+            "64:ff9b:1::808:808",
+            // Teredo transition address
+            "2001:0:4136:e378:8000:63bf:3fff:fdd2",
             "2002:7f00:0001::",
+            "2002:c0a8:1::",
+            "::ffff:169.254.169.254",
         ];
         for value in private {
             let address: Ipv6Addr = value.parse().expect("fixture address should parse");
             assert!(!is_public_ipv6(address), "{value} must not be public");
         }
 
-        for value in ["2606:4700:4700::1111", "2001:4860:4860::8888"] {
+        for value in [
+            "2606:4700:4700::1111",
+            "2001:4860:4860::8888",
+            "64:ff9b::5db8:d822",
+        ] {
             let address: Ipv6Addr = value.parse().expect("fixture address should parse");
             assert!(is_public_ipv6(address), "{value} should be public");
         }
-    }
-
-    // INVARIANT(security): the loop runs `0..=MAX_REDIRECTS` and errors when `redirect_count`
-    // reaches `MAX_REDIRECTS`, so at most MAX_REDIRECTS redirects are followed across at most
-    // MAX_REDIRECTS + 1 requests. This pins the arithmetic; the loop itself needs a live socket.
-    #[test]
-    fn the_redirect_budget_is_bounded_and_small() {
-        assert_eq!(MAX_REDIRECTS, 5);
-        assert_eq!((0..=MAX_REDIRECTS).count(), MAX_REDIRECTS + 1);
     }
 
     #[test]
@@ -4654,172 +4610,180 @@ mod url_security_tests {
         assert!(!visited.insert(cycle.as_str().to_string()));
     }
 }
-#[test]
-fn regional_budget_hub_and_meeting_buttons_expose_their_public_resources() {
-    let budget = Url::parse("https://sandiegocounty.budget.socrata.com").unwrap();
-    let html = br#"<script>var settings={"operating_budget_dataset_id":"u4wm-r3vc","revenue_budget_dataset_id":"sucv-y5vk"};</script>"#;
-    let (_, links, _) = extract_public_resource_links(&budget, html, None, None).unwrap();
-    assert_eq!(
-        links.iter().filter(|l| l.url.contains("rows.csv")).count(),
-        2
-    );
-    assert!(links.iter().all(|l| l
-        .url
-        .starts_with("https://data.sandiegocounty.gov/api/views/")));
-    let hub = Url::parse("https://sdgis-sandag.opendata.arcgis.com").unwrap();
-    let (_, links, _) = extract_public_resource_links(&hub, br#"<meta content='%7B%22contentGroupId%22%3A%22e1a39cc8334f4aa0b7970f7dd268a8ab%22%2C%22ownerId%22%3A%226e08ea455575ef20877c0ef11251959f%22%7D'>"#, None, None).unwrap();
-    assert_eq!(
-        links.len(),
-        1,
-        "owner hashes must not be treated as content items"
-    );
-    assert!(links[0]
-        .url
-        .contains("group%3Ae1a39cc8334f4aa0b7970f7dd268a8ab"));
-    let granicus = Url::parse("https://sandiego.granicus.com/ViewPublisher.php?view_id=3").unwrap();
-    let (_, links, _) = extract_public_resource_links(&granicus, br#"<a href="javascript:void(0)" onclick="window.open('//sandiego.granicus.com/MediaPlayer.php?view_id=3&amp;clip_id=9484','player')">Video</a><a onclick="window.open('https://other.test/MediaPlayer.php?clip_id=1')">External</a>"#, None, None).unwrap();
-    assert_eq!(links.len(), 1);
-    assert!(links[0].url.contains("clip_id=9484"));
-    assert!(links[0].follow_candidate);
-    assert!(!is_supported_platform_host("arcgis.com.evil.test"));
-    let (_, links, _) = extract_public_resource_links(&budget, br#"<a href="https://view.officeapps.live.com/op/view.aspx?src=https%3A%2F%2Fwww.sandiego.gov%2Fcomments.xlsx">Comments</a>"#, None, None).unwrap();
-    assert_eq!(links[0].url, "https://www.sandiego.gov/comments.xlsx");
-    assert!(links[0].download_candidate);
-}
 
-#[test]
-fn sdhc_board_extensionless_reports_are_downloads_with_usable_context() {
-    let base = Url::parse(
-        "https://sdhc.org/governance-legislative-affairs/sdhc-board-of-commissioners/meetings/",
-    )
-    .unwrap();
-    let body = br#"<nav><a href='/housing-opportunities/'>Housing opportunities</a></nav>
+#[cfg(test)]
+mod link_extraction_tests {
+    use super::*;
+
+    #[test]
+    fn regional_budget_hub_and_meeting_buttons_expose_their_public_resources() {
+        let budget = Url::parse("https://sandiegocounty.budget.socrata.com").unwrap();
+        let html = br#"<script>var settings={"operating_budget_dataset_id":"u4wm-r3vc","revenue_budget_dataset_id":"sucv-y5vk"};</script>"#;
+        let (_, links, _) = extract_public_resource_links(&budget, html, None, None).unwrap();
+        assert_eq!(
+            links.iter().filter(|l| l.url.contains("rows.csv")).count(),
+            2
+        );
+        assert!(links.iter().all(|l| l
+            .url
+            .starts_with("https://data.sandiegocounty.gov/api/views/")));
+        let hub = Url::parse("https://sdgis-sandag.opendata.arcgis.com").unwrap();
+        let (_, links, _) = extract_public_resource_links(&hub, br#"<meta content='%7B%22contentGroupId%22%3A%22e1a39cc8334f4aa0b7970f7dd268a8ab%22%2C%22ownerId%22%3A%226e08ea455575ef20877c0ef11251959f%22%7D'>"#, None, None).unwrap();
+        assert_eq!(
+            links.len(),
+            1,
+            "owner hashes must not be treated as content items"
+        );
+        assert!(links[0]
+            .url
+            .contains("group%3Ae1a39cc8334f4aa0b7970f7dd268a8ab"));
+        let granicus =
+            Url::parse("https://sandiego.granicus.com/ViewPublisher.php?view_id=3").unwrap();
+        let (_, links, _) = extract_public_resource_links(&granicus, br#"<a href="javascript:void(0)" onclick="window.open('//sandiego.granicus.com/MediaPlayer.php?view_id=3&amp;clip_id=9484','player')">Video</a><a onclick="window.open('https://other.test/MediaPlayer.php?clip_id=1')">External</a>"#, None, None).unwrap();
+        assert_eq!(links.len(), 1);
+        assert!(links[0].url.contains("clip_id=9484"));
+        assert!(links[0].follow_candidate);
+        assert!(!is_supported_platform_host("arcgis.com.evil.test"));
+        let (_, links, _) = extract_public_resource_links(&budget, br#"<a href="https://view.officeapps.live.com/op/view.aspx?src=https%3A%2F%2Fwww.sandiego.gov%2Fcomments.xlsx">Comments</a>"#, None, None).unwrap();
+        assert_eq!(links[0].url, "https://www.sandiego.gov/comments.xlsx");
+        assert!(links[0].download_candidate);
+    }
+
+    #[test]
+    fn sdhc_board_extensionless_reports_are_downloads_with_usable_context() {
+        let base = Url::parse(
+            "https://sdhc.org/governance-legislative-affairs/sdhc-board-of-commissioners/meetings/",
+        )
+        .unwrap();
+        let body = br#"<nav><a href='/housing-opportunities/'>Housing opportunities</a></nav>
       <table><tr><td>April 16, 2026</td><td><a href='/4-16-2026-agenda/'>Agenda</a></td></tr>
       <tr><td></td><td>Item 103 <a href='/103_hcr26-014-imperial-shelter_final/'>HCR26-014</a>
       Approval of the Operating Agreement with Alpha Project for the Imperial Shelter
       <a href='/103_imperial-shelter_final/'>Presentation</a></td><td>Approved 6-0</td></tr>
       <tr><td><a href='/contact/'>Contact us</a><a href='https://unrelated.test/report/'>HCR26-900</a>
       <a href='/account/?download=private'>Account</a></td></tr></table>"#;
-    let (_, links, _) = extract_public_resource_links(&base, body, None, None).unwrap();
-    let report = &links[0];
-    assert!(report
-        .url
-        .ends_with("/103_hcr26-014-imperial-shelter_final/"));
-    assert!(report.download_candidate && !report.navigation_chrome);
-    assert!(report.label.contains("Alpha Project") && report.label.contains("Imperial Shelter"));
-    assert!(links
-        .iter()
-        .any(|l| l.label.starts_with("Presentation") && l.download_candidate));
-    assert!(
-        !links
+        let (_, links, _) = extract_public_resource_links(&base, body, None, None).unwrap();
+        let report = &links[0];
+        assert!(report
+            .url
+            .ends_with("/103_hcr26-014-imperial-shelter_final/"));
+        assert!(report.download_candidate && !report.navigation_chrome);
+        assert!(
+            report.label.contains("Alpha Project") && report.label.contains("Imperial Shelter")
+        );
+        assert!(links
             .iter()
-            .find(|l| l.url.ends_with("/contact/"))
-            .unwrap()
-            .download_candidate
-    );
-    let elsewhere = Url::parse("https://sdhc.org/news-release/example/").unwrap();
-    let (_, generic, _) = extract_public_resource_links(&elsewhere, body, None, None).unwrap();
-    assert!(
-        !generic
-            .iter()
-            .find(|l| l.url == report.url)
-            .unwrap()
-            .download_candidate
-    );
-    let listing = publication_listing_links(base.as_str(), body).unwrap();
-    assert!(listing.contains(&report.url));
-}
+            .any(|l| l.label.starts_with("Presentation") && l.download_candidate));
+        assert!(
+            !links
+                .iter()
+                .find(|l| l.url.ends_with("/contact/"))
+                .unwrap()
+                .download_candidate
+        );
+        let elsewhere = Url::parse("https://sdhc.org/news-release/example/").unwrap();
+        let (_, generic, _) = extract_public_resource_links(&elsewhere, body, None, None).unwrap();
+        assert!(
+            !generic
+                .iter()
+                .find(|l| l.url == report.url)
+                .unwrap()
+                .download_candidate
+        );
+        let listing = publication_listing_links(base.as_str(), body).unwrap();
+        assert!(listing.contains(&report.url));
+    }
 
-#[test]
-fn council_agendas_expose_item_indexes_without_spending_frontier_on_bootstrap_navigation() {
-    let agenda = Url::parse("https://sandiego.hylandcloud.com/211agendaonlinecouncil/Documents/ViewAgenda?meetingId=7192&type=agenda&doctype=1").unwrap();
-    let (_, links, _) = extract_public_resource_links(&agenda, br#"
+    #[test]
+    fn council_agendas_expose_item_indexes_without_spending_frontier_on_bootstrap_navigation() {
+        let agenda = Url::parse("https://sandiego.hylandcloud.com/211agendaonlinecouncil/Documents/ViewAgenda?meetingId=7192&type=agenda&doctype=1").unwrap();
+        let (_, links, _) = extract_public_resource_links(&agenda, br#"
         <div class="navbar-collapse"><a href="/211agendaonlinecouncil/Meetings">Past Meeting Search</a></div>
         <a href="javascript:loadAgendaItem(265583,false);">Riverbed encampment funding</a>
         <a href="javascript:loadAgendaItem(265584,false);">Loan documents</a>
     "#, None, None).unwrap();
-    assert_eq!(links.len(), 3);
-    assert!(
-        links
+        assert_eq!(links.len(), 3);
+        assert!(
+            links
+                .iter()
+                .find(|link| link.label == "Past Meeting Search")
+                .unwrap()
+                .navigation_chrome
+        );
+        let items = links
             .iter()
-            .find(|link| link.label == "Past Meeting Search")
-            .unwrap()
-            .navigation_chrome
-    );
-    let items = links
-        .iter()
-        .filter(|link| link.url.contains("ViewMeetingAgendaItem"))
-        .collect::<Vec<_>>();
-    assert_eq!(items.len(), 2);
-    assert!(items
-        .iter()
-        .all(|link| link.follow_candidate && !link.download_candidate && !link.navigation_chrome));
-}
-
-#[cfg(test)]
-fn unused_acquisition() -> AcquisitionRecord {
-    AcquisitionRecord {
-        requested_url: String::new(),
-        resolved_url: String::new(),
-        redirect_chain: Vec::new(),
-        http_status: 200,
-        content_type: None,
-        etag: None,
-        last_modified: None,
-        response_date: None,
-        retrieved_at: String::new(),
+            .filter(|link| link.url.contains("ViewMeetingAgendaItem"))
+            .collect::<Vec<_>>();
+        assert_eq!(items.len(), 2);
+        assert!(items.iter().all(|link| link.follow_candidate
+            && !link.download_candidate
+            && !link.navigation_chrome));
     }
-}
 
-#[test]
-fn council_optional_item_failure_preserves_other_attachments_and_retry_links() {
-    let agenda = Url::parse("https://sandiego.hylandcloud.com/211agendaonlinecouncil/Documents/ViewAgenda?meetingId=7192&type=agenda&doctype=1").unwrap();
-    let (_, mut links, _) = extract_public_resource_links(
-        &agenda,
-        br#"
+    fn unused_acquisition() -> AcquisitionRecord {
+        AcquisitionRecord {
+            requested_url: String::new(),
+            resolved_url: String::new(),
+            redirect_chain: Vec::new(),
+            http_status: 200,
+            content_type: None,
+            etag: None,
+            last_modified: None,
+            response_date: None,
+            retrieved_at: String::new(),
+        }
+    }
+
+    #[test]
+    fn council_optional_item_failure_preserves_other_attachments_and_retry_links() {
+        let agenda = Url::parse("https://sandiego.hylandcloud.com/211agendaonlinecouncil/Documents/ViewAgenda?meetingId=7192&type=agenda&doctype=1").unwrap();
+        let (_, mut links, _) = extract_public_resource_links(
+            &agenda,
+            br#"
         <a href="javascript:loadAgendaItem(265583,false);">Riverbed encampment funding</a>
         <a href="javascript:loadAgendaItem(265584,false);">Loan documents</a>
     "#,
-        None,
-        None,
-    )
-    .unwrap();
-    let original_links = links.clone();
-    let mut seen = links
-        .iter()
-        .map(|link| link.url.clone())
-        .collect::<BTreeSet<_>>();
-    let item = Url::parse(&links[0].url).unwrap();
-    let unavailable = Url::parse(&links[1].url).unwrap();
-    let successful = ResponsePayload { final_url: item.clone(), content_type: Some("text/html".into()), bytes: br#"<a href="/211agendaonlinecouncil/Documents/DownloadFile/grant.pdf?meetingId=7192&amp;itemId=265583&amp;publishId=1">Grant agreement</a>"#.to_vec(), acquisition: unused_acquisition() };
-    merge_hyland_item_attachments(&item, "Riverbed", Ok(successful), &mut links, &mut seen);
-    merge_hyland_item_attachments(
-        &unavailable,
-        "Loan documents",
-        Err(AppError::DataParsing("temporarily unavailable".into())),
-        &mut links,
-        &mut seen,
-    );
-    let redirected = ResponsePayload {
-        final_url: agenda.clone(),
-        content_type: Some("text/html".into()),
-        bytes: Vec::new(),
-        acquisition: unused_acquisition(),
-    };
-    merge_hyland_item_attachments(
-        &unavailable,
-        "Loan documents",
-        Ok(redirected),
-        &mut links,
-        &mut seen,
-    );
-    assert_eq!(links.len(), 3);
-    assert_eq!(&links[..2], original_links.as_slice());
-    assert!(
-        links[1].follow_candidate,
-        "A failed item must remain eligible for ordinary frontier retry"
-    );
-    assert!(links[2].download_candidate && links[2].label.contains("Grant agreement"));
+            None,
+            None,
+        )
+        .unwrap();
+        let original_links = links.clone();
+        let mut seen = links
+            .iter()
+            .map(|link| link.url.clone())
+            .collect::<BTreeSet<_>>();
+        let item = Url::parse(&links[0].url).unwrap();
+        let unavailable = Url::parse(&links[1].url).unwrap();
+        let successful = ResponsePayload { final_url: item.clone(), content_type: Some("text/html".into()), bytes: br#"<a href="/211agendaonlinecouncil/Documents/DownloadFile/grant.pdf?meetingId=7192&amp;itemId=265583&amp;publishId=1">Grant agreement</a>"#.to_vec(), acquisition: unused_acquisition() };
+        merge_hyland_item_attachments(&item, "Riverbed", Ok(successful), &mut links, &mut seen);
+        merge_hyland_item_attachments(
+            &unavailable,
+            "Loan documents",
+            Err(AppError::DataParsing("temporarily unavailable".into())),
+            &mut links,
+            &mut seen,
+        );
+        let redirected = ResponsePayload {
+            final_url: agenda.clone(),
+            content_type: Some("text/html".into()),
+            bytes: Vec::new(),
+            acquisition: unused_acquisition(),
+        };
+        merge_hyland_item_attachments(
+            &unavailable,
+            "Loan documents",
+            Ok(redirected),
+            &mut links,
+            &mut seen,
+        );
+        assert_eq!(links.len(), 3);
+        assert_eq!(&links[..2], original_links.as_slice());
+        assert!(
+            links[1].follow_candidate,
+            "A failed item must remain eligible for ordinary frontier retry"
+        );
+        assert!(links[2].download_candidate && links[2].label.contains("Grant agreement"));
+    }
 }
 
 #[cfg(test)]

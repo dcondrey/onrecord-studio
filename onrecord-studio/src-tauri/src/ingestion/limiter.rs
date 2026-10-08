@@ -186,76 +186,25 @@ fn validate_policy(policy: RateLimitPolicy) -> Result<(), AppError> {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn enforces_portal_capacity_without_cross_bucket_state() {
-        let limiter = RateLimiter::new(2).unwrap();
-        limiter
-            .register_portal("one", RateLimitPolicy::default())
-            .await
-            .unwrap();
-        limiter
-            .register_portal("two", RateLimitPolicy::default())
-            .await
-            .unwrap();
-        assert!(limiter
-            .register_portal("three", RateLimitPolicy::default())
-            .await
-            .is_err());
-        assert_eq!(limiter.registered_portal_count().await, 2);
-    }
-
-    #[tokio::test]
-    async fn reconfigures_an_existing_bucket_without_consuming_capacity() {
-        let limiter = RateLimiter::new(1).unwrap();
-        limiter
-            .register_portal(
-                "portal",
-                RateLimitPolicy {
-                    burst_capacity: 5,
-                    refill_tokens_per_second: 1.0,
-                },
-            )
-            .await
-            .unwrap();
-        limiter
-            .register_portal(
-                "portal",
-                RateLimitPolicy {
-                    burst_capacity: 2,
-                    refill_tokens_per_second: 2.0,
-                },
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(limiter.registered_portal_count().await, 1);
-        assert!(limiter.available_tokens("portal").await.unwrap() <= 2.0);
-    }
-
-    #[test]
-    fn rejects_refill_rates_that_could_overflow_sleep_durations() {
-        assert!(validate_policy(RateLimitPolicy {
-            burst_capacity: 1,
-            refill_tokens_per_second: f64::MIN_POSITIVE,
-        })
-        .is_err());
-        assert!(validate_policy(RateLimitPolicy {
-            burst_capacity: 1,
-            refill_tokens_per_second: f64::NAN,
-        })
-        .is_err());
-    }
-}
-
-#[cfg(test)]
-mod bucket_invariant_tests {
-    use super::*;
-
     fn policy(burst_capacity: u32, refill_tokens_per_second: f64) -> RateLimitPolicy {
         RateLimitPolicy {
             burst_capacity,
             refill_tokens_per_second,
         }
+    }
+
+    #[tokio::test]
+    async fn portal_capacity_admits_exactly_the_configured_count() {
+        assert!(RateLimiter::new(0).is_err());
+        let limiter = RateLimiter::new(2).unwrap();
+        for key in ["one", "two"] {
+            limiter.register_portal(key, policy(1, 1.0)).await.unwrap();
+        }
+        assert!(limiter
+            .register_portal("three", policy(1, 1.0))
+            .await
+            .is_err());
+        assert_eq!(limiter.registered_portal_count().await, 2);
     }
 
     // INVARIANT(ingestion): acquire consumes exactly one token per call, and the bucket is the
@@ -268,7 +217,7 @@ mod bucket_invariant_tests {
             .await
             .expect("register");
 
-        // A very slow refill means anything we observe is consumption, not replenishment.
+        // A very slow refill means anything observed is consumption, not replenishment.
         let before = limiter.available_tokens("portal").await.expect("tokens");
         limiter.acquire("portal").await.expect("first token");
         let after_one = limiter.available_tokens("portal").await.expect("tokens");
@@ -285,28 +234,28 @@ mod bucket_invariant_tests {
         );
     }
 
-    // SECURITY(ingestion): raising burst capacity must not mint tokens the portal never earned.
-    // This is the invariant the refill-then-clamp ordering in `reconfigure` exists to protect, and
-    // it is the direction the pre-existing test does not exercise.
+    // SECURITY(ingestion): re-registering reconfigures the bucket in place. Lowering the burst
+    // clamps the balance; raising it must not mint tokens the portal never earned, which is what
+    // the refill-then-clamp ordering in `reconfigure` protects.
     #[tokio::test]
-    async fn raising_burst_capacity_does_not_mint_unearned_tokens() {
-        let limiter = RateLimiter::new(4).expect("limiter");
+    async fn reconfiguring_a_bucket_never_mints_unearned_tokens() {
+        let limiter = RateLimiter::new(1).expect("limiter");
+        limiter
+            .register_portal("portal", policy(5, 0.001))
+            .await
+            .expect("register");
         limiter
             .register_portal("portal", policy(2, 0.001))
             .await
-            .expect("register");
+            .expect("lower burst");
+        assert!(limiter.available_tokens("portal").await.expect("tokens") <= 2.0);
+
         limiter.acquire("portal").await.expect("spend one");
         limiter.acquire("portal").await.expect("spend two");
-
-        let spent = limiter.available_tokens("portal").await.expect("tokens");
-        assert!(spent < 1.0, "expected a drained bucket, got {spent}");
-
-        // Re-registering with a larger burst reconfigures in place.
         limiter
             .register_portal("portal", policy(100, 0.001))
             .await
-            .expect("reconfigure");
-
+            .expect("raise burst");
         let after = limiter.available_tokens("portal").await.expect("tokens");
         assert!(
             after < 1.0,
@@ -347,7 +296,6 @@ mod bucket_invariant_tests {
         );
     }
 
-    // Buckets must not share a token pool: draining one portal cannot throttle another.
     #[tokio::test]
     async fn portals_do_not_share_a_token_pool() {
         let limiter = RateLimiter::new(4).expect("limiter");
@@ -377,24 +325,20 @@ mod bucket_invariant_tests {
         assert_eq!(limiter.registered_portal_count().await, 0);
     }
 
-    #[test]
-    fn a_limiter_must_admit_at_least_one_portal() {
-        assert!(RateLimiter::new(0).is_err());
-        assert!(RateLimiter::new(1).is_ok());
-    }
-
     // `validate_policy` is what keeps `Duration::from_secs_f64` in the acquire loop from
     // panicking, so its rejections are a panic-safety boundary, not input hygiene.
     #[test]
     fn policy_validation_rejects_values_that_would_break_the_acquire_loop() {
-        assert!(validate_policy(policy(0, 1.0)).is_err(), "zero burst");
-        assert!(validate_policy(policy(1, 0.0)).is_err(), "zero refill");
-        assert!(validate_policy(policy(1, -1.0)).is_err(), "negative refill");
-        assert!(validate_policy(policy(1, f64::NAN)).is_err(), "NaN refill");
-        assert!(
-            validate_policy(policy(1, f64::INFINITY)).is_err(),
-            "infinite refill"
-        );
+        for (rejected, case) in [
+            (policy(0, 1.0), "zero burst"),
+            (policy(1, 0.0), "zero refill"),
+            (policy(1, -1.0), "negative refill"),
+            (policy(1, f64::MIN_POSITIVE), "sub-minimum refill"),
+            (policy(1, f64::NAN), "NaN refill"),
+            (policy(1, f64::INFINITY), "infinite refill"),
+        ] {
+            assert!(validate_policy(rejected).is_err(), "{case}");
+        }
         assert!(validate_policy(policy(1, 1.0)).is_ok());
     }
 
