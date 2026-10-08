@@ -129,15 +129,39 @@ pub(crate) fn summarize(
                 unchanged_checks: 0,
                 last_checked_at: None,
                 change_records: 0,
+                changes: Vec::new(),
             }),
         }
     }
     for table in &mut tables {
-        table.change_records = manifest
+        let name = table.table.clone();
+        let records = manifest
             .files
             .iter()
-            .filter(|file| file.format == PackFileFormat::Changes && file.table == table.table)
-            .count() as u64;
+            .filter(|file| file.format == PackFileFormat::Changes && file.table == name);
+        table.change_records = records.clone().count() as u64;
+        let retrieved_at = |path: &str| {
+            manifest
+                .files
+                .iter()
+                .find(|file| file.path == path)
+                .map(|file| file.retrieved_at.clone())
+        };
+        table.changes = records
+            .filter_map(|file| file.changes.as_ref())
+            .map(|summary| {
+                summary.exposed(
+                    retrieved_at(&summary.previous),
+                    retrieved_at(&summary.current),
+                )
+            })
+            .collect();
+        table.changes.sort_by_key(|change| {
+            change
+                .current_retrieved_at
+                .as_deref()
+                .and_then(|at| DateTime::parse_from_rfc3339(at).ok())
+        });
         let checks = manifest
             .checks
             .iter()

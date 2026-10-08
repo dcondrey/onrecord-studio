@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 //
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 vi.hoisted(() => {
   const entries = new Map<string, string>();
@@ -20,12 +20,13 @@ vi.hoisted(() => {
   });
 });
 
-const bridge = vi.hoisted(() => ({ rows: [] as unknown[], fail: false }));
+const bridge = vi.hoisted(() => ({ rows: [] as unknown[], fail: false, total: null as number | null }));
 
 vi.mock('@tauri-apps/api/core', () => ({
   isTauri: () => false,
   invoke: (command: string) => {
     if (command === 'list_findings') return bridge.fail ? Promise.reject(new Error('index offline')) : Promise.resolve(bridge.rows);
+    if (command === 'count_findings') return Promise.resolve(bridge.total);
     return Promise.resolve(null);
   },
 }));
@@ -105,10 +106,28 @@ describe('CrossCorpusExplorer', () => {
       makeFinding('cc-3', 'CROSS_CORPUS_TEMPORAL_SHIFT', 'city-b'),
     ];
     render(<CrossCorpusExplorer />);
-    const summary = await screen.findByRole('list', { name: 'Findings by detector' });
-    expect(summary.textContent).toContain('Shared language: 2');
-    expect(summary.textContent).toContain('Temporal shift: 1');
-    expect(summary.textContent).not.toContain('Orphan topic');
+    await screen.findByRole('grid', { name: 'Cross-corpus findings by jurisdiction' });
+    expect(screen.getByRole('gridcell', { name: /^city-a, shared language: 2 findings/ }).textContent).toContain('2');
+    expect(screen.getByRole('gridcell', { name: /^city-b, temporal shift: 1 finding/ })).toBeTruthy();
+    expect(screen.getByRole('gridcell', { name: /^city-a, orphan topic: 0 findings/ })).toBeTruthy();
+    expect(screen.getByText('3 cross-corpus findings across 2 jurisdictions; most from shared language (2).')).toBeTruthy();
+    // The full detector name stays reachable however the header is shortened.
+    expect(screen.getByRole('columnheader', { name: 'Reused grounds' })).toBeTruthy();
+
+    fireEvent.keyDown(screen.getByRole('gridcell', { name: /^city-b, temporal shift/ }), { key: 'Enter' });
+    expect(screen.getByText(/headline for cc-3/)).toBeTruthy();
+    expect(screen.queryByText(/headline for cc-1/)).toBeNull();
+  });
+
+  it('withholds the counts while only a first page of findings is loaded, and draws them once all are', async () => {
+    bridge.rows = Array.from({ length: 200 }, (_, i) => makeFinding(`cc-${i}`, i % 2 ? 'CROSS_CORPUS_SHARED_LANGUAGE' : 'HELD_BACK_RESPONSE', 'city-a'));
+    bridge.total = 200;
+    render(<CrossCorpusExplorer />);
+    const loadAll = await screen.findByRole('button', { name: 'Load all to compare' });
+    expect(screen.queryByRole('grid')).toBeNull();
+    await act(async () => { fireEvent.click(loadAll); });
+    await screen.findByRole('grid', { name: 'Cross-corpus findings by jurisdiction' });
+    expect(screen.getByRole('gridcell', { name: /^city-a, shared language: 100 findings/ })).toBeTruthy();
   });
 
   it('reports a failed load instead of claiming no patterns exist', async () => {

@@ -616,6 +616,11 @@ mod tests {
             ),
             ("call_types", 2, 1, Some("2026-10-06T13:23:02+00:00"), 1)
         );
+        // The change record reaches the app with both snapshots' retrieval times.
+        let change = &table.changes[0];
+        assert_eq!(table.changes.len(), 1);
+        assert!(change.previous_retrieved_at.is_some() && change.current_retrieved_at.is_some());
+        assert_ne!(change.previous, change.current);
         assert!(table.files.iter().all(|file| file.dataset_kind.is_some()));
         let repository = DuckDbRepository::new(":memory:").unwrap();
         repository

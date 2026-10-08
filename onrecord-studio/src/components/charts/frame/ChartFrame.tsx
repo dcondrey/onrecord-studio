@@ -31,6 +31,8 @@ export interface ChartFrameProps {
   table: TwinTable;
   tableDefault?: 'chart' | 'table';
   legend?: LegendItem[];
+  /** False when the figure's own legend already explains each kind of absence it draws. */
+  autoAbsenceLegend?: boolean;
   legendFocus?: LegendFocus;
   /** The single filter row, above the plot. */
   controls?: ReactNode;
@@ -103,7 +105,7 @@ export default function ChartFrame(props: ChartFrameProps) {
   const storageKey = props.storageKey ?? title;
   const [view, setView] = useState<'chart' | 'table'>(() => readView(storageKey, props.tableDefault ?? 'chart'));
   const showsData = status === 'ready' || status === 'stale';
-  const legend = [...(props.legend ?? []), ...absenceLegend(absenceStates(table))];
+  const legend = [...(props.legend ?? []), ...(props.autoAbsenceLegend === false ? [] : absenceLegend(absenceStates(table)))];
 
   const toggleView = () => {
     const next = view === 'chart' ? 'table' : 'chart';

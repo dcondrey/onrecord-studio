@@ -12,7 +12,11 @@ import SeverityGlyph from './SeverityGlyph';
 import { severityLabel } from '../objects/labels';
 import { useAppStore } from '../../store/useAppStore';
 import { useInspectFinding } from '../../hooks/useInspectFinding';
-import type { Finding, FindingCitation, FindingSeverity } from '../../types';
+import type { AgencyPerformanceProfile, Finding, FindingCitation, FindingSeverity } from '../../types';
+import { isLegalClaimKind } from '../../types/findings';
+import type { GlyphShape } from '../ui/shapeGlyph';
+import StateGrid, { type StateGridCell, type StateGridRow } from '../charts/figures/StateGrid';
+import { seqStep } from '../charts/marks/HeatCell';
 import { FindingEvidence } from '../ui/EvidenceBasis';
 import ArtifactDrafts from './ArtifactDrafts';
 import EvidenceGaps from './EvidenceGaps';
@@ -27,6 +31,78 @@ import { touchesOwnOrganization, useAffiliationDisclosure } from '../account/use
 const PAGE_SIZE = 50;
 const SEVERITIES: FindingSeverity[] = ['CRITICAL', 'SERIOUS', 'NOTABLE', 'INFO'];
 type FindingSort = 'ranked' | 'newest';
+
+/** The same shapes the row glyphs use; severity is a detector rating, so it never takes a hue here. */
+const SEVERITY_SHAPE: Record<FindingSeverity, GlyphShape> = { CRITICAL: 'diamond', SERIOUS: 'triangle', NOTABLE: 'circle', INFO: 'ring' };
+const NO_AGENCY = 'none';
+
+function agencyKey(finding: Finding): string {
+  const { portalKey, agencyId } = finding.subject;
+  return agencyId === null ? NO_AGENCY : `${portalKey ?? ''}:${agencyId}`;
+}
+
+/** Severity × agency counts over every finding, with the headline naming the agency carrying the most. */
+export function severityMatrix(findings: readonly Finding[], profiles: readonly AgencyPerformanceProfile[]) {
+  const names = new Map(profiles.map((profile) => [`${profile.portalSubdomain}:${profile.agencyId}`, profile.agencyName]));
+  const groups = new Map<string, { label: string; counts: Record<FindingSeverity, Finding[]> }>();
+  for (const finding of findings) {
+    const key = agencyKey(finding);
+    const label = key === NO_AGENCY ? 'No agency' : names.get(key) ?? `Agency ${finding.subject.agencyId} (${finding.subject.portalKey ?? 'unknown source'})`;
+    const group = groups.get(key) ?? { label, counts: { CRITICAL: [], SERIOUS: [], NOTABLE: [], INFO: [] } };
+    group.counts[finding.severity].push(finding);
+    groups.set(key, group);
+  }
+  const total = (key: string) => SEVERITIES.reduce((sum, level) => sum + (groups.get(key)?.counts[level].length ?? 0), 0);
+  // Agencies by total, ties by name; the no-agency row last.
+  const keys = [...groups.keys()].sort((a, b) => (a === NO_AGENCY ? 1 : b === NO_AGENCY ? -1 : total(b) - total(a) || groups.get(a)!.label.localeCompare(groups.get(b)!.label)));
+  const maxCell = Math.max(0, ...keys.flatMap((key) => SEVERITIES.map((level) => groups.get(key)!.counts[level].length)));
+  const maxTotal = Math.max(0, ...keys.map(total));
+  const counted = (list: readonly Finding[]) => list.filter((finding) => isLegalClaimKind(finding.kind)).length;
+  const rows: StateGridRow[] = keys.map((key) => {
+    const { label, counts } = groups.get(key)!;
+    const rowCounted = SEVERITIES.reduce((sum, level) => sum + counted(counts[level]), 0);
+    return {
+      key,
+      label,
+      trailing: { text: `${total(key).toLocaleString('en-US')}${rowCounted > 0 ? ` · ${rowCounted} counted` : ''}`, value: total(key), max: maxTotal },
+      cells: SEVERITIES.map((level): StateGridCell => {
+        const cell = counts[level];
+        const name = `${label}, ${severityLabel(level).toLowerCase()}: ${cell.length} ${cell.length === 1 ? 'finding' : 'findings'}.`;
+        if (cell.length === 0) return { kind: 'state', tone: 'quiet', glyph: 'bar', text: '0', name };
+        const kinds = [...cell.reduce((tally, finding) => tally.set(finding.kind, (tally.get(finding.kind) ?? 0) + 1), new Map<string, number>())]
+          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+          .slice(0, 3);
+        const legal = counted(cell);
+        const legalNote = legal > 0 ? ` ${legal} ${legal === 1 ? 'is a counted legal claim' : 'are counted legal claims'}.` : '';
+        return {
+          kind: 'count', value: cell.length, step: seqStep(cell.length, maxCell), glyph: SEVERITY_SHAPE[level], text: cell.length.toLocaleString('en-US'), actionable: true,
+          name: `${name}${legalNote} Press Enter to list them.`,
+          tip: {
+            rows: [
+              ...(legal > 0 ? [{ key: 'counted', value: legal.toLocaleString('en-US'), label: 'counted legal claims', swatch: 'flag' as const, tone: 'counted' as const }] : []),
+              ...kinds.map(([kind, count]) => ({ key: kind, value: count.toLocaleString('en-US'), label: kind.replace(/_/g, ' ').toLowerCase() })),
+            ],
+            note: 'Most frequent kinds in this cell.',
+          },
+        };
+      }),
+    };
+  });
+  let headline: string | null = null;
+  const top = keys.find((key) => key !== NO_AGENCY);
+  if (top) {
+    const { label, counts } = groups.get(top)!;
+    const critical = counts.CRITICAL.length;
+    const allCritical = findings.filter((finding) => finding.severity === 'CRITICAL').length;
+    const including = critical === 0 ? '' : critical === allCritical
+      ? `, including ${critical === 1 ? 'the only critical one' : `all ${critical} critical ones`}`
+      : `, including ${critical} of ${allCritical} critical`;
+    headline = `${label} carries ${total(top)} of ${findings.length} findings${including}.`;
+  } else if (findings.length > 0) {
+    headline = `None of the ${findings.length} findings names an agency.`;
+  }
+  return { rows, keys, headline };
+}
 
 interface ActionError {
   action: 'refresh' | 'dismiss' | 'restore';
@@ -55,6 +131,10 @@ export default function FindingsInbox() {
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [hasMore, setHasMore] = useState(false);
   const [severityFilter, setSeverityFilter] = useState<FindingSeverity | null>(null);
+  const [agencyFilter, setAgencyFilter] = useState<string | null>(null);
+  const [totalFindings, setTotalFindings] = useState<number | null>(null);
+  const countGate = useLatestRequestGate();
+  const agencyProfiles = useAppStore((state) => state.agencyProfiles);
   const [sort, setSort] = useState<FindingSort>('ranked');
   const [textFilter, setTextFilter] = useState('');
   const [exportOpen, setExportOpen] = useState(false);
@@ -117,6 +197,24 @@ export default function FindingsInbox() {
     loadFindings();
     return listGate.invalidate;
   }, [findingsRefreshRequests, listGate, loadFindings]);
+
+  // The total a 'Load all' offer names, read again for each refresh and page: a count resolving
+  // after a newer sweep describes the older one.
+  useEffect(() => {
+    if (!hasMore) {
+      setTotalFindings(null);
+      return;
+    }
+    const request = countGate.begin();
+    invokeCommand('count_findings', { filter: null })
+      .then((count) => {
+        if (countGate.isCurrent(request) && typeof count === 'number') setTotalFindings(count);
+      })
+      .catch(() => {
+        if (countGate.isCurrent(request)) setTotalFindings(null);
+      });
+    return countGate.invalidate;
+  }, [countGate, findingsRefreshRequests, hasMore, limit]);
 
   const refresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -221,13 +319,16 @@ export default function FindingsInbox() {
     const matching = lensedFindings.filter(
       (finding) =>
         (severityFilter === null || finding.severity === severityFilter) &&
+        (agencyFilter === null || agencyKey(finding) === agencyFilter) &&
         (needle === '' || `${finding.headline} ${finding.explanation}`.toLowerCase().includes(needle)),
     );
     return sort === 'newest'
       ? [...matching].sort((a, b) => Date.parse(b.lastSeenAt) - Date.parse(a.lastSeenAt))
       : matching;
-  }, [lensedFindings, severityFilter, sort, textFilter]);
-  const isNarrowed = severityFilter !== null || textFilter.trim() !== '';
+  }, [agencyFilter, lensedFindings, severityFilter, sort, textFilter]);
+  const isNarrowed = severityFilter !== null || agencyFilter !== null || textFilter.trim() !== '';
+  const matrix = useMemo(() => severityMatrix(lensedFindings, agencyProfiles), [agencyProfiles, lensedFindings]);
+  const agencyLabel = agencyFilter === null ? null : matrix.rows.find((row) => row.key === agencyFilter)?.label ?? null;
 
   return (
     <section id="findings-inbox" className="app-panel flex flex-col gap-4 p-5" aria-label="Findings inbox">
@@ -264,9 +365,55 @@ export default function FindingsInbox() {
         </div>
       )}
 
+      {findings.length > 0 && !hasMore && (
+        <StateGrid
+          title="Findings by agency and severity"
+          storageKey="findings-severity-agency"
+          headline={matrix.headline}
+          sources={{ tables: ['findings'], note: 'agency names from agency profiles; severity ranks reading order and does not say whether a finding is a counted legal claim (Total names those)' }}
+          summary={`${lensedFindings.length} findings across ${matrix.rows.length} rows. Activate a cell to filter the list to that agency and severity, or a column header for the severity alone.`}
+          status="ready"
+          rowHeader="Agency"
+          trailingHeader="Total"
+          columns={SEVERITIES.map((level) => ({ key: level, label: severityLabel(level), glyph: SEVERITY_SHAPE[level] }))}
+          rows={matrix.rows}
+          pressedColumn={agencyFilter === null && severityFilter ? SEVERITIES.indexOf(severityFilter) : null}
+          selected={(() => {
+            const row = agencyFilter === null ? -1 : matrix.keys.indexOf(agencyFilter);
+            return row >= 0 && severityFilter ? [{ row, col: SEVERITIES.indexOf(severityFilter) }] : [];
+          })()}
+          onActivate={(row, col) => {
+            setAgencyFilter(matrix.keys[row]);
+            setSeverityFilter(SEVERITIES[col]);
+          }}
+          onColumnActivate={(col) => {
+            setAgencyFilter(null);
+            setSeverityFilter((current) => (current === SEVERITIES[col] ? null : SEVERITIES[col]));
+          }}
+          onEscape={() => {
+            setAgencyFilter(null);
+            setSeverityFilter(null);
+          }}
+        />
+      )}
+      {findings.length > 0 && hasMore && (
+        <div className="flex flex-wrap items-center gap-2 text-caption text-muted">
+          <span>Counts by agency need every finding: the {findings.length} loaded are not totals.</span>
+          <Button size="sm" disabled={isLoading || totalFindings === null} onClick={() => totalFindings !== null && setLimit(totalFindings)}>
+            {totalFindings === null ? 'Load all to compare by agency' : `Load all ${totalFindings.toLocaleString('en-US')} to compare by agency`}
+          </Button>
+        </div>
+      )}
+
       {findings.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 text-caption text-muted">
-          <div role="group" aria-label="Filter by severity" className="flex gap-1">
+          {(agencyFilter !== null || (severityFilter !== null && !hasMore)) && (
+            <span className="flex items-center gap-1">
+              <Badge>{[agencyFilter === null ? null : agencyLabel ?? 'Selected agency', severityFilter ? severityLabel(severityFilter) : null].filter(Boolean).join(' · ')}</Badge>
+              <Button size="sm" variant="ghost" onClick={() => { setAgencyFilter(null); setSeverityFilter(null); }}>Clear</Button>
+            </span>
+          )}
+          {hasMore && <div role="group" aria-label="Filter by severity" className="flex gap-1">
             {SEVERITIES.map((level) => (
               <button
                 key={level}
@@ -278,7 +425,7 @@ export default function FindingsInbox() {
                 {severityLabel(level)}
               </button>
             ))}
-          </div>
+          </div>}
           <label className="sr-only" htmlFor="findings-text-filter">Filter findings by text</label>
           <input
             id="findings-text-filter"

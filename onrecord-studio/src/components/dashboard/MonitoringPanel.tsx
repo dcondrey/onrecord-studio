@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
-import type { CoverageExpectation, MonitoringEvidence, MonitoringStatus, ServiceObservation } from '../../types/monitoring';
+import type { CoverageAssessment, CoverageExpectation, MonitoringEvidence, MonitoringStatus, ServiceObservation } from '../../types/monitoring';
+import { absent } from '../charts/core/nulls';
+import StateGrid, { type StateGridCell, type StateGridRow } from '../charts/figures/StateGrid';
 import { citationLocation, observationPoints, optionalMeasurement } from '../../utils/monitoring';
 import Button from '../ui/Button';
 import SegmentedControl from '../ui/SegmentedControl';
@@ -19,6 +21,91 @@ function Citation({ source }: { source: MonitoringEvidence }) {
   </details>;
 }
 
+/** The corpus status of each expectation, mapped once; an unmapped status prints as sent, on neutral. */
+function acquisitionCell(item: CoverageAssessment): StateGridCell {
+  const { recordType, agency, period } = item.expectation;
+  const where = `${agency}, ${recordType}, ${period}`;
+  const base = { actionable: true, tip: { rows: [], note: item.explanation } };
+  switch (item.status) {
+    case 'NOT_LOCATED':
+      return { ...base, kind: 'gap', lead: true, absence: absent('not-recorded', 'no matching record in the stored corpus'), glyph: 'ring', text: 'not found', short: 'n/f', legend: 'Expected, not found: a record to request (n/f)', name: `${where}: expected, not found in the stored corpus. A record to request.` };
+    case 'MATCHES_NEED_REVIEW':
+      return { ...base, kind: 'state', tone: 'neutral', glyph: 'diamond', text: `${item.candidates.length} to review`, short: item.candidates.length.toLocaleString('en-US'), legend: 'Possible matches to review', name: `${where}: ${item.candidates.length} possible ${item.candidates.length === 1 ? 'match needs' : 'matches need'} review.` };
+    case 'RECEIPT_RECORDED':
+      return { ...base, kind: 'state', tone: 'positive', glyph: 'check', text: 'received', short: 'rcvd', legend: 'Receipt recorded', name: `${where}: receipt recorded and its cited source still verifies.` };
+    case 'SOURCE_CHANGED':
+      return { ...base, kind: 'state', tone: 'neutral', glyph: 'triangle', text: 'source changed', short: 'chg', legend: 'Receipt recorded, cited source changed (chg)', name: `${where}: receipt recorded, but its cited source no longer verifies.` };
+    case 'WAIVED':
+      return { ...base, kind: 'state', tone: 'neutral', glyph: 'bar', text: 'waived', short: 'wvd', legend: 'Waived (wvd)', name: `${where}: waived.` };
+    default: {
+      const words = item.status.replace(/_/g, ' ').toLowerCase();
+      const code = words.split(' ').filter(Boolean).map((word) => word[0]).join('').slice(0, 3);
+      return { ...base, kind: 'state', tone: 'neutral', glyph: 'circle', text: item.status, short: code, legend: `${words} (${code})`, name: `${where}: ${item.status}.` };
+    }
+  }
+}
+
+/**
+ * When a period begins (ms) and how many months it spans, for ordering columns: 'yyyy',
+ * 'yyyy-mm', 'Qn yyyy' or 'yyyy Qn', and fiscal years ('FY2025-26' starts July 2025; 'FY2026' is
+ * the year ending in 2026, so it also starts July 2025). `null` for any other form.
+ */
+export function parsePeriod(period: string): { start: number; months: number } | null {
+  const text = period.trim();
+  let match = /^(\d{4})$/.exec(text);
+  if (match) return { start: Date.UTC(Number(match[1]), 0, 1), months: 12 };
+  match = /^(\d{4})-(\d{2})$/.exec(text);
+  if (match) return { start: Date.UTC(Number(match[1]), Number(match[2]) - 1, 1), months: 1 };
+  match = /^Q([1-4])\s*(\d{4})$/i.exec(text);
+  if (match) return { start: Date.UTC(Number(match[2]), (Number(match[1]) - 1) * 3, 1), months: 3 };
+  match = /^(\d{4})\s*-?\s*Q([1-4])$/i.exec(text);
+  if (match) return { start: Date.UTC(Number(match[1]), (Number(match[2]) - 1) * 3, 1), months: 3 };
+  match = /^FY\s*(\d{4})\s*[-–/]\s*(\d{2}|\d{4})$/i.exec(text);
+  if (match) return { start: Date.UTC(Number(match[1]), 6, 1), months: 12 };
+  match = /^FY\s*(\d{4})$/i.exec(text);
+  if (match) return { start: Date.UTC(Number(match[1]) - 1, 6, 1), months: 12 };
+  return null;
+}
+
+/** Periods by start, a longer period before a shorter one starting with it; unparseable ones last, as listed. */
+export function orderPeriods(periods: readonly string[]): string[] {
+  const dated = periods.flatMap((period, index) => {
+    const parsed = parsePeriod(period);
+    return parsed ? [{ period, index, ...parsed }] : [];
+  });
+  dated.sort((a, b) => a.start - b.start || b.months - a.months || a.index - b.index);
+  return [...dated.map((entry) => entry.period), ...periods.filter((period) => parsePeriod(period) === null)];
+}
+
+/** Rows are record types grouped by agency, columns the periods in time order; a period with no expectation is not checked. */
+export function acquisitionMatrix(coverage: readonly CoverageAssessment[]) {
+  const periods = orderPeriods([...new Set(coverage.map((item) => item.expectation.period))]);
+  const keyed = new Map<string, CoverageAssessment[]>();
+  for (const item of coverage) {
+    const key = `${item.expectation.agency}\u0000${item.expectation.recordType}`;
+    keyed.set(key, [...(keyed.get(key) ?? []), item]);
+  }
+  const rows: (StateGridRow & { items: (CoverageAssessment | null)[] })[] = [...keyed.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, items]) => {
+      const { agency, recordType } = items[0].expectation;
+      const byPeriod = periods.map((period) => items.find((item) => item.expectation.period === period) ?? null);
+      return {
+        key,
+        label: recordType,
+        group: agency,
+        items: byPeriod,
+        cells: byPeriod.map((item, j) => item
+          ? acquisitionCell(item)
+          : { kind: 'gap' as const, absence: absent('not-covered', 'no record of this type is expected for this period'), glyph: 'bar' as const, text: 'not expected', short: 'n/e', legend: 'No record expected for this period (n/e)', name: `${agency}, ${recordType}, ${periods[j]}: no record expected for this period.` }),
+      };
+    });
+  const missing = coverage.filter((item) => item.status === 'NOT_LOCATED').length;
+  const agencies = new Set(coverage.map((item) => item.expectation.agency)).size;
+  const headline = `${missing} of ${coverage.length} expected ${coverage.length === 1 ? 'record' : 'records'} not yet found, across ${agencies} ${agencies === 1 ? 'agency' : 'agencies'}.`;
+  return { periods, rows, headline };
+}
+
 export default function MonitoringPanel({ caseId = null, topic = 'homelessness' }: { caseId?: string | null; topic?: string }) {
   const [result, setStatus] = useState<MonitoringStatus | null>(null);
   const status = result?.topic === topic && result.caseId === caseId ? result : null;
@@ -28,6 +115,8 @@ export default function MonitoringPanel({ caseId = null, topic = 'homelessness' 
   const [newCoverage, setNewCoverage] = useState(false);
   const [newObservation, setNewObservation] = useState(false);
   const [selectedObservation, setSelectedObservation] = useState<string | null>(null);
+  const [coverageView, setCoverageView] = useState<'matrix' | 'list'>('matrix');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [dateFrom, setDateFrom] = useState(''); const [dateTo, setDateTo] = useState('');
   // Every read and save begins a request on one gate, and the effect below begins a new one
   // whenever the case or topic changes, so a result for the previous case is never written.
@@ -47,7 +136,7 @@ export default function MonitoringPanel({ caseId = null, topic = 'homelessness' 
   }, [caseId, gate, topic]);
 
   useEffect(() => {
-    setStatus(null); setNewCoverage(false); setNewObservation(false); setSelectedObservation(null);
+    setStatus(null); setNewCoverage(false); setNewObservation(false); setSelectedObservation(null); setExpandedId(null);
     void load();
     return gate.invalidate;
   }, [gate, load]);
@@ -70,6 +159,12 @@ export default function MonitoringPanel({ caseId = null, topic = 'homelessness' 
   const observations = (status?.observations ?? []).filter(o => (!dateFrom || o.observedOn >= dateFrom) && (!dateTo || o.observedOn <= dateTo));
   const points = observationPoints(observations);
   const selected = observations.find(o => o.id === selectedObservation);
+  const matrix = status ? acquisitionMatrix(status.coverage) : null;
+  // Keyed by expectation id: a save re-sorts the rows, and an index would then open another expectation.
+  const expandedItem = status?.coverage.find((item) => item.expectation.id === expandedId) ?? null;
+  const expandedCell = matrix && expandedItem
+    ? matrix.rows.flatMap((row, i) => row.items.flatMap((item, j) => (item?.expectation.id === expandedItem.expectation.id ? [{ row: i, col: j }] : [])))[0] ?? null
+    : null;
   return <section aria-label="Evidence monitoring">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <p className="max-w-prose text-body text-muted">Turn unresolved questions into records to acquire, and compare cited versions before drawing conclusions.</p>
@@ -89,7 +184,25 @@ export default function MonitoringPanel({ caseId = null, topic = 'homelessness' 
       <Button size="sm" onClick={() => setNewCoverage(!newCoverage)}>Define a consequential missing record</Button>
       {newCoverage && <CoverageForm caseId={caseId} topic={topic} busy={busy} onSave={value => void save('coverage', value)} />}
       {!status.coverage.length && <p className="text-sm text-muted">Define the records needed to resolve a specific question. Requests from saved research dossiers also appear here automatically.</p>}
-      {status.coverage.map(item => <article key={item.expectation.id} className={panelClass}>
+      {status.coverage.length > 0 && <SegmentedControl label="Acquisition priorities as" mode="filter" size="sm" value={coverageView} onChange={setCoverageView} options={[{ value: 'matrix', label: 'Matrix' }, { value: 'list', label: 'List view' }]} />}
+      {coverageView === 'matrix' && matrix && status.coverage.length > 0 && <StateGrid
+        title="Acquisition matrix"
+        storageKey="acquisition-matrix"
+        headline={matrix.headline}
+        sources={{ tables: ['monitor_coverage', 'monitor_listings'] }}
+        summary={`${matrix.rows.length} record types by ${matrix.periods.length} periods. Activate a cell to open that expectation below.`}
+        status="ready"
+        rowHeader="Record type"
+        columns={matrix.periods.map((period) => ({ key: period, label: period }))}
+        rows={matrix.rows}
+        selected={expandedCell ? [expandedCell] : []}
+        onActivate={(row, col) => {
+          const id = matrix.rows[row]?.items[col]?.expectation.id ?? null;
+          setExpandedId((current) => (current === id ? null : id));
+        }}
+        onEscape={() => setExpandedId(null)}
+      />}
+      {(coverageView === 'list' ? status.coverage : expandedItem ? [expandedItem] : []).map(item => <article key={item.expectation.id} className={panelClass}>
         <div className="text-body text-warning">{item.status.replace(/_/g, ' ')} · {item.expectation.agency} · {item.expectation.period}</div>
         <h4 className="mt-2 font-semibold text-fg">{item.expectation.recordType}</h4>
         <p className="mt-2 text-sm text-fg-secondary">Unlocks: {item.expectation.consequence}</p><p className="mt-2 text-body text-muted">{item.explanation}</p>

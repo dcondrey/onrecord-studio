@@ -79,11 +79,28 @@ describe('watchlist change detection', () => {
     expect(screen.queryByText('b-record')).toBeNull();
   });
 
+  it('states a watch never checked as one not-checked-yet cell, never as dimensions not applicable', async () => {
+    bridge.invoke.mockImplementation((command: string) => Promise.resolve(command === 'list_watches' ? [summary('a', 'Alpha')] : []));
+    render(<WatchlistPanel />);
+    const cell = await screen.findByRole('gridcell', { name: 'Alpha: not checked yet.' });
+    expect(cell.textContent).toContain('not checked yet');
+    expect(screen.queryAllByRole('gridcell', { name: /^Alpha, / })).toHaveLength(0);
+    expect(document.body.textContent).not.toMatch(/not applicable|n\/a/);
+  });
+
   it('never words a dimension with no data as no change', async () => {
     const missing = dimension({ dimension: 'SOURCE_HEALTH', outcome: 'NOT_MEASURED', baselineAsOf: null, observedAsOf: null, reason: 'No sync run has completed since the baseline.' });
     const same = dimension({ dimension: 'DOCUMENTS', outcome: 'UNCHANGED' });
     bridge.invoke.mockImplementation((command: string) => Promise.resolve(command === 'list_watches' ? [summary('a', 'Alpha', [same, missing])] : []));
     render(<WatchlistPanel />);
+    // The matrix: 'not observed' and 'unchanged' are different cells with different words.
+    const unobserved = await screen.findByRole('gridcell', { name: /Alpha, source: not observed\. No data this run: No sync run has completed/ });
+    const unchanged = screen.getByRole('gridcell', { name: /Alpha, documents: Observed, no change since/ });
+    expect(unobserved.textContent).toContain('not observed');
+    expect(unchanged.textContent).toContain('same');
+    expect(unobserved.querySelector('[data-absence="not-recorded"]')).toBeTruthy();
+    expect(unchanged.querySelector('[data-absence]')).toBeNull();
+    fireEvent.click(screen.getByRole('radio', { name: 'List view' }));
     await screen.findByText(/No data this run: No sync run has completed since the baseline\./);
     expect(screen.getByText(`Observed, no change since ${formatShortDate('2026-10-01T00:00:00Z')}`, { exact: false })).toBeTruthy();
     expect(describeDimension(missing).text).not.toMatch(/no change/i);
@@ -100,13 +117,29 @@ describe('watchlist change detection', () => {
     expect(screen.getByText(/Basis: Present now and absent from the baseline\./)).toBeTruthy();
   });
 
+  it('lists only the changes of the changed cell activated in the matrix', async () => {
+    const figures = { ...change('a', 'figure-row'), id: 'f', dimension: 'FIGURES' as const, changeKind: 'FIGURE_CHANGED' };
+    bridge.invoke.mockImplementation((command: string) => Promise.resolve(
+      command === 'list_watches'
+        ? [summary('a', 'Alpha', [dimension({ dimension: 'FIGURES', outcome: 'CHANGED', changeCount: 1 }), dimension({ dimension: 'DOCUMENTS', outcome: 'CHANGED', changeCount: 1 })])]
+        : command === 'list_watch_changes' ? [change('a', 'document-row'), figures] : null,
+    ));
+    render(<WatchlistPanel />);
+    await screen.findByText('document-row');
+    const cell = screen.getByRole('gridcell', { name: /Alpha, figures: changed/ });
+    fireEvent.keyDown(cell, { key: 'Enter' });
+    await screen.findByText('Changes for Alpha · Figures');
+    expect(screen.getByText('figure-row')).toBeTruthy();
+    expect(screen.queryByText('document-row')).toBeNull();
+  });
+
   it('checks every watch when a refresh completes, once per refresh', async () => {
     bridge.invoke.mockImplementation((command: string) => Promise.resolve(command === 'list_watches' ? [summary('a', 'Alpha')] : command === 'list_watch_changes' ? [] : []));
     render(<WatchlistPanel />);
-    await screen.findByText('Alpha');
+    await screen.findByRole('button', { name: /^Alpha/ });
     expect(bridge.invoke.mock.calls.filter(([command]) => command === 'check_watches')).toHaveLength(0);
     await act(async () => { useAppStore.setState({ findingsRefreshRequests: 1 }); });
-    await screen.findByText('Alpha');
+    await screen.findByRole('button', { name: /^Alpha/ });
     expect(bridge.invoke.mock.calls.filter(([command]) => command === 'check_watches')).toEqual([['check_watches', { watchId: null }]]);
   });
 });

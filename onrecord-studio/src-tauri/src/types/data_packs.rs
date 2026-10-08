@@ -36,6 +36,30 @@ pub struct DataPackTable {
     pub last_checked_at: Option<String>,
     /// Change records between the table's snapshots, which are listed but never imported.
     pub change_records: u64,
+    /// What each of those change records compares and counts, oldest pair first.
+    #[serde(default)]
+    pub changes: Vec<DataPackChange>,
+}
+
+/// One change record between two retrievals of a table's publisher file.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DataPackChange {
+    /// The earlier snapshot's original, as the manifest lists it.
+    pub previous: String,
+    /// When the earlier snapshot was retrieved, RFC 3339; `None` when the manifest no longer
+    /// lists that original.
+    pub previous_retrieved_at: Option<String>,
+    /// The later snapshot's original.
+    pub current: String,
+    pub current_retrieved_at: Option<String>,
+    pub added: u64,
+    pub removed: u64,
+    /// Changed records listed field by field; `None` when `whole_records`, because those records
+    /// were listed as removed and added, so the changes are counted but not separated.
+    pub changed: Option<u64>,
+    /// More than half the records changed, so changed records are listed as removed and added.
+    pub whole_records: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

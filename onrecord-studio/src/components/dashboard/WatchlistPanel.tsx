@@ -12,6 +12,9 @@ import Time from '../ui/Time';
 import { Field, Input, Select } from '../ui/Field';
 import { formatDateTime, formatShortDate } from '../objects/labels';
 import { cn } from '../../utils/cn';
+import { absent } from '../charts/core/nulls';
+import StateGrid, { type StateGridCell, type StateGridRow } from '../charts/figures/StateGrid';
+import SegmentedControl from '../ui/SegmentedControl';
 
 const KIND_LABELS: Record<WatchKind, string> = {
   AGENCY: 'Agency',
@@ -72,6 +75,64 @@ export function describeDimension(result: DimensionResult): { text: string; tone
   }
 }
 
+const DIMENSIONS = Object.keys(DIMENSION_LABELS) as WatchDimension[];
+
+/**
+ * One cell of the watch outcome matrix: 'not observed' and 'unchanged' never share a glyph or words.
+ * Every check reports every dimension, so a cell with no result is either a watch never checked or
+ * a check recorded before the dimension existed; neither says the dimension does not apply.
+ */
+function outcomeCell(label: string, dimension: WatchDimension, result: DimensionResult | undefined): StateGridCell {
+  const where = `${label}, ${DIMENSION_LABELS[dimension].toLowerCase()}`;
+  if (!result) {
+    return { kind: 'gap', absence: absent('not-recorded', 'the last check recorded no result for this dimension'), glyph: 'bar', text: 'not in last check', short: 'n/r', legend: 'Not in the last check (n/r)', name: `${where}: the last check recorded no result for this dimension.` };
+  }
+  const { text } = describeDimension(result);
+  const span = result.baselineAsOf || result.observedAsOf
+    ? [{ key: 'span', value: `${result.baselineAsOf ? formatShortDate(result.baselineAsOf) : 'no baseline'} → ${result.observedAsOf ? formatShortDate(result.observedAsOf) : 'not observed'}`, label: 'baseline → observed' }]
+    : [];
+  switch (result.outcome) {
+    case 'CHANGED':
+      return {
+        kind: 'state', tone: 'lead', glyph: 'diamond', actionable: true,
+        text: `${result.changeCount} changed`, short: result.changeCount.toLocaleString('en-US'), legend: 'Changed (a lead to read)',
+        tableText: text, name: `${where}: changed, ${text}. Press Enter to list these changes.`,
+        tip: { rows: [{ key: 'n', value: result.changeCount.toLocaleString('en-US'), label: result.changeCount === 1 ? 'change' : 'changes', swatch: 'rect', tone: 'lead' }, ...span] },
+      };
+    case 'UNCHANGED':
+      return { kind: 'state', tone: 'positive', glyph: 'check', text: 'same', legend: 'Observed, unchanged', tableText: text, name: `${where}: ${text}.`, tip: { rows: span, note: 'Observed and equal to the baseline.' } };
+    case 'BASELINE_RECORDED':
+      return { kind: 'state', tone: 'neutral', glyph: 'triangle', text: 'baseline', short: 'base', legend: 'Baseline recorded, nothing to compare yet', tableText: text, name: `${where}: ${text}.`, tip: { rows: span, note: 'First observation; nothing to compare yet.' } };
+    case 'NOT_MEASURED':
+      return {
+        kind: 'gap', absence: absent('not-recorded', result.reason ?? 'the dimension could not be observed'), glyph: 'ring', text: 'not observed', short: 'n/o', legend: 'Not observed this check (n/o)',
+        name: `${where}: not observed. ${text}.`,
+        tip: { rows: span, note: `Not observed: ${result.reason ?? 'the dimension could not be observed'}. This is not “unchanged”.` },
+      };
+  }
+}
+
+/** The matrix headline: changed watches and change total, then checks that could not observe. */
+export function watchHeadline(summaries: readonly WatchSummary[]): string {
+  const changed = summaries.filter((summary) => summary.lastDimensions.some((result) => result.outcome === 'CHANGED'));
+  const total = summaries.reduce((sum, summary) => sum + summary.lastDimensions.reduce((inner, result) => inner + (result.outcome === 'CHANGED' ? result.changeCount : 0), 0), 0);
+  const unobserved = summaries.reduce((sum, summary) => sum + summary.lastDimensions.filter((result) => result.outcome === 'NOT_MEASURED').length, 0);
+  const lead = `${changed.length} of ${summaries.length} ${summaries.length === 1 ? 'watch' : 'watches'} changed since ${summaries.length === 1 ? 'its' : 'their'} last check (${total.toLocaleString('en-US')} ${total === 1 ? 'change' : 'changes'})`;
+  if (unobserved === 0) return `${lead}.`;
+  return `${lead}; ${unobserved} dimension ${unobserved === 1 ? 'check' : 'checks'} could not observe ${unobserved === 1 ? 'its' : 'their'} source.`;
+}
+
+function relativeAge(iso: string | null): string {
+  if (!iso) return 'not checked yet';
+  const ms = Date.now() - Date.parse(iso);
+  if (!Number.isFinite(ms)) return 'not checked yet';
+  const minutes = Math.max(0, Math.round(ms / 60_000));
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours} h ago`;
+  return `${Math.round(hours / 24)} d ago`;
+}
+
 function asList<T>(value: T[] | undefined, what: string): T[] {
   if (!Array.isArray(value)) throw new Error(`The native ${what} response was invalid.`);
   return value;
@@ -86,6 +147,8 @@ export default function WatchlistPanel() {
   const [summaries, setSummaries] = useState<WatchSummary[]>([]);
   const [changes, setChanges] = useState<WatchChange[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [dimensionFilter, setDimensionFilter] = useState<WatchDimension | null>(null);
+  const [view, setView] = useState<'matrix' | 'list'>('matrix');
   const [loaded, setLoaded] = useState(false);
   const [reload, setReload] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -159,6 +222,25 @@ export default function WatchlistPanel() {
   };
 
   const selected = summaries.find((summary) => summary.watch.id === selectedId) ?? null;
+  const shownChanges = dimensionFilter ? changes.filter((change) => change.dimension === dimensionFilter) : changes;
+  const selectWatch = (id: string | null) => {
+    setSelectedId(id);
+    setDimensionFilter(null);
+  };
+  const gridRows: StateGridRow[] = summaries.map(({ watch, lastCheckedAt, lastDimensions }) => ({
+    key: watch.id,
+    label: watch.label,
+    sublabel: KIND_LABELS[watch.kind],
+    trailing: { text: relativeAge(lastCheckedAt) },
+    // Never checked: one cell across every dimension, so nothing reads as a per-dimension result.
+    cells: lastCheckedAt === null
+      ? DIMENSIONS.map((_, j): StateGridCell | null => (j > 0 ? null : {
+        kind: 'gap', absence: absent('not-covered', 'this watch has not been checked yet'), glyph: 'bar', span: DIMENSIONS.length,
+        text: 'not checked yet', short: 'not checked', legend: 'Not checked yet', name: `${watch.label}: not checked yet.`,
+      }))
+      : DIMENSIONS.map((dimension) => outcomeCell(watch.label, dimension, lastDimensions.find((result) => result.dimension === dimension))),
+  }));
+  const selectedRow = summaries.findIndex((summary) => summary.watch.id === selectedId);
 
   return (
     <Panel aria-label="Watchlist">
@@ -199,11 +281,41 @@ export default function WatchlistPanel() {
 
       {!loaded && !error && <Skeleton variant="lines" lines={3} label="Reading the watchlist" />}
       {loaded && summaries.length === 0 && <p className="text-muted">Nothing is being watched yet.</p>}
+      {summaries.length > 0 && (
+        <SegmentedControl
+          label="Watch outcomes as"
+          value={view}
+          mode="filter"
+          size="sm"
+          onChange={setView}
+          options={[{ value: 'matrix', label: 'Matrix' }, { value: 'list', label: 'List view' }]}
+        />
+      )}
+      {view === 'matrix' && summaries.length > 0 && (
+        <StateGrid
+          title="Watch outcomes"
+          storageKey="watch-outcomes"
+          headline={watchHeadline(summaries)}
+          sources={{ tables: ['watches', 'watch_runs', 'watch_baselines', 'watch_changes'], note: 'not observed ≠ unchanged' }}
+          summary={`${summaries.length} watches by ${DIMENSIONS.length} dimensions. Changed cells can be activated to list their changes below.`}
+          status="ready"
+          rowHeader="Watch"
+          trailingHeader="Checked"
+          columns={DIMENSIONS.map((dimension) => ({ key: dimension, label: DIMENSION_LABELS[dimension] }))}
+          rows={gridRows}
+          selected={selectedRow >= 0 && dimensionFilter ? [{ row: selectedRow, col: DIMENSIONS.indexOf(dimensionFilter) }] : []}
+          onActivate={(row, col) => {
+            setSelectedId(summaries[row].watch.id);
+            setDimensionFilter(DIMENSIONS[col]);
+          }}
+          onEscape={() => selectWatch(null)}
+        />
+      )}
       <ul className="space-y-2">
         {summaries.map(({ watch, lastCheckedAt, lastDimensions }) => (
           <li key={watch.id} className={cn('rounded-lg border p-3', watch.id === selectedId ? 'border-accent/30 bg-accent/5' : 'border-line')}>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <button type="button" className="focus-ring rounded text-left font-medium text-fg hover:underline" aria-pressed={watch.id === selectedId} onClick={() => setSelectedId(watch.id === selectedId ? null : watch.id)}>
+              <button type="button" className="focus-ring rounded text-left font-medium text-fg hover:underline" aria-pressed={watch.id === selectedId} onClick={() => selectWatch(watch.id === selectedId ? null : watch.id)}>
                 {watch.label} <span className="font-normal text-muted">· {KIND_LABELS[watch.kind]}</span>
               </button>
               <Button size="sm" variant="ghost" aria-label={`Remove ${watch.label} from the watchlist`} onClick={() => void remove(watch.id)}>
@@ -211,7 +323,7 @@ export default function WatchlistPanel() {
               </Button>
             </div>
             <p className="mt-1 text-caption text-muted">{lastCheckedAt ? <>Last checked <Time value={lastCheckedAt} format={formatDateTime} className="whitespace-nowrap" /></> : 'Not checked yet'}</p>
-            {lastDimensions.length > 0 && (
+            {view === 'list' && lastDimensions.length > 0 && (
               <ul className="mt-2 space-y-0.5 text-caption">
                 {lastDimensions.map((result) => {
                   const { text, tone } = describeDimension(result);
@@ -229,12 +341,23 @@ export default function WatchlistPanel() {
 
       {loaded && (
         <div aria-label="Recorded changes">
-          <h4 className="text-body font-medium text-fg">{selected ? `Changes for ${selected.watch.label}` : 'Changes across all watches'}</h4>
-          {changes.length === 0 ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="text-body font-medium text-fg">
+              {selected ? `Changes for ${selected.watch.label}` : 'Changes across all watches'}
+              {dimensionFilter ? ` · ${DIMENSION_LABELS[dimensionFilter]}` : ''}
+            </h4>
+            {dimensionFilter && <Button size="sm" variant="ghost" onClick={() => setDimensionFilter(null)}>Show every dimension</Button>}
+          </div>
+          {dimensionFilter && (selected?.lastDimensions.find((result) => result.dimension === dimensionFilter)?.changeCount ?? 0) > shownChanges.length && (
+            <p className="text-caption text-muted">
+              {shownChanges.length} of {selected?.lastDimensions.find((result) => result.dimension === dimensionFilter)?.changeCount} changes shown: only the latest 100 of this watch are loaded.
+            </p>
+          )}
+          {shownChanges.length === 0 ? (
             <p className="mt-1 text-muted">No changes recorded. This lists only changes that were detected; see each watch above for what a check could and could not observe.</p>
           ) : (
             <ul className="mt-1 space-y-2">
-              {changes.map((change) => (
+              {shownChanges.map((change) => (
                 <li key={change.id} className="rounded-lg border border-line p-3">
                   <div className="font-medium text-fg">{CHANGE_LABELS[change.changeKind] ?? change.changeKind}</div>
                   <div className="text-muted">{change.subject}</div>

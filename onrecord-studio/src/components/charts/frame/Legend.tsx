@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
 import { COMPARISON_DASH, VIZ } from '../core/claim';
 import type { LegendFocus } from '../hooks/useLegendFocus';
 import { useSvgId } from './VizDefs';
@@ -12,6 +12,8 @@ export interface LegendItem {
   swatch: SwatchKind;
   /** The mark colour the swatch stands for. Default ink. The label text is never coloured. */
   tone?: SwatchTone;
+  /** A key drawn by the figure itself, in place of `swatch`, when no standard swatch is the mark. */
+  icon?: ReactNode;
 }
 
 /** A 16×12 key for one legend entry or tooltip row, drawn like the mark it stands for. */
@@ -76,7 +78,7 @@ export function Legend({ items, focus }: { items: readonly LegendItem[]; focus?:
         const interactive = focus && !item.key.startsWith('absence-');
         const content = (
           <>
-            <LegendSwatch kind={item.swatch} tone={item.tone} />
+            {item.icon ?? <LegendSwatch kind={item.swatch} tone={item.tone} />}
             <span>{item.label}</span>
           </>
         );

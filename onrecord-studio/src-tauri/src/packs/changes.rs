@@ -12,6 +12,7 @@ use super::{ChangeSummary, PackFile, PackFileFormat};
 use crate::error::AppError;
 use crate::storage::sqlite::quote_ident;
 use crate::storage::DuckDbRepository;
+use crate::types::data_packs::DataPackChange;
 use crate::types::{AnalyticalDatasetKind, AnalyticalImportRequest};
 use duckdb::{params, Connection};
 use std::path::Path;
@@ -372,6 +373,27 @@ pub(super) async fn write_change_record(
     })
 }
 
+impl ChangeSummary {
+    /// The record as the app shows it, with each side's retrieval time. A whole-records listing
+    /// has no separate changed count, so `changed` is absent rather than the manifest's 0.
+    pub(crate) fn exposed(
+        &self,
+        previous_retrieved_at: Option<String>,
+        current_retrieved_at: Option<String>,
+    ) -> DataPackChange {
+        DataPackChange {
+            previous: self.previous.clone(),
+            previous_retrieved_at,
+            current: self.current.clone(),
+            current_retrieved_at,
+            added: self.added,
+            removed: self.removed,
+            changed: (!self.whole_records).then_some(self.changed),
+            whole_records: self.whole_records,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -626,5 +648,9 @@ mod tests {
         assert!(rows
             .iter()
             .all(|row| row.6.as_deref() == Some(WHOLE_RECORDS_NOTE)));
+
+        // Shown to the app, the whole-records pair has no changed count rather than a 0.
+        assert_eq!(most.exposed(None, None).changed, None);
+        assert_eq!(half.exposed(None, None).changed, Some(2));
     }
 }
