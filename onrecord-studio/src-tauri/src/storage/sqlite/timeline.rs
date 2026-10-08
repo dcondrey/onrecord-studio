@@ -4,7 +4,7 @@ use super::*;
 use super::{
     connection::execute_transaction,
     integrity::{
-        replace_managed_integrity_flags, update_automatic_audit_status, upsert_automatic_case_audit,
+        automatic_audit_exists, synchronize_automatic_audit_flags, update_automatic_audit_status,
     },
 };
 
@@ -513,15 +513,9 @@ fn withdraw_uncorrelated_alerts(
         .map_err(|error| {
             AppError::Storage(format!("Failed to withdraw a correlation flag: {error}"))
         })?;
-        let audit_exists = tx
-            .query_row(
-                "SELECT EXISTS(SELECT 1 FROM case_audits WHERE audit_id = ?1)",
-                params![audit_id],
-                |row| row.get::<_, bool>(0),
-            )
-            .map_err(|error| {
-                AppError::Storage(format!("Failed to inspect a correlation audit: {error}"))
-            })?;
+        let audit_exists = automatic_audit_exists(tx, &audit_id).map_err(|error| {
+            AppError::Storage(format!("Failed to inspect a correlation audit: {error}"))
+        })?;
         if audit_exists {
             update_automatic_audit_status(tx, &audit_id)?;
         }
@@ -723,48 +717,15 @@ pub(super) fn synchronize_timeline_audit(
     subdomain: &str,
     timeline_flags: &[&str],
 ) -> Result<(), AppError> {
-    let audit_exists = tx
-        .query_row(
-            "SELECT EXISTS(
-                SELECT 1 FROM case_audits WHERE audit_id = ?1
-             )",
-            params![audit_id],
-            |row| row.get::<_, bool>(0),
-        )
-        .map_err(|error| {
-            AppError::Internal(format!(
-                "Failed to inspect the automatic timeline audit state: {error}"
-            ))
-        })?;
-
-    if timeline_flags.is_empty() && !audit_exists {
-        return Ok(());
-    }
-
-    upsert_automatic_case_audit(
+    synchronize_automatic_audit_flags(
         tx,
         audit_id,
         request_id,
         subdomain,
         "Automatically derived during request timeline synchronization",
-        if timeline_flags.contains(&FLAG_STATUTORY_LATENCY_VIOLATION) {
-            VERIFICATION_STATUS_STATUTORY
-        } else if timeline_flags.is_empty() {
-            VERIFICATION_STATUS_COMPLIANT
-        } else {
-            VERIFICATION_STATUS_ANOMALY
-        },
-        false,
+        &DERIVED_TIMELINE_FLAG_TYPES,
+        timeline_flags,
     )
-    .map_err(|error| {
-        AppError::Internal(format!(
-            "Failed to synchronize the automatic timeline audit: {error}"
-        ))
-    })?;
-
-    replace_managed_integrity_flags(tx, audit_id, &DERIVED_TIMELINE_FLAG_TYPES, timeline_flags)?;
-
-    update_automatic_audit_status(tx, audit_id)
 }
 
 fn validate_auxiliary_event(event: &AuxiliaryEventInput) -> Result<(), AppError> {

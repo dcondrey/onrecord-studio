@@ -1,10 +1,7 @@
 //! Policy-mandate evaluation and review of the legal findings it stores.
 
 use super::*;
-use super::{
-    connection::execute_transaction,
-    integrity::{update_automatic_audit_status, upsert_automatic_case_audit},
-};
+use super::{connection::execute_transaction, integrity::synchronize_automatic_audit_flags};
 
 impl DuckDbRepository {
     pub async fn evaluate_request_legal_compliance(
@@ -632,52 +629,18 @@ fn synchronize_policy_audit_alert(
         .map_err(|error| {
             AppError::Storage(format!("Failed to aggregate policy findings: {error}"))
         })?;
-    let audit_id = format!("auto-{portal_key}-{request_id}");
-    let audit_exists = tx
-        .query_row(
-            "SELECT EXISTS(SELECT 1 FROM case_audits WHERE audit_id = ?1)",
-            params![audit_id],
-            |row| row.get::<_, bool>(0),
-        )
-        .map_err(|error| {
-            AppError::Storage(format!("Failed to inspect policy audit state: {error}"))
-        })?;
-    if active_finding_count > 0 || audit_exists {
-        upsert_automatic_case_audit(
-            tx,
-            &audit_id,
-            request_id,
-            portal_key,
-            "Automatically derived from versioned policy evidence rules",
-            if active_finding_count > 0 {
-                VERIFICATION_STATUS_ANOMALY
-            } else {
-                VERIFICATION_STATUS_COMPLIANT
-            },
-            false,
-        )
-        .map_err(|error| {
-            AppError::Storage(format!("Failed to synchronize policy audit: {error}"))
-        })?;
-        tx.execute(
-            "DELETE FROM document_integrity_flags
-             WHERE audit_id = ?1 AND flag_type = ?2",
-            params![audit_id, FLAG_POTENTIAL_POLICY_VIOLATION],
-        )
-        .map_err(|error| {
-            AppError::Storage(format!("Failed to clear stale policy alert: {error}"))
-        })?;
-        if active_finding_count > 0 {
-            tx.execute(
-                "INSERT INTO document_integrity_flags (audit_id, flag_type)
-                 VALUES (?1, ?2)",
-                params![audit_id, FLAG_POTENTIAL_POLICY_VIOLATION],
-            )
-            .map_err(|error| {
-                AppError::Storage(format!("Failed to synchronize policy alert: {error}"))
-            })?;
-        }
-        update_automatic_audit_status(tx, &audit_id)?;
-    }
-    Ok(())
+    let flags: &[&str] = if active_finding_count > 0 {
+        &[FLAG_POTENTIAL_POLICY_VIOLATION]
+    } else {
+        &[]
+    };
+    synchronize_automatic_audit_flags(
+        tx,
+        &format!("auto-{portal_key}-{request_id}"),
+        request_id,
+        portal_key,
+        "Automatically derived from versioned policy evidence rules",
+        &[FLAG_POTENTIAL_POLICY_VIOLATION],
+        flags,
+    )
 }

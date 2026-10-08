@@ -284,6 +284,15 @@ pub(super) fn request_has_heavily_redacted_document(
     Ok(false)
 }
 
+/// `EXISTS` is BOOLEAN in DuckDB; decoding it as an integer fails the whole transaction.
+pub(super) fn automatic_audit_exists(tx: &Transaction<'_>, audit_id: &str) -> duckdb::Result<bool> {
+    tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM case_audits WHERE audit_id = ?1)",
+        params![audit_id],
+        |row| row.get::<_, bool>(0),
+    )
+}
+
 /// Re-derives the request-level density flags after a document leaves the request, so the
 /// automatic audit stops asserting an anomaly that only the removed document carried.
 pub(super) fn resynchronize_request_density_flags(
@@ -292,15 +301,9 @@ pub(super) fn resynchronize_request_density_flags(
     subdomain: &str,
 ) -> Result<(), AppError> {
     let audit_id = format!("auto-{subdomain}-{request_id}");
-    let audit_exists = tx
-        .query_row(
-            "SELECT EXISTS(SELECT 1 FROM case_audits WHERE audit_id = ?1)",
-            params![audit_id],
-            |row| row.get::<_, bool>(0),
-        )
-        .map_err(|error| {
-            AppError::Internal(format!("Failed to inspect the request audit: {error}"))
-        })?;
+    let audit_exists = automatic_audit_exists(tx, &audit_id).map_err(|error| {
+        AppError::Internal(format!("Failed to inspect the request audit: {error}"))
+    })?;
     if !audit_exists {
         return Ok(());
     }
@@ -329,12 +332,7 @@ pub(super) fn upsert_automatic_case_audit<T: ToSql>(
     verification_status: &str,
     replace_conclusion: bool,
 ) -> duckdb::Result<()> {
-    let exists = tx.query_row(
-        "SELECT EXISTS(SELECT 1 FROM case_audits WHERE audit_id = ?1)",
-        params![audit_id],
-        |row| row.get::<_, bool>(0),
-    )?;
-    if exists {
+    if automatic_audit_exists(tx, audit_id)? {
         tx.execute(
             "UPDATE case_audits
              SET target_request_id = ?2,
@@ -364,6 +362,42 @@ pub(super) fn upsert_automatic_case_audit<T: ToSql>(
     Ok(())
 }
 
+/// Makes `flags` the complete set of `managed` flags on a request's automatic audit, then
+/// re-derives the audit's status from every flag it carries, including those other writers
+/// manage. The audit is created only when there is a flag to record; an existing one keeps its
+/// notes.
+pub(super) fn synchronize_automatic_audit_flags<T: ToSql>(
+    tx: &Transaction<'_>,
+    audit_id: &str,
+    request_id: T,
+    subdomain: &str,
+    notes: &str,
+    managed: &[&str],
+    flags: &[&str],
+) -> Result<(), AppError> {
+    let failed = |error: duckdb::Error| {
+        AppError::Internal(format!(
+            "Failed to synchronize automatic audit '{audit_id}': {error}"
+        ))
+    };
+    if flags.is_empty() && !automatic_audit_exists(tx, audit_id).map_err(failed)? {
+        return Ok(());
+    }
+    // A new audit's status is provisional; `update_automatic_audit_status` settles it below.
+    upsert_automatic_case_audit(
+        tx,
+        audit_id,
+        request_id,
+        subdomain,
+        notes,
+        VERIFICATION_STATUS_COMPLIANT,
+        false,
+    )
+    .map_err(failed)?;
+    replace_managed_integrity_flags(tx, audit_id, managed, flags)?;
+    update_automatic_audit_status(tx, audit_id)
+}
+
 pub(super) fn synchronize_density_audit(
     tx: &Transaction<'_>,
     document_id: i64,
@@ -382,63 +416,20 @@ pub(super) fn synchronize_density_audit(
                 "Failed to load document request for entropy synchronization: {error}"
             ))
         })?;
-    let audit_id = format!("auto-{subdomain}-{request_id}");
-    let request_has_suspicious_data_density =
-        request_has_suspicious_density(tx, request_id, subdomain)?;
-    // DuckDB types `EXISTS(...)` as BOOLEAN, not an integer, and decoding it as `i64` fails the
-    // whole transaction. The other two call sites already read it as `bool`; this one did not,
-    // and it is the only reader on `mark_document_downloaded`, the terminal write for every
-    // document with no text layer. Nothing covered that path until the entropy test above.
-    let audit_exists = tx
-        .query_row(
-            "SELECT EXISTS(SELECT 1 FROM case_audits WHERE audit_id = ?1)",
-            params![audit_id],
-            |row| row.get::<_, bool>(0),
-        )
-        .map_err(|error| {
-            AppError::Internal(format!("Failed to inspect entropy audit state: {error}"))
-        })?;
-    if !request_has_suspicious_data_density && !audit_exists {
-        return Ok(());
-    }
-
-    upsert_automatic_case_audit(
+    let flags: &[&str] = if request_has_suspicious_density(tx, request_id, subdomain)? {
+        &[FLAG_SUSPICIOUS_DATA_DENSITY]
+    } else {
+        &[]
+    };
+    synchronize_automatic_audit_flags(
         tx,
-        &audit_id,
+        &format!("auto-{subdomain}-{request_id}"),
         request_id,
         subdomain,
         "Automatically derived during document entropy synchronization",
-        if request_has_suspicious_data_density {
-            VERIFICATION_STATUS_ANOMALY
-        } else {
-            VERIFICATION_STATUS_COMPLIANT
-        },
-        false,
+        &[FLAG_SUSPICIOUS_DATA_DENSITY],
+        flags,
     )
-    .map_err(|error| {
-        AppError::Internal(format!("Failed to synchronize entropy case audit: {error}"))
-    })?;
-    tx.execute(
-        "DELETE FROM document_integrity_flags
-         WHERE audit_id = ?1 AND flag_type = ?2",
-        params![audit_id, FLAG_SUSPICIOUS_DATA_DENSITY],
-    )
-    .map_err(|error| {
-        AppError::Internal(format!(
-            "Failed to clear stale entropy integrity flag: {error}"
-        ))
-    })?;
-    if request_has_suspicious_data_density {
-        tx.execute(
-            "INSERT INTO document_integrity_flags (audit_id, flag_type)
-             VALUES (?1, ?2)",
-            params![audit_id, FLAG_SUSPICIOUS_DATA_DENSITY],
-        )
-        .map_err(|error| {
-            AppError::Internal(format!("Failed to insert entropy integrity flag: {error}"))
-        })?;
-    }
-    update_automatic_audit_status(tx, &audit_id)
 }
 
 pub(super) fn has_heavy_redaction_density(extracted_text: &str) -> Result<bool, AppError> {
