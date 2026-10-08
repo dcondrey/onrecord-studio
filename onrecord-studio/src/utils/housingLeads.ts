@@ -103,7 +103,8 @@ export function housingLeads(results: Entry[], currentYear = new Date().getUTCFu
   const figure: LeadFigure = { kind: 'stacked', measure: 'Dwelling units on building permits issued, by income tier and issue year', claim: 'descriptive', unit: 'count', normalise: false,
     caption: 'Units on permits issued, not built or occupied; a negative tier total is units removed, net.',
     notes: [...(undated ? [`${shown(undated)} jobs have no readable issue date and are in no year.`] : []), ...(noJob ? [`${shown(noJob)} building permits have no job recorded and are in no total.`] : [])],
-    segments: [{ key: 'lowest', label: 'Extremely low and very low', tone: 'lead' }, { key: 'low', label: 'Low', tone: 'ord-4' }, { key: 'moderate', label: 'Moderate', tone: 'ord-3' }, { key: 'above_moderate', label: 'Above moderate', tone: 'ord-2' }],
+    // Grey tiers take ramp steps in segment order; Moderate and Above moderate sit two apart.
+    segments: [{ key: 'lowest', label: 'Extremely low and very low', tone: 'lead' }, { key: 'low', label: 'Low', tone: 'ord-1' }, { key: 'moderate', label: 'Moderate', tone: 'ord-2' }, { key: 'above_moderate', label: 'Above moderate', tone: 'ord-4' }],
     rows: years.map((row) => {
       const year = count(row.issued_year)!; const unrecorded = TIERS.filter((tier) => count(row[tier.key]) === null).map((tier) => tier.name);
       const untiered = (count(row.jobs) ?? 0) - (count(row.tiered_jobs) ?? 0);

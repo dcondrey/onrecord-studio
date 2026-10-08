@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import fixture from '../../src-tauri/tests/fixtures/call-leads.json';
 import type { AnalyticalSchema, SqlQueryResult } from '../types';
 import { storedLeads } from '../utils/automaticDiscovery';
-import { callLeads, callQueries } from '../utils/callLeads';
+import { callLeads, callQueries, sleeperBeatCounts, sleeperBeatRowsSql } from '../utils/callLeads';
 
 const schema = fixture.schema as AnalyticalSchema;
 const table = (snapshotId: string) => schema.datasets.find((dataset) => dataset.snapshotId === snapshotId)!;
@@ -92,5 +92,26 @@ describe('leads from police calls for service', () => {
       expect.objectContaining({ family: 'POLICE_CALLS', key: 'cfs_2026:calls_outcomes', snapshotIds: ['cfs_2026', 'cfs_2025', 'cfs_dispositions'] }),
       expect.objectContaining({ family: 'POLICE_CALLS', key: 'cfs_2026:calls_sleeper_beats', snapshotIds: ['cfs_2026', 'cfs_2025', 'cfs_beats'] }),
     ]);
+  });
+});
+
+describe('the beat map counts', () => {
+  const packed = (citywide: number) => [{ query: query('calls_sleeper_beats'), result: result([
+    { beat: '524', calls: 40, citywide_calls: citywide, no_beat: 2, all_beats: '524=40,521=30,999=8' }]) }];
+
+  it('maps the beats only when they and the calls with no beat make the citywide total the lead states', () => {
+    expect(sleeperBeatCounts(packed(80))).toEqual({ beats: [{ beat: '524', calls: 40 }, { beat: '521', calls: 30 }, { beat: '999', calls: 8 }], noBeat: 2, citywide: 80 });
+    // limit-1 and limit+1: one call either way and the map would state shares of a different whole.
+    expect(sleeperBeatCounts(packed(79))).toBeNull();
+    expect(sleeperBeatCounts(packed(81))).toBeNull();
+  });
+
+  it("opens one beat's calls with the lead's own selection of SLEEPER calls", () => {
+    const sql = callQueries(schema, table('cfs_2026')).find((item) => item.id === 'calls_sleeper_beats')!.sql;
+    const rows = sleeperBeatRowsSql(sql, "52'1")!;
+    expect(rows.startsWith(sql.slice(0, sql.indexOf(', beat_calls AS (')))).toBe(true);
+    expect(rows).toContain("SELECT * FROM sleeper WHERE beat = '52''1'");
+    expect(rows).not.toContain('beat_calls');
+    expect(sleeperBeatRowsSql('SELECT 1', '521')).toBeNull();
   });
 });

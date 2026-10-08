@@ -131,7 +131,7 @@ describe('the beat map', () => {
     bridge.invoke.mockImplementation((_name: string, args: { sql: string }) => (args.sql.includes('analysis_beats_a')
       ? new Promise((resolve) => { releaseA = resolve; })
       : Promise.resolve(answer('999'))));
-    const props = { counts: [{ beat: '521', calls: 5 }, { beat: '999', calls: 3 }], noBeat: 2, sources: { tables: ['pd_calls_for_service_2025'] } };
+    const props = { counts: [{ beat: '521', calls: 5 }, { beat: '999', calls: 3 }], noBeat: 2, citywide: 10, sources: { tables: ['pd_calls_for_service_2025'] } };
     const view = render(<BeatMap boundary={{ table: table('beats_a'), crs: true }} {...props} />);
     view.rerender(<BeatMap boundary={{ table: table('beats_b'), crs: true }} {...props} />);
     await screen.findByRole('img', { name: /Beat 999: 3 SLEEPER calls/ });

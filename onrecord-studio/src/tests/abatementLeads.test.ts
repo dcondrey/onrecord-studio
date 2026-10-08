@@ -30,7 +30,7 @@ describe('leads from released abatement logs', () => {
     expect(lead.detail).toContain('Completed within 3 hours of posting: 22. Within 24 hours: 101. From 24 to 72 hours: 1,811. After 72 hours or more: 144. Median 29.3 hours.');
     expect(lead.detail).not.toContain('before the notice was posted');
     expect(lead.detail).not.toContain('no notice in that log');
-    expect(lead.detail).toContain('24 and 72 hours are yardsticks, not the agency\'s stated requirement.');
+    expect(lead.detail).toContain('24 and 72 hours are this app\'s yardsticks; the logs do not record the notice period that applied.');
     const full = abatementLeads([{ query, result: hours(2067, { completed_before_posted: 11, abatements_without_notice_in_log: 214 }) }])[0].detail;
     expect(full).toContain('11 are recorded completed before the notice was posted. 214 of 11,104 abatements dated within the notice log\'s period are at a place with no notice in that log.');
   });

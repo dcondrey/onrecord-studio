@@ -4,7 +4,7 @@ import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
 import { useFirstRunDataStore } from '../../store/useFirstRunDataStore';
 import type { AnalyticalDatasetSummary as CityDatasetSummary, AnalyticalSchema, CityDataset } from '../../types';
-import { sleeperBeatCounts } from '../../utils/callLeads';
+import { sleeperBeatCounts, sleeperBeatRowsSql } from '../../utils/callLeads';
 import PlaceMap, { type PlaceBoundary } from '../charts/figures/PlaceMap';
 import { quoteIdentifier } from '../../utils/dataDiscovery';
 import { dailyCountsOf, type DailyCounts } from '../../utils/serviceAccountability';
@@ -68,11 +68,14 @@ type BoundaryState = { status: 'loading' } | { status: 'ready'; boundaries: Plac
  * opened, and a read that resolves after the beat table changed is discarded: it would draw one
  * file's boundaries under another's counts.
  */
-export function BeatMap({ boundary, counts, noBeat, sources }: {
+export function BeatMap({ boundary, counts, noBeat, citywide, sources, onActivate }: {
   boundary: { table: CityDatasetSummary; crs: boolean };
   counts: { beat: string; calls: number }[];
   noBeat: number;
+  /** The beats query's own citywide total, the denominator the ranked lead states. */
+  citywide: number;
   sources: ChartSources;
+  onActivate?(beat: string): void;
 }) {
   const [state, setState] = useState<BoundaryState>({ status: 'loading' });
   const gate = useLatestRequestGate();
@@ -97,14 +100,15 @@ export function BeatMap({ boundary, counts, noBeat, sources }: {
     return gate.invalidate;
   }, [gate, table.tableName, table.snapshotId, crs]);
   const top = counts[0];
-  const total = counts.reduce((sum, item) => sum + item.calls, 0) + noBeat;
   return (
     <PlaceMap
       title="SLEEPER calls by police beat, on the beat map"
-      headline={top && total ? `Beat ${top.beat}: ${top.calls.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} SLEEPER calls` : null}
+      headline={top && citywide ? `Beat ${top.beat}: ${top.calls.toLocaleString('en-US')} of ${citywide.toLocaleString('en-US')} SLEEPER calls` : null}
       noun="SLEEPER calls"
       places={counts.map((item) => ({ key: item.beat, label: `Beat ${item.beat}`, count: item.calls }))}
       unplaced={noBeat}
+      total={citywide}
+      onActivate={onActivate}
       boundaries={state.status === 'ready' ? state.boundaries : null}
       error={state.status === 'failed' ? state.message : null}
       sources={{ ...sources, tables: [...sources.tables, table.displayName] }}
@@ -189,7 +193,13 @@ export default function AutomaticDiscovery() {
   const beatMapOf = (item: DiscoveryObservation) => {
     if (!boundary || !item.id.endsWith(':calls_sleeper_beats')) return null;
     const counts = sleeperBeatCounts(state.profiles[item.snapshotId]?.results ?? []);
-    return counts ? { boundary, counts: counts.beats, noBeat: counts.noBeat } : null;
+    const sql = item.query?.sql;
+    // A beat's circle opens that beat's calls, selected exactly as the lead's query selects them.
+    const onActivate = sql ? (beat: string) => {
+      const rows = sleeperBeatRowsSql(sql, beat);
+      if (rows) { controller.inspect(rows); openAnalysis(); }
+    } : undefined;
+    return counts ? { boundary, counts: counts.beats, noBeat: counts.noBeat, citywide: counts.citywide, onActivate } : null;
   };
   const card = (item: DiscoveryObservation) => {
     const dataset = datasets.find((candidate) => candidate.snapshotId === item.snapshotId)!;

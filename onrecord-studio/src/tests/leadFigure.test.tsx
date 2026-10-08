@@ -61,3 +61,60 @@ describe('LeadFigure', () => {
     expect(table.getByText('Outside this measure: 5 no beat recorded')).toBeTruthy();
   });
 });
+
+describe('LeadFigure geometry', () => {
+  const find = <K extends LeadFigureData['kind']>(kind: K) => KINDS.find((figure) => figure.kind === kind) as Extract<LeadFigureData, { kind: K }>;
+
+  it('draws each closed bin as wide as its hours, and the open-ended bin as a tile off the scale', () => {
+    const { container } = render(<LeadFigure figure={find('bins')} headline="A lead" size="full" sources={sources} />);
+    // Focus rings follow each mark's box: a closed bin's box is its hour span less a 1.5px gap.
+    const widths = [...container.querySelectorAll('.viz-focus-ring')].map((ring) => Number(ring.getAttribute('width')) - 6 + 1.5);
+    expect(widths).toHaveLength(3);
+    expect(widths[0] / widths[1]).toBeCloseTo(3 / 69, 6);
+    expect(container.querySelector('[data-open-bin]')?.textContent).toContain('1');
+  });
+
+  it('prints a count exactly below 10,000 and compactly from 10,000', () => {
+    const ranked = { ...find('ranked'), excluded: [], rows: [
+      { key: 'a', label: 'Beat 521', value: { state: 'value' as const, value: 10_000 }, subject: true, detail: null },
+      { key: 'b', label: 'Beat 522', value: { state: 'value' as const, value: 9_999 }, subject: false, detail: null }] };
+    const { container } = render(<LeadFigure figure={ranked} headline="A lead" size="full" sources={sources} />);
+    const labels = [...container.querySelectorAll('text')].map((text) => text.textContent);
+    expect(labels).toContain('10K');
+    expect(labels).toContain('9,999');
+  });
+
+  it("gives an absent bullet subject a slot with the builder's reason, not a 'not recorded' word in the comparison's track", () => {
+    const bullet = KINDS.find((figure) => figure.kind === 'paired' && figure.display === 'bullet')!;
+    const { container } = render(<LeadFigure figure={bullet} headline="A lead" size="full" sources={sources} />);
+    const slot = container.querySelector('[data-absence="not-recorded"]')!;
+    expect(slot.querySelector('text')?.textContent).toMatch(/^no rows in the actuals/);
+    expect([...container.querySelectorAll('text')].some((text) => text.textContent === 'not recorded')).toBe(false);
+  });
+
+  it('marks the focused year across the panels, and a card keeps the first panel and says how many more there are', () => {
+    const series = find('series');
+    const twoPanels = { ...series, panels: [...series.panels, { ...series.panels[0], key: 'other', label: 'Other beds' }] };
+    const { container } = render(<LeadFigure figure={twoPanels} headline="A lead" size="full" sources={sources} />);
+    const year = screen.getAllByRole('img').find((mark) => mark.getAttribute('aria-label')?.startsWith('FY 2024'))!;
+    expect(container.querySelector('[data-crosshair]')).toBeNull();
+    fireEvent.focus(year);
+    expect(container.querySelector('[data-crosshair]')).not.toBeNull();
+    fireEvent.blur(year);
+    expect(container.querySelector('[data-crosshair]')).toBeNull();
+    cleanup();
+    render(<LeadFigure figure={twoPanels} headline={null} size="card" sources={sources} />);
+    expect(screen.queryByText('Other beds')).toBeNull();
+    expect(screen.getByText("+1 panel in the lead's dossier.")).toBeTruthy();
+  });
+});
+
+describe('CalendarHeat on a card', () => {
+  it('names every covered day and keeps the grid to one tab stop', () => {
+    const daily = { counts: new Map([['2025-03-04', 12]]), first: '2025-03-01', last: '2025-03-10', years: new Set([2025]), undated: 0 };
+    const { container } = render(<CalendarHeat title="Abatements by day" noun="abatements" daily={daily} sources={sources} size="card" />);
+    expect(screen.getByRole('img', { name: 'Tue Mar 4, 2025: 12 abatements' })).toBeTruthy();
+    expect(screen.getAllByRole('img', { name: /abatements$/ })).toHaveLength(10);
+    expect(container.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+  });
+});

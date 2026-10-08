@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, type PointerEvent } from 'react';
 import type { DailyCounts } from '../../../utils/serviceAccountability';
 import { formatDate, formatValue } from '../core/format';
 import { absent, measured } from '../core/nulls';
@@ -30,6 +30,7 @@ export interface CalendarHeatProps {
 }
 
 const DAY = 86_400_000;
+/** Monday, Wednesday and Friday are labelled: in full on a roomy grid, by initial on a small one. */
 const WEEKDAY_LABELS = ['Mon', '', 'Wed', '', 'Fri', '', ''];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -84,11 +85,15 @@ function median(values: readonly number[]): number | null {
 
 const dayLabel = (ms: number) => `${new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: 'UTC' }).format(ms)} ${formatDate(ms, 'day')}`;
 
+/** Cells shrink to 5px, with one-letter weekday labels, so 54 weeks fit a 340px card. The year
+ * has its own line above the month labels. */
 function layoutOf(years: readonly number[], width: number, size: 'card' | 'full') {
-  const left = 30;
-  const cell = Math.max(6, Math.min(size === 'card' ? 10 : 14, Math.floor((width - left - 4) / 54)));
-  const block = 16 + 7 * cell + 12;
-  return { left, cell, block, height: years.length * block };
+  const roomy = Math.floor((width - 30 - 4) / 54) >= 8;
+  const left = roomy ? 30 : 12;
+  const cell = Math.max(5, Math.min(size === 'card' ? 10 : 14, Math.floor((width - left - 4) / 54)));
+  const header = 28;
+  const block = header + 7 * cell + 10;
+  return { left, cell, header, block, short: cell < 8, height: years.length * block };
 }
 
 export default function CalendarHeat({ title, noun, daily, sources, size }: CalendarHeatProps) {
@@ -97,7 +102,7 @@ export default function CalendarHeat({ title, noun, daily, sources, size }: Cale
   const bounds = useMemo(() => thresholds(days), [days]);
   const years = useMemo(() => [...new Set(days.map((day) => day.year))], [days]);
   const tooltip = useTooltip();
-  const interactive = size === 'full';
+  // One tab stop for the whole grid; arrows move day to day through the covered days.
   const roving = useRovingFocus({ shape: { rows: Math.max(1, covered.length) }, onActivate: () => {}, onEscape: tooltip.hide });
 
   const total = covered.reduce((sum, day) => sum + day.count, 0);
@@ -105,7 +110,7 @@ export default function CalendarHeat({ title, noun, daily, sources, size }: Cale
   const weekdays = covered.filter((day) => day.weekday < 5).reduce((sum, day) => sum + day.count, 0);
   const middle = median(covered.map((day) => day.count));
   const headline = busiest && total > 0
-    ? `Busiest day: ${dayLabel(busiest.ms)}, ${formatValue(busiest.count, { kind: 'count' })}; ${formatValue(weekdays / total, { kind: 'percent' })} of ${noun} on weekdays`
+    ? `Busiest day: ${dayLabel(busiest.ms)}, ${formatValue(busiest.count, { kind: 'count' })} ${noun}; ${formatValue(weekdays / total, { kind: 'percent' })} of ${noun} on weekdays`
     : null;
 
   const table: TwinTable = useMemo(() => {
@@ -129,17 +134,19 @@ export default function CalendarHeat({ title, noun, daily, sources, size }: Cale
   }, [covered, daily.undated, noun, title]);
 
   const coveredIndex = new Map(covered.map((day, index) => [day.iso, index]));
+  const contentOf = (day: Day) => (day.covered
+    ? <TooltipContent title={dayLabel(day.ms)} rows={[{ key: 'n', value: formatValue(day.count, { kind: 'count' }), label: noun }]} />
+    : <TooltipContent title={dayLabel(day.ms)} rows={[]} note="Outside the period the source covers; not a zero." />);
+  // Keyboard reaches a covered cell through roving focus. The pointer is read by one overlay per
+  // year (below), not by the cells: a cell is smaller than the minimum hit area, so cell hit areas
+  // would overlap and the last-drawn neighbour would take the hover.
   const interaction = (day: Day): MarkInteraction | undefined => {
     const index = coveredIndex.get(day.iso);
-    if (!interactive || index === undefined) return undefined;
-    const name = `${dayLabel(day.ms)}: ${formatValue(day.count, { kind: 'count' })} ${noun}`;
-    const content = <TooltipContent title={dayLabel(day.ms)} rows={[{ key: 'n', value: formatValue(day.count, { kind: 'count' }), label: noun }]} />;
+    if (index === undefined) return undefined;
     return {
-      name,
+      name: `${dayLabel(day.ms)}: ${formatValue(day.count, { kind: 'count' })} ${noun}`,
       item: roving.getItemProps(index),
-      onPointerMove: (event) => tooltip.show(content, { clientX: event.clientX, clientY: event.clientY }),
-      onPointerLeave: tooltip.hide,
-      onFocusMark: (box) => tooltip.show(content, box),
+      onFocusMark: (box) => tooltip.show(contentOf(day), box),
       onBlurMark: tooltip.hide,
     };
   };
@@ -179,29 +186,37 @@ export default function CalendarHeat({ title, noun, daily, sources, size }: Cale
         legend={covered.length < days.length ? [{ key: 'not-covered', label: 'Outside the period the source covers', swatch: 'slot-dotted' }] : []}
         minHeight={size === 'card' ? 96 : 140}
         plotHeight={(width) => layoutOf(years, width, size).height}
-        interactive={interactive ? { roledescription: 'calendar' } : undefined}
+        interactive={{ roledescription: 'calendar' }}
         storageKey={`calendar:${title}`}
       >
         {({ width }) => {
-          const { left, cell, block } = layoutOf(years, width, size);
+          const { left, cell, header, block, short } = layoutOf(years, width, size);
           return (
             <g>
               {years.map((year, y) => {
-                const top = y * block + 16;
+                const top = y * block + header;
                 const start = Date.UTC(year, 0, 1);
                 const lead = weekdayOf(start);
                 const column = (day: Day) => Math.floor((Math.round((day.ms - start) / DAY) + lead) / 7);
                 const yearDays = days.filter((day) => day.year === year);
+                const weeks = Math.ceil((yearDays.length + lead) / 7);
+                // The day under the pointer, from its week column and weekday row.
+                const dayAt = (event: PointerEvent<SVGRectElement>): Day | null => {
+                  const box = event.currentTarget.getBoundingClientRect();
+                  const col = Math.floor(((event.clientX - box.left) / box.width) * weeks);
+                  const row = Math.floor(((event.clientY - box.top) / box.height) * 7);
+                  return yearDays[col * 7 + row - lead] ?? null;
+                };
                 return (
                   <g key={year}>
-                    <text x={0} y={top - 4} className="fill-fg-secondary text-[11px] font-medium viz-num">{year}</text>
+                    <text x={0} y={top - 17} className="fill-fg-secondary text-[11px] font-medium viz-num">{year}</text>
                     {MONTHS.map((month, m) => {
                       const firstOfMonth = yearDays.find((day) => day.iso.slice(5, 7) === String(m + 1).padStart(2, '0'));
                       if (!firstOfMonth || (cell < 8 && m % 2)) return null;
                       return <text key={month} x={left + column(firstOfMonth) * cell} y={top - 4} className={TICK_CLASS}>{month}</text>;
                     })}
-                    {WEEKDAY_LABELS.map((label, d) => label && cell >= 8 && (
-                      <text key={label} x={left - 4} y={top + d * cell + cell / 2} dy="0.32em" textAnchor="end" className={TICK_CLASS}>{label}</text>
+                    {WEEKDAY_LABELS.map((label, d) => label && (
+                      <text key={label} x={left - 3} y={top + d * cell + cell / 2} dy="0.32em" textAnchor="end" className={TICK_CLASS}>{short ? label[0] : label}</text>
                     ))}
                     {yearDays.map((day) => (
                       <HeatCell
@@ -215,6 +230,20 @@ export default function CalendarHeat({ title, noun, daily, sources, size }: Cale
                         interaction={interaction(day)}
                       />
                     ))}
+                    <rect
+                      x={left}
+                      y={top}
+                      width={weeks * cell}
+                      height={7 * cell}
+                      fill="transparent"
+                      aria-hidden="true"
+                      onPointerMove={(event) => {
+                        const day = dayAt(event);
+                        if (day) tooltip.show(contentOf(day), { clientX: event.clientX, clientY: event.clientY });
+                        else tooltip.hide();
+                      }}
+                      onPointerLeave={tooltip.hide}
+                    />
                   </g>
                 );
               })}

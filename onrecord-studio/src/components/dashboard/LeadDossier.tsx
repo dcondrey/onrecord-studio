@@ -4,6 +4,7 @@ import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
 import type { DossierGap, EvidenceLink, LeadDossier as LeadDossierData, LeadFigure as LeadFigureData } from '../../types';
 import LeadFigure from '../charts/figures/LeadFigure';
+import { useDiscoveryController } from './AutomaticDiscoveryProvider';
 import { tableLeadSources, type TableLeadSources } from '../../utils/tableLeadSources';
 import { findingToBriefingEvidence } from './BriefingWorkspace';
 import ArtifactDrafts from './ArtifactDrafts';
@@ -120,6 +121,7 @@ export default function LeadDossier({ findingId }: { findingId: string }) {
  * stays citable. A finding with no figure keeps its explanation in the evidence chain as before.
  */
 function LeadFigureSection({ dossier, figure }: { dossier: LeadDossierData; figure: FigureState }) {
+  const controller = useDiscoveryController();
   const sources = tableLeadSources(dossier.finding.explanation);
   const drawn = 'figure' in figure ? figure.figure : null;
   if (!drawn) {
@@ -135,6 +137,9 @@ function LeadFigureSection({ dossier, figure }: { dossier: LeadDossierData; figu
   const tablesAt = explanation.lastIndexOf(TABLES_READ);
   const prose = tablesAt < 0 ? explanation : explanation.slice(0, tablesAt);
   const tables = sources?.tables.map((table) => table.parts?.name ?? table.line) ?? [];
+  // A mark opens the lead's own query in Analysis, as its card does.
+  const sql = sources?.sql;
+  const onActivate = controller && sql ? () => { controller.inspect(sql); useAppStore.getState().setWorkspaceView('analysis'); } : undefined;
   return (
     <>
       <LeadFigure
@@ -142,6 +147,7 @@ function LeadFigureSection({ dossier, figure }: { dossier: LeadDossierData; figu
         headline={dossier.finding.headline}
         size="full"
         sources={{ tables: tables.length ? tables : ['tables not recorded with this finding'], retrievedAt: sources?.tables[0]?.parts?.retrievedOn }}
+        onActivate={onActivate}
       />
       <details className="text-body">
         <summary className="focus-ring w-fit cursor-pointer rounded text-caption text-muted hover:text-fg">Figures as text</summary>

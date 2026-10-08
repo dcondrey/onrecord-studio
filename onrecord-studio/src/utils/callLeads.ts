@@ -109,8 +109,7 @@ GROUP BY call_year, call_type ORDER BY call_year DESC NULLS LAST, call_type`,
  SELECT beat, called_at FROM incidents WHERE call_type = 'SLEEPER' AND (conflicted OR dispo IS NULL OR dispo NOT IN (${list(CANCELLED)}))
 )${beats ? `, places AS (
  SELECT TRIM(CAST(${quoteIdentifier('beat')} AS VARCHAR)) AS beat, MIN(TRIM(CAST(${quoteIdentifier('neighborhood')} AS VARCHAR))) AS neighborhood FROM ${quoteIdentifier(beats.tableName)} GROUP BY 1
-)` : ''}
-, beat_calls AS (
+)` : ''}${BEAT_CALLS_CTE}
  SELECT beat, COUNT(*) AS calls FROM sleeper WHERE beat IS NOT NULL GROUP BY beat
 ), sleeper_totals AS (
  SELECT COUNT(*) AS citywide_calls, COUNT(*) FILTER (WHERE beat IS NULL) AS no_beat, MIN(YEAR(called_at)) AS first_year, MAX(YEAR(called_at)) AS last_year FROM sleeper
@@ -123,9 +122,14 @@ ORDER BY beat_calls.calls DESC, beat_calls.beat LIMIT 10`,
   return queries;
 }
 
-/** Every beat's SLEEPER calls from the beats query's packed column, and the calls with no beat;
- * null when the result was cut short or predates the column. */
-export function sleeperBeatCounts(results: Entry[]): { beats: { beat: string; calls: number }[]; noBeat: number } | null {
+/** Where the beats query's per-beat counting starts; everything before it selects the SLEEPER calls. */
+const BEAT_CALLS_CTE = '\n, beat_calls AS (';
+
+/** Every beat's SLEEPER calls from the beats query's packed column, the calls with no beat and the
+ * citywide total; null when the result was cut short, predates the column, or the beats and the
+ * calls with no beat do not add up to the citywide total (a map of them would then disagree with
+ * the lead's own denominator). */
+export function sleeperBeatCounts(results: Entry[]): { beats: { beat: string; calls: number }[]; noBeat: number; citywide: number } | null {
   const read = rowsOf(results, 'calls_sleeper_beats');
   const packed = read?.rows[0].all_beats;
   if (!read || typeof packed !== 'string') return null;
@@ -134,7 +138,18 @@ export function sleeperBeatCounts(results: Entry[]): { beats: { beat: string; ca
     const calls = count(pair.slice(at + 1));
     return at > 0 && calls !== null ? [{ beat: pair.slice(0, at), calls }] : [];
   });
-  return { beats, noBeat: count(read.rows[0].no_beat) ?? 0 };
+  const noBeat = count(read.rows[0].no_beat) ?? 0;
+  const citywide = count(read.rows[0].citywide_calls);
+  if (citywide === null || beats.reduce((sum, item) => sum + item.calls, 0) + noBeat !== citywide) return null;
+  return { beats, noBeat, citywide };
+}
+
+/** The SLEEPER calls of one beat, as the beats query selected them, or null for SQL that is not a
+ * beats query. Opens the rows behind a beat's circle on the map. */
+export function sleeperBeatRowsSql(sql: string, beat: string): string | null {
+  const at = sql.indexOf(BEAT_CALLS_CTE);
+  if (at < 0) return null;
+  return `${sql.slice(0, at)}\nSELECT * FROM sleeper WHERE beat = '${beat.replace(/'/g, "''")}' ORDER BY called_at`;
 }
 
 /** A result cut short by the row limit would give short counts, so it gives none. */
@@ -144,14 +159,15 @@ const typeYear = (row: Record<string, unknown>): TypeYear => ({ year: count(row.
   blank: count(row.blank) ?? 0, conflicting: count(row.conflicting) ?? 0, arrest: count(row.arrest) ?? 0, report: count(row.report) ?? 0, noReport: count(row.no_report) ?? 0, unfounded: count(row.unfounded) ?? 0, other: count(row.other) ?? 0,
   crisis: count(row.crisis_team) ?? 0, otherCodes: typeof row.other_codes === 'string' && row.other_codes ? row.other_codes : null });
 /** The outcomes that partition the calls with a disposition. The Crisis Response Team is not one:
- * its calls are also counted under their first letter, so it is drawn as an overlay. Outcomes are
- * not ordered, so neighbouring segments take ramp steps at least two apart to stay distinguishable. */
+ * its calls are also counted under their first letter, so it is drawn as an overlay. The grey
+ * outcomes take the ramp's steps in segment order, so the legend reads light to dark as the bar
+ * does; the commonest, no report required, takes the first step. */
 const OUTCOME_SEGMENTS = [
   { key: 'arrest', label: 'Arrest', tone: 'lead' },
-  { key: 'report', label: 'Report', tone: 'ord-3' },
   { key: 'noReport', label: 'No report required', tone: 'ord-1' },
-  { key: 'unfounded', label: 'Unfounded', tone: 'ord-4' },
-  { key: 'other', label: 'Other code', tone: 'ord-2' },
+  { key: 'report', label: 'Report', tone: 'ord-2' },
+  { key: 'unfounded', label: 'Unfounded', tone: 'ord-3' },
+  { key: 'other', label: 'Other code', tone: 'ord-4' },
 ] as const satisfies readonly { key: keyof TypeYear; label: string; tone: LeadSegmentTone }[];
 /** Calls not cancelled or duplicated: the ones a unit was sent to or that were otherwise closed. */
 const sent = (item: TypeYear) => item.calls - item.cancelled;
