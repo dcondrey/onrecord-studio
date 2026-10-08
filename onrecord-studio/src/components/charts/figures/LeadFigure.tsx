@@ -355,8 +355,10 @@ function StackedPlot({ figure, width, size, interaction }: { figure: LeadStacked
   const layout = stackedLayout(figure, width, size);
   const totals = figure.rows.map((row) => rowTotal(row.values));
   const negatives = figure.rows.map((row) => row.values.reduce((sum, value) => sum + Math.min(0, value), 0));
-  // A row's end label: its total, and on a count axis the units removed below zero, signed.
-  const totalLabels = totals.map((total, index) => `${format(total, figure.unit, true)}${!figure.normalise && negatives[index] < 0 ? `, ${format(negatives[index], figure.unit)} removed` : ''}`);
+  // A row's end label: its total, or with units removed below zero, the net and the removal.
+  const totalLabels = totals.map((total, index) => (!figure.normalise && negatives[index] < 0
+    ? `${format(total + negatives[index], figure.unit, true)} net (${format(negatives[index], figure.unit)} removed)`
+    : format(total, figure.unit, true)));
   const reserve = Math.max(28, ...totalLabels.map((label) => measureText(label) + 10));
   const right = Math.max(layout.plotX + 60, width - reserve);
   const least = Math.min(0, ...negatives);

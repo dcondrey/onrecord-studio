@@ -110,7 +110,7 @@ describe('the beat map counts', () => {
     const sql = callQueries(schema, table('cfs_2026')).find((item) => item.id === 'calls_sleeper_beats')!.sql;
     const rows = sleeperBeatRowsSql(sql, "52'1")!;
     expect(rows.startsWith(sql.slice(0, sql.indexOf(', beat_calls AS (')))).toBe(true);
-    expect(rows).toContain("SELECT * FROM sleeper WHERE beat = '52''1'");
+    expect(rows).toMatch(/SELECT incident, called_at, dispo, beat FROM incidents WHERE call_type = 'SLEEPER' AND .* AND beat = '52''1'/);
     expect(rows).not.toContain('beat_calls');
     expect(sleeperBeatRowsSql('SELECT 1', '521')).toBeNull();
   });

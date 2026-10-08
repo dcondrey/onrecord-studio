@@ -199,6 +199,22 @@ FROM paired`,
 
 const count = (value: unknown): number => numberOrNull(value) ?? 0;
 
+/**
+ * One population, the posted notices, split three ways: each paired place holds exactly one notice,
+ * so paired places count notices. None when the parts would exceed the whole: a strip of them
+ * would then state a part-to-whole the counts do not support. Abatements with no notice are another
+ * population, a note rather than a part.
+ */
+export function noticeParts(posted: number, paired: number, notMatchable: number) {
+  const other = posted - paired - notMatchable;
+  if (other < 0) return [];
+  return [
+    { key: 'paired', label: 'notices paired with one abatement', count: paired },
+    { key: 'not_matchable', label: 'notices with no place or time', count: notMatchable },
+    { key: 'other', label: 'notices at a place without exactly one of each', count: other },
+  ].filter((item) => item.count > 0);
+}
+
 function repeatLeads(results: { query: DiscoveryQuery; result?: SqlQueryResult }[]): ServiceLead[] {
   const entry = results.find((item) => item.query.id === 'abatement_repeat_places');
   if (!entry?.result?.rows.length) return [];
@@ -269,14 +285,7 @@ export function abatementLeads(results: { query: DiscoveryQuery; result?: SqlQue
       before: early ? { key: 'before', label: 'completed before the notice was logged', count: early } : null,
       median: numberOrNull(row.median_hours),
       reference: { at: 72, label: '72 h reference (app yardstick; the logs do not record the notice period that applied)' },
-      // One population, the posted notices, split three ways: each paired place holds exactly one
-      // notice, so paired places count notices. Abatements with no notice are another population
-      // and are a note, not a part of this whole.
-      denominator: [
-        { key: 'paired', label: 'notices paired with one abatement', count: paired },
-        { key: 'not_matchable', label: 'notices with no place or time', count: count(row.notices_not_matchable) },
-        { key: 'other', label: 'notices at a place without exactly one of each', count: Math.max(0, count(row.posted_notices) - paired - count(row.notices_not_matchable)) },
-      ].filter((item) => item.count > 0) } satisfies LeadFigure }),
+      denominator: noticeParts(count(row.posted_notices), paired, count(row.notices_not_matchable)) } satisfies LeadFigure }),
     title: `${shown(count(row.under_24_hours))} of ${shown(paired)} abatements matched to a single posted notice were completed less than 24 hours after posting`,
     detail: `${shown(count(row.posted_notices))} notices and ${shown(count(row.completed_abatements))} abatements are in the two logs${period}. ${shown(paired)} places have exactly one of each, matched on address and coordinates. Completed within 3 hours of posting: ${shown(count(row.under_3_hours))}. Within 24 hours: ${shown(count(row.under_24_hours))}. From 24 to 72 hours: ${shown(count(row.from_24_to_72_hours))}. After 72 hours or more: ${shown(count(row.over_72_hours))}.${row.median_hours == null ? '' : ` Median ${String(row.median_hours)} hours.`}${early ? ` ${shown(early)} are recorded completed before the notice was posted.` : ''}${unnoticed ? ` ${shown(unnoticed)} of ${shown(count(row.abatements_in_notice_period))} abatements dated within the notice log's period are at a place with no notice in that log.` : ''} The logs record when a notice was posted and when an abatement was closed. They do not record the notice period that applied, whether anyone was present, or what was done with belongings; 24 and 72 hours are this app's yardsticks; the logs do not record the notice period that applied.`,
     question: 'What notice period does the agency\'s abatement procedure require, and what happened to belongings at the places cleared soonest after posting? A records request for the storage log and the notices as posted would show it.',

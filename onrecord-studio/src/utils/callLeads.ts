@@ -56,6 +56,8 @@ export function missingCallCompanions(schema: AnalyticalSchema, dataset: Analyti
 
 const code = (name: string) => `UPPER(TRIM(CAST(${quoteIdentifier(name)} AS VARCHAR)))`;
 const list = (codes: readonly string[]) => codes.map((value) => `'${value}'`).join(', ');
+/** A SLEEPER call a unit was sent to: not cancelled or duplicated, unless its latest entries disagree. */
+const SLEEPER_SENT = `call_type = 'SLEEPER' AND (conflicted OR dispo IS NULL OR dispo NOT IN (${list(CANCELLED)}))`;
 /** Every year's rows, then one row per incident: the publisher repeats an incident number when a
  * call is updated, and the latest entry is the one kept. Repeats often share a date_time, so the
  * latest entry cannot always be told apart; an incident whose latest entries disagree on the
@@ -98,7 +100,7 @@ GROUP BY call_year, call_type ORDER BY call_year DESC NULLS LAST, call_type`,
     id: 'calls_daily', title: 'SLEEPER calls by day',
     method: `SLEEPER calls in ${names}, one row per incident number as above, leaving out the cancelled and duplicate codes ${CANCELLED.join(', ')} unless the incident's latest entries disagree on the disposition, counted per calendar day of date_time. The days covered are those from the first to the last call of any type in the files, in the years the files hold; a day in them with no SLEEPER call is a count of zero, and a day outside them was not covered.`,
     sql: `WITH ${deduplicated(years, false)}, ${dailyCountsSql(
-      `SELECT CAST(called_at AS DATE) AS day FROM incidents WHERE call_type = 'SLEEPER' AND (conflicted OR dispo IS NULL OR dispo NOT IN (${list(CANCELLED)}))`,
+      `SELECT CAST(called_at AS DATE) AS day FROM incidents WHERE ${SLEEPER_SENT}`,
       'SELECT CAST(called_at AS DATE) AS day FROM incidents',
     )}`,
   });
@@ -106,7 +108,7 @@ GROUP BY call_year, call_type ORDER BY call_year DESC NULLS LAST, call_type`,
     id: 'calls_sleeper_beats', title: 'Where SLEEPER calls were sent, by police beat',
     method: `SLEEPER calls in ${names}, one row per incident number as above, leaving out the cancelled and duplicate codes ${CANCELLED.join(', ')} unless the incident's latest entries disagree on the disposition, counted by the beat of the call's address${beats ? ` with the neighborhood from ${beats.displayName}` : ''}. The ten beats with most calls are read, with every beat's count packed in one column for the map, the citywide total and the calls with no beat recorded.`,
     sql: `WITH ${deduplicated(years, true)}, sleeper AS (
- SELECT beat, called_at FROM incidents WHERE call_type = 'SLEEPER' AND (conflicted OR dispo IS NULL OR dispo NOT IN (${list(CANCELLED)}))
+ SELECT beat, called_at FROM incidents WHERE ${SLEEPER_SENT}
 )${beats ? `, places AS (
  SELECT TRIM(CAST(${quoteIdentifier('beat')} AS VARCHAR)) AS beat, MIN(TRIM(CAST(${quoteIdentifier('neighborhood')} AS VARCHAR))) AS neighborhood FROM ${quoteIdentifier(beats.tableName)} GROUP BY 1
 )` : ''}${BEAT_CALLS_CTE}
@@ -144,12 +146,13 @@ export function sleeperBeatCounts(results: Entry[]): { beats: { beat: string; ca
   return { beats, noBeat, citywide };
 }
 
-/** The SLEEPER calls of one beat, as the beats query selected them, or null for SQL that is not a
- * beats query. Opens the rows behind a beat's circle on the map. */
+/** The SLEEPER calls of one beat, selected as the beats query selects them, with each call's
+ * incident number and disposition; null for SQL that is not a beats query. Opens the rows behind a
+ * beat's circle on the map. */
 export function sleeperBeatRowsSql(sql: string, beat: string): string | null {
   const at = sql.indexOf(BEAT_CALLS_CTE);
   if (at < 0) return null;
-  return `${sql.slice(0, at)}\nSELECT * FROM sleeper WHERE beat = '${beat.replace(/'/g, "''")}' ORDER BY called_at`;
+  return `${sql.slice(0, at)}\nSELECT incident, called_at, dispo, beat FROM incidents WHERE ${SLEEPER_SENT} AND beat = '${beat.replace(/'/g, "''")}' ORDER BY called_at`;
 }
 
 /** A result cut short by the row limit would give short counts, so it gives none. */

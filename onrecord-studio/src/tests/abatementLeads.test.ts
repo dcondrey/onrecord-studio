@@ -3,7 +3,7 @@ import fixture from '../../src-tauri/tests/fixtures/abatement-leads.json';
 import service from '../../src-tauri/tests/fixtures/service-accountability.json';
 import type { AnalyticalSchema, SqlQueryResult } from '../types';
 import nearby from '../../src-tauri/tests/fixtures/abatement-reports-nearby.json';
-import { abatementLeads, abatementQueries, reportsAroundAbatements } from '../utils/abatementLeads';
+import { abatementLeads, abatementQueries, noticeParts, reportsAroundAbatements } from '../utils/abatementLeads';
 import { storedLeads } from '../utils/automaticDiscovery';
 
 const schema = fixture.schema as AnalyticalSchema;
@@ -117,5 +117,14 @@ describe('Encampment reports around abatements', () => {
     expect(lead.detail).not.toContain('9 Elm Street');
     expect(lead.detail).toContain('34 rows have no coordinates or readable time');
     expect(lead.detail).toContain('whether the same people returned');
+  });
+});
+
+describe('the posted notices strip', () => {
+  it('splits the posted notices into parts that sum to them, and draws none when the parts would exceed the whole', () => {
+    const parts = noticeParts(100, 60, 10);
+    expect(parts.map((part) => part.count)).toEqual([60, 10, 30]);
+    expect(noticeParts(70, 60, 10).map((part) => part.key)).toEqual(['paired', 'not_matchable']);
+    expect(noticeParts(69, 60, 10)).toEqual([]);
   });
 });
