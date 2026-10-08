@@ -48,10 +48,11 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
         }}
         disabled={isDiscovering}
         size="sm"
-        className="w-32 border-0 bg-transparent text-control text-fg-secondary shadow-none"
+        className="w-32 border-0 2xl:w-44 bg-transparent text-control text-fg-secondary shadow-none"
       >
         <optgroup label="San Diego sources">
-          {BUILT_IN_SOURCE_OPTIONS.map((source) => <option key={source.id} value={source.id}>{source.label}</option>)}
+          {/* The field beside it already asks for a URL, so the catch-all option needs no second label for it. */}
+          {BUILT_IN_SOURCE_OPTIONS.map((source) => <option key={source.id} value={source.id}>{source.id === 'auto' ? 'Any source' : source.label}</option>)}
         </optgroup>
       </Select>
       <label htmlFor={inputId} className="sr-only">Public data source URL</label>
