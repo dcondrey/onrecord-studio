@@ -2,6 +2,7 @@ import { useId, useState } from 'react';
 import { useLicense } from '../licensing/LicenseProvider';
 import { providerLabel } from '../licensing/providers';
 import Button from '../ui/Button';
+import Switch from '../ui/Switch';
 import Dialog, { DialogBody, DialogHeader } from '../ui/Dialog';
 import Icon from '../ui/icons';
 import { useAppStore } from '../../store/useAppStore';
@@ -39,6 +40,8 @@ export default function AccountMenu() {
   const audioAlertsEnabled = useAppStore((state) => state.audioAlertsEnabled);
   const setAudioAlertsEnabled = useAppStore((state) => state.setAudioAlertsEnabled);
   const billingHintId = useId();
+  const audioLabelId = useId();
+  const audioHintId = useId();
   const status = controller?.status ?? null;
   if (!controller || !status || !isDirectChannel(status)) return null;
 
@@ -123,20 +126,13 @@ export default function AccountMenu() {
                 </p>
               ) : null}
             </div>
-            <label className="mt-5 flex items-center justify-between gap-4 border-t border-line pt-4 text-body text-fg">
+            <div className="mt-5 flex items-center justify-between gap-4 border-t border-line pt-4 text-body text-fg">
               <span>
-                Audio alerts
-                <span className="block text-caption text-muted">A sound when a source finishes syncing or a task fails.</span>
+                <span id={audioLabelId}>Audio alerts</span>
+                <span id={audioHintId} className="block text-caption text-muted">A sound when a source finishes syncing or a task fails.</span>
               </span>
-              <input
-                type="checkbox"
-                role="switch"
-                checked={audioAlertsEnabled}
-                aria-checked={audioAlertsEnabled}
-                onChange={(event) => setAudioAlertsEnabled(event.currentTarget.checked)}
-                className="focus-ring"
-              />
-            </label>
+              <Switch checked={audioAlertsEnabled} onCheckedChange={setAudioAlertsEnabled} aria-labelledby={audioLabelId} aria-describedby={audioHintId} />
+            </div>
             {billingNotice ? <p role="alert" className="mt-3 text-caption text-warning">{billingNotice}</p> : null}
             {confirming ? (
               <div role="group" aria-label="Confirm account deletion" className="mt-4 rounded-lg border border-danger/30 bg-danger/10 p-4 text-body text-danger">

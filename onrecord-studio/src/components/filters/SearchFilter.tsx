@@ -10,6 +10,7 @@ import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { displayError } from '../../utils/errorMessage';
 import { SearchField, Select } from '../ui/Field';
 import { buttonClass } from '../ui/Button';
+import Switch from '../ui/Switch';
 
 export default function SearchFilter() {
   const activePortalKey = useAppStore((state) => state.activePortalKey);
@@ -182,14 +183,14 @@ export default function SearchFilter() {
 
   return (
     <section aria-label="Evidence search" className="shrink-0 px-5 py-3 lg:px-6">
-      <div className="app-panel flex flex-wrap items-center gap-2 p-2">
+      <div className="app-panel flex items-center gap-2 p-2">
         <SearchField
           id="evidence-search"
           aria-label="Search requests and extracted documents"
           value={inputValue}
           onChange={(event) => updateTerm(event.target.value)}
           placeholder="Search requests and document text"
-          wrapperClassName="min-w-[15rem] flex-1"
+          wrapperClassName="min-w-0 flex-1"
           trailing={isSearching ? <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-line-strong border-t-accent" role="status" aria-label="Searching" /> : null}
         />
         <AgencySelector />
@@ -197,34 +198,29 @@ export default function SearchFilter() {
           aria-label="Request status"
           value={selectedStatus ?? ''}
           onChange={(event) => setSearchFilters(inputValue, selectedAgencyId, event.target.value || null, selectedPolicyDeviation)}
-          className="focus-ring w-36"
+          className="focus-ring w-32 xl:w-36"
         >
           <option value="">All statuses</option>
           <option value="open">Open</option>
           <option value="closed">Closed</option>
           <option value="referred">Referred</option>
         </Select>
-        <button type="button" onClick={clear} aria-hidden={!hasFilters || undefined} tabIndex={hasFilters ? undefined : -1} className={buttonClass({ variant: 'ghost', className: `focus-ring ${hasFilters ? '' : 'invisible'}` })}>
-          Clear
-        </button>
-        <div className="ml-auto hidden shrink-0 border-l border-line px-3 text-right sm:block" aria-busy={!countKnown || undefined}>
-          <div className="text-heading tabular-nums text-fg">{isSearching || !countKnown ? '—' : formatMatchCount(resultCount)}</div>
+        {hasFilters && (
+          <button type="button" onClick={clear} className={buttonClass({ variant: 'ghost', className: 'focus-ring' })}>
+            Clear
+          </button>
+        )}
+        <div className="hidden w-24 shrink-0 border-l border-line px-3 text-right sm:block" aria-busy={isSearching || !countKnown || undefined}>
+          {isSearching || !countKnown
+            ? <div className="flex h-5 items-center justify-end"><span className="skeleton h-3.5 w-10 rounded" /><span className="sr-only">Count not known yet</span></div>
+            : <div className="text-heading tabular-nums text-fg">{formatMatchCount(resultCount)}</div>}
           <div className="text-overline uppercase text-muted">Matches</div>
         </div>
       </div>
       <div className="mt-1.5 flex min-h-6 flex-wrap items-center gap-2 px-2 text-caption">
-        <button
-          type="button"
-          role="switch"
-          aria-checked={interpretPlainLanguage}
-          onClick={() => setInterpretPlainLanguage((enabled) => !enabled)}
-          className="focus-ring inline-flex h-6 items-center gap-2 whitespace-nowrap rounded-full px-1 font-medium text-fg-secondary"
-        >
-          <span aria-hidden="true" className={`relative h-4 w-7 rounded-full transition-colors ${interpretPlainLanguage ? 'bg-accent' : 'bg-line-strong'}`}>
-            <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-canvas transition-transform ${interpretPlainLanguage ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
-          </span>
+        <Switch checked={interpretPlainLanguage} onCheckedChange={setInterpretPlainLanguage} className="whitespace-nowrap text-caption">
           Plain-language search
-        </button>
+        </Switch>
         {parsedQuery.filters.map((filter, index) => {
           const deferred = deferredFilterKeys.has(filterKey(filter));
           return (
@@ -265,9 +261,10 @@ export default function SearchFilter() {
             {watchStatus.ok && <button type="button" onClick={() => setWorkspaceView('overview')} className="ml-1 underline">Open watchlist</button>}
           </span>
         )}
-        {error && (
+        {/* With nothing retained, the workbench states the failure itself. */}
+        {error && retainedCount > 0 && (
           <span role="alert" className="basis-full text-danger">
-            Search unavailable; {retainedCount > 0 ? `showing ${formatMatchCount(retainedCount)} results from the last successful query` : 'no result set is available'}: {error}
+            Search unavailable; showing {formatMatchCount(retainedCount)} results from the last successful query: {error}
           </span>
         )}
       </div>
