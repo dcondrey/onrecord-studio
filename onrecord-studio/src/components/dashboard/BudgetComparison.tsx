@@ -32,7 +32,8 @@ export default function BudgetComparison({ schema, onCompare }: { schema: Analyt
   const effective = { ...selection, budgetSnapshotId: chosenBudget, actualsSnapshotId: chosenActuals };
   const update = (patch: Partial<BudgetComparisonSelection>) => { setSelection({ ...selection, ...patch }); setError(''); setFailure(null); };
   const chosen = schema.datasets.filter((d) => [chosenBudget, chosenActuals].includes(d.snapshotId));
-  return <section aria-label="Budget versus actuals" className="space-y-3">
+  // The panel around it is the "Budget versus actuals" region; a second region of that name would repeat it.
+  return <div className="space-y-3">
     <p className="text-label leading-relaxed text-muted">Compare City operating allocations with reported actuals for one fiscal-year code. Each side is summed by year, fund, funds center, and account before matching. Missing counterparts and missing amounts remain visible.</p>
     <div className="grid gap-2 sm:grid-cols-2">
       {(['budget', 'actuals'] as const).map((role) => <label key={role} className="text-label leading-4 text-fg-secondary">
@@ -59,5 +60,5 @@ export default function BudgetComparison({ schema, onCompare }: { schema: Analyt
     {busy && <p role="status" className="text-label leading-4 text-muted">Comparing budget and actuals. The result opens in the SQL analysis panel below.</p>}
     {error && <p role="alert" className="text-label leading-4 text-danger">{error}</p>}
     {failure && <InlineError summary="The comparison couldn’t be run." detail={failure.message} onRetry={() => compare(failure.query)} />}
-  </section>;
+  </div>;
 }
