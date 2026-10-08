@@ -309,7 +309,7 @@ pub async fn evidence(
         result.candidates.truncate(6);
         let ids = result.candidates.iter().flat_map(|c|[c.date_citation.evidence_id.as_str(),c.item_citation.evidence_id.as_str()]).collect::<std::collections::HashSet<_>>();
         result.evidence.retain(|e|ids.contains(e.id.as_str()));
-        result.limitations.push("Deterministic agenda lookup covers at most24 retained City Council agendas and500,000 characters per document. It requires an unambiguous weekday/full-date heading and explicit item boundaries; other bodies and unrecognized layouts are not covered. No meeting deadline, vote or adoption is inferred.".into());
+        result.limitations.push("Deterministic agenda lookup covers at most 24 retained City Council agendas and 500,000 characters per document. It requires an unambiguous weekday/full-date heading and explicit item boundaries; other bodies and unrecognized layouts are not covered. No meeting deadline, vote or adoption is inferred.".into());
         Ok(result)
     }).await
 }
