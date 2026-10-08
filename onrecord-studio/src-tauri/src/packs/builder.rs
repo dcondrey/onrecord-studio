@@ -198,7 +198,7 @@ pub async fn build(pack: &str, out: &Path) -> Result<PathBuf, AppError> {
     let (_scratch, repository) = scratch_database().await?;
     let mut files = Vec::new();
     for published in published {
-        let relative = format!("originals/{}/{}", published.table, published.file_name);
+        let relative = published.path.clone();
         let path = out.join(&relative);
         tokio::fs::create_dir_all(path.parent().expect("a file under originals"))
             .await

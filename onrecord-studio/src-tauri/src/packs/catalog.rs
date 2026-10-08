@@ -189,6 +189,10 @@ pub(crate) struct PublishedFile {
     pub year: Option<u16>,
     pub url: String,
     pub file_name: String,
+    /// Where the pack keeps the file: `originals/<table>/<file name>`, with a directory between
+    /// them for an archived capture or for files of one table that share a name.
+    #[cfg_attr(not(feature = "pack-builder"), allow(dead_code))]
+    pub path: String,
     pub partial: bool,
     pub kind: AnalyticalDatasetKind,
     pub worksheet: Option<&'static str>,
@@ -216,6 +220,7 @@ pub(crate) fn published_files(
                     file_name: file_name(&url).ok_or_else(|| {
                         AppError::Internal(format!("Registry URL {url} has no file name"))
                     })?,
+                    path: String::new(),
                     url,
                     partial: entry.partial_for(year),
                     kind: AnalyticalDatasetKind::RegionalData,
@@ -224,7 +229,7 @@ pub(crate) fn published_files(
                 });
             }
         }
-        return Ok(files);
+        return assign_paths(files);
     }
     let mut files = Vec::new();
     for table in pack_tables(pack)? {
@@ -235,11 +240,70 @@ pub(crate) fn published_files(
                 year,
                 url: source.url,
                 file_name: source.file_name,
+                path: String::new(),
                 partial: source.partial,
                 kind: source.kind,
                 worksheet: None,
                 licence: None,
             });
+        }
+    }
+    assign_paths(files)
+}
+
+/// The Wayback Machine capture time of an archived file, written as the snapshot pack writes its
+/// stamps: `/web/20161103063507id_/...` is `2016-11-03T063507Z`.
+fn capture_stamp(url: &str) -> Option<String> {
+    let url = reqwest::Url::parse(url).ok()?;
+    if url.host_str() != Some("web.archive.org") {
+        return None;
+    }
+    let mut segments = url.path_segments()?;
+    if segments.next() != Some("web") {
+        return None;
+    }
+    let digits = segments.next()?.strip_suffix("id_")?;
+    if digits.len() != 14 || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    Some(format!(
+        "{}-{}-{}T{}Z",
+        &digits[..4],
+        &digits[4..6],
+        &digits[6..8],
+        &digits[8..]
+    ))
+}
+
+/// Gives each file its pack path. An archived capture always sits under its capture time, so a
+/// later capture of the same file leaves an earlier one's path, and with it the app's record of
+/// which build replaced which, unchanged. Other files of one table that share a name sit under a
+/// digest of their URL.
+fn assign_paths(mut files: Vec<PublishedFile>) -> Result<Vec<PublishedFile>, AppError> {
+    let directories = files
+        .iter()
+        .map(|file| {
+            capture_stamp(&file.url).or_else(|| {
+                let shared = files
+                    .iter()
+                    .filter(|other| other.table == file.table && other.file_name == file.file_name)
+                    .count()
+                    > 1;
+                shared.then(|| crate::integrity::sha256_hex(file.url.as_bytes())[..12].to_owned())
+            })
+        })
+        .collect::<Vec<_>>();
+    let mut seen = std::collections::BTreeSet::new();
+    for (file, directory) in files.iter_mut().zip(directories) {
+        file.path = match directory {
+            Some(directory) => format!("originals/{}/{directory}/{}", file.table, file.file_name),
+            None => format!("originals/{}/{}", file.table, file.file_name),
+        };
+        if !seen.insert(file.path.clone()) {
+            return Err(AppError::Internal(format!(
+                "Two files of a pack would both be {}",
+                file.path
+            )));
         }
     }
     Ok(files)
@@ -451,5 +515,53 @@ mod tests {
         let files = published_files(&entry.pack, 2026).unwrap();
         assert_eq!(files[0].url, entry.url);
         assert_eq!(files[0].file_name, file_name(&entry.url).unwrap());
+    }
+
+    /// Captures of one publisher file at different times, or two sources' files of one name, are
+    /// kept apart under the table their path's second segment names.
+    #[test]
+    fn files_of_one_table_that_share_a_name_get_distinct_paths() {
+        let file = |url: &str| PublishedFile {
+            table: "archived_city_parcels",
+            year: None,
+            url: url.into(),
+            file_name: file_name(url).unwrap(),
+            path: String::new(),
+            partial: false,
+            kind: AnalyticalDatasetKind::RegionalData,
+            worksheet: None,
+            licence: None,
+        };
+        let paths = assign_paths(vec![
+            file("https://web.archive.org/web/20251208071038id_/https://seshat.datasd.org/p/parcels.csv"),
+            file("https://web.archive.org/web/20170125201459id_/http://data.sandiego.gov/parcels.csv"),
+            file("https://example.org/a/parcels.csv"),
+            file("https://example.org/b/parcels.csv"),
+            file("https://example.org/a/leases.csv"),
+        ])
+        .unwrap()
+        .into_iter()
+        .map(|file| file.path)
+        .collect::<Vec<_>>();
+        let digest = |url: &str| crate::integrity::sha256_hex(url.as_bytes())[..12].to_owned();
+        assert_eq!(
+            paths,
+            [
+                "originals/archived_city_parcels/2025-12-08T071038Z/parcels.csv".to_owned(),
+                "originals/archived_city_parcels/2017-01-25T201459Z/parcels.csv".to_owned(),
+                format!(
+                    "originals/archived_city_parcels/{}/parcels.csv",
+                    digest("https://example.org/a/parcels.csv")
+                ),
+                format!(
+                    "originals/archived_city_parcels/{}/parcels.csv",
+                    digest("https://example.org/b/parcels.csv")
+                ),
+                "originals/archived_city_parcels/leases.csv".to_owned(),
+            ]
+        );
+        for pack in pack_names() {
+            published_files(pack, 2026).unwrap();
+        }
     }
 }
