@@ -1,9 +1,9 @@
 {
   "note": "Serious and critical axe-core violations accepted as of this run; regenerate with `npm run ui:check -- <run> --write-baseline` after fixing some.",
   "generatedFrom": {
-    "label": "9c4e16a1-202610081145",
-    "gitHead": "9c4e16a1",
-    "generatedAt": "2026-10-08T11:45:32.273Z",
+    "label": "c0b7f76b-202610081440",
+    "gitHead": "c0b7f76b",
+    "generatedAt": "2026-10-08T14:40:26.402Z",
     "data": "real",
     "browser": "bundled chromium 156.0.8078.4",
     "axeVersion": "4.14.0",
@@ -26,15 +26,24 @@
     "analysis-sql-preview",
     "briefing",
     "case-switcher",
+    "chart-gallery",
     "collection-plan",
     "command-palette",
     "command-palette-question",
     "compare",
+    "compare-dispositions",
     "evidence",
     "evidence-authority-library",
     "evidence-document-viewer",
     "evidence-request-detail",
     "evidence-timeline",
+    "figures-budget-dots",
+    "figures-budget-dots-truncated",
+    "figures-contracts",
+    "figures-contracts-no-payments",
+    "figures-ordinance-distance",
+    "figures-ordinance-time",
+    "figures-reconcile",
     "first-run",
     "header-add-source-dialog",
     "header-source-actions-menu",
@@ -52,7 +61,9 @@
     "meetings",
     "my-requests",
     "my-requests-detail",
+    "organization-record",
     "overview",
+    "overview-casework-case",
     "overview-casework-tools",
     "overview-casework-tools-drawer-assess-usefulness",
     "overview-casework-tools-tab-coverage",
@@ -67,6 +78,7 @@
     "overview-drawer-research-run-sources-and-issues",
     "overview-drawer-shared-language-across-sources",
     "overview-drawer-topic-packs",
+    "overview-following",
     "overview-post-ingest-brief",
     "overview-response-analytics",
     "overview-sidebar-collapsed",
@@ -79,6 +91,7 @@
     "profile-settings",
     "self-review",
     "story",
+    "story-ranked-leads",
     "story-tab-all-findings"
   ],
   "violations": {
@@ -87,52 +100,9 @@
         "impact": "serious",
         "targets": [
           {
-            "target": "div[role=\"status\"] > .relative > .overflow-x-auto",
+            "target": ".overflow-x-auto",
             "states": [
               "loading"
-            ],
-            "widths": [
-              1024
-            ]
-          }
-        ]
-      }
-    },
-    "meetings": {
-      "color-contrast": {
-        "impact": "serious",
-        "targets": [
-          {
-            "target": "button[aria-current=\"true\"] > .gap-2.px-2.h-8 > .text-body.font-medium.truncate",
-            "states": [
-              "error"
-            ],
-            "widths": [
-              1024
-            ]
-          },
-          {
-            "target": "button[title=\"City Council agendas\"] > .gap-2.px-2.h-8 > .text-body.font-medium.truncate",
-            "states": [
-              "error"
-            ],
-            "widths": [
-              1024
-            ]
-          },
-          {
-            "target": "button[title=\"County of San Diego\"] > .gap-2.px-2.h-8 > .text-body.font-medium.truncate",
-            "states": [
-              "error"
-            ],
-            "widths": [
-              1024
-            ]
-          },
-          {
-            "target": "button[title=\"San Diego Housing Commission\"] > .gap-2.px-2.h-8 > .text-body.font-medium.truncate",
-            "states": [
-              "error"
             ],
             "widths": [
               1024
@@ -146,34 +116,7 @@
         "impact": "serious",
         "targets": [
           {
-            "target": ".p-2.items-start.justify-between:nth-child(1) > span",
-            "states": [
-              "populated"
-            ],
-            "widths": [
-              1024
-            ]
-          },
-          {
-            "target": ".p-2.items-start.justify-between:nth-child(2) > span",
-            "states": [
-              "populated"
-            ],
-            "widths": [
-              1024
-            ]
-          },
-          {
             "target": "time[datetime=\"2026-08-04T17:00:00.000Z\"]",
-            "states": [
-              "populated"
-            ],
-            "widths": [
-              1024
-            ]
-          },
-          {
-            "target": "time[datetime=\"2026-08-14T17:00:00.000Z\"]",
             "states": [
               "populated"
             ],
@@ -184,14 +127,14 @@
         ]
       }
     },
-    "overview-casework-tools": {
+    "story": {
       "color-contrast": {
         "impact": "serious",
         "targets": [
           {
             "target": "button[aria-current=\"true\"] > .px-2.gap-2.h-8 > .text-body.truncate.font-medium",
             "states": [
-              "populated"
+              "loading"
             ],
             "widths": [
               1024
@@ -200,7 +143,7 @@
           {
             "target": "button[title=\"City Council agendas\"] > .px-2.gap-2.h-8 > .text-body.truncate.font-medium",
             "states": [
-              "populated"
+              "loading"
             ],
             "widths": [
               1024
@@ -209,7 +152,7 @@
           {
             "target": "button[title=\"County of San Diego\"] > .px-2.gap-2.h-8 > .text-body.truncate.font-medium",
             "states": [
-              "populated"
+              "loading"
             ],
             "widths": [
               1024
@@ -218,7 +161,7 @@
           {
             "target": "button[title=\"San Diego Housing Commission\"] > .px-2.gap-2.h-8 > .text-body.truncate.font-medium",
             "states": [
-              "populated"
+              "loading"
             ],
             "widths": [
               1024
