@@ -125,8 +125,36 @@ type WriterJob = Box<dyn FnOnce(&mut Connection) + Send + 'static>;
 
 #[derive(Clone)]
 pub struct CorpusIndex {
-    writer: mpsc::Sender<WriterJob>,
+    writer: Arc<WriterThread>,
     analysis_permits: Arc<Semaphore>,
+}
+
+/// The writer thread owns the index's only connection. Dropping the last [`CorpusIndex`] closes
+/// the queue and waits for that thread, so the file is closed when the drop returns: Windows locks
+/// a DuckDB file per open database, and a reopen racing the exiting writer is refused there.
+struct WriterThread {
+    sender: Option<mpsc::Sender<WriterJob>>,
+    handle: Option<std::thread::JoinHandle<()>>,
+}
+
+impl WriterThread {
+    fn sender(&self) -> &mpsc::Sender<WriterJob> {
+        self.sender
+            .as_ref()
+            .expect("the sender is only taken in drop")
+    }
+}
+
+impl Drop for WriterThread {
+    fn drop(&mut self) {
+        drop(self.sender.take());
+        if let Some(handle) = self.handle.take() {
+            // A job that dropped the last handle runs on the writer itself; joining would deadlock.
+            if handle.thread().id() != std::thread::current().id() {
+                let _ = handle.join();
+            }
+        }
+    }
 }
 
 // The million-document throughput harness in scripts/validate-release-performance.mjs measures
@@ -383,7 +411,7 @@ impl CorpusIndex {
         let (writer, mut receiver) = mpsc::channel::<WriterJob>(WRITER_QUEUE_CAPACITY);
         let (ready_sender, ready_receiver) = std_mpsc::sync_channel(1);
         let writer_path = database_path.clone();
-        std::thread::Builder::new()
+        let handle = std::thread::Builder::new()
             .name("onrecord-corpus-writer".to_string())
             .spawn(move || {
                 let connection = open_writer_connection(&writer_path);
@@ -407,7 +435,10 @@ impl CorpusIndex {
             .map_err(|_| AppError::Storage("Corpus writer failed during startup".to_string()))?
             .map_err(AppError::Storage)?;
         Ok(Self {
-            writer,
+            writer: Arc::new(WriterThread {
+                sender: Some(writer),
+                handle: Some(handle),
+            }),
             analysis_permits: Arc::new(Semaphore::new(MAXIMUM_CONCURRENT_ANALYSES)),
         })
     }
@@ -1075,7 +1106,7 @@ impl CorpusIndex {
     }
 
     pub async fn status(&self) -> Result<CorpusIndexStatus, AppError> {
-        let available_write_capacity = self.writer.capacity();
+        let available_write_capacity = self.writer.sender().capacity();
         self.read("Corpus index status", move |connection| {
             let (documents, segments, terms, relationships) = connection
                 .query_row(
@@ -1116,6 +1147,7 @@ impl CorpusIndex {
     {
         let (result_sender, result_receiver) = oneshot::channel();
         self.writer
+            .sender()
             .send(Box::new(move |connection| {
                 let _ = result_sender.send(function(connection));
             }))
@@ -5084,6 +5116,7 @@ mod tests {
             1
         );
 
+        drop(index);
         let connection = Connection::open(&path).expect("the written index must open");
         let mut statement = connection
             .prepare(
@@ -5154,7 +5187,7 @@ mod tests {
     async fn the_widened_schema_admits_the_new_kinds_and_temporal_edge_columns() {
         let directory = tempdir().expect("temp dir must be created");
         let path = directory.path().join("corpus.db");
-        let _index = CorpusIndex::open(&path).expect("the index must open");
+        drop(CorpusIndex::open(&path).expect("the index must open"));
         let connection = Connection::open(&path).expect("the fresh index must open");
         connection
             .execute_batch(

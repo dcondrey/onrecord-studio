@@ -590,15 +590,14 @@ mod tests {
             )
             .unwrap();
         assert_eq!(large_text_bytes, LARGE_TEXT_BYTES);
-        drop(connection);
-
+        // Concurrent readers share the one database instance, as the app's do: a second
+        // instance of the same file is refused on Windows, which locks the file per instance.
         std::thread::scope(|scope| {
             let mut readers = Vec::new();
             for _ in 0..4 {
-                let path = path.clone();
+                let reader = connection.try_clone().unwrap();
                 readers.push(scope.spawn(move || {
-                    Connection::open(path)
-                        .unwrap()
+                    reader
                         .query_row("SELECT COUNT(*) FROM perf_requests", [], |row| {
                             row.get::<_, i64>(0)
                         })
