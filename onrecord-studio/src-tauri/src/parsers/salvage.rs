@@ -1,5 +1,5 @@
 use crate::error::AppError;
-use crate::integrity::sha256_hex;
+use crate::integrity::{digest_hex, sha256_hex};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashSet};
 use std::fs::File;
@@ -260,7 +260,7 @@ pub fn extract_salvage_report<P: AsRef<Path>>(
     Ok(SalvageReport {
         provenance_marker: SALVAGE_PROVENANCE_MARKER,
         primary_error,
-        source_sha256: digest_hex(&source_digest),
+        source_sha256: digest_hex(source_digest),
         source_size_bytes: consumed,
         recovered_character_count: accumulator.recovered_characters,
         alphabetic_character_count: accumulator.alphabetic_characters,
@@ -268,16 +268,6 @@ pub fn extract_salvage_report<P: AsRef<Path>>(
         runs: accumulator.runs,
         text,
     })
-}
-
-fn digest_hex(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut encoded = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        encoded.push(char::from(HEX[usize::from(byte >> 4)]));
-        encoded.push(char::from(HEX[usize::from(byte & 0x0f)]));
-    }
-    encoded
 }
 
 fn process_ascii_byte(

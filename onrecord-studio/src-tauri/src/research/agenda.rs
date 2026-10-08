@@ -2,7 +2,7 @@
 //! never a date borrowed from approved minutes or a truncated lexical window.
 use crate::{
     error::AppError,
-    integrity::sha256_hex,
+    integrity::{is_sha256_hex, sha256_hex},
     storage::{pii::mask_pii, sqlite::DuckDbRepository},
     types::{ResearchCitation, ResearchEvidence, ResearchMeeting},
 };
@@ -209,7 +209,7 @@ fn extract(
     let Some(url) = source.source_url.as_deref().filter(|url| official_url(url)) else {
         return Ok(result);
     };
-    if source.source_sha256.len() != 64
+    if !is_sha256_hex(&source.source_sha256)
         || source.document_id.is_none()
         || source.portal_key.is_none()
     {

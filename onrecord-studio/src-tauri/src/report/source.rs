@@ -4,6 +4,7 @@
 
 use super::{SourceDocument, SourceDocuments};
 use crate::error::AppError;
+use crate::integrity::is_sha256_hex;
 use crate::storage::sqlite::DuckDbRepository;
 use duckdb::params;
 use std::collections::BTreeSet;
@@ -15,7 +16,7 @@ pub const MAXIMUM_DISTINCT_DOCUMENTS: usize = 2_000;
 fn digest_or_none(value: Option<String>) -> Option<String> {
     value
         .map(|value| value.trim().to_ascii_lowercase())
-        .filter(|value| value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        .filter(|value| is_sha256_hex(value))
 }
 
 pub async fn load_source_documents(

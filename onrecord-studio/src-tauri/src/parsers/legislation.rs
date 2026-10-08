@@ -1,9 +1,8 @@
 use crate::error::AppError;
-use crate::integrity::digest_hex;
+use crate::integrity::sha256_hex;
 use crate::types::LegalAuthorityImport;
 use chrono::NaiveDate;
 use reqwest::Url;
-use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 
 const MAXIMUM_LEGAL_SOURCE_BYTES: usize = 8 * 1024 * 1024;
@@ -468,8 +467,4 @@ fn stem_policy_token(token: &str) -> String {
         }
     }
     stem
-}
-
-fn sha256_hex(value: &[u8]) -> String {
-    digest_hex(Sha256::digest(value))
 }

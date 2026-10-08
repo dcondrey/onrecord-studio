@@ -2,7 +2,7 @@
 
 use crate::blocking::spawn_with;
 use crate::error::AppError;
-use crate::integrity::sha256_hex;
+use crate::integrity::{digest_hex, sha256_hex};
 use crate::storage::sqlite::DuckDbRepository;
 use crate::types::{
     EmbeddingIndexReport, EmbeddingIndexStatus, EmbeddingModelStatus, HybridSearchFilter,
@@ -996,11 +996,7 @@ fn artifact_manifest(cache_dir: &Path) -> Result<(usize, Option<String>), AppErr
         hasher.update(entry.as_bytes());
         hasher.update(b"\n");
     }
-    let digest = hasher
-        .finalize()
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
+    let digest = digest_hex(hasher.finalize());
     Ok((entries.len(), Some(digest)))
 }
 

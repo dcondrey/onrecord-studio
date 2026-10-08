@@ -37,28 +37,14 @@ const CONTRACTOR_CONTEXT_BYTES: usize = 100;
 /// Filler words allowed between a label and its value ("Contractor License No. 123456").
 const MAXIMUM_LABEL_FILLERS: usize = 4;
 
-fn floor_boundary(text: &str, mut index: usize) -> usize {
-    while index > 0 && !text.is_char_boundary(index) {
-        index -= 1;
-    }
-    index
-}
-
-fn ceil_boundary(text: &str, mut index: usize) -> usize {
-    while index < text.len() && !text.is_char_boundary(index) {
-        index += 1;
-    }
-    index
-}
-
 /// True when PII masking would remove any part of `start..end`, or cannot run.
 fn masked_by_pii(text: &str, start: usize, end: usize) -> bool {
     masked_by_pii_reaching(text, start, end, 8)
 }
 
 fn masked_by_pii_reaching(text: &str, start: usize, end: usize, trailing: usize) -> bool {
-    let window_start = floor_boundary(text, start.saturating_sub(PII_CONTEXT_BYTES));
-    let window_end = ceil_boundary(text, (end + trailing).min(text.len()));
+    let window_start = text.floor_char_boundary(start.saturating_sub(PII_CONTEXT_BYTES));
+    let window_end = text.ceil_char_boundary((end + trailing).min(text.len()));
     mask_pii(&text[window_start..window_end]).map_or(true, |result| {
         result.findings.iter().any(|finding| {
             window_start + finding.byte_start < end && window_start + finding.byte_end > start
@@ -180,8 +166,8 @@ fn digit_run_end(bytes: &[u8], start: usize) -> usize {
 
 /// The line containing `around`, clipped to `reach` bytes either side.
 fn same_line_window(lower: &str, around: usize, reach: usize) -> &str {
-    let start = floor_boundary(lower, around.saturating_sub(reach));
-    let end = ceil_boundary(lower, (around + reach).min(lower.len()));
+    let start = lower.floor_char_boundary(around.saturating_sub(reach));
+    let end = lower.ceil_char_boundary((around + reach).min(lower.len()));
     let window = &lower[start..end];
     let anchor = around - start;
     let line_start = window[..anchor].rfind('\n').map_or(0, |at| at + 1);

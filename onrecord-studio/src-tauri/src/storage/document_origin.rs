@@ -5,6 +5,7 @@
 //! user added are never offered as a match, because the report says what a source served.
 
 use crate::error::AppError;
+use crate::integrity::is_sha256_hex;
 use crate::storage::DuckDbRepository;
 use crate::types::{HeldComparison, HeldDocumentMatch, NotComparedReason, SourceKind};
 use duckdb::{params, Connection, OptionalExt, ToSql};
@@ -112,9 +113,7 @@ impl DuckDbRepository {
                     let digest = |value: Option<String>| {
                         value
                             .map(|value| value.trim().to_ascii_lowercase())
-                            .filter(|value| {
-                                value.len() == 64 && value.bytes().all(|b| b.is_ascii_hexdigit())
-                            })
+                            .filter(|value| is_sha256_hex(value))
                     };
                     Ok(DocumentDigests {
                         source_kind: SourceKind::from_stored(&row.get::<_, String>(0)?),

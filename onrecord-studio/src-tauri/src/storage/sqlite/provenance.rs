@@ -1,6 +1,5 @@
 //! Document provenance verification and its append-only log.
 
-use super::integrity::is_well_formed_sha256;
 use super::*;
 
 impl DuckDbRepository {
@@ -125,7 +124,7 @@ impl DuckDbRepository {
         let recorded_digest = context
             .expected_sha256
             .as_deref()
-            .filter(|expected| is_well_formed_sha256(expected));
+            .filter(|expected| crate::integrity::is_sha256_hex(expected));
         if context.expected_sha256.is_some() && recorded_digest.is_none() {
             verification_errors.push(
                 "The recorded digest is not a well-formed SHA-256 value, so the stored bytes \
@@ -144,7 +143,7 @@ impl DuckDbRepository {
         let recorded_projection = context
             .recorded_text_projection_sha256
             .as_deref()
-            .filter(|digest| is_well_formed_sha256(digest));
+            .filter(|digest| crate::integrity::is_sha256_hex(digest));
         let text_projection_matches = match (
             recorded_projection,
             current_text_projection_sha256.as_deref(),

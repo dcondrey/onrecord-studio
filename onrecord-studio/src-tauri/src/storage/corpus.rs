@@ -4,7 +4,7 @@ use super::storage_rewrite::wal_path;
 use crate::analysis::series_gaps::{series_gaps, SeriesObservation};
 use crate::analysis::typed_edges;
 use crate::error::AppError;
-use crate::integrity::digest_hex;
+use crate::integrity::{digest_hex, is_sha256_hex};
 use crate::types::{
     CorpusEntityEdge, CorpusEntityKind, CorpusEntityNeighborhood, CorpusEntityNode,
     CorpusEvidenceReference, CorpusIndexStatus, CorpusPattern, CorpusPatternKind,
@@ -1342,8 +1342,8 @@ fn corpus_index_matches_current_schema(path: &Path) -> bool {
 
 fn validate_document_input(input: &CorpusDocumentInput) -> Result<(), AppError> {
     if input.portal_key.trim().is_empty()
-        || input.raw_file_sha256.len() != 64
-        || input.extracted_text_sha256.len() != 64
+        || !is_sha256_hex(&input.raw_file_sha256)
+        || !is_sha256_hex(&input.extracted_text_sha256)
     {
         return Err(AppError::DataParsing(
             "Corpus documents require a portal key and normalized SHA-256 digests".to_string(),
