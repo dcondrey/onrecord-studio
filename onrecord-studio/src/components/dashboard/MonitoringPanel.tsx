@@ -156,7 +156,7 @@ export default function MonitoringPanel({ caseId = null, topic = 'homelessness' 
         rowHeader="Record type"
         columns={matrix.periods.map((period) => ({ key: period, label: period }))}
         rows={matrix.rows}
-        selected={expandedCell}
+        selected={expandedCell ? [expandedCell] : []}
         onActivate={(row, col) => setExpandedCell((current) => current?.row === row && current.col === col ? null : { row, col })}
         onEscape={() => setExpandedCell(null)}
         legend={[

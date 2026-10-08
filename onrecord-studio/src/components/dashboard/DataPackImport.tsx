@@ -4,6 +4,11 @@ import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { DataPackFileSummary, DataPackImportOutcome, DataPackSummary, DataPackTable, PublishedPack, PublishedPackSelection } from '../../types';
 import Icon from '../ui/icons';
+import { formatValue } from '../charts/core/format';
+import { absent } from '../charts/core/nulls';
+import ChangeTimeline from '../charts/figures/ChangeTimeline';
+import StateGrid, { type StateGridCell, type StateGridRow } from '../charts/figures/StateGrid';
+import { seqStep } from '../charts/marks/HeatCell';
 
 const IMPORTING = 'Importing files';
 const DOWNLOADING = 'Downloading, verifying and importing';
@@ -153,9 +158,143 @@ function snapshotHistory(table: DataPackTable): string | null {
   return parts.length > 0 ? `Snapshots: ${parts.join(' · ')}.` : null;
 }
 
-function SnapshotHistory({ table }: { table: DataPackTable }) {
+/** The change timeline when the manifest reports its change records; the summary line otherwise. */
+function SnapshotHistory({ table, pack }: { table: DataPackTable; pack: string }) {
+  // A manifest summary from before change records were reported carries no `changes` at all.
+  const changes: DataPackTable['changes'] | undefined = table.changes;
+  if (Array.isArray(changes) && (changes.length > 0 || table.unchangedChecks > 0)) {
+    return <ChangeTimeline table={table.table} changes={changes} unchangedChecks={table.unchangedChecks} lastCheckedAt={table.lastCheckedAt} storageKey={`pack-changes:${pack}:${table.table}`} />;
+  }
   const history = snapshotHistory(table);
   return history ? <p className="text-muted">{history}</p> : null;
+}
+
+const ALL_YEARS = 'all';
+
+/** One cell of the coverage matrix: what a table holds for one year, as the import picker offers it. */
+interface CoverageChoice {
+  key: string;
+  table: string;
+  year: number | null;
+  files: DataPackFileSummary[];
+}
+
+function fileCell(choice: CoverageChoice, maxRows: number, selected: boolean): StateGridCell {
+  const rows = choice.files.reduce((sum, file) => sum + file.rows, 0);
+  const bytes = choice.files.reduce((sum, file) => sum + file.bytes, 0);
+  const latest = latestOf(choice.files);
+  const partial = choice.files.some((file) => file.partial);
+  const where = `${choice.table}, ${period(choice.year)}`;
+  const tip = {
+    rows: [
+      { key: 'rows', value: rows.toLocaleString(), label: 'rows' },
+      { key: 'size', value: megabytes(bytes), label: 'size' },
+      { key: 'retrieved', value: latest.retrievedAt.slice(0, 10), label: 'retrieved by the pack builder' },
+      ...(latest.licence ? [{ key: 'licence', value: latest.licence.id, label: 'licence' }] : []),
+    ],
+    note: partial ? 'Period not over: later rows may be published.' : undefined,
+  };
+  if (choice.files.some((file) => file.datasetKind === null)) {
+    return { kind: 'state', tone: 'neutral', glyph: 'bar', text: 'not imported', name: `${where}: in the pack, but this app does not import this file.`, tip };
+  }
+  const text = formatValue(rows, { kind: 'count', compact: true });
+  return {
+    kind: 'count', value: rows, step: seqStep(rows, maxRows), glyph: partial ? 'triangle' : 'circle', actionable: true, tip,
+    text: selected ? `${text} ✓` : text,
+    tableText: `${rows.toLocaleString()} rows · ${megabytes(bytes)} · retrieved ${latest.retrievedAt.slice(0, 10)}${partial ? ' · partial' : ''}`,
+    name: `${where}: ${rows.toLocaleString()} rows, retrieved ${latest.retrievedAt.slice(0, 10)}${partial ? ', period not over' : ''}. ${selected ? 'Selected for import.' : 'Not selected.'} Press Enter to ${selected ? 'deselect' : 'select'} it for import.`,
+  };
+}
+
+/** A tables × years matrix of what the pack holds. A year with no file is an empty cell, never 0 rows. */
+export function coverageMatrix(summary: DataPackSummary, choices: readonly CoverageChoice[], selected: ReadonlySet<string>) {
+  const listed = choices.flatMap((choice) => (choice.year === null ? [] : [choice.year]));
+  // Every year between the first and last listed: a year inside the span with no file is a gap.
+  const years = listed.length ? Array.from({ length: Math.max(...listed) - Math.min(...listed) + 1 }, (_, i) => Math.min(...listed) + i) : [];
+  const oneFile = choices.some((choice) => choice.year === null);
+  const columns = [...years.map(String), ...(oneFile ? [ALL_YEARS] : [])];
+  const maxRows = Math.max(0, ...choices.map((choice) => choice.files.reduce((sum, file) => sum + file.rows, 0)));
+  const positions: { row: number; col: number }[] = [];
+  const keys: (string | null)[][] = [];
+  let present = 0;
+  let missing = 0;
+  const rows: StateGridRow[] = summary.tables.map((table, i) => {
+    const own = choices.filter((choice) => choice.table === table.table);
+    const splitByYear = own.some((choice) => choice.year !== null);
+    const latest = own.flatMap((choice) => choice.files).reduce<DataPackFileSummary | null>((best, file) => (!best || retrieved(file) >= retrieved(best) ? file : best), null);
+    const freshness = [
+      latest ? `retrieved ${latest.retrievedAt.slice(0, 10)}` : null,
+      table.unchangedChecks > 0 ? `${table.unchangedChecks} unchanged` : null,
+      table.changeRecords > 0 ? `${table.changeRecords} change rec.` : null,
+    ].filter(Boolean).join(' · ');
+    keys.push([]);
+    return {
+      key: table.table,
+      label: table.table,
+      trailing: { text: freshness || 'no retrieval date' },
+      cells: columns.map((column, j): StateGridCell => {
+        const year = column === ALL_YEARS ? null : Number(column);
+        const choice = own.find((candidate) => candidate.year === year);
+        keys[i].push(choice?.key ?? null);
+        if (choice) {
+          present += 1;
+          const isSelected = selected.has(choice.key);
+          if (isSelected) positions.push({ row: i, col: j });
+          return fileCell(choice, maxRows, isSelected);
+        }
+        if (year !== null && !splitByYear) {
+          return { kind: 'gap', absence: absent('not-covered', 'published as one file covering every year'), glyph: 'bar', text: 'one file', name: `${table.table}, ${year}: published as one file, not by year.` };
+        }
+        if (year === null) {
+          return { kind: 'gap', absence: absent('not-covered', 'published by year, not as one file'), glyph: 'bar', text: 'by year', name: `${table.table}: published by year, not as one file.` };
+        }
+        missing += 1;
+        return { kind: 'gap', absence: absent('not-covered', `no ${year} file in this pack`), glyph: 'ring', text: 'no file', name: `${table.table}, ${year}: no file in this pack. Not zero rows.` };
+      }),
+    };
+  });
+  const partial = choices.filter((choice) => choice.files.some((file) => file.partial)).length;
+  const headline = `${present} of ${present + missing} table-years have a file in this pack${missing > 0 ? `; ${missing} have none` : ''}${partial > 0 ? `; ${partial} cover a period not yet over` : ''}.`;
+  return { columns, rows, positions, keys, headline };
+}
+
+function PackCoverage({ summary, choices, selected, onToggle }: { summary: DataPackSummary; choices: readonly CoverageChoice[]; selected: ReadonlySet<string>; onToggle(key: string): void }) {
+  const matrix = coverageMatrix(summary, choices, selected);
+  return (
+    <StateGrid
+      title="What this pack holds"
+      storageKey={`pack-coverage:${summary.pack}`}
+      headline={matrix.headline}
+      sources={{ tables: ['pack manifest'], note: `${summary.pack} ${summary.packVersion}, built ${summary.builtAt.slice(0, 10)}` }}
+      summary={`${summary.tables.length} tables by ${matrix.columns.length} years. Activate a file's cell to select it for import.`}
+      status="ready"
+      rowHeader="Table"
+      trailingHeader="Freshness"
+      columns={matrix.columns.map((column) => ({ key: column, label: column === ALL_YEARS ? 'All years' : column }))}
+      rows={matrix.rows}
+      selected={matrix.positions}
+      onActivate={(row, col) => {
+        const key = matrix.keys[row]?.[col];
+        if (key) onToggle(key);
+      }}
+      legend={[
+        { key: 'file', label: 'File in the pack (darker = more rows; ▲ period not over)', swatch: 'rect', tone: 'mark' },
+      ]}
+    />
+  );
+}
+
+/** A folder pack's files as matrix cells: the latest file of each table and year. */
+function folderChoices(summary: DataPackSummary): CoverageChoice[] {
+  const choices: CoverageChoice[] = [];
+  for (const table of summary.tables) {
+    const years = [...new Set(table.files.map((file) => file.year))];
+    for (const year of years) {
+      const latest = latestOf(table.files.filter((file) => file.year === year));
+      choices.push({ key: latest.path, table: table.table, year, files: [latest] });
+    }
+  }
+  return choices;
 }
 
 function PublishedPacks({ onImported }: { onImported?: () => void }) {
@@ -234,10 +373,11 @@ function PublishedPacks({ onImported }: { onImported?: () => void }) {
             <p className="text-muted">Each file was retrieved by the pack builder on the date it lists, not by you. Anything published after that is not in it.</p>
           </div>
           <Licence summary={summary} />
+          {summary.tables.length > 0 && <PackCoverage summary={summary} choices={choices} selected={selected} onToggle={toggle} />}
           {summary.tables.map((table) => (
             <fieldset key={table.table} className="space-y-1">
               <legend className="font-semibold text-fg">{table.table}</legend>
-              <SnapshotHistory table={table} />
+              <SnapshotHistory table={table} pack={summary.pack} />
               {choices.filter((choice) => choice.table === table.table).map((choice) => (
                 <label key={choice.key} className="flex items-center gap-2 text-fg-secondary">
                   <input type="checkbox" disabled={!importable(choice)} checked={selected.has(choice.key)} onChange={() => toggle(choice.key)} />
@@ -312,10 +452,11 @@ export default function DataPackImport({ onImported }: { onImported?: () => void
             <p className="text-muted">Each file was retrieved by the pack builder on the date it lists, not by you. Anything published after that is not in it.</p>
           </div>
           <Licence summary={summary} />
+          {summary.tables.length > 0 && <PackCoverage summary={summary} choices={folderChoices(summary)} selected={selected} onToggle={toggle} />}
           {summary.tables.map((table) => (
             <fieldset key={table.table} className="space-y-1">
               <legend className="font-semibold text-fg">{table.table}</legend>
-              <SnapshotHistory table={table} />
+              <SnapshotHistory table={table} pack={summary.pack} />
               {table.files.map((file) => (
                 <label key={file.path} className="flex items-center gap-2 text-fg-secondary">
                   <input type="checkbox" disabled={file.datasetKind === null} checked={selected.has(file.path)} onChange={() => toggle(file.path)} />

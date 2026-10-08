@@ -77,8 +77,8 @@ export interface StateGridProps {
   legend?: LegendItem[];
   controls?: ReactNode;
   storageKey: string;
-  /** The selected cell, outlined in ink (selection never uses violet). */
-  selected?: { row: number; col: number } | null;
+  /** The selected cells, outlined in ink (selection never uses violet). */
+  selected?: readonly { row: number; col: number }[];
   onActivate?(row: number, col: number): void;
   onColumnActivate?(col: number): void;
   onEscape?(): void;
@@ -323,7 +323,7 @@ export default function StateGrid(props: StateGridProps) {
                         onBlurMark: tooltip.hide,
                         onClick: cell.actionable ? () => onActivate?.(i, j) : undefined,
                       };
-                      const isSelected = selected?.row === i && selected.col === j;
+                      const isSelected = selected?.some((cell) => cell.row === i && cell.col === j) ?? false;
                       return (
                         <g key={column.key} role="gridcell" aria-selected={isSelected || undefined} className={cell.actionable ? 'cursor-pointer' : undefined}>
                           {cell.kind === 'count' ? (

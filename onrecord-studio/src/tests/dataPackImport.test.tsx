@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { open } from '@tauri-apps/plugin-dialog';
 import { invokeCommand } from '../ipc';
@@ -64,7 +64,7 @@ describe('DataPackImport', () => {
     for (const checkbox of screen.getAllByRole('checkbox')) fireEvent.click(checkbox);
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Import 3 files' })); });
 
-    const items = screen.getAllByRole('listitem').map((item) => item.textContent ?? '');
+    const items = within(screen.getByRole('list', { name: 'Data pack import results' })).getAllByRole('listitem').map((item) => item.textContent ?? '');
     expect(items[0]).toContain('2 rows imported to analysis_t, retrieved by the pack builder on 2026-10-05.');
     expect(items[1]).toContain('No rows imported');
     expect(items[2]).toContain('Nothing imported: these bytes are already stored as analysis_t');
@@ -112,6 +112,43 @@ describe('DataPackImport', () => {
     const choice = screen.getByRole('checkbox', { name: /^Latest snapshot, retrieved 2026-10-07 · 10 rows · 2 MB · 2 earlier snapshots not downloaded$/ });
     fireEvent.click(choice);
     expect(screen.getByRole('button', { name: 'Download and import 2 MB' })).toBeTruthy();
+  });
+
+  it('draws a year with no file as an empty cell, never a zero-row one, and selects a file from its cell', async () => {
+    const file = (year: number) => ({ path: `police_calls/${year}.csv`, year, rows: 1_200, bytes: 10, partial: false, sourceUrl: 'https://example.test/', retrievedAt: '2026-10-05T23:59:15Z', datasetKind: 'CALLS_FOR_SERVICE' as const, licence: null });
+    const manifest = { ...summary('calls'), tables: [{ table: 'police_calls', files: [file(2024), file(2026)], unchangedChecks: 0, lastCheckedAt: null, changeRecords: 0, changes: [] }] };
+    vi.mocked(open).mockResolvedValueOnce('/packs/calls');
+    vi.mocked(invokeCommand).mockImplementation(((command: string) => Promise.resolve(command === "list_published_packs" ? [] : manifest)) as unknown as typeof invokeCommand);
+    render(<DataPackImport />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Choose pack folder' })); });
+
+    const gap = screen.getByRole('img', { name: /^police_calls, 2025: no file in this pack/ });
+    expect(gap.querySelector('[data-absence="not-covered"]')).toBeTruthy();
+    expect(gap.textContent).not.toMatch(/\b0\b/);
+    expect(screen.getByText('2 of 3 table-years have a file in this pack; 1 have none.')).toBeTruthy();
+
+    fireEvent.keyDown(screen.getByRole('img', { name: /^police_calls, 2026: 1,200 rows/ }), { key: 'Enter' });
+    expect((screen.getByRole('checkbox', { name: /^2026 · 1,200 rows/ }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('states a whole-records change pair as not separated, never as 0 changed', async () => {
+    const original = (stamp: string) => ({ path: `originals/call_types/${stamp}/types.csv`, year: null, rows: 10, bytes: 10, partial: false, sourceUrl: 'https://example.test/', retrievedAt: `${stamp}T13:23:00Z`, datasetKind: 'REGIONAL_DATA' as const, licence: null });
+    const changes = [
+      { previous: original('2026-09-01').path, previousRetrievedAt: '2026-09-01T13:23:00Z', current: original('2026-09-15').path, currentRetrievedAt: '2026-09-15T13:23:00Z', added: 4, removed: 1, changed: 2, wholeRecords: false },
+      { previous: original('2026-09-15').path, previousRetrievedAt: '2026-09-15T13:23:00Z', current: original('2026-10-01').path, currentRetrievedAt: '2026-10-01T13:23:00Z', added: 9, removed: 9, changed: null, wholeRecords: true },
+    ];
+    const manifest = { ...summary('snapshots'), snapshots: true, tables: [{ table: 'call_types', files: [original('2026-09-01'), original('2026-09-15'), original('2026-10-01')], unchangedChecks: 3, lastCheckedAt: '2026-10-06T13:23:02Z', changeRecords: 2, changes }] };
+    vi.mocked(open).mockResolvedValueOnce('/packs/snapshots');
+    vi.mocked(invokeCommand).mockImplementation(((command: string) => Promise.resolve(command === "list_published_packs" ? [] : manifest)) as unknown as typeof invokeCommand);
+    render(<DataPackImport />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Choose pack folder' })); });
+
+    expect(screen.getByText('call_types: +13 / −10 / 2 changed (1 pair not separated) across 3 retrievals since Sep 1, 2026; last checked Oct 6, 2026, no change since.')).toBeTruthy();
+    const whole = screen.getByRole('img', { name: /^Sep 15, 2026 to Oct 1, 2026: 9 added, 9 removed, changed not separated/ });
+    expect(whole.textContent).toContain('not separated');
+    fireEvent.click(screen.getAllByRole('button', { name: 'View as table' }).at(-1)!);
+    const row = screen.getByRole('cell', { name: /^No value recorded: not separated/ }).closest('tr')!;
+    expect(row.textContent).not.toMatch(/(^|[^\d,])0($|[^\d,])/);
   });
 
   it('never shows a published manifest that resolves after another pack was chosen', async () => {

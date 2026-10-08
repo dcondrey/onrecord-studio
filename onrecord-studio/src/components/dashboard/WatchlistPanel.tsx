@@ -292,7 +292,7 @@ export default function WatchlistPanel() {
           trailingHeader="Checked"
           columns={DIMENSIONS.map((dimension) => ({ key: dimension, label: DIMENSION_LABELS[dimension] }))}
           rows={gridRows}
-          selected={selectedRow >= 0 && dimensionFilter ? { row: selectedRow, col: DIMENSIONS.indexOf(dimensionFilter) } : null}
+          selected={selectedRow >= 0 && dimensionFilter ? [{ row: selectedRow, col: DIMENSIONS.indexOf(dimensionFilter) }] : []}
           onActivate={(row, col) => {
             setSelectedId(summaries[row].watch.id);
             setDimensionFilter(DIMENSIONS[col]);
