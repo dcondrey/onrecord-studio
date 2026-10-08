@@ -169,7 +169,7 @@ function SourceToolsMenu({ items, flagged }: { items: SourceTool[]; flagged: boo
           role="menu"
           aria-label="Source options"
           onKeyDown={onMenuKey}
-          className="glass motion-pop absolute right-0 top-full z-popover mt-2 w-72 rounded-xl p-1"
+          className="motion-pop absolute right-0 top-full z-popover mt-2 w-72 rounded-xl border border-line-strong bg-panel p-1 shadow-popover"
         >
           {items.map((item, index) => (
             <button
