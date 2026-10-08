@@ -1,5 +1,6 @@
 //! Rebuildable, provenance-linked corpus index for cross-document pattern discovery.
 
+use super::storage_rewrite::wal_path;
 use crate::analysis::series_gaps::{series_gaps, SeriesObservation};
 use crate::analysis::typed_edges;
 use crate::error::AppError;
@@ -1310,14 +1311,6 @@ fn carry_registry_forward(connection: &Connection, outdated: &Path) {
     if copied.is_ok() {
         let _ = remove_index_files(outdated);
     }
-}
-
-/// DuckDB writes its write-ahead log beside the database as `<file>.wal`. Leaving it behind next
-/// to a new database of the same name would replay records written against the old shape.
-fn wal_path(path: &Path) -> PathBuf {
-    let mut wal = path.as_os_str().to_os_string();
-    wal.push(".wal");
-    PathBuf::from(wal)
 }
 
 /// Whether an existing index was stamped by this exact schema version.
