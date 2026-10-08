@@ -49,7 +49,7 @@ export default function Badge({ tone = 'neutral', glyph, dashed = false, classNa
   return (
     <span
       className={cn(
-        'inline-flex h-5 items-center gap-1 whitespace-nowrap rounded-full border px-2 text-caption font-medium',
+        'inline-flex h-5 w-fit items-center gap-1 whitespace-nowrap rounded-full border px-2 text-caption font-medium',
         TONE[tone],
         dashed && 'border-dashed',
         className,
