@@ -233,7 +233,8 @@ fn parse_pdf_date_literal(bytes: &[u8]) -> Option<DateTime<Utc>> {
         if rest.is_empty() || rest.starts_with('Z') {
             ('Z', "")
         } else {
-            (rest.chars().next().unwrap_or('Z'), &rest[1..])
+            let sign = rest.chars().next().unwrap_or('Z');
+            (sign, &rest[sign.len_utf8()..])
         }
     } else {
         ('Z', "")
@@ -299,10 +300,29 @@ mod tests {
     }
 
     #[test]
-    fn parses_pdf_date_literal_with_timezone_offset() {
-        let parsed = parse_pdf_date_literal(b"D:20240301143000-05'00'").unwrap();
-        // 14:30 in UTC-5 -> 19:30 UTC
-        assert_eq!(parsed.timestamp(), 1_709_321_400);
+    fn parses_pdf_date_literals_and_rejects_unreadable_years() {
+        let utc = |value: &str| Some(parse_iso_datetime(value).unwrap());
+        let cases: [(&str, Option<DateTime<Utc>>); 6] = [
+            // 14:30 in UTC-5 is 19:30 UTC.
+            (
+                "D:20240301143000-05'00'",
+                DateTime::from_timestamp(1_709_321_400, 0),
+            ),
+            ("D:20240301", utc("2024-03-01T00:00:00Z")),
+            ("D:", None),
+            ("D:202", None),
+            ("D:not-a-date", None),
+            ("D:2024ABCD", utc("2024-01-01T00:00:00Z")),
+        ];
+        for (literal, expected) in cases {
+            assert_eq!(
+                parse_pdf_date_literal(literal.as_bytes()),
+                expected,
+                "{literal}"
+            );
+        }
+        // Untrusted input: a multibyte character where the zone sign belongs must not panic.
+        let _ = parse_pdf_date_literal("D:20240301143000é".as_bytes());
     }
 
     #[test]

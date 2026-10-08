@@ -70,10 +70,11 @@ pub fn portal_key(value: &str) -> Result<&str, AppError> {
 /// Rejects a raw IPC-supplied filesystem path before it reaches disk I/O. The analytical import
 /// and export commands accept a path the user chose through a native file dialog, which can point
 /// anywhere on disk by design -- there is no managed directory to contain it in, unlike
-/// `validate_report_path` in `commands/export.rs`, which targets a fixed reports directory. This
-/// only closes the symlink indirection: a scripted or compromised IPC caller (not just the
-/// intended dialog flow) could otherwise point either command at a symlink planted somewhere
-/// reachable, redirecting an import read or an export overwrite to a file the user never chose.
+/// `report::output::validate_output_path_with_extension`, which targets a fixed reports
+/// directory. This only closes the symlink indirection: a scripted or compromised IPC caller (not
+/// just the intended dialog flow) could otherwise point either command at a symlink planted
+/// somewhere reachable, redirecting an import read or an export overwrite to a file the user
+/// never chose.
 pub fn validate_filesystem_target_path<'a>(
     value: &'a str,
     label: &str,
