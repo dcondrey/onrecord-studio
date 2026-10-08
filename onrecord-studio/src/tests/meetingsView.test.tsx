@@ -39,7 +39,7 @@ describe('meetings view', () => {
     const second = deferred<MeetingCalendar>();
     bridge.invoke.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
     render(<MeetingsView />);
-    fireEvent.click(screen.getByRole('button', { name: 'Refreshing…' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     await act(async () => second.resolve(calendar([meeting('new', 'Planning Commission')])));
     await act(async () => first.resolve(calendar([meeting('old', 'Board of Supervisors')])));
     expect(screen.getByText('Planning Commission')).toBeTruthy();
@@ -61,7 +61,7 @@ describe('meetings view', () => {
     const undatedCard = screen.getByRole('article', { name: 'Board of Education date not recorded' });
     expect(undatedCard.textContent).toContain('Date not recorded');
     expect(undatedCard.textContent).toContain('No weekday and full date');
-    expect(screen.getAllByText('not recorded').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Not recorded').length).toBeGreaterThan(0);
     fireEvent.click(screen.getByText('Item 605: Riverbed Encampment Resolution Funding'));
     expect(screen.getByText('Evidence gap (untested)')).toBeTruthy();
     expect(screen.getByText('Basis: Stated')).toBeTruthy();

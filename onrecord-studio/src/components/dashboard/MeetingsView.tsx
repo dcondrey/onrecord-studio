@@ -104,10 +104,13 @@ function Posting({ document }: { document: MeetingDocument }) {
         <>Posting time not recorded: {ABSENCE_TEXT[posting.reason]}</>
       )}
       {document.differingFetches > 0 && (
-        <div>
-          {document.differingFetches === 1 ? '1 fetch' : `${document.differingFetches} fetches`} of this address returned different bytes. The earlier
-          text was not kept, so those copies are not compared.
-        </div>
+        <details className="mt-0.5">
+          <summary className="cursor-pointer">Fetched copies differ</summary>
+          <p className="mt-0.5">
+            {document.differingFetches === 1 ? '1 fetch' : `${document.differingFetches} fetches`} of this address returned different bytes. The earlier
+            text was not kept, so those copies are not compared.
+          </p>
+        </details>
       )}
     </div>
   );
@@ -163,9 +166,10 @@ function Locator({ citation }: { citation: FindingCitation }) {
 }
 
 function Quote({ citation }: { citation: FindingCitation }) {
+  const quote = citation.quote?.trim();
   return (
     <blockquote className="mt-1 border-l-2 border-line-strong pl-3 text-body text-fg-secondary">
-      “{citation.quote ?? 'quote not recorded'}”
+      {quote ? `“${quote}”` : <span className="text-muted">Quote not recorded</span>}
       <div><Locator citation={citation} /></div>
     </blockquote>
   );
@@ -244,9 +248,11 @@ function MeetingCard({ meeting, selected, onSelect, drafts, onDraft }: {
           </ul>
         </div>
       )}
-      <div className="p-4 text-body text-fg-secondary">
-        Comment deadline:{' '}
-        {meeting.commentDeadlines.length === 0 ? <span className="text-muted">not recorded</span> : <Quote citation={meeting.commentDeadlines[0]} />}
+      <div className="p-4">
+        <p className="text-caption text-muted">Comment deadline</p>
+        {meeting.commentDeadlines.length === 0
+          ? <p className="mt-0.5 text-body text-muted">Not recorded</p>
+          : <Quote citation={meeting.commentDeadlines[0]} />}
       </div>
       {meeting.suggestions.length > 0 && (
         <div className="p-4">
@@ -319,10 +325,12 @@ export default function MeetingsView() {
             counts as upcoming. A posting time is the Last-Modified header the server sent with the file: the server’s statement about
             the file, not proof of when the public could first read it, and no notice requirement is evaluated here.
           </>}
-          actions={<Button onClick={load}>{loading ? 'Refreshing…' : 'Refresh'}</Button>}
+          actions={calendar?.meetings.length === 0 ? undefined : (
+            <Button onClick={load} className="min-w-[7rem]">{loading && calendar ? 'Refreshing…' : 'Refresh'}</Button>
+          )}
         />
         {calendar && calendar.postingCounts.agendaFilesWithBothTimes > 0 && (
-          <p className="max-w-prose text-body text-fg-secondary" aria-label="Posting time counts">
+          <p className="max-w-3xl text-headline text-fg" aria-label="Posting time counts">
             <span className="tabular-nums">{calendar.postingCounts.under72HoursBeforeStart} of {calendar.postingCounts.agendaFilesWithBothTimes}</span> agenda files with a recorded posting
             time and a stated start time were posted less than 72 hours before the meeting, per the file’s Last-Modified header.
             {calendar.postingCounts.afterMeetingStart > 0 && ` ${calendar.postingCounts.afterMeetingStart} carry a header later than the stated start.`}
