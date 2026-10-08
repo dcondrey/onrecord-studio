@@ -2,13 +2,23 @@ import { useEffect } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { cn } from '../../utils/cn';
 import { PRODUCT_BYLINE, PRODUCT_NAME } from '../../config/brand';
-import Icon from '../ui/icons';
-import { OPEN_COMMAND_PALETTE_EVENT } from './CommandPalette';
+import Icon, { type IconName } from '../ui/icons';
 import { openSourceConnector } from './sourceEvents';
 import { isApplePlatform } from './NavigationControls';
 import { useWorkspaceBadges } from '../../hooks/useWorkspaceBadges';
 import { workspaceCommandRegistry } from '../../commands/registry';
 import StatusDot from '../ui/statusDot';
+import Badge, { CountBadge } from '../ui/Badge';
+import Button from '../ui/Button';
+import type { SourceKind } from '../../types';
+
+const ROW = 'sidebar-nav-item focus-ring group relative flex h-8 w-full items-center rounded-md text-left transition-colors duration-fast';
+
+function sourceIcon(kind: SourceKind): IconName {
+  if (kind === 'LOCAL_FILE' || kind === 'PASTED_CONTENT' || kind === 'DIRECT_FILE') return 'database';
+  if (kind === 'NEXT_REQUEST') return 'building';
+  return 'globe';
+}
 
 export default function Sidebar() {
   const badges = useWorkspaceBadges();
@@ -26,6 +36,11 @@ export default function Sidebar() {
   const setSidebarOpen = useAppStore((state) => state.setSidebarOpen);
   const toggleSidebarCollapsed = useAppStore((state) => state.toggleSidebarCollapsed);
   const runtimeByPortal = new Map(runtimes.map((runtime) => [runtime.portal.portalKey, runtime]));
+  const modifier = isApplePlatform() ? '⌘' : 'Ctrl ';
+  // Only an incomplete capability is worth a line; a working OCR stack is the expected state.
+  const ocrGap = ocrCapability && !(ocrCapability.imageOcrAvailable && ocrCapability.pdfOcrAvailable)
+    ? (ocrCapability.imageOcrAvailable ? 'Scanned PDFs can’t be read here' : 'Scanned images and PDFs can’t be read here')
+    : null;
 
   useEffect(() => {
     const mobile = window.matchMedia('(max-width: 767px)');
@@ -44,287 +59,227 @@ export default function Sidebar() {
           type="button"
           aria-label="Close navigation"
           onClick={() => setSidebarOpen(false)}
-          className="app-backdrop fixed inset-0 z-40 backdrop-blur-sm md:hidden"
+          className="fixed inset-0 z-overlay bg-scrim md:hidden"
         />
       )}
       <aside
         aria-label="Workspace navigation"
         className={cn(
-          'sidebar-surface fixed inset-y-0 left-0 z-50 flex shrink-0 flex-col border-r shadow-2xl shadow-black/10 backdrop-blur-xl transition-[width,transform] duration-300 md:relative md:z-20 md:translate-x-0 md:shadow-none',
-          isCollapsed ? 'w-[68px]' : 'w-[248px]',
+          'sidebar-surface fixed inset-y-0 left-0 z-popover flex shrink-0 flex-col border-r shadow-popover transition-transform duration-slow ease-out md:relative md:z-sticky md:translate-x-0 md:shadow-none',
+          isCollapsed ? 'w-14' : 'w-[248px]',
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
-        <div className={cn('flex h-[64px] shrink-0 items-center border-b border-line', isCollapsed ? 'justify-center px-3' : 'gap-2.5 px-3.5')}>
-          <img src="/brand-mark.png" alt="" className="h-9 w-9 shrink-0 rounded-[9px]" />
+        <div className={cn('flex h-14 shrink-0 items-center border-b border-line', isCollapsed ? 'justify-center px-2' : 'gap-2.5 px-3.5')}>
+          <img src="/brand-mark.png" alt="" className="h-7 w-7 shrink-0 rounded-lg" />
           {!isCollapsed && (
             <div className="min-w-0">
-              <div className="truncate text-label font-semibold tracking-[-0.015em] text-fg">{PRODUCT_NAME}</div>
-              <div className="mt-0.5 truncate text-caption text-muted">{PRODUCT_BYLINE}</div>
+              <div className="truncate text-heading text-fg">{PRODUCT_NAME}</div>
+              <div className="truncate text-caption text-muted">{PRODUCT_BYLINE}</div>
             </div>
           )}
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            iconOnly
+            icon="x"
             aria-label="Close navigation"
             onClick={() => setSidebarOpen(false)}
-            className="focus-ring ml-auto rounded-lg p-2 text-muted hover:bg-raised hover:text-fg md:hidden"
-          >
-            <Icon name="x" />
-          </button>
+            className="ml-auto md:hidden"
+          />
         </div>
 
-        <nav aria-label="Primary navigation" className="shrink-0 px-2.5 py-3">
-          {!isCollapsed && <div className="sidebar-section-label mb-1.5 px-2">Workspace</div>}
-          <div className="space-y-0.5">
+        <nav aria-label="Primary navigation" className="shrink-0 px-2 py-3">
+          {!isCollapsed && <div className="mb-1 px-2 text-overline uppercase text-muted">Workspace</div>}
+          <div className="space-y-px">
             {workspaceCommandRegistry.map((item) => {
               const selected = workspaceView === item.view;
+              const badge = badges[item.view];
               return (
                 <button
                   key={item.view}
                   type="button"
                   aria-current={selected ? 'page' : undefined}
-                  aria-label={isCollapsed ? item.navigationLabel : undefined}
-                  title={`${item.navigationLabel} (${isApplePlatform() ? '⌘' : 'Ctrl'}${item.shortcutIndex}) — ${item.detail}`}
+                  aria-label={isCollapsed ? `${item.navigationLabel}${badge ? `, ${badge.label}` : ''}` : undefined}
+                  title={`${item.navigationLabel} (${modifier}${item.shortcutIndex}) — ${item.detail}`}
                   onClick={() => setWorkspaceView(item.view)}
                   className={cn(
-                    'sidebar-nav-item focus-ring group relative flex w-full items-center overflow-hidden rounded-lg border text-left transition',
-                    isCollapsed ? 'justify-center px-2 py-2' : 'gap-2 px-2 py-1.5',
-                    selected
-                      ? 'sidebar-nav-item-active border-transparent text-accent'
-                      : 'border-transparent text-muted hover:bg-raised/70 hover:text-fg',
+                    ROW,
+                    isCollapsed ? 'justify-center' : 'gap-2 px-2',
+                    selected ? 'sidebar-nav-item-active text-accent' : 'text-fg-secondary hover:bg-raised hover:text-fg',
                   )}
                 >
-                  <span className={cn('grid h-7 w-7 shrink-0 place-items-center rounded-md transition', selected ? 'bg-accent/10 text-accent' : 'text-muted group-hover:text-fg-secondary')}>
-                    <Icon name={item.icon} className="h-4 w-4" />
+                  <span className={cn('relative grid h-6 w-6 shrink-0 place-items-center', selected ? 'text-accent' : 'text-muted group-hover:text-fg-secondary')}>
+                    <Icon name={item.icon} size="md" />
+                    {isCollapsed && badge && (
+                      <span aria-hidden="true" className={cn('absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full', badge.tone === 'warning' ? 'bg-warning-mark' : 'bg-accent')} />
+                    )}
                   </span>
                   {!isCollapsed && (
-                    <span className="min-w-0 flex-1 truncate text-label font-medium">{item.navigationLabel}</span>
-                  )}
-                  {badges[item.view] && (
-                    <span
-                      title={badges[item.view]!.label}
-                      className={cn(
-                        'motion-pop numeric-value rounded-full px-1.5 py-px text-caption font-semibold',
-                        badges[item.view]!.tone === 'warning' ? 'bg-warning/20 text-warning' : 'bg-accent/20 text-accent',
-                        isCollapsed && 'absolute right-1 top-0.5 px-1',
+                    <>
+                      <span className="min-w-0 flex-1 truncate text-body font-medium">{item.navigationLabel}</span>
+                      <kbd aria-hidden="true" className="text-caption tabular-nums text-muted opacity-0 transition-opacity duration-fast group-hover:opacity-100 group-focus-visible:opacity-100">
+                        {modifier}{item.shortcutIndex}
+                      </kbd>
+                      {badge && (
+                        <CountBadge
+                          value={badge.text}
+                          title={badge.label}
+                          aria-hidden="true"
+                          className={badge.tone === 'warning' ? 'bg-warning/10 text-warning' : 'bg-accent/10 text-accent'}
+                        />
                       )}
-                    >
-                      <span aria-hidden="true">{badges[item.view]!.text}</span>
-                      <span className="sr-only">{badges[item.view]!.label}</span>
-                    </span>
+                      {badge && <span className="sr-only">{badge.label}</span>}
+                    </>
                   )}
-                  {!isCollapsed && <span className="text-label text-muted">{isApplePlatform() ? '⌘' : 'Ctrl'}{item.shortcutIndex}</span>}
                 </button>
               );
             })}
           </div>
         </nav>
 
-        <div className="mx-4 h-px bg-raised/70" />
+        <div className="mx-3 h-px shrink-0 bg-line" />
 
-        <nav aria-label="Data sources" className="min-h-0 flex-1 overflow-y-auto px-2.5 py-3">
+        <nav aria-label="Data sources" className="min-h-[120px] flex-1 overflow-y-auto px-2 py-3">
           {!isCollapsed && (
-            <div className="mb-2 flex items-center justify-between px-2">
-              <span className="sidebar-section-label">Data sources</span>
-              <span className="numeric-value text-label text-muted">{portals.length}</span>
+            <div className="mb-1 flex h-6 items-center justify-between pl-2">
+              <span className="text-overline uppercase text-muted">Data sources</span>
+              <Button variant="ghost" size="sm" iconOnly icon="filePlus" aria-label="Add source" title="Add source" onClick={openSourceConnector} className="h-6 w-6" />
             </div>
           )}
-          <button
-            type="button"
-            title={isCollapsed ? 'All saved sources' : undefined}
-            onClick={() => setActivePortal(null)}
-            className={cn(
-              'sidebar-nav-item focus-ring relative mb-0.5 flex w-full items-center overflow-hidden rounded-lg border text-left transition',
-              isCollapsed ? 'justify-center px-2 py-2' : 'gap-2 px-2 py-1.5',
-              activePortalKey === null
-                ? 'sidebar-source-active border-transparent text-highlight'
-                : 'border-transparent text-muted hover:bg-raised/70 hover:text-fg',
-            )}
-          >
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md">
-              <Icon name="globe" className="h-4 w-4" />
-            </span>
-            {!isCollapsed && <span className="min-w-0 flex-1 text-label font-medium">All saved sources</span>}
-            {!isCollapsed && <span className="numeric-value rounded-md bg-surface px-1.5 py-0.5 text-label text-muted">{portals.length}</span>}
-          </button>
-
-          {portals.map(({ registration: portal, lifecycleState, healthStatus, lastError }) => {
-            const runtime = runtimeByPortal.get(portal.portalKey);
-            const paused = lifecycleState === 'PAUSED';
-            const degraded = healthStatus === 'degraded';
-            const syncing = syncingPortalKeys.includes(portal.portalKey);
-            const selected = activePortalKey === portal.portalKey;
-            // Progress is settled work against total work. In-flight downloads are capped by the
-            // concurrency limit, so counting them as done would make a long crawl look stalled.
-            const settledTasks = runtime ? runtime.completedTasks + runtime.failedTasks : 0;
-            const totalTasks = runtime
-              ? settledTasks + runtime.queuedTasks + runtime.activeTasks
-              : 0;
-            // Failures count as settled but are reported apart, never folded into one figure.
-            const percentComplete = totalTasks > 0 ? Math.round((settledTasks / totalTasks) * 100) : 0;
-            return (
-              <button
-                key={portal.portalKey}
-                type="button"
-                title={
-                  degraded
-                    ? `${portal.displayName} needs attention${lastError ? `: ${lastError}` : ''}`
-                    : isCollapsed
-                      ? portal.displayName
-                      : undefined
-                }
-                onClick={() => setActivePortal(portal.portalKey)}
-                className={cn(
-                  'sidebar-nav-item focus-ring relative mb-0.5 w-full overflow-hidden rounded-lg border text-left transition',
-                  isCollapsed ? 'grid place-items-center px-2 py-2' : 'px-2 py-1.5',
-                  selected
-                    ? 'sidebar-source-active border-transparent'
-                    : 'border-transparent hover:border-control hover:bg-raised/40',
-                )}
-              >
-                <div className={cn('flex items-center', isCollapsed ? 'justify-center' : 'gap-2.5')}>
-                  <span className={cn('relative grid h-7 w-7 shrink-0 place-items-center rounded-lg font-mono text-caption font-semibold', selected ? 'bg-highlight/10 text-highlight' : 'bg-surface text-muted')}>
-                    {portal.displayName.slice(0, 2).toUpperCase()}
-                    {/* Paused is its own colour rather than the idle grey. A source the operator
-                        halted and one that has simply finished are different facts, and a shared
-                        dot would say neither. */}
-                    <span className={cn('portal-status-dot absolute -right-0.5 -top-0.5 grid h-3.5 w-3.5 place-items-center rounded-full border-2', syncing && 'status-pulse')} style={{ backgroundColor: 'var(--sidebar-surface)' }}>
-                      <StatusDot
-                        state={degraded ? 'error' : syncing ? 'active' : paused ? 'note' : 'idle'}
-                        label={degraded ? `${portal.displayName} needs attention` : syncing ? `${portal.displayName} is syncing` : paused ? `${portal.displayName} is paused` : `${portal.displayName} is idle`}
-                        className={cn('h-2 w-2', paused && 'text-warning')}
-                      />
-                    </span>
-                  </span>
-                  {!isCollapsed && <span className={cn('min-w-0 flex-1 truncate text-label font-medium', selected ? 'text-highlight' : 'text-fg-secondary')}>{portal.displayName}</span>}
-                  {!isCollapsed && paused && <span className="shrink-0 rounded-md bg-warning/10 px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wide text-warning">Paused</span>}
-                  {!isCollapsed && degraded && <span className="shrink-0 rounded-md bg-danger/10 px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wide text-danger">Attention</span>}
-                </div>
-                {!isCollapsed && selected && degraded && (
-                  <p role="status" className="mt-1 pl-9 text-label leading-4 text-danger [overflow-wrap:anywhere]">
-                    {lastError ?? 'The last sync did not finish cleanly, and no error was recorded.'}
-                  </p>
-                )}
-                {!isCollapsed && runtime && totalTasks > 0 && (
-                  <div className="mt-1 pl-9">
-                    <div className="numeric-value text-label text-muted">
-                      {settledTasks.toLocaleString()} of {totalTasks.toLocaleString()} done
-                      {runtime.failedTasks > 0 && (
-                        <span className="text-warning"> · {runtime.failedTasks.toLocaleString()} failed</span>
-                      )}
-                    </div>
-                    <div
-                      role="progressbar"
-                      aria-valuenow={percentComplete}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-label={`${portal.displayName} ingestion progress`}
-                      className="mt-1 h-1 w-full overflow-hidden rounded-full bg-raised"
-                    >
-                      <div
-                        className={cn('h-full rounded-full transition-[width] duration-500', syncing ? 'bg-success' : 'bg-muted')}
-                        style={{ width: `${percentComplete}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </button>
-            );
-          })}
-
-          {portals.length === 0 && !isCollapsed && (
-            <div className="mx-1 mt-3 rounded-xl border border-dashed border-line bg-surface/40 p-3.5">
-              <div className="flex items-center gap-2 text-label font-semibold text-muted">
-                <Icon name="database" className="h-4 w-4 text-accent" />
-                {workspaceInitializationStatus === 'loading'
-                  ? 'Loading saved sources'
-                  : workspaceInitializationStatus === 'error'
-                    ? 'Saved sources unavailable'
-                    : 'No sources connected'}
-              </div>
-              <p className="mt-2 text-caption leading-relaxed text-muted">
-                {workspaceInitializationStatus === 'loading'
-                  ? 'Checking the local source catalog.'
-                  : workspaceInitializationStatus === 'error'
-                    ? 'The source catalog did not load. Existing sources may still be present; check the activity log.'
-                    : 'Add a records portal, website, or file to start.'}
-              </p>
-              {workspaceInitializationStatus === 'ready' && (
-                <button type="button" onClick={openSourceConnector} className="focus-ring mt-3 w-full rounded-lg border primary-action border-transparent px-2.5 py-1.5 text-label font-semibold text-white">
-                  Add a source
-                </button>
+          <div className="space-y-px">
+            <button
+              type="button"
+              title={isCollapsed ? 'All saved sources' : undefined}
+              aria-label={isCollapsed ? `All saved sources, ${portals.length}` : undefined}
+              aria-current={activePortalKey === null ? 'true' : undefined}
+              onClick={() => setActivePortal(null)}
+              className={cn(
+                ROW,
+                isCollapsed ? 'justify-center' : 'gap-2 px-2',
+                activePortalKey === null ? 'sidebar-nav-item-active text-accent' : 'text-fg-secondary hover:bg-raised hover:text-fg',
               )}
+            >
+              <span className="grid h-6 w-6 shrink-0 place-items-center"><Icon name="grid" size="md" /></span>
+              {!isCollapsed && <span className="min-w-0 flex-1 truncate text-body font-medium">All saved sources</span>}
+              {!isCollapsed && workspaceInitializationStatus === 'ready' && <CountBadge value={portals.length} />}
+            </button>
+
+            {portals.map(({ registration: portal, lifecycleState, healthStatus, lastError }) => {
+              const runtime = runtimeByPortal.get(portal.portalKey);
+              const paused = lifecycleState === 'PAUSED';
+              const degraded = healthStatus === 'degraded';
+              const syncing = syncingPortalKeys.includes(portal.portalKey);
+              const selected = activePortalKey === portal.portalKey;
+              // Progress is settled work against total work. In-flight downloads are capped by the
+              // concurrency limit, so counting them as done would make a long crawl look stalled.
+              const settledTasks = runtime ? runtime.completedTasks + runtime.failedTasks : 0;
+              const totalTasks = runtime ? settledTasks + runtime.queuedTasks + runtime.activeTasks : 0;
+              const failedTasks = runtime?.failedTasks ?? 0;
+              // Failures count as settled but are reported apart, never folded into one figure.
+              const percentComplete = totalTasks > 0 ? Math.round((settledTasks / totalTasks) * 100) : 0;
+              const showProgress = !isCollapsed && totalTasks > 0 && (syncing || failedTasks > 0);
+              // Paused is its own state rather than idle: a source the operator halted and one that
+              // has simply finished are different facts.
+              const status = degraded ? 'needs attention' : syncing ? 'syncing' : paused ? 'paused' : 'idle';
+              return (
+                <button
+                  key={portal.portalKey}
+                  type="button"
+                  aria-label={`${portal.displayName}, ${status}${failedTasks > 0 ? `, ${failedTasks.toLocaleString()} failed` : ''}`}
+                  aria-current={selected ? 'true' : undefined}
+                  title={degraded && lastError ? `${portal.displayName} needs attention: ${lastError}` : portal.displayName}
+                  onClick={() => setActivePortal(portal.portalKey)}
+                  className={cn(
+                    'sidebar-nav-item focus-ring group relative block w-full rounded-md text-left transition-colors duration-fast',
+                    selected ? 'sidebar-nav-item-active text-accent' : 'text-fg-secondary hover:bg-raised hover:text-fg',
+                  )}
+                >
+                  <span className={cn('flex h-8 items-center', isCollapsed ? 'justify-center' : 'gap-2 px-2')}>
+                    <span className={cn('relative grid h-6 w-6 shrink-0 place-items-center', !selected && 'text-muted group-hover:text-fg-secondary')}>
+                      <Icon name={sourceIcon(portal.sourceKind)} size="md" />
+                      {isCollapsed && (syncing || degraded || paused) && (
+                        <span className="absolute -right-0.5 -top-0.5 grid h-3 w-3 place-items-center rounded-full bg-surface">
+                          <StatusDot state={degraded ? 'error' : syncing ? 'active' : 'idle'} pulse={syncing && !degraded} label="" className={cn(paused && !degraded && !syncing && 'text-warning')} />
+                        </span>
+                      )}
+                    </span>
+                    {!isCollapsed && (
+                      <>
+                        <span className="min-w-0 flex-1 truncate text-body font-medium">{portal.displayName}</span>
+                        {degraded ? (
+                          <Badge tone="danger" glyph="diamond">Attention</Badge>
+                        ) : paused ? (
+                          <Badge tone="warning">Paused</Badge>
+                        ) : syncing ? (
+                          <StatusDot state="active" pulse label="" className="mr-1" />
+                        ) : null}
+                      </>
+                    )}
+                  </span>
+                  {showProgress && (
+                    <span className="block px-2 pb-2 pl-10">
+                      <span className="flex min-w-0 items-baseline gap-1 text-caption tabular-nums text-muted">
+                        <span className="shrink-0">{settledTasks.toLocaleString()}/{totalTasks.toLocaleString()}</span>
+                        {failedTasks > 0 && <span className="min-w-0 truncate text-danger">· {failedTasks.toLocaleString()} failed</span>}
+                      </span>
+                      {syncing && (
+                        <span
+                          role="progressbar"
+                          aria-valuenow={percentComplete}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-label={`${portal.displayName} ingestion progress`}
+                          className="mt-1 block h-0.5 w-full overflow-hidden rounded-full bg-raised"
+                        >
+                          <span className="block h-full origin-left rounded-full bg-success-mark transition-transform duration-slow" style={{ transform: `scaleX(${percentComplete / 100})` }} />
+                        </span>
+                      )}
+                    </span>
+                  )}
+                  {!isCollapsed && selected && degraded && (
+                    <span role="status" className="block px-2 pb-2 pl-10 text-caption text-danger [overflow-wrap:anywhere]">
+                      {lastError ?? 'The last sync did not finish cleanly, and no error was recorded.'}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {workspaceInitializationStatus === 'loading' && portals.length === 0 && (
+            <div role="status" aria-busy="true" className="mt-px space-y-1 px-2">
+              <span className="sr-only">Loading saved sources</span>
+              {[0, 1, 2].map((row) => <div key={row} aria-hidden="true" className="skeleton h-7 rounded-md" />)}
+            </div>
+          )}
+
+          {workspaceInitializationStatus === 'ready' && portals.length === 0 && !isCollapsed && (
+            <div className="mx-1 mt-3 rounded-lg border border-dashed border-line p-3">
+              <p className="text-body font-medium text-fg-secondary">No sources yet</p>
+              <p className="mt-1 text-caption text-muted">Add a records portal, website or file to start.</p>
+              <Button variant="primary" size="sm" onClick={openSourceConnector} className="mt-3 w-full">Add a source</Button>
             </div>
           )}
         </nav>
 
-        <div className="border-t border-line p-2.5">
-          {!isCollapsed ? (
-            <>
-              <button type="button" onClick={openCommandPalette} className="command-trigger focus-ring flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-label font-medium text-muted transition hover:text-fg">
-                <Icon name="search" className="h-4 w-4" />
-                <span className="flex-1 text-left">Commands</span>
-                <span className="keycap rounded-md border px-1.5 py-0.5 text-label">{isApplePlatform() ? '⌘K' : 'Ctrl K'}</span>
-              </button>
-              <div className="mt-2 flex items-center justify-between px-2 text-label text-muted">
-                <span className="flex items-center gap-2"><StatusDot state={syncingPortalKeys.length ? 'active' : 'idle'} label={syncingPortalKeys.length ? 'Workers busy' : 'Workers idle'} /> Worker capacity</span>
-                <span className={cn('numeric-value', syncingPortalKeys.length > 0 && 'font-semibold text-success')}>{syncingPortalKeys.length}/5</span>
-              </div>
-              <div
-                className="mt-1 flex items-center justify-between gap-3 px-2 text-label text-muted"
-                title={ocrCapability
-                  ? [
-                      `${ocrCapability.engine}${ocrCapability.engineVersion ? ` ${ocrCapability.engineVersion}` : ''}`,
-                      ocrCapability.pdfRenderer
-                        ? `${ocrCapability.pdfRenderer}${ocrCapability.pdfRendererVersion ? ` ${ocrCapability.pdfRendererVersion}` : ''}`
-                        : null,
-                      ocrCapability.languageProbeComplete
-                        ? `Languages: ${ocrCapability.languagePacks.join(', ') || 'none'}`
-                        : 'Language packs were not reported',
-                      ...ocrCapability.diagnostics,
-                    ].filter(Boolean).join(' — ')
-                  : 'OCR capability probe has not completed'}
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  <span className={cn(
-                    'h-1.5 w-1.5 shrink-0 rounded-full',
-                    ocrCapability?.imageOcrAvailable && ocrCapability.pdfOcrAvailable
-                      ? 'bg-success'
-                      : ocrCapability
-                        ? 'bg-warning'
-                        : 'bg-muted',
-                  )} />
-                  Local OCR
-                </span>
-                <span className="truncate text-right text-label">
-                  {!ocrCapability
-                    ? 'Checking'
-                    : ocrCapability.imageOcrAvailable && ocrCapability.pdfOcrAvailable
-                      ? 'Image + PDF'
-                      : ocrCapability.imageOcrAvailable
-                        ? 'Image only'
-                        : 'Unavailable'}
-                </span>
-              </div>
-            </>
-          ) : (
-            <button type="button" onClick={openCommandPalette} title={`Commands (${isApplePlatform() ? '⌘' : 'Ctrl'}K)`} aria-label="Open command palette" className="command-trigger focus-ring mx-auto grid h-9 w-9 place-items-center rounded-lg border text-muted"><Icon name="search" className="h-4 w-4" /></button>
+        <div className="shrink-0 border-t border-line p-2">
+          {ocrGap && !isCollapsed && (
+            <p className="mb-1 flex items-start gap-2 px-2 py-1 text-caption text-warning" title={ocrCapability?.diagnostics.join(' — ') || undefined}>
+              <Icon name="flag" size="xs" className="mt-0.5" />
+              {ocrGap}
+            </p>
           )}
           <button
             type="button"
             onClick={toggleSidebarCollapsed}
             aria-label={isCollapsed ? 'Expand navigation' : undefined}
-            className="focus-ring mt-1.5 hidden w-full items-center justify-center gap-2 rounded-lg py-1.5 text-label font-medium text-muted transition hover:bg-raised/70 hover:text-fg-secondary md:flex"
+            className="focus-ring hidden h-8 w-full items-center justify-center gap-2 rounded-md text-control text-muted transition-colors duration-fast hover:bg-raised hover:text-fg-secondary md:flex"
           >
-            <Icon name="collapse" className={cn('h-3.5 w-3.5 transition-transform', isCollapsed && 'rotate-180')} />
+            <Icon name="collapse" size="sm" className={cn('transition-transform duration-base', isCollapsed && 'rotate-180')} />
             {!isCollapsed && 'Collapse navigation'}
           </button>
         </div>
       </aside>
     </>
   );
-}
-
-function openCommandPalette() {
-  window.dispatchEvent(new Event(OPEN_COMMAND_PALETTE_EVENT));
 }
