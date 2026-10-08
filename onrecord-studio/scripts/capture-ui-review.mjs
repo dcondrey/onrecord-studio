@@ -369,7 +369,7 @@ async function discoverSubviews(page) {
     const scope = document.querySelector('main') ?? document.body;
     const tabs = [...scope.querySelectorAll('[role=tab]')].filter((tab) => tab.getAttribute('aria-selected') !== 'true' && tab.getClientRects().length > 0)
       .map((tab) => ({ kind: 'tab', name: (tab.textContent ?? '').replace(/\s+/g, ' ').trim() })).filter((tab) => tab.name);
-    const drawers = [...scope.querySelectorAll('details.app-panel > summary')].map((summary) => ({ kind: 'drawer', name: (summary.textContent ?? '').replace(/\s+/g, ' ').trim() }));
+    const drawers = [...scope.querySelectorAll('details.app-panel > summary, details[data-ui-drawer] > summary')].map((summary) => ({ kind: 'drawer', name: (summary.textContent ?? '').replace(/\s+/g, ' ').trim() }));
     return [...tabs, ...drawers];
   });
 }
@@ -578,7 +578,7 @@ try {
             if (only && !only.some((filter) => name.startsWith(filter))) continue;
             const locator = subview.kind === 'tab'
               ? (p) => p.getByRole('main').getByRole('tab', { name: subview.name, exact: true })
-              : (p) => p.getByRole('main').locator('details.app-panel > summary', { hasText: subview.name });
+              : (p) => p.getByRole('main').locator('details.app-panel > summary, details[data-ui-drawer] > summary', { hasText: subview.name });
             queue.push({ view: name, scenario: definition.scenario, steps: [...definition.steps, click(`${subview.kind} "${subview.name}"`, locator)], primary: [], states: [], discovered: true });
           }
         }

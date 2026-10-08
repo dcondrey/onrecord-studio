@@ -175,7 +175,7 @@ export default function OverviewDashboard() {
 function ToolDrawer({ label, children }: { label: string; children: ReactNode }) {
   const [everOpened, setEverOpened] = useState(false);
   return (
-    <details className="group" onToggle={(event) => { if (event.currentTarget.open) setEverOpened(true); }}>
+    <details className="group" data-ui-drawer onToggle={(event) => { if (event.currentTarget.open) setEverOpened(true); }}>
       <summary className="focus-ring flex h-12 cursor-pointer list-none items-center gap-2 rounded text-body font-medium text-fg [&::-webkit-details-marker]:hidden">
         {label}
       </summary>
