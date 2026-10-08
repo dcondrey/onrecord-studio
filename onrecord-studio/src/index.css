@@ -130,6 +130,16 @@
   --viz-seq-3: #94a3b8;
   --viz-seq-4: #64748b;
   --viz-seq-5: #334155;
+  /* Text set inside a sequential cell: ink on the light steps, the surface colour on the dark ones. */
+  --viz-on-seq-1: rgb(var(--fg));
+  --viz-on-seq-2: rgb(var(--fg));
+  --viz-on-seq-3: rgb(var(--fg));
+  --viz-on-seq-4: var(--viz-surface);
+  --viz-on-seq-5: var(--viz-surface);
+  --viz-on-ord-1: rgb(var(--fg));
+  --viz-on-ord-2: var(--viz-surface);
+  --viz-on-ord-3: var(--viz-surface);
+  --viz-on-ord-4: var(--viz-surface);
   --scrollbar: #cbd5e1;
   --scrollbar-hover: #94a3b8;
   font-synthesis: none;
@@ -197,8 +207,10 @@
      lead vs mark CVD 20.8 / normal 21.8. Ordinal ramp --ordinal PASS, light end 2.15:1. */
   --viz-ink: #e2e8f0;
   --viz-mark: #94a3b8;
-  --viz-context: #475569;
-  --viz-track: #1e293b;
+  /* One step lighter than the spec's #475569 and #1e293b, which were set against #0f172a: on this
+     panel (#162033) they measured about 2:1 and the hollow peer marks disappeared. */
+  --viz-context: #64748b;
+  --viz-track: #263247;
   --viz-lead: #8b5cf6;
   --viz-positive: #0d9488;
   --viz-counted: #f43f5e;
@@ -206,11 +218,13 @@
   --viz-ord-2: #64748b;
   --viz-ord-3: #94a3b8;
   --viz-ord-4: #cbd5e1;
-  --viz-seq-1: #1e293b;
+  --viz-seq-1: #263247;
   --viz-seq-2: #334155;
   --viz-seq-3: #475569;
   --viz-seq-4: #64748b;
   --viz-seq-5: #94a3b8;
+  --viz-on-seq-4: rgb(var(--fg));
+  --viz-on-ord-2: rgb(var(--fg));
   --scrollbar: #334155;
   --scrollbar-hover: #475569;
 }
@@ -926,6 +940,15 @@ a[href] {
     --viz-seq-3: GrayText;
     --viz-seq-4: CanvasText;
     --viz-seq-5: CanvasText;
+    --viz-on-seq-1: CanvasText;
+    --viz-on-seq-2: CanvasText;
+    --viz-on-seq-3: CanvasText;
+    --viz-on-seq-4: Canvas;
+    --viz-on-seq-5: Canvas;
+    --viz-on-ord-1: CanvasText;
+    --viz-on-ord-2: CanvasText;
+    --viz-on-ord-3: Canvas;
+    --viz-on-ord-4: Canvas;
   }
 }
 

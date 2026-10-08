@@ -36,6 +36,11 @@ export interface ChartFrameProps {
   controls?: ReactNode;
   minHeight: number;
   /**
+   * The plot's height at a measured width, for figures whose rows grow when labels move above
+   * their bars at narrow widths. Default: minHeight.
+   */
+  plotHeight?(width: number): number;
+  /**
    * Set when the plot's marks are keyboard-focusable: the plot becomes a named group with this
    * role description. Otherwise the plot is one image labelled by the headline.
    */
@@ -118,7 +123,7 @@ export default function ChartFrame(props: ChartFrameProps) {
   } else if (view === 'table') {
     body = <TableTwin table={table} />;
   } else if (width > 0) {
-    const size = { width, height: minHeight };
+    const size = { width, height: props.plotHeight ? props.plotHeight(width) : minHeight };
     body = (
       <svg
         width={size.width}

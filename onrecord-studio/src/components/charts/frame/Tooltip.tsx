@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { LegendSwatch, type SwatchKind } from './Legend';
+import { LegendSwatch, type SwatchKind, type SwatchTone } from './Legend';
 
 export type TooltipAnchor = { clientX: number; clientY: number } | DOMRect;
 
@@ -54,6 +54,7 @@ export interface TooltipRow {
   value: string;
   label: string;
   swatch?: SwatchKind;
+  tone?: SwatchTone;
 }
 
 /** Tooltip body: an optional title, then rows with the value first and its label after. */
@@ -63,7 +64,7 @@ export function TooltipContent({ title, rows, note }: { title?: string; rows: re
       {title && <div className="font-medium text-fg">{title}</div>}
       {rows.map((row) => (
         <div key={row.key} className="flex items-center gap-2">
-          {row.swatch && <LegendSwatch kind={row.swatch} />}
+          {row.swatch && <LegendSwatch kind={row.swatch} tone={row.tone} />}
           <span className="viz-num font-semibold text-fg">{row.value}</span>
           <span className="text-fg-secondary">{row.label}</span>
         </div>

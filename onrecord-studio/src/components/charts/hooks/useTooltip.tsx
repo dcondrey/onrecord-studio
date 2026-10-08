@@ -46,6 +46,13 @@ export function useTooltip() {
 
   useEffect(() => cancel, []);
 
+  // A fixed tooltip would detach from its mark when anything scrolls, so it closes instead.
+  useEffect(() => {
+    if (!shown) return;
+    window.addEventListener('scroll', hide, { capture: true, passive: true });
+    return () => window.removeEventListener('scroll', hide, { capture: true });
+  }, [shown, hide]);
+
   const node = shown && typeof document !== 'undefined' ? createPortal(<TooltipLayer anchor={shown.at}>{shown.content}</TooltipLayer>, document.body) : null;
   return useMemo(() => ({ show, hide, node, visible: shown !== null }), [show, hide, node, shown]);
 }

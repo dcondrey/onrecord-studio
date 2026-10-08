@@ -57,7 +57,7 @@ export function useRovingFocus({ shape, onActivate, onEscape }: RovingFocusOptio
       onBlur: () => setFocused(false),
       onKeyDown: (event) => {
         const meta = event.ctrlKey || event.metaKey;
-        let next: [number, number] | null = null;
+        let next: [number, number];
         switch (event.key) {
           case 'ArrowRight':
             next = grid ? [i, j + 1] : [i + 1, j];

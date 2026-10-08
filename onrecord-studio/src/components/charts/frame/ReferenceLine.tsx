@@ -61,7 +61,7 @@ export function ReferenceBand({ from, to, extent, axis, label }: {
       {axis === 'x'
         ? <rect x={lo} y={c0} width={hi - lo} height={c1 - c0} style={{ fill: VIZ.track, opacity: 0.6 }} />
         : <rect x={c0} y={lo} width={c1 - c0} height={hi - lo} style={{ fill: VIZ.track, opacity: 0.6 }} />}
-      <text x={axis === 'x' ? lo + 4 : c0 + 4} y={axis === 'x' ? c1 - 4 : lo + 12} className="fill-muted text-[11px]">{label}</text>
+      <text x={axis === 'x' ? hi - 4 : c1 - 4} y={axis === 'x' ? c1 - 4 : lo + 12} textAnchor="end" className="fill-muted text-[11px]">{label}</text>
     </g>
   );
 }
