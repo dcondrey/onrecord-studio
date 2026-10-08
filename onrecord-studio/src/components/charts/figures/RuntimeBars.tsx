@@ -2,7 +2,6 @@ import { ShapeGlyph } from '../../ui/shapeGlyph';
 import type { PortalRuntimeSnapshot } from '../../../types';
 import { VIZ } from '../core/claim';
 import { measureText } from '../core/layout';
-import { measured } from '../core/nulls';
 import { scaleLinear } from '../core/scale';
 import ChartFrame from '../frame/ChartFrame';
 import type { LegendItem } from '../frame/Legend';
@@ -10,8 +9,8 @@ import { TooltipContent } from '../frame/Tooltip';
 import type { TwinTable } from '../frame/TableTwin';
 import { useRovingFocus } from '../hooks/useRovingFocus';
 import { useTooltip } from '../hooks/useTooltip';
-import { Bar, StackedBar } from '../marks/Bar';
-import { LABEL_CLASS, MarkGroup, MUTED_LABEL_CLASS } from '../marks/shared';
+import { StackedBar } from '../marks/Bar';
+import { hBarPath, LABEL_CLASS, MarkGroup, MUTED_LABEL_CLASS } from '../marks/shared';
 
 export interface RuntimeRow {
   key: string;
@@ -22,7 +21,7 @@ export interface RuntimeRow {
   runtime: Pick<PortalRuntimeSnapshot, 'completedTasks' | 'failedTasks' | 'activeTasks' | 'queuedTasks' | 'frontierExclusions' | 'stoppedHosts'> | null;
 }
 
-export const NOT_RUN = 'not run this session';
+export const NOT_RUN = 'no collection queue this session';
 const NOT_COLLECTED_LINES = 3;
 const BAND = 14;
 
@@ -33,10 +32,36 @@ function total(runtime: NonNullable<RuntimeRow['runtime']>): number {
   return runtime.completedTasks + runtime.failedTasks + runtime.activeTasks + runtime.queuedTasks;
 }
 
+/** The frontier rule ids `FrontierExclusion::rule()` in src-tauri/src/ingestion/queue/mod.rs emits. */
+const FRONTIER_RULE_TEXT: Record<string, string> = {
+  guidance: 'Excluded by the source’s saved guidance',
+  'query-variant': 'Same page with a different filter',
+  'off-scope-host': 'Links to hosts outside the source',
+  'off-source-host-download': 'Downloads hosted outside the source',
+  'depth-ceiling': 'Past the crawl depth limit',
+  'navigation-chrome': 'Site navigation links',
+  'host-stopped': 'Host stopped for this run',
+  'robots-excluded': 'Excluded by the site’s robots.txt',
+  'filename-pattern': 'File name rule',
+  'file-size': 'File size rule',
+  'document-date': 'Document date rule',
+  'content-keyword': 'Content keyword rule',
+  'content-pattern': 'Content pattern rule',
+  organization: 'Organization rule',
+};
+
+/** A rule id as words: a known id gets its sentence, any other is de-cased ('excludeUrlPrefixes' → 'Exclude url prefixes'). */
+export function frontierRuleText(rule: string): string {
+  const known = FRONTIER_RULE_TEXT[rule];
+  if (known) return known;
+  const words = rule.replace(/([a-z0-9])([A-Z])/g, '$1 $2').split(/[-_\s]+/).filter(Boolean).join(' ').toLowerCase();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : rule;
+}
+
 /** Bounds on coverage, as text: they state what was not collected, not a quantity to compare. */
 export function notCollectedLines(runtime: NonNullable<RuntimeRow['runtime']>): string[] {
   return [
-    ...runtime.frontierExclusions.map((exclusion) => `${exclusion.rule}: ${plural(exclusion.excludedLinks, 'link')} refused`),
+    ...runtime.frontierExclusions.map((exclusion) => `${frontierRuleText(exclusion.rule)}: ${plural(exclusion.excludedLinks, 'link')} refused`),
     ...runtime.stoppedHosts.map((host) => `${host.host} stopped: ${host.reason}`),
   ];
 }
@@ -67,15 +92,16 @@ function rowHeight(row: RuntimeRow): number {
 }
 
 const LEGEND: LegendItem[] = [
-  { key: 'done', label: 'Done', swatch: 'rect', tone: 'mark' },
-  { key: 'failed', label: 'Failed (ink, with ▲)', swatch: 'rect', tone: 'ink' },
-  { key: 'active', label: 'Active', swatch: 'rect', tone: 'context' },
-  { key: 'queued', label: 'Queued (outline)', swatch: 'hollow', tone: 'context' },
+  { key: 'done', label: 'Done', swatch: 'rect', tone: 'positive' },
+  { key: 'failed', label: 'Failed (▲)', swatch: 'rect', tone: 'ink' },
+  { key: 'active', label: 'Active', swatch: 'rect', tone: 'mark' },
+  { key: 'queued', label: 'Queued', swatch: 'ring', tone: 'mark' },
 ];
 
 /**
  * F10, collection tasks per source on one shared task scale: done, failed, active, then queued as
- * an outline. Failed tasks are an operational state, drawn as their own ink segment with a ▲ and
+ * an outline. Each bar ends at its own source's total; there is no shared track, which would read
+ * an idle source as unfinished. Failed tasks are an operational state, drawn as their own ink segment with a ▲ and
  * a count, never folded into progress and never crimson. Frontier refusals and stopped hosts are
  * printed as 'Not collected' lines under each bar.
  */
@@ -109,7 +135,7 @@ export default function RuntimeBars({ title = 'Collection tasks by source', rows
       title={title}
       storageKey={storageKey}
       headline={headline}
-      sources={{ tables: ['portal_sync_runs', 'ingestion_task_frontier'], note: 'live queue counts for this session' }}
+      sources={{ tables: ['portal_sync_runs', 'ingestion_task_frontier'], note: 'live queue counts for this session, read from the running queue; each failed task is also recorded in source_ingestion_failures, and its detail is in the event stream' }}
       summary={`${plural(rows.length, 'source')}${notRun ? `, ${notRun} ${NOT_RUN}` : ''}. Failed tasks are drawn as their own segment.`}
       status={status === 'ready' && rows.length === 0 ? 'empty' : status}
       emptyText="No source has a collection queue yet. Connect or resume a source to see its tasks here."
@@ -158,10 +184,10 @@ function RuntimePlot({ width, rows, onShowFailures }: { width: number; rows: rea
           <TooltipContent
             title={row.label}
             rows={[
-              { key: 'done', value: count(runtime.completedTasks), label: 'done', swatch: 'rect', tone: 'mark' },
+              { key: 'done', value: count(runtime.completedTasks), label: 'done', swatch: 'rect', tone: 'positive' },
               { key: 'failed', value: count(runtime.failedTasks), label: 'failed', swatch: 'rect', tone: 'ink' },
-              { key: 'active', value: count(runtime.activeTasks), label: 'active', swatch: 'rect', tone: 'context' },
-              { key: 'queued', value: count(runtime.queuedTasks), label: 'queued', swatch: 'hollow', tone: 'context' },
+              { key: 'active', value: count(runtime.activeTasks), label: 'active', swatch: 'rect', tone: 'mark' },
+              { key: 'queued', value: count(runtime.queuedTasks), label: 'queued', swatch: 'ring', tone: 'mark' },
             ]}
           />
         );
@@ -175,7 +201,8 @@ function RuntimePlot({ width, rows, onShowFailures }: { width: number; rows: rea
         }
         const barY = top + 16;
         const stacked = runtime.completedTasks + runtime.failedTasks + runtime.activeTasks;
-        const queuedScale = scaleLinear([0, Math.max(1, runtime.queuedTasks)], [x(stacked) + (stacked > 0 ? 2 : 0), x(stacked) + (stacked > 0 ? 2 : 0) + (x(runtime.queuedTasks) - x(0))], { nice: false });
+        const queuedFrom = x(stacked) + (stacked > 0 ? 2 : 0);
+        const queuedTo = queuedFrom + x(runtime.queuedTasks) - x(0);
         const failedAt = x(runtime.completedTasks + runtime.failedTasks / 2);
         const lines = notCollectedLines(runtime);
         const shownLines = lines.length > NOT_COLLECTED_LINES + 1 ? [...lines.slice(0, NOT_COLLECTED_LINES), `+${lines.length - NOT_COLLECTED_LINES} more (see table)`] : lines;
@@ -194,18 +221,19 @@ function RuntimePlot({ width, rows, onShowFailures }: { width: number; rows: rea
             }}
           >
             <text x={0} y={top + 7} dy="0.32em" className="fill-fg text-[12px] font-medium">{fit(heading, width)}</text>
-            <rect x={x(0)} y={barY} width={Math.max(0, x(maxTasks) - x(0))} height={BAND} rx={2} style={{ fill: VIZ.track, opacity: 0.5 }} />
             <StackedBar
               band={{ pos: barY, thickness: BAND }}
               scale={x}
               segments={[
-                { key: 'done', value: runtime.completedTasks, tone: 'default', label: count(runtime.completedTasks) },
+                { key: 'done', value: runtime.completedTasks, tone: 'positive', label: count(runtime.completedTasks) },
                 { key: 'failed', value: runtime.failedTasks, tone: 'primary', label: count(runtime.failedTasks) },
-                { key: 'active', value: runtime.activeTasks, tone: 'ord-1', label: count(runtime.activeTasks) },
+                { key: 'active', value: runtime.activeTasks, tone: 'default', label: count(runtime.activeTasks) },
               ]}
               motionKey={`runtime-${row.key}`}
             />
-            {runtime.queuedTasks > 0 && <Bar band={{ pos: barY, thickness: BAND }} value={measured(runtime.queuedTasks)} scale={queuedScale} role="comparison" />}
+            {runtime.queuedTasks > 0 && (
+              <path data-segment="queued" d={hBarPath(queuedFrom, queuedTo - 0.75, barY + 0.75, BAND - 1.5)} style={{ fill: 'none', stroke: VIZ.mark, strokeWidth: 1.5 }} />
+            )}
             {runtime.failedTasks > 0 && <ShapeGlyph shape="triangle" cx={Math.max(5, Math.min(width - 5, failedAt))} cy={barY + BAND + 6} radius={4} style={{ fill: VIZ.ink }} />}
             <text x={0} y={barY + BAND + 19} dy="0.32em" className={LABEL_CLASS}>
               {fit(countsLine(runtime), width)}

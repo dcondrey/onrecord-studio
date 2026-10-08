@@ -89,8 +89,10 @@ export default function ActivityDashboard() {
                 label="Failed tasks"
                 value={measured ? metrics.failedTasks : null}
                 unavailableReason={UNAVAILABLE}
-                detail={metrics.taskFailureRatePercentage === null ? 'No tasks have finished yet' : `${metrics.taskFailureRatePercentage.toFixed(1)}% of finished tasks`}
-                className={measured && metrics.failedTasks > 0 ? '[&_.numeric-value]:text-danger' : undefined}
+                detail={<>
+                  {measured && metrics.failedTasks > 0 && <span aria-hidden="true" className="mr-1 text-fg">▲</span>}
+                  {metrics.taskFailureRatePercentage === null ? 'No tasks have finished yet' : `${metrics.taskFailureRatePercentage.toFixed(1)}% of finished tasks`}
+                </>}
               />
             </>
           )}
@@ -150,7 +152,12 @@ export default function ActivityDashboard() {
                 status={runtimesStatus === 'pending' ? 'loading' : runtimesStatus === 'failed' ? 'error' : 'ready'}
                 error={runtimesStatus === 'failed' ? `Not available until the runtimes can be read. ${runtimesError ?? ''}`.trim() : null}
                 rows={runtimes.map((runtime) => ({ key: runtime.portal.portalKey, label: runtime.portal.displayName, state: runtime.isRunning ? 'Running' : 'Idle', runtime }))}
-                onShowFailures={() => setFilter('errors')}
+                onShowFailures={(portalKey) => {
+                  // Failure events are prefixed with their source's key, so the query narrows the
+                  // stream to that source's problems, visibly and clearably in the filter box.
+                  setFilter('errors');
+                  setQuery(portalKey);
+                }}
               />
             </div>
           </section>

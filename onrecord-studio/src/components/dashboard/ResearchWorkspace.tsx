@@ -220,14 +220,13 @@ function portalKeyFor(portals: SavedSource[], url: string): string | null {
   return portals.find(({ registration }) => registration.canonicalUrl === url)?.registration.portalKey ?? null;
 }
 
-/** Portal sources as task bars; any other source keeps its link and state line. */
+/** Portal sources' queues as task bars, then every source with its link and state line. */
 function RunSources({ sources }: { sources: ResearchSourceStatus[] }) {
-  const portals = useAppStore((app) => app.portals);
   return (
     <>
       <CollectionRuntimes sources={sources} />
       <ul className="grid gap-3 md:grid-cols-2">
-        {sources.filter((source) => !portalKeyFor(portals, source.url)).map((source) => (
+        {sources.map((source) => (
           <li key={source.url} className="min-w-0">
             {/^https?:\/\//.test(source.url)
               ? <a href={source.url} target="_blank" rel="noreferrer" className="focus-ring rounded font-medium text-accent underline-offset-2 hover:underline">{source.label}<span className="sr-only"> (opens in browser)</span></a>
@@ -256,7 +255,10 @@ function CollectionRuntimes({ sources }: { sources: ResearchSourceStatus[] }) {
     const portalKey = portalKeyFor(portals, source.url);
     if (!portalKey) return [];
     const runtime = runtimes.find((candidate) => candidate.portal.portalKey === portalKey) ?? null;
-    return [{ key: source.url, label: source.label, state: runtime ? (runtime.isRunning ? "Running" : "Idle") : `research run: ${source.state.toLowerCase().split("_").join(" ")}${source.detail ? `, ${source.detail}` : ""}`, runtime }];
+    // Without a queue snapshot the run's own report is the only state; it is attributed to the run
+    // so it does not read as this session's queue.
+    const reported = /^OK$/i.test(source.state) ? "collected" : source.state.toLowerCase().split("_").join(" ");
+    return [{ key: source.url, label: source.label, state: runtime ? (runtime.isRunning ? "Running" : "Idle") : `research run reported ${reported}`, runtime }];
   });
   if (rows.length === 0) return null;
   return (
