@@ -245,6 +245,14 @@ body,
   margin: 0;
 }
 
+/* The shell never scrolls: every view scrolls inside its own region, so the title bar and the
+   sidebar cannot be carried off screen by a scroll that reached the document. */
+html,
+body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 body {
   min-width: 320px;
   min-height: 100vh;
@@ -1023,10 +1031,12 @@ a[href] {
   visibility: hidden;
 }
 
-/* Investigation workbench (src/components/workbench). The panes are laid out on the width the view
-   has, not the window's (a container query), so a collapsed sidebar gives the room back. Under
-   720px the panes stack and the page scrolls; up to 960px the context pane folds under the stage
-   in one scrolling column; above that the three panes sit side by side and each scrolls on its own.
+/* Investigation workbench (src/components/workbench). The panes are laid out on the width W the
+   view gives the workbench, not the window's (a container query), so a collapsed sidebar gives the
+   room back. Breakpoints live in Workbench.tsx too (STACKED_BELOW, THREE_COLUMNS_FROM).
+   - W < 720: one column and the page scrolls: queue, stage, context, then Watching.
+   - 720 to 1119: the navigator, then one scrolling column with the stage over the context pane.
+   - 1120 and up: navigator, stage and context side by side, each scrolling on its own.
    Stacked panes never shrink below their content: a fixed-height column would otherwise squeeze
    them and let one paint over the next. */
 .workbench {
@@ -1049,25 +1059,100 @@ a[href] {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  order: 2;
 }
 
 .workbench-main > * {
   flex-shrink: 0;
 }
 
-/* The navigator is two stacked panes (the queue, then watch status) that scroll inside themselves. */
+/* Stacked, the navigator's panes join the page's one column, Watching after the lead. */
 .workbench-nav {
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-  flex-direction: column;
-  gap: 12px;
+  display: contents;
+}
+
+.workbench-queue {
+  order: 1;
+}
+
+.workbench-watch {
+  order: 3;
+}
+
+/* The stage sets its headline by its own width; the context pane lays its sections out by its own. */
+.workbench-pane[data-pane="stage"] {
+  container-type: inline-size;
+  container-name: stage;
+}
+
+.workbench-pane[data-pane="context"] {
+  container-type: inline-size;
+  container-name: context;
+}
+
+.stage-headline {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  letter-spacing: -0.012em;
+  font-weight: 600;
+}
+
+@container stage (min-width: 640px) {
+  .stage-headline {
+    font-size: 2rem;
+    line-height: 2.375rem;
+    letter-spacing: -0.026em;
+  }
+}
+
+.context-sections {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.context-sections > section + section {
+  border-top: 1px solid rgb(var(--line));
+}
+
+/* A wide context pane (under the stage, below 1120) reads as two columns: what the lead cites and
+   asks for on the left, what surrounds it on the right; tables and drafts span both. */
+@container context (min-width: 600px) {
+  .context-sections {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "cited related"
+      "requests gaps"
+      "tables tables"
+      "draft draft";
+    align-items: start;
+  }
+  .context-sections > [data-area="cited"] { grid-area: cited; }
+  .context-sections > [data-area="requests"] { grid-area: requests; }
+  .context-sections > [data-area="related"] { grid-area: related; border-top: 0; border-left: 1px solid rgb(var(--line)); align-self: stretch; }
+  .context-sections > [data-area="gaps"] { grid-area: gaps; border-left: 1px solid rgb(var(--line)); align-self: stretch; }
+  .context-sections > [data-area="tables"] { grid-area: tables; }
+  .context-sections > [data-area="draft"] { grid-area: draft; }
 }
 
 @container workbench (min-width: 720px) {
   .workbench-grid {
     height: 100%;
-    grid-template-columns: 256px minmax(0, 1fr);
+    grid-template-columns: 272px minmax(0, 1fr);
+  }
+  .workbench-nav {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .workbench-queue {
+    flex: 1 1 auto;
+    min-height: 24rem;
+  }
+  /* Open, Watching takes at most 45% of the navigator and scrolls inside itself. */
+  .workbench-watch-open {
+    max-height: 45%;
   }
   .workbench-main {
     min-height: 0;
@@ -1076,12 +1161,12 @@ a[href] {
   }
 }
 
-@container workbench (min-width: 960px) {
+@container workbench (min-width: 1120px) {
   .workbench-grid {
-    grid-template-columns: 256px minmax(0, 1fr) 264px;
+    grid-template-columns: 280px minmax(0, 1fr) 300px;
   }
   .workbench-grid[data-wide] {
-    grid-template-columns: 256px minmax(0, 1fr);
+    grid-template-columns: 280px minmax(0, 1fr);
   }
   .workbench-main {
     display: contents;
@@ -1093,15 +1178,6 @@ a[href] {
   }
 }
 
-@container workbench (min-width: 1200px) {
-  .workbench-grid {
-    grid-template-columns: 288px minmax(0, 1fr) 312px;
-  }
-  .workbench-grid[data-wide] {
-    grid-template-columns: 288px minmax(0, 1fr);
-  }
-}
-
 @container workbench (min-width: 1380px) {
   .workbench-grid {
     grid-template-columns: 304px minmax(0, 1fr) 340px;
@@ -1109,6 +1185,12 @@ a[href] {
   .workbench-grid[data-wide] {
     grid-template-columns: 304px minmax(0, 1fr);
   }
+}
+
+/* A failed share of the collection meter: a neutral hatch, so a failure never reads as a counted claim. */
+.watch-meter-failed {
+  background: repeating-linear-gradient(135deg, var(--hatch) 0 2px, transparent 2px 4px);
+  box-shadow: inset 0 0 0 1px var(--viz-baseline);
 }
 
 /* A queued lead. Selection is an interaction state, so it takes the accent tint and rail the

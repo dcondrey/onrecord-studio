@@ -1,6 +1,19 @@
-import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useAppStore, type WorkbenchQueueLead, type WorkbenchSurface } from '../../store/useAppStore';
 import { cn } from '../../utils/cn';
+import { scrollingAncestor, scrollWithin } from '../../utils/scrollWithin';
+import { useChartSize } from '../charts/hooks/useChartSize';
+import Button from '../ui/Button';
+
+/** The workbench's container width W (index.css lays the panes out on it); 0 until measured. */
+const WorkbenchWidth = createContext(0);
+export const useWorkbenchWidth = () => useContext(WorkbenchWidth);
+/** Below this W the panes stack in one page-scrolling column (index.css `@container workbench`). */
+export const STACKED_BELOW = 720;
+/** From this W the context pane gets its own column. */
+export const THREE_COLUMNS_FROM = 1120;
+/** Cards a stacked queue shows before "Show all". */
+const STACKED_QUEUE_ROWS = 6;
 
 /**
  * The investigation workbench: a navigator (sources, watch status and the lead queue) on the left,
@@ -14,20 +27,24 @@ export default function Workbench({ navigator, children, wide = false, className
   wide?: boolean;
   className?: string;
 }) {
+  const box = useRef<HTMLDivElement>(null);
+  const { width } = useChartSize(box);
   return (
-    <div className={cn('workbench min-h-0 flex-1', className)}>
-      <div className="workbench-grid" data-wide={wide ? '' : undefined}>
-        {navigator}
-        {/* Below 960px the stage and context share this one scrolling column; a tab stop lets the
-            keyboard scroll it while it holds only placeholders. */}
-        <div className="workbench-main focus-ring" role="region" aria-label="Selected lead and the records around it" tabIndex={0}>{children}</div>
+    <WorkbenchWidth.Provider value={width}>
+      <div ref={box} className={cn('workbench min-h-0 flex-1', className)}>
+        <div className="workbench-grid" data-wide={wide ? '' : undefined}>
+          {navigator}
+          {/* Below 1120px the stage and context share this one scrolling column; a tab stop lets
+              the keyboard scroll it while it holds only placeholders. */}
+          <div className="workbench-main focus-ring" role="region" aria-label="Selected lead and the records around it" tabIndex={0}>{children}</div>
+        </div>
       </div>
-    </div>
+    </WorkbenchWidth.Provider>
   );
 }
 
 /** One workbench pane: a titled, rounded module whose header stays put while its body scrolls. */
-export function Pane({ label, title, meta, actions, children, className, bodyClassName, elevated = false }: {
+export function Pane({ label, title, meta, actions, children, className, bodyClassName, elevated = false, role }: {
   /** The pane's accessible name. */
   label: string;
   title?: ReactNode;
@@ -37,9 +54,11 @@ export function Pane({ label, title, meta, actions, children, className, bodyCla
   className?: string;
   bodyClassName?: string;
   elevated?: boolean;
+  /** `stage` or `context`: names the pane's container for index.css's container queries. */
+  role?: 'stage' | 'context';
 }) {
   return (
-    <section aria-label={label} className={cn('workbench-pane flex flex-col rounded-xl border border-line bg-panel', elevated ? 'shadow-panel' : '', className)}>
+    <section aria-label={label} data-pane={role} className={cn('workbench-pane flex flex-col rounded-xl border border-line bg-panel', elevated ? 'shadow-panel' : '', className)}>
       {(title || actions) && (
         <header className="sticky top-0 z-[1] flex h-11 shrink-0 items-center gap-2 rounded-t-xl border-b border-line bg-panel px-4">
           {title && <h2 className="text-overline uppercase text-muted">{title}</h2>}
@@ -53,9 +72,18 @@ export function Pane({ label, title, meta, actions, children, className, bodyCla
 }
 
 /** A labelled group inside a pane: an overline heading, an optional count, then its rows. */
-export function PaneSection({ title, count, action, children, className }: { title: string; count?: ReactNode; action?: ReactNode; children: ReactNode; className?: string }) {
+export function PaneSection({ title, count, action, children, className, area, id }: {
+  title: string;
+  count?: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  /** The section's grid area when the context pane lays its sections in two columns (index.css). */
+  area?: string;
+  id?: string;
+}) {
   return (
-    <section className={cn('px-4 py-3', className)}>
+    <section id={id} data-area={area} className={cn('px-4 py-3', className)}>
       <div className="mb-2 flex h-5 items-center gap-2">
         <h3 className="text-overline uppercase text-muted">{title}</h3>
         {count !== undefined && <span className="text-caption tabular-nums text-muted">{count}</span>}
@@ -110,9 +138,18 @@ export function LeadQueue({ label, items, selectedId, onSelect }: {
   const refs = useRef(new Map<string, HTMLButtonElement>());
   const index = items.findIndex((item) => item.id === selectedId);
   const tabStop = index < 0 ? items[0]?.id : selectedId;
+  const width = useWorkbenchWidth();
+  const stacked = width > 0 && width < STACKED_BELOW;
+  const [showAll, setShowAll] = useState(false);
+  // Stacked, the queue sits above the stage on one page; a short queue keeps the stage in reach.
+  const shown = stacked && !showAll && index < STACKED_QUEUE_ROWS ? items.slice(0, STACKED_QUEUE_ROWS) : items;
 
+  // Follows the selection inside the queue's own scroller; scrollIntoView would also scroll the
+  // page and the shell around it.
   useEffect(() => {
-    if (selectedId) refs.current.get(selectedId)?.scrollIntoView({ block: 'nearest' });
+    const element = selectedId ? refs.current.get(selectedId) : undefined;
+    const container = element ? scrollingAncestor(element) : null;
+    if (element && container) scrollWithin(container, element, 'nearest');
   }, [selectedId]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>, at: number) => {
@@ -129,8 +166,9 @@ export function LeadQueue({ label, items, selectedId, onSelect }: {
   };
 
   return (
+    <>
     <ol aria-label={label} className="space-y-1 p-2">
-      {items.map((item, at) => (
+      {shown.map((item, at) => (
         <li key={item.id}>
           <button
             ref={(element) => { if (element) refs.current.set(item.id, element); else refs.current.delete(item.id); }}
@@ -146,5 +184,11 @@ export function LeadQueue({ label, items, selectedId, onSelect }: {
         </li>
       ))}
     </ol>
+    {shown.length < items.length && (
+      <div className="px-2 pb-2">
+        <Button size="sm" variant="ghost" className="w-full justify-center" onClick={() => setShowAll(true)}>Show all {items.length.toLocaleString()} leads</Button>
+      </div>
+    )}
+    </>
   );
 }

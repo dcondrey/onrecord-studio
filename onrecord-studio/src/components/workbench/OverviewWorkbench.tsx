@@ -1,77 +1,59 @@
-import { useCallback, useMemo, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { invokeCommand } from '../../ipc';
 import { useCaseScope } from '../../hooks/useCaseScope';
 import { useGatedLoad } from '../../hooks/useGatedLoad';
+import { useRankedLeads } from '../../hooks/useRankedLeads';
 import { nextUpcomingMeeting } from '../../hooks/useWorkspaceBadges';
 import { useAppStore } from '../../store/useAppStore';
-import type { Finding, StoryLead } from '../../types';
-import { isLegalClaimKind } from '../../types/findings';
+import { comparisonOf } from '../../utils/attentionFactors';
 import { cn } from '../../utils/cn';
-import { deadlineLedgerHeadline, meetingWhen } from '../dashboard/AttentionFeed';
+import { meetingWhen } from '../dashboard/AttentionFeed';
 import CaseScopeBar from '../dashboard/CaseScopeBar';
 import { useSinceInstant } from '../dashboard/SinceControl';
 import { findingFamily } from '../objects/findingFamily';
 import { formatShortDate } from '../objects/labels';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
-import FamilyBadge from '../ui/FamilyBadge';
 import Icon, { type IconName } from '../ui/icons';
 import StatusDot from '../ui/statusDot';
 import LeadCard from './LeadCard';
 import LeadDetail, { ContextSkeleton, StageSkeleton } from './LeadDetail';
-import Workbench, { LeadQueue, Pane, useWorkbenchQueue } from './Workbench';
+import Workbench, { LeadQueue, Pane, THREE_COLUMNS_FROM, useWorkbenchQueue, useWorkbenchWidth } from './Workbench';
 
-const FINDINGS_SCAN_LIMIT = 200;
 const MEETING_HORIZON_DAYS = 14;
 /** The deadline ledger's selection id; never a finding id, which is a hex digest. */
-const LEDGER_ID = 'ledger';
-const SEVERITY_RANK = { CRITICAL: 100, SERIOUS: 70, NOTABLE: 40, INFO: 10 } as const;
-
-/** Severity first; a counted statutory violation outranks a pattern signal of the same weight. */
-function rankLeads(findings: readonly Finding[]): Finding[] {
-  const rank = (finding: Finding) => SEVERITY_RANK[finding.severity] + (isLegalClaimKind(finding.kind) ? 15 : 0);
-  return findings.filter((finding) => !finding.dismissedAt).sort((a, b) => rank(b) - rank(a) || b.discoveredAt.localeCompare(a.discoveredAt));
-}
+export const LEDGER_ID = 'ledger';
+const WATCHING_OPEN_KEY = 'overview.watching.open';
+/** The window height below which Watching starts folded, so the queue keeps four cards in view. */
+const WATCHING_OPEN_MIN_HEIGHT = 860;
 
 /**
- * The overview as an investigation workbench: the leads found in the Since window and the watch
+ * The overview as an investigation workbench: the ranked leads in the Since window and the watch
  * status on the left, the selected lead in the centre, the records around it on the right. The
- * counted deadline ledger is watched, not queued (its totals are all-time, not found in this
- * window); selecting it draws the ledger on the stage.
+ * queue is the Story desk's ranking, so "#3" is the same lead on both. The counted deadline ledger
+ * is watched, not queued (its totals are all-time, not found in this window); selecting it draws
+ * the ledger on the stage.
  */
 export default function OverviewWorkbench({ ledgerFigure, onOpenLedger, onOpenFollowing }: {
   ledgerFigure: ReactNode;
   onOpenLedger(): void;
   onOpenFollowing(): void;
 }) {
-  const sinceInstant = useSinceInstant();
-  const findingsRefreshRequests = useAppStore((state) => state.findingsRefreshRequests);
+  const since = useSinceInstant();
   const portals = useAppStore((state) => state.portals);
   const setSincePreset = useAppStore((state) => state.setSincePreset);
+  const requestFindingsRefresh = useAppStore((state) => state.requestFindingsRefresh);
   const selected = useAppStore((state) => state.workbenchSelection.overview ?? null);
   const selectWorkbenchLead = useAppStore((state) => state.selectWorkbenchLead);
-  const agencyProfiles = useAppStore((state) => state.agencyProfiles);
-  const activePortalKey = useAppStore((state) => state.activePortalKey);
   const caseScope = useCaseScope();
+  const ranked = useRankedLeads();
+  const ledger = useLedgerTotals();
+  const { leads } = ranked;
 
-  const findings = useGatedLoad(`${sinceInstant}:${findingsRefreshRequests}`, () => invokeCommand('list_findings', { filter: { discoveredAfter: sinceInstant }, limit: FINDINGS_SCAN_LIMIT }));
-  const ranking = useGatedLoad(`story:${findingsRefreshRequests}`, () => invokeCommand('list_story_leads', { limit: 100 }));
-
-  const leads = useMemo(() => (findings.status === 'ready'
-    ? rankLeads(findings.data.filter((finding) => caseScope.status !== 'ready' || caseScope.value.findingIds.has(finding.id)))
-    : []), [caseScope, findings]);
-  const ranked = useMemo(() => new Map<string, { lead: StoryLead }>(
-    ranking.status === 'ready' ? ranking.data.map((lead) => [lead.findingId, { lead }]) : [],
-  ), [ranking]);
-  const ledger = useMemo(
-    () => (caseScope.status === 'off' ? deadlineLedgerHeadline(agencyProfiles.filter((profile) => !activePortalKey || profile.portalSubdomain === activePortalKey)) : null),
-    [activePortalKey, agencyProfiles, caseScope.status],
-  );
   const sourceName = useCallback((portalKey: string | null) => portals.find((saved) => saved.registration.portalKey === portalKey)?.registration.displayName, [portals]);
-
-  const queue = useMemo(() => leads.map((finding) => ({ id: finding.id, headline: finding.headline, kind: findingFamily(finding.kind) })), [leads]);
+  const queue = useMemo(() => leads.map((lead, index) => ({ id: lead.findingId, headline: lead.headline, kind: findingFamily(lead.kind), rank: index + 1, lead })), [leads]);
   const current = selected === LEDGER_ID && ledger ? LEDGER_ID : queue.some((item) => item.id === selected) ? selected : queue[0]?.id ?? null;
-  useWorkbenchQueue('overview', findings.status === 'ready' ? queue : null, current);
+  useWorkbenchQueue('overview', ranked.status === 'ready' ? queue : null, current);
   const select = useCallback((id: string) => selectWorkbenchLead('overview', id), [selectWorkbenchLead]);
   const selectIfQueued = useCallback((id: string) => {
     if (!queue.some((item) => item.id === id)) return false;
@@ -79,24 +61,13 @@ export default function OverviewWorkbench({ ledgerFigure, onOpenLedger, onOpenFo
     return true;
   }, [queue, select]);
   const index = queue.findIndex((item) => item.id === current);
-  const position = index >= 0 ? { index: index + 1, total: queue.length } : undefined;
 
   // A source name says something only when the queue holds more than one source's leads.
-  const spansSources = new Set(leads.map((finding) => finding.subject.portalKey).filter(Boolean)).size > 1;
-  const items = leads.map((finding) => ({
-    id: finding.id,
-    content: (
-      <LeadCard
-        badges={<>
-          <FamilyBadge family={findingFamily(finding.kind)} />
-          {isLegalClaimKind(finding.kind) && <Badge tone="violation">Counted</Badge>}
-        </>}
-        headline={finding.headline}
-        severity={finding.severity}
-        subject={spansSources ? sourceName(finding.subject.portalKey) : undefined}
-        time={finding.discoveredAt}
-      />
-    ),
+  const spansSources = new Set(leads.map((lead) => lead.portalKey).filter(Boolean)).size > 1;
+  const scaleMax = leads[0]?.publicInterest.totalBasisPoints ?? 1;
+  const items = leads.map((lead, at) => ({
+    id: lead.findingId,
+    content: <LeadCard lead={lead} rank={at + 1} scaleMax={scaleMax} source={spansSources ? sourceName(lead.portalKey) : undefined} />,
   }));
 
   const navigator = (
@@ -104,26 +75,40 @@ export default function OverviewWorkbench({ ledgerFigure, onOpenLedger, onOpenFo
       <Pane
         label="Lead queue"
         title="Leads"
-        meta={findings.status === 'ready' ? `${leads.length.toLocaleString()}${findings.data.length === FINDINGS_SCAN_LIMIT ? '+' : ''}` : undefined}
-        actions={sinceInstant ? <span className="text-caption text-muted">since {formatShortDate(sinceInstant)}</span> : <span className="text-caption text-muted">any time</span>}
-        className="min-h-[15rem] flex-1"
+        meta={ranked.status === 'ready' ? leads.length.toLocaleString() : undefined}
+        actions={<span className="text-caption text-muted">by attention score</span>}
+        className="workbench-queue"
         bodyClassName="overflow-y-auto"
       >
-        <div className="px-2 pt-2 empty:hidden"><CaseScopeBar state={caseScope} noun="findings" /></div>
-        {findings.status === 'pending' ? <QueueSkeleton /> : findings.status === 'failed' ? (
-          <p role="alert" className="px-4 py-3 text-body text-danger">Leads couldn’t be loaded. {findings.message}</p>
-        ) : items.length === 0 ? (
-          <div className="px-4 py-6 text-center">
-            <p className="text-heading text-fg-secondary">{sinceInstant ? `Nothing new since ${formatShortDate(sinceInstant)}` : 'No leads yet'}</p>
-            <p className="mt-1 text-caption text-muted">
-              {sinceInstant
-                ? <>Widen the window to see every lead found so far. <Button variant="link" size="sm" className="h-auto px-0 align-baseline text-caption" onClick={() => setSincePreset('all')}>Any time</Button></>
-                : 'Leads appear here as sources are collected and the detectors run.'}
-            </p>
-          </div>
-        ) : (
-          <LeadQueue label="Leads, most serious first" items={items} selectedId={current} onSelect={select} />
-        )}
+        <div aria-busy={ranked.refreshing || undefined}>
+          <div className="px-2 pt-2 empty:hidden"><CaseScopeBar state={caseScope} noun="leads" /></div>
+          {ranked.status === 'pending' ? <QueueSkeleton /> : ranked.status === 'failed' ? (
+            <div role="alert" className="px-4 py-4">
+              <p className="text-body font-medium text-fg">Leads couldn’t be loaded.</p>
+              {ranked.message && <p className="mt-1 break-words text-caption text-muted">{ranked.message}</p>}
+              <Button size="sm" className="mt-3" onClick={requestFindingsRefresh}>Try again</Button>
+            </div>
+          ) : items.length === 0 ? (
+            <div className="px-4 py-6 text-center">
+              {since && ranked.total > 0 ? (
+                <>
+                  <p className="text-heading text-fg-secondary">Nothing new since {formatShortDate(since)}</p>
+                  <p className="mt-1 text-caption text-muted">
+                    Widen the window to see every lead ranked so far.{' '}
+                    <Button variant="link" size="sm" className="h-auto px-0 align-baseline text-caption" onClick={() => setSincePreset('all')}>Any time</Button>
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-heading text-fg-secondary">No leads yet</p>
+                  <p className="mt-1 text-caption text-muted">Leads appear here once the detectors finish a sweep of what has been collected.</p>
+                </>
+              )}
+            </div>
+          ) : (
+            <LeadQueue label="Leads by attention score" items={items} selectedId={current} onSelect={select} />
+          )}
+        </div>
       </Pane>
       <WatchStatus ledger={ledger} ledgerSelected={current === LEDGER_ID} onSelectLedger={() => select(LEDGER_ID)} onOpenFollowing={onOpenFollowing} />
     </div>
@@ -132,7 +117,7 @@ export default function OverviewWorkbench({ ledgerFigure, onOpenLedger, onOpenFo
   let main: ReactNode;
   if (current === LEDGER_ID) {
     main = (
-      <Pane label="Selected lead" elevated>
+      <Pane label="Selected lead" role="stage" elevated>
         <article aria-labelledby="ledger-stage-title" className="motion-fade">
           <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-6 py-4">
             <h2 id="ledger-stage-title" className="text-heading text-fg">Deadline ledger</h2>
@@ -144,30 +129,37 @@ export default function OverviewWorkbench({ ledgerFigure, onOpenLedger, onOpenFo
         </article>
       </Pane>
     );
-  } else if (findings.status === 'pending') {
+  } else if (ranked.status === 'pending') {
     main = <PendingDetail />;
   } else if (!current) {
     main = (
-      <Pane label="Selected lead" elevated>
-        <StageWaiting text={findings.status === 'failed' ? 'A lead opens here once the queue loads.' : 'When a lead is found it opens here, with its figure, its evidence chain and the records around it.'} />
+      <Pane label="Selected lead" role="stage" elevated>
+        <StageWaiting text={ranked.status === 'failed' ? 'A lead opens here once the queue loads.' : 'When a lead is ranked it opens here, with its figure, its evidence and the records around it.'} />
       </Pane>
     );
   } else {
-    const story = ranked.get(current);
-    // The overview orders by severity; the Story desk's attention rank would be a second ordering
-    // beside "1 of 40", so the factors are drawn without it.
-    main = <LeadDetail findingId={current} storyLead={story?.lead} position={position} onSelectFinding={selectIfQueued} />;
+    const lead = leads[index];
+    main = (
+      <LeadDetail
+        findingId={current}
+        storyLead={lead}
+        position={{ index: index + 1, total: leads.length }}
+        compare={comparisonOf(leads, index)}
+        source={spansSources ? sourceName(lead.portalKey) : undefined}
+        onSelectFinding={selectIfQueued}
+      />
+    );
   }
 
-  return <Workbench navigator={navigator} wide={current === LEDGER_ID || (!current && findings.status !== 'pending')}>{main}</Workbench>;
+  return <Workbench navigator={navigator} wide={current === LEDGER_ID || (!current && ranked.status !== 'pending')}>{main}</Workbench>;
 }
 
 /** The stage and context while the queue is still being read: shapes, never a number. */
 export function PendingDetail() {
   return (
     <>
-      <Pane label="Selected lead" title="Lead" elevated><StageSkeleton /></Pane>
-      <Pane label="Records around this lead" title="Around this lead"><ContextSkeleton /></Pane>
+      <Pane label="Selected lead" title="Lead" role="stage" elevated><StageSkeleton /></Pane>
+      <Pane label="Records around this lead" title="Around this lead" role="context"><ContextSkeleton /></Pane>
     </>
   );
 }
@@ -178,15 +170,10 @@ export function WorkbenchSkeleton() {
     <Workbench
       navigator={(
         <div className="workbench-nav">
-          <Pane label="Lead queue" title="Leads" className="min-h-0 flex-1" bodyClassName="overflow-hidden"><QueueSkeleton /></Pane>
-          <Pane label="Watch status" title="Watching" className="shrink-0" bodyClassName="space-y-3 p-4">
-            {[0, 1, 2].map((row) => (
-              <div key={row} aria-hidden="true" className="flex gap-2.5">
-                <div className="skeleton h-6 w-6 rounded-md" />
-                <div className="flex-1 space-y-1.5"><div className="skeleton h-4 w-2/3 rounded" /><div className="skeleton h-3 w-1/2 rounded" /></div>
-              </div>
-            ))}
-          </Pane>
+          <Pane label="Lead queue" title="Leads" className="workbench-queue" bodyClassName="overflow-hidden"><QueueSkeleton /></Pane>
+          <section aria-label="Watch status" className="workbench-watch workbench-pane flex shrink-0 flex-col rounded-xl border border-line bg-panel">
+            <header className="flex h-11 items-center gap-2 px-4"><h2 className="text-overline uppercase text-muted">Watching</h2><div aria-hidden="true" className="skeleton ml-2 h-3 w-32 rounded" /></header>
+          </section>
         </div>
       )}
     >
@@ -209,27 +196,71 @@ function StageWaiting({ text }: { text: string }) {
 function QueueSkeleton() {
   return (
     <div role="status" aria-busy="true" className="space-y-1 p-2">
-      <span className="sr-only">Loading leads</span>
+      <span className="sr-only">Ranking leads</span>
       {[0, 1, 2, 3].map((card) => (
-        <div key={card} aria-hidden="true" className="space-y-2 rounded-lg px-3 py-2.5">
-          <div className="skeleton h-5 w-20 rounded-full" />
-          <div className="skeleton h-4 w-full rounded" />
-          <div className="skeleton h-4 w-3/4 rounded" />
-          <div className="skeleton h-3 w-1/2 rounded" />
+        <div key={card} aria-hidden="true" className="rounded-lg px-3 py-2.5">
+          <div className="flex h-5 items-center gap-1.5"><div className="skeleton h-3 w-6 rounded" /><div className="skeleton h-5 w-24 rounded-full" /></div>
+          <div className="skeleton mt-1.5 h-4 w-full rounded" />
+          <div className="skeleton mt-1 h-4 w-3/4 rounded" />
+          <div className="skeleton mt-1.5 h-3 w-1/2 rounded" />
+          <div className="skeleton mt-2.5 h-1.5 w-full rounded-full" />
         </div>
       ))}
     </div>
   );
 }
 
-/** One watch row: an icon tile, a title, one caption line and an optional figure at the end. */
-function WatchRow({ icon, title, caption, figure, hint, current, onClick, children }: {
+interface LedgerTotals {
+  misses: number;
+  requests: number;
+  departments: number;
+}
+
+/**
+ * The counted deadline ledger's all-time totals over the profiles the analytics ledger draws (the
+ * active source's, or every source's). Null while a case scope is on, since these totals cover
+ * every request rather than the case's, and when no department has a counted miss.
+ */
+export function useLedgerTotals(): LedgerTotals | null {
+  const profiles = useAppStore((state) => state.agencyProfiles);
+  const activePortalKey = useAppStore((state) => state.activePortalKey);
+  const caseScope = useCaseScope();
+  return useMemo(() => {
+    if (caseScope.status !== 'off') return null;
+    const scoped = profiles.filter((profile) => !activePortalKey || profile.portalSubdomain === activePortalKey);
+    const misses = scoped.reduce((sum, profile) => sum + profile.statutoryViolationCount, 0);
+    if (misses === 0) return null;
+    return {
+      misses,
+      requests: scoped.reduce((sum, profile) => sum + profile.totalRequestsProcessed, 0),
+      departments: scoped.filter((profile) => profile.statutoryViolationCount > 0).length,
+    };
+  }, [activePortalKey, caseScope.status, profiles]);
+}
+
+function readWatchingOpen(): boolean | null {
+  try {
+    const stored = window.localStorage.getItem(WATCHING_OPEN_KEY);
+    return stored === 'true' ? true : stored === 'false' ? false : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeWatchingOpen(open: boolean) {
+  try {
+    window.localStorage.setItem(WATCHING_OPEN_KEY, String(open));
+  } catch {
+    // An unwritable store only means the choice is not remembered next launch.
+  }
+}
+
+/** One watch row: an icon tile, a title and an optional figure, then lines that wrap, never truncate. */
+function WatchRow({ icon, title, figure, lines, current, onClick, children }: {
   icon: IconName;
   title: ReactNode;
-  caption?: ReactNode;
   figure?: ReactNode;
-  /** The full wording when the row shortens it. */
-  hint?: string;
+  lines?: ReactNode[];
   current?: boolean;
   onClick(): void;
   children?: ReactNode;
@@ -238,30 +269,50 @@ function WatchRow({ icon, title, caption, figure, hint, current, onClick, childr
     <button
       type="button"
       onClick={onClick}
-      title={hint}
       aria-current={current ? 'true' : undefined}
-      className={cn('lead-card focus-ring flex w-full gap-2.5 rounded-lg border border-transparent px-2.5 py-1.5 text-left hover:bg-raised/60', caption || children ? 'items-start' : 'items-center')}
+      className="lead-card focus-ring flex w-full items-start gap-2.5 rounded-lg border border-transparent px-2.5 py-2 text-left hover:bg-raised/60"
     >
       <span aria-hidden="true" className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-raised text-fg-secondary"><Icon name={icon} size="sm" /></span>
       <span className="min-w-0 flex-1">
-        <span className="flex h-6 min-w-0 items-center gap-1.5 text-body font-medium text-fg">
+        <span className="flex min-h-6 min-w-0 flex-wrap items-center gap-x-1.5 text-body font-medium text-fg">
           {title}
-          {figure && <span className="ml-auto shrink-0 pl-2 text-caption font-medium tabular-nums text-fg-secondary">{figure}</span>}
+          {figure !== undefined && <span className="ml-auto shrink-0 pl-2 text-caption font-medium tabular-nums text-fg-secondary">{figure}</span>}
         </span>
-        {caption && <span className="-mt-0.5 block truncate text-caption tabular-nums text-muted">{caption}</span>}
+        {lines?.map((line, at) => <span key={at} className="block text-caption tabular-nums text-muted">{line}</span>)}
         {children}
       </span>
     </button>
   );
 }
 
+/** Collection work across every saved source, settled and waiting, on one track. */
+function CollectionMeter({ completed, failed, active, total }: { completed: number; failed: number; active: number; total: number }) {
+  const share = (count: number) => `${(count / total) * 100}%`;
+  return (
+    <span
+      role="progressbar"
+      aria-label="Collection tasks settled across sources"
+      aria-valuemin={0}
+      aria-valuemax={total}
+      aria-valuenow={completed + failed}
+      aria-valuetext={`${(completed + failed).toLocaleString()} of ${total.toLocaleString()} tasks settled${failed > 0 ? `, ${failed.toLocaleString()} failed` : ''}`}
+      className="mt-2 flex h-1.5 w-full overflow-hidden rounded-full bg-viz-track"
+    >
+      <span className="h-full bg-success-mark" style={{ width: share(completed) }} />
+      {failed > 0 && <span className="watch-meter-failed h-full" style={{ width: share(failed) }} />}
+      {active > 0 && <span className="h-full bg-success-mark/50" style={{ width: share(active) }} />}
+    </span>
+  );
+}
+
 /**
  * What the reader keeps an eye on: collection across every saved source (the sidebar lists them
  * one by one; this is their sum, so a stalled run shows without opening anything), the counted
- * deadline ledger, the next public meeting, and what the watches saw change.
+ * deadline ledger, the next public meeting, and what the watches saw change. Folded, the header
+ * carries the same facts in one line.
  */
 function WatchStatus({ ledger, ledgerSelected, onSelectLedger, onOpenFollowing }: {
-  ledger: string | null;
+  ledger: LedgerTotals | null;
   ledgerSelected: boolean;
   onSelectLedger(): void;
   onOpenFollowing(): void;
@@ -272,14 +323,29 @@ function WatchStatus({ ledger, ledgerSelected, onSelectLedger, onOpenFollowing }
   const findingsRefreshRequests = useAppStore((state) => state.findingsRefreshRequests);
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
   const since = useSinceInstant();
+  const width = useWorkbenchWidth();
+  const [chosen, setChosen] = useState<boolean | null>(readWatchingOpen);
+  const [fallback, setFallback] = useState<boolean | null>(null);
+  // The default is decided once, from the first measured width: open only where there is room.
+  useEffect(() => {
+    if (fallback === null && width > 0) setFallback(width >= THREE_COLUMNS_FROM && window.innerHeight >= WATCHING_OPEN_MIN_HEIGHT);
+  }, [fallback, width]);
+  const open = chosen ?? fallback ?? false;
+  const toggle = () => {
+    setChosen(!open);
+    storeWatchingOpen(!open);
+  };
   const calendar = useGatedLoad('calendar', () => invokeCommand('get_meeting_calendar', {}));
   const changes = useGatedLoad(`changes:${findingsRefreshRequests}`, () => invokeCommand('list_watch_changes', { watchId: null, limit: 20 }));
 
   const live = new Set(portals.map((saved) => saved.registration.portalKey));
   const running = runtimes.filter((runtime) => live.has(runtime.portal.portalKey));
-  const settled = running.reduce((sum, runtime) => sum + runtime.completedTasks + runtime.failedTasks, 0);
-  const total = running.reduce((sum, runtime) => sum + runtime.completedTasks + runtime.failedTasks + runtime.queuedTasks + runtime.activeTasks, 0);
-  const failed = running.reduce((sum, runtime) => sum + runtime.failedTasks, 0);
+  const sum = (pick: (runtime: (typeof running)[number]) => number) => running.reduce((total, runtime) => total + pick(runtime), 0);
+  const completed = sum((runtime) => runtime.completedTasks);
+  const failed = sum((runtime) => runtime.failedTasks);
+  const active = sum((runtime) => runtime.activeTasks);
+  const total = completed + failed + active + sum((runtime) => runtime.queuedTasks);
+  const settled = completed + failed;
   const paused = portals.filter((saved) => saved.lifecycleState === 'PAUSED').length;
   const degraded = portals.filter((saved) => saved.healthStatus === 'degraded').length;
   const collecting = syncing.filter((key) => live.has(key)).length;
@@ -291,47 +357,80 @@ function WatchStatus({ ledger, ledgerSelected, onSelectLedger, onOpenFollowing }
     paused > 0 && `${paused} paused`,
     degraded > 0 && `${degraded} need${degraded === 1 ? 's' : ''} attention`,
   ].filter(Boolean).join(' · ') || 'none collecting';
+  const sources = `${portals.length.toLocaleString()} source${portals.length === 1 ? '' : 's'}`;
+  const percent = total > 0 ? `${Math.floor((settled / total) * 100)}%` : null;
+  const dot = <StatusDot state={degraded > 0 ? 'error' : collecting > 0 ? 'active' : 'idle'} pulse={collecting > 0 && degraded === 0} label={degraded > 0 ? 'needs attention' : collecting > 0 ? 'collecting' : 'idle'} />;
+  const summary = [
+    <span key="sources">{sources}</span>,
+    dot,
+    percent && <span key="percent">{percent}</span>,
+    ledger && <span key="ledger">§ {ledger.misses.toLocaleString()}</span>,
+    changes.status === 'ready' && <span key="changes">{recent.length.toLocaleString()} change{recent.length === 1 ? '' : 's'}</span>,
+  ].filter(Boolean);
 
   return (
-    <Pane label="Watch status" title="Watching" className="shrink-0" bodyClassName="space-y-0.5 p-2">
-      <WatchRow
-        icon="database"
-        title={<><span>{portals.length.toLocaleString()} source{portals.length === 1 ? '' : 's'}</span><StatusDot state={degraded > 0 ? 'error' : collecting > 0 ? 'active' : 'idle'} pulse={collecting > 0 && degraded === 0} label={degraded > 0 ? 'needs attention' : collecting > 0 ? 'collecting' : 'idle'} /></>}
-        caption={total > 0 ? `${state} · ${settled.toLocaleString()}/${total.toLocaleString()} tasks${failed > 0 ? ` · ${failed.toLocaleString()} failed` : ''}` : `${state} · no queue this session`}
-        figure={total > 0 ? `${Math.floor((settled / total) * 100)}%` : undefined}
-        onClick={() => setWorkspaceView('activity')}
-      >
-        {total > 0 && (
-          <span role="progressbar" aria-label="Collection tasks settled across sources" aria-valuemin={0} aria-valuemax={total} aria-valuenow={settled} className="mt-1.5 block h-1 overflow-hidden rounded-full bg-raised">
-            <span className="block h-full origin-left rounded-full bg-success-mark transition-transform duration-slow" style={{ transform: `scaleX(${settled / total})` }} />
-          </span>
-        )}
-      </WatchRow>
-      {ledger && (
-        <WatchRow
-          icon="bars"
-          title={<><span>Deadline ledger</span><Badge tone="violation" className="h-[18px] px-1.5">Counted</Badge></>}
-          hint={ledger}
-          current={ledgerSelected}
-          onClick={onSelectLedger}
-        />
+    <section aria-label="Watch status" className={cn('workbench-watch workbench-pane flex shrink-0 flex-col rounded-xl border border-line bg-panel', open && 'workbench-watch-open')}>
+      <h2 className="shrink-0">
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls="watching-body"
+          onClick={toggle}
+          className="focus-ring flex h-11 w-full items-center gap-2 rounded-xl px-4 text-left"
+        >
+          <span className="text-overline uppercase text-muted">Watching</span>
+          {!open && (
+            <span className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-caption tabular-nums text-fg-secondary">
+              {summary.flatMap((part, at) => (at < 2 ? [part] : [<span key={`dot-${at}`} aria-hidden="true" className="text-muted">·</span>, part]))}
+            </span>
+          )}
+          <Icon name="chevron" size="xs" className={cn('ml-auto shrink-0 text-muted transition-transform', open && 'rotate-90')} />
+        </button>
+      </h2>
+      {open && (
+        <div id="watching-body" className="min-h-0 space-y-0.5 overflow-y-auto overscroll-contain border-t border-line p-2">
+          <WatchRow
+            icon="database"
+            title={<><span>{sources}</span>{dot}</>}
+            figure={percent ?? undefined}
+            lines={[
+              state,
+              total > 0
+                ? <>{settled.toLocaleString()} of {total.toLocaleString()} tasks settled{failed > 0 && <span className="text-danger"> · {failed.toLocaleString()} failed</span>}</>
+                : 'no queue this session',
+            ]}
+            onClick={() => setWorkspaceView('activity')}
+          >
+            {total > 0 && <CollectionMeter completed={completed} failed={failed} active={active} total={total} />}
+          </WatchRow>
+          {ledger && (
+            <WatchRow
+              icon="bars"
+              title={<><span>Deadline ledger</span><Badge tone="violation" className="h-[18px] px-1.5">Counted</Badge></>}
+              figure={`${ledger.misses.toLocaleString()} missed`}
+              lines={[`of ${ledger.requests.toLocaleString()} requests · ${ledger.departments.toLocaleString()} department${ledger.departments === 1 ? '' : 's'} · all-time`]}
+              current={ledgerSelected}
+              onClick={onSelectLedger}
+            />
+          )}
+          {upcoming && (
+            <WatchRow
+              icon="calendar"
+              title={<span>{upcoming.body}</span>}
+              figure={upcoming.days === 0 ? 'today' : `in ${upcoming.days} day${upcoming.days === 1 ? '' : 's'}`}
+              lines={[upcoming.meeting.date ? meetingWhen(upcoming.meeting.date, upcoming.meeting.startTime) : 'Date not published']}
+              onClick={() => setWorkspaceView('meetings')}
+            />
+          )}
+          <WatchRow
+            icon="activity"
+            title={changes.status === 'ready' && recent.length > 0 ? `${recent.length.toLocaleString()} watch change${recent.length === 1 ? '' : 's'}` : 'Watch changes'}
+            figure={changes.status === 'failed' ? 'didn’t load' : recent.length === 0 && changes.status === 'ready' ? (since ? 'none in window' : 'none yet') : undefined}
+            lines={recent[0] ? [`${recent[0].subject}: ${recent[0].oldValue ?? 'not in baseline'} → ${recent[0].newValue ?? 'no longer present'}`] : undefined}
+            onClick={onOpenFollowing}
+          />
+        </div>
       )}
-      {upcoming && (
-        <WatchRow
-          icon="calendar"
-          title={<span className="truncate">{upcoming.body}</span>}
-          caption={upcoming.meeting.date ? meetingWhen(upcoming.meeting.date, upcoming.meeting.startTime) : 'Date not published'}
-          figure={upcoming.days === 0 ? 'today' : `in ${upcoming.days} day${upcoming.days === 1 ? '' : 's'}`}
-          onClick={() => setWorkspaceView('meetings')}
-        />
-      )}
-      <WatchRow
-        icon="activity"
-        title={changes.status === 'ready' && recent.length > 0 ? `${recent.length.toLocaleString()} watch change${recent.length === 1 ? '' : 's'}` : 'Watch changes'}
-        hint={recent[0] ? `${recent[0].subject}: ${recent[0].oldValue ?? 'not in baseline'} → ${recent[0].newValue ?? 'no longer present'}` : undefined}
-        figure={changes.status === 'failed' ? 'didn’t load' : recent.length === 0 && changes.status === 'ready' ? (since ? 'none in window' : 'none yet') : undefined}
-        onClick={onOpenFollowing}
-      />
-    </Pane>
+    </section>
   );
 }

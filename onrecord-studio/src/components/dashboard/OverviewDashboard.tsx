@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import TemporalMap from '../charts/TemporalMap';
 import DepartmentLedger, { ledgerOrder, SMALL_SAMPLE_CLOSURES } from '../charts/figures/DepartmentLedger';
 import Dumbbells, { changeText, type DumbbellKind, type DumbbellRow } from '../charts/figures/Dumbbells';
 import { formatDateRange, formatValue } from '../charts/core/format';
 import { absent, measured, type Measured } from '../charts/core/nulls';
-import { useAppStore } from '../../store/useAppStore';
+import { useAppStore, type CaseworkTab, type OverviewPerspective } from '../../store/useAppStore';
+import { scrollWithin } from '../../utils/scrollWithin';
 import MetricsGrid from './MetricsGrid';
 import Icon from '../ui/icons';
-import PageHeader from '../ui/PageHeader';
+import Skeleton from '../ui/Skeleton';
 import Panel, { PanelHeader } from '../ui/Panel';
 import Button from '../ui/Button';
 import { Select } from '../ui/Field';
@@ -24,8 +25,8 @@ import AutomaticDiscovery from './AutomaticDiscovery';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { AgencyPerformanceProfile } from '../../types';
-import { AttentionFeedSkeleton } from './AttentionFeed';
 import OverviewWorkbench, { WorkbenchSkeleton } from '../workbench/OverviewWorkbench';
+import Masthead, { Dateline } from '../workbench/Masthead';
 import EmptyState from '../ui/EmptyState';
 import SinceControl from './SinceControl';
 import WatchlistPanel from './WatchlistPanel';
@@ -38,26 +39,27 @@ import StarterSets from './StarterSets';
 import FirstRunData from './FirstRunData';
 import { useStarterRunStore } from '../../store/useStarterRunStore';
 
-type Perspective = 'leads' | 'following' | 'analytics' | 'tools';
-
-const PERSPECTIVES: { value: Perspective; label: string }[] = [
+const PERSPECTIVES: { value: OverviewPerspective; label: string }[] = [
   { value: 'leads', label: 'Leads' },
   { value: 'following', label: 'Following' },
   { value: 'analytics', label: 'Analytics' },
+  { value: 'casework', label: 'Casework' },
   { value: 'tools', label: 'Tools' },
 ];
 
 export default function OverviewDashboard() {
   const portals = useAppStore((state) => state.portals);
-  const [perspective, setPerspective] = useState<Perspective>('leads');
-  const [workbench, setWorkbench] = useState<{ reportId: string; review: boolean } | null>(null);
+  const perspective = useAppStore((state) => state.overviewPerspective);
+  const setPerspective = useAppStore((state) => state.setOverviewPerspective);
+  const [casework, setCasework] = useState<{ reportId: string; tab: CaseworkTab; opened: number }>({ reportId: '', tab: 'Cases', opened: 0 });
   const requestedCasework = useAppStore((state) => state.requestedCasework);
   const consumeCasework = useAppStore((state) => state.consumeCasework);
-  // Casework opened from the case switcher or the inspector lands here.
+  const openCasework = useAppStore((state) => state.openCasework);
+  // Casework opened from the case switcher, the inspector or the command bar lands on its tab.
   useEffect(() => {
     if (!requestedCasework) return;
     const request = consumeCasework();
-    if (request) setWorkbench({ reportId: request.reportId, review: false });
+    if (request) setCasework((current) => ({ reportId: request.reportId, tab: request.tab ?? 'Cases', opened: current.opened + 1 }));
   }, [consumeCasework, requestedCasework]);
   const workspaceInitializationStatus = useAppStore((state) => state.workspaceInitializationStatus);
   // Stays up after the first source lands, so the outcome of every source in a run is visible.
@@ -80,11 +82,15 @@ export default function OverviewDashboard() {
   const caseScoped = useAppStore((state) => state.activeCaseId !== null && state.scopeToCase);
   const inspectDepartment = useInspectDepartment();
   const portalName = usePortalName();
+  const scroller = useRef<HTMLDivElement>(null);
+  // Scrolls the overview's own column to the ledger; never the shell around it.
   const openLedger = useCallback(() => {
     setPerspective('analytics');
-    requestAnimationFrame(() => document.getElementById('deadline-ledger')?.scrollIntoView({ block: 'start' }));
-  }, []);
-  const openWorkbench = () => setWorkbench({ reportId: '', review: false });
+    requestAnimationFrame(() => {
+      const ledger = document.getElementById('deadline-ledger');
+      if (ledger && scroller.current) scrollWithin(scroller.current, ledger, 'start');
+    });
+  }, [setPerspective]);
   const hasSources = portals.length > 0;
   const ledger = (
     <DepartmentLedger
@@ -94,70 +100,59 @@ export default function OverviewDashboard() {
       status={caseScoped ? 'scoped-out' : profiles.length === 0 && analyticsStatus === 'pending' ? 'loading' : 'ready'}
       scopedOutText="Hidden while a case scope is active: these are all-time totals for every request, not the case's."
       portalName={portalName}
-      onInspect={(profile) => inspectDepartment(profile.portalSubdomain, profile.agencyId)}
+      onInspect={(profile) => inspectDepartment(profile.portalSubdomain, profile.agencyId, true)}
     />
   );
+  const loading = workspaceInitializationStatus === 'loading';
+  const failed = workspaceInitializationStatus === 'error';
   const showStarter = workspaceInitializationStatus === 'ready' && (portals.length === 0 || starterRunShown);
-  const leadsWorkbench = perspective === 'leads' && !workbench && hasSources && workspaceInitializationStatus === 'ready';
+  const leadsWorkbench = perspective === 'leads' && hasSources && !showStarter && workspaceInitializationStatus === 'ready';
+  const fillsView = perspective === 'leads' && (leadsWorkbench || loading);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-      <div className={cn('mx-auto flex w-full max-w-content flex-1 flex-col gap-3 px-3 pt-4 md:px-4', leadsWorkbench || (perspective === 'leads' && workspaceInitializationStatus === 'loading') ? 'min-h-[36rem] pb-3' : 'pb-10')}>
-        {workbench ? (
-          <div className="px-1">
-            <button type="button" onClick={() => setWorkbench(null)} className="focus-ring mb-2 inline-flex items-center gap-1 rounded text-body text-accent hover:underline">
-              <Icon name="back" size="sm" /> Overview
-            </button>
-            <PageHeader title="Casework" summary="Track requests and commitments, reconcile spending, and challenge the evidence." />
-          </div>
-        ) : (
-          <header className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            {/* The breadcrumb names the view; the perspective tabs title the page. */}
-            <h2 className="sr-only">Overview</h2>
-            <div className="mr-auto flex flex-wrap items-center gap-2">
-              <SegmentedControl<Perspective>
-                label="Overview perspective"
-                mode="tabs"
-                size="sm"
-                value={perspective}
-                onChange={setPerspective}
-                panelId={() => 'overview-perspective'}
-                options={PERSPECTIVES}
-              />
-              <p className="hidden text-caption text-muted 2xl:block">Leads, what you follow, and the state of your sources.</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {hasSources && <SinceControl />}
-              <Button onClick={() => setWorkspaceView('evidence')}>Review evidence</Button>
-            </div>
-          </header>
-        )}
+    <div ref={scroller} className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <div className={cn('mx-auto flex w-full max-w-content flex-1 flex-col gap-3 px-3 pt-4 md:px-4', fillsView ? 'min-h-[36rem] pb-3' : 'pb-10')}>
+        <Masthead
+          overline={<Dateline />}
+          title="Overview"
+          tabs={(
+            <SegmentedControl<OverviewPerspective>
+              label="Overview perspective"
+              mode="tabs"
+              size="sm"
+              value={perspective}
+              onChange={setPerspective}
+              panelId={() => 'overview-perspective'}
+              options={PERSPECTIVES}
+            />
+          )}
+          actions={<>
+            {hasSources && !loading && !showStarter && <SinceControl />}
+            <Button onClick={() => setWorkspaceView('evidence')}>Review evidence</Button>
+          </>}
+        />
 
         <FirstRunData />
-        {workspaceInitializationStatus === 'loading' ? (
-          perspective === 'leads' && !workbench
-            ? <WorkbenchSkeleton />
-            : <section aria-label="Needs attention" className="app-panel overflow-hidden"><AttentionFeedSkeleton /></section>
-        ) : workspaceInitializationStatus === 'error' ? (
-          <WorkspaceSourcesUnavailable detail={workspaceInitializationError} />
-        ) : showStarter && (perspective === 'leads' || workbench) ? (
-          <section className="app-panel p-5"><StarterSets /></section>
-        ) : null}
-
         <PostIngestBrief />
-        {workbench ? (
-          <ProfessionalWorkbench key={`${workbench.reportId}:${workbench.review}`} initialReportId={workbench.reportId} initialTab={workbench.review ? 'Evidence review' : 'Cases'} />
-        ) : (
-          <div id="overview-perspective" role="tabpanel" aria-label={PERSPECTIVES.find((option) => option.value === perspective)?.label} className={cn('flex flex-col gap-3', leadsWorkbench ? 'min-h-0 flex-1' : perspective !== 'leads' && 'motion-fade')}>
+        <div id="overview-perspective" role="tabpanel" aria-label={PERSPECTIVES.find((option) => option.value === perspective)?.label} className={cn('flex flex-col gap-3', fillsView ? 'min-h-0 flex-1' : perspective !== 'leads' && 'motion-fade')}>
+          {failed ? (
+            <div className="mx-auto w-full max-w-[46rem] pt-6"><WorkspaceSourcesUnavailable detail={workspaceInitializationError} /></div>
+          ) : <>
             <SubjectDossier />
-            {perspective === 'leads' && leadsWorkbench && <OverviewWorkbench ledgerFigure={ledger} onOpenLedger={openLedger} onOpenFollowing={() => setPerspective('following')} />}
+            {perspective === 'leads' && (
+              loading ? <WorkbenchSkeleton />
+                : showStarter ? <section className="app-panel mx-auto w-full max-w-[46rem] p-5"><StarterSets /></section>
+                  : leadsWorkbench && <OverviewWorkbench ledgerFigure={ledger} onOpenLedger={openLedger} onOpenFollowing={() => setPerspective('following')} />
+            )}
             {perspective === 'following' && (
               <section aria-label="Following" className="grid grid-cols-1 items-start gap-4 2xl:grid-cols-2">
                 <WatchlistPanel />
                 <StandingSearchPanel />
               </section>
             )}
-            {perspective === 'analytics' && (hasSources ? (
+            {perspective === 'analytics' && (loading ? (
+              <Panel aria-label="Response analytics"><Skeleton variant="lines" lines={5} label="Loading your saved sources" className="p-5" /></Panel>
+            ) : hasSources ? (
               <Panel aria-labelledby="response-analytics-title">
                 <PanelHeader
                   titleId="response-analytics-title"
@@ -178,18 +173,14 @@ export default function OverviewDashboard() {
             ) : (
               <EmptyState icon="bars" title="No requests to measure yet" body="Response analytics measure how quickly and completely agencies answer the requests in your saved sources. Add a records portal to start." />
             ))}
+            {perspective === 'casework' && (
+              <ProfessionalWorkbench key={casework.opened} initialReportId={casework.reportId} initialTab={casework.tab} />
+            )}
             {perspective === 'tools' && <>
-              <ResearchWorkspace onReview={(reportId) => setWorkbench({ reportId, review: true })} />
+              <ResearchWorkspace onReview={(reportId) => openCasework(reportId, 'Evidence review')} />
               <Panel aria-labelledby="more-tools-title">
                 <PanelHeader titleId="more-tools-title" title="More tools" />
                 <div className="divide-y divide-line px-5">
-                  <div className="flex items-center justify-between gap-4 py-3">
-                    <div className="min-w-0">
-                      <p className="text-body font-medium text-fg">Develop a lead into a durable case</p>
-                      <p className="text-caption text-muted">Track requests, productions and commitments; reconcile spending; challenge the evidence.</p>
-                    </div>
-                    <Button onClick={openWorkbench}>Open casework and research tools</Button>
-                  </div>
                   <ToolDrawer label="Discoveries across your library"><AutomaticDiscovery /></ToolDrawer>
                   <ToolDrawer label="Topic packs"><TopicPacks /></ToolDrawer>
                   <ToolDrawer label="Shared language across sources"><CrossCorpusExplorer /></ToolDrawer>
@@ -199,8 +190,8 @@ export default function OverviewDashboard() {
                 </div>
               </Panel>
             </>}
-          </div>
-        )}
+          </>}
+        </div>
       </div>
     </div>
   );
@@ -479,14 +470,18 @@ function WorkspaceSourcesUnavailable({ detail }: { detail: string | null }) {
   );
 }
 
-/** The overview's department action: scope Evidence to that department's requests. */
+/**
+ * The overview's department action: scope Evidence to that department's requests. From the counted
+ * ledger it also keeps only the requests whose statutory deadline was exceeded, so the misses the
+ * reader clicked are the list they land on.
+ */
 function useInspectDepartment() {
   const setActivePortal = useAppStore((state) => state.setActivePortal);
   const setSearchFilters = useAppStore((state) => state.setSearchFilters);
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
-  return useCallback((portalKey: string, agencyId: number) => {
+  return useCallback((portalKey: string, agencyId: number, statutoryOnly = false) => {
     setActivePortal(portalKey);
-    setSearchFilters('', agencyId, null, null);
+    setSearchFilters('', agencyId, null, null, statutoryOnly);
     setWorkspaceView('evidence');
   }, [setActivePortal, setSearchFilters, setWorkspaceView]);
 }

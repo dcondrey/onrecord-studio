@@ -2,6 +2,7 @@ import { Fragment, useId, useLayoutEffect, useMemo, useRef, useState, type React
 import { cn } from '../../../utils/cn';
 import Badge from '../../ui/Badge';
 import Button from '../../ui/Button';
+import Icon from '../../ui/icons';
 import AnalyticsUnavailable from '../AnalyticsUnavailable';
 import { CLAIM_TAG, VIZ, type Claim } from '../core/claim';
 import { absenceLegend, isAbsence, isValue, type AbsenceState, type Measured } from '../core/nulls';
@@ -47,6 +48,11 @@ export interface BarTableColumn {
    * position in a column already names what each bar measures.
    */
   claim?: Claim;
+  /**
+   * `lead`: the values are points the app assigned to a lead it surfaced (attention factors), so
+   * the bars are violet, and a counted column's bars crimson, matching the lead figures elsewhere.
+   */
+  paint?: 'lead';
   /** The scale's top, overriding the column's own maximum: fixed so rows never rescale on filter. */
   max?: number;
   sortable?: boolean;
@@ -149,6 +155,19 @@ function absenceStatesOf(rows: readonly BarTableRow[], columns: readonly BarTabl
   return [...states];
 }
 
+/** A row's header, with the row's details toggle at its right end when the rows expand. */
+function RowHeader({ row, toggle, open }: { row: BarTableRow; toggle: ReturnType<ReturnType<typeof useDrillDown>['buttonProps']> | null; open: boolean }) {
+  if (!toggle) return <>{row.header}</>;
+  return (
+    <div className="flex items-start gap-2">
+      <div className="min-w-0 flex-1">{row.header}</div>
+      <button type="button" {...toggle} aria-label={`Details: ${row.name}`} className="focus-ring grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted hover:bg-raised hover:text-fg">
+        <Icon name="chevron" size="sm" className={cn('transition-transform', open && 'rotate-90')} />
+      </button>
+    </div>
+  );
+}
+
 /** The hatched span of excluded records: never a solid value bar, never on the value axis. */
 function HatchedSpan({ x0, x1 }: { x0: number; x1: number }) {
   const hatch = useHatchFill();
@@ -180,7 +199,8 @@ function CellBar({ column, cell, min, max, motionKey, dimmed, shrink }: { column
   } else if (column.hatched) {
     mark = <HatchedSpan x0={0} x1={x(value.value)} />;
   } else {
-    mark = <Bar band={band} value={value} scale={x} claim="descriptive" role={cell.approximate ? 'comparison' : 'default'} motionKey={motionKey} />;
+    const counted = column.paint === 'lead' && column.claim === 'counted';
+    mark = <Bar band={band} value={value} scale={x} claim={counted ? 'counted' : 'descriptive'} role={cell.approximate ? 'comparison' : column.paint === 'lead' ? 'lead' : 'default'} motionKey={motionKey} />;
   }
   const end = isValue(value) ? x(Math.max(0, value.value)) : 0;
   return (
@@ -363,12 +383,7 @@ export default function BarTable(props: BarTableProps) {
                   {narrow && (
                     <tr>
                       <th scope="row" colSpan={span} className="px-2 pt-2 text-left font-normal">
-                        {row.header}
-                        {drill?.mode === 'row' && (
-                          <button type="button" {...drillDown.buttonProps(row.key)} className="focus-ring mt-1 block rounded text-caption text-muted hover:text-fg">
-                            {rowOpen ? 'Hide details' : 'Details'}
-                          </button>
-                        )}
+                        <RowHeader row={row} toggle={drill?.mode === 'row' ? drillDown.buttonProps(row.key) : null} open={rowOpen} />
                       </th>
                     </tr>
                   )}
@@ -382,12 +397,7 @@ export default function BarTable(props: BarTableProps) {
                   >
                     {!narrow && (
                       <th scope="row" className={cn('px-2 text-left font-normal', level === 0 && 'min-w-[10rem]', props.dense ? 'py-1' : 'py-2')}>
-                        {row.header}
-                        {drill?.mode === 'row' && (
-                          <button type="button" {...drillDown.buttonProps(row.key)} className="focus-ring mt-1 block rounded text-caption text-muted hover:text-fg">
-                            {rowOpen ? 'Hide details' : 'Details'}
-                          </button>
-                        )}
+                        <RowHeader row={row} toggle={drill?.mode === 'row' ? drillDown.buttonProps(row.key) : null} open={rowOpen} />
                       </th>
                     )}
                     {columns.map((column, j) => {
@@ -432,7 +442,9 @@ export default function BarTable(props: BarTableProps) {
                               <span className={cn('viz-num whitespace-nowrap text-caption', isValue(cell.value) ? 'text-fg-secondary' : 'text-muted', cellOpen && 'font-semibold text-fg')}>{cell.text}</span>
                             </span>
                           ) : (
-                            <span className="text-caption text-muted">{column.missing?.text ?? ''}</span>
+                            column.missing && !column.missing.text
+                              ? <span className="sr-only">{column.missing.title}</span>
+                              : <span className="text-caption text-muted">{column.missing?.text ?? ''}</span>
                           )}
                         </td>
                       );
