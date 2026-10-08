@@ -1,7 +1,6 @@
 /**
- * Saves `content` through a transient anchor. The object URL is revoked after a delay because
- * WebKit (the macOS Tauri webview) can cancel a download whose blob URL is revoked in the same
- * task as the click.
+ * Saves `content` through a transient anchor. The object URL is revoked after a delay rather than
+ * in the same task as the click, so the webview has started reading the blob before it is freed.
  */
 export function downloadFile(name: string, content: string, type = 'text/plain;charset=utf-8') {
   const url = URL.createObjectURL(new Blob([content], { type }));
