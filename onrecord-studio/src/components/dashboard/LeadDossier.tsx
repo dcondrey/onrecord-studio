@@ -114,8 +114,8 @@ export default function LeadDossier({ findingId }: { findingId: string }) {
               <ul className="space-y-2">
                 {state.dossier.gaps.map((gap, index) => (
                   <li key={index}>
-                    <p>{gapLine(gap)}</p>
-                    <GapRequest gap={gap} />
+                    <p>{gapLine(gap, state.dossier.evidence)}</p>
+                    <GapRequest gap={gap} evidence={state.dossier.evidence} />
                   </li>
                 ))}
               </ul>
@@ -252,11 +252,11 @@ type CopyState = { kind: 'idle' } | { kind: 'copied' } | { kind: 'fallback'; tex
  * confirm or refute the figure; it never states that the claim is wrong. Composed locally from the
  * gap's own fields, so nothing in it goes beyond what the dossier recorded.
  */
-export function GapRequest({ gap }: { gap: DossierGap }) {
+export function GapRequest({ gap, evidence }: { gap: DossierGap; evidence: readonly EvidenceLink[] }) {
   const [copy, setCopy] = useState<CopyState>({ kind: 'idle' });
 
   const copyRequest = async () => {
-    const text = gapRequestText(gap);
+    const text = gapRequestText(gap, evidence);
     try {
       await navigator.clipboard.writeText(text);
       setCopy({ kind: 'copied' });
@@ -288,8 +288,9 @@ export function GapRequest({ gap }: { gap: DossierGap }) {
 }
 
 /** A neutral public-records request paragraph for the records that would close `gap`. */
-function gapRequestText(gap: DossierGap): string {
-  const record = `document ${gap.documentId} held under ${gap.portalKey}`;
+function gapRequestText(gap: DossierGap, evidence: readonly EvidenceLink[]): string {
+  const fileName = gapFileName(gap, evidence);
+  const record = `${fileName ? `“${fileName}” (` : ''}document ${gap.documentId} held under ${gap.portalKey}${fileName ? ')' : ''}`;
   if (gap.gap === 'notComputed') {
     return (
       `I request a complete, readable electronic copy of ${record}, together with its metadata ` +
@@ -306,9 +307,15 @@ function gapRequestText(gap: DossierGap): string {
   );
 }
 
-export function gapLine(gap: DossierGap): string {
-  if (gap.gap === 'notComputed') return `${gap.portalKey} / document ${gap.documentId}: figures not examined — ${gap.reason}`;
-  return `${gap.portalKey} / document ${gap.documentId}: “${gap.claimText}” — ${gap.reason}: ${gap.detail}`;
+/** The file name the dossier's evidence resolved for a gap's document; null when it cites none. */
+function gapFileName(gap: DossierGap, evidence: readonly EvidenceLink[]): string | null {
+  return evidence.find((link) => link.portalKey === gap.portalKey && link.documentId === gap.documentId && link.fileName)?.fileName ?? null;
+}
+
+export function gapLine(gap: DossierGap, evidence: readonly EvidenceLink[]): string {
+  const record = gapFileName(gap, evidence) ?? `${gap.portalKey} / document ${gap.documentId}`;
+  if (gap.gap === 'notComputed') return `${record}: figures not examined — ${gap.reason}`;
+  return `${record}: “${gap.claimText}” — ${gap.reason}: ${gap.detail}`;
 }
 
 export function dossierMarkdown(dossier: LeadDossierData): string {
@@ -328,7 +335,7 @@ export function dossierMarkdown(dossier: LeadDossierData): string {
     ...dossier.falsification.recordsToSeek.map((record) => `- ${record}`),
     '',
     '## Gaps',
-    ...(dossier.gaps.length ? dossier.gaps.map((gap) => `- ${gapLine(gap)}`) : ['- Every figure found could be checked, or none was found.']),
+    ...(dossier.gaps.length ? dossier.gaps.map((gap) => `- ${gapLine(gap, dossier.evidence)}`) : ['- Every figure found could be checked, or none was found.']),
     '',
     `Assembled ${dossier.assembledAt}. Observations only; a pattern signal is not a legal claim.`,
   ];

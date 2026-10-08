@@ -142,16 +142,22 @@ function FactorPlot({ rows, width, max, compareRank }: { rows: readonly FactorRo
         const name = `${row.label}: ${text}${versus}${value ? `. ${value.evidence}` : ''}`;
         const tip = (
           <TooltipContent
-            title={`${row.label} (${row.counted ? 'legal claim' : 'pattern signal'})`}
+            title={row.value === 'absent' ? row.label : `${row.label} (${row.counted ? 'legal claim' : 'pattern signal'})`}
             rows={[{ key: 'own', value: text, label: 'this lead' }, ...(compareRank !== undefined ? [{ key: 'compare', value: row.compare === null ? 'not in its record' : `+${row.compare}`, label: `#${compareRank}` }] : [])]}
             note={value?.evidence}
           />
         );
         const end = value ? x(value.points) : x(0);
         const tick = row.compare === null ? null : x(row.compare);
+        const tickLine = tick !== null && (
+          <line aria-hidden="true" data-compare-tick x1={tick} x2={tick} y1={y - TICK_OVERHANG} y2={y + BAND + TICK_OVERHANG} style={{ stroke: VIZ.ink, strokeWidth: 2 }} strokeLinecap="round" />
+        );
         return (
           <g key={row.key}>
-            <text x={0} y={y + BAND / 2} dy="0.32em" className={row.counted ? 'fill-fg text-[12px] font-medium' : ROW_LABEL_CLASS} style={{ paintOrder: 'stroke', stroke: VIZ.surface, strokeWidth: 4, strokeLinejoin: 'round' }}>
+            {/* An absent factor's words sit at the bars' start like every other absent row, haloed
+                over the compared lead's tick, which is drawn beneath them. */}
+            {row.value === 'absent' && tickLine}
+            <text x={0} y={y + BAND / 2} dy="0.32em" className={row.counted && row.value !== 'absent' ? 'fill-fg text-[12px] font-medium' : ROW_LABEL_CLASS} style={{ paintOrder: 'stroke', stroke: VIZ.surface, strokeWidth: 4, strokeLinejoin: 'round' }}>
               <title>{row.key}</title>
               {fitText(row.label, layout.plotX - 12)}
             </text>
@@ -169,12 +175,10 @@ function FactorPlot({ rows, width, max, compareRank }: { rows: readonly FactorRo
               {value && value.points > 0 && <path d={hBarPath(x(0), end, y, BAND, 3)} style={{ fill: row.counted ? counted : lead }} />}
               {/* With no bar of its own, the words start past the compared lead's tick, never under it. */}
               {row.value === 'unassessed' && <AbsentSlot absence={UNASSESSED} box={{ x: Math.max(x(0) + 2, (tick ?? 0) + 6), y: y - 2, width: 96, height: BAND + 4 }} text="not assessed" />}
-              {row.value === 'absent' && <text x={Math.max(x(0), tick ?? 0) + 6} y={y + BAND / 2} dy="0.32em" className={`${MUTED_LABEL_CLASS} italic`}>{NOT_IN_RECORD}</text>}
+              {row.value === 'absent' && <text x={x(0) + 6} y={y + BAND / 2} dy="0.32em" className={`${MUTED_LABEL_CLASS} italic`} style={{ paintOrder: 'stroke', stroke: VIZ.surface, strokeWidth: 4, strokeLinejoin: 'round' }}>{NOT_IN_RECORD}</text>}
               {value && <text x={Math.max(end, tick ?? 0) + 6} y={y + BAND / 2} dy="0.32em" className="viz-num fill-fg text-[11px] font-medium">{text}</text>}
             </MarkGroup>
-            {tick !== null && (
-              <line aria-hidden="true" data-compare-tick x1={tick} x2={tick} y1={y - TICK_OVERHANG} y2={y + BAND + TICK_OVERHANG} style={{ stroke: VIZ.ink, strokeWidth: 2 }} strokeLinecap="round" />
-            )}
+            {row.value !== 'absent' && tickLine}
           </g>
         );
       })}

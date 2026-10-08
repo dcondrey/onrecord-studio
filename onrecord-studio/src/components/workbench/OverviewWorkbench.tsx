@@ -120,16 +120,16 @@ export default function OverviewWorkbench({ ledgerFigure, onOpenLedger, onOpenFo
   let main: ReactNode;
   if (current === LEDGER_ID) {
     main = (
-      <Pane label="Selected lead" role="stage" elevated>
-        <article aria-labelledby="ledger-stage-title" className="motion-fade">
-          <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-6 py-4">
-            <h2 id="ledger-stage-title" className="text-heading text-fg">Deadline ledger</h2>
-            <Badge tone="violation">Counted</Badge>
-            <span className="text-caption text-muted">All-time totals across every request, not only this window</span>
-            <Button size="sm" icon="bars" className="ml-auto" onClick={onOpenLedger}>Open in response analytics</Button>
-          </header>
-          <div className="px-6 py-6">{ledgerFigure}</div>
-        </article>
+      // The lead stage's own header, so the stage keeps one height and one header row whichever it shows.
+      <Pane
+        label="Selected lead"
+        title="Deadline ledger"
+        meta="all-time, not only this window"
+        role="stage"
+        actions={<Button size="sm" variant="ghost" icon="bars" onClick={onOpenLedger}>Open in response analytics</Button>}
+        elevated
+      >
+        <article aria-label="Deadline ledger" className="motion-fade px-6 py-6">{ledgerFigure}</article>
       </Pane>
     );
   } else if (ranked.status === 'pending') {
@@ -391,7 +391,7 @@ function WatchStatus({ ledger, ledgerSelected, onSelectLedger, onOpenFollowing }
             lines={[
               state,
               total > 0
-                ? <>{settled.toLocaleString()} of {total.toLocaleString()} tasks settled{failed > 0 && <span className="text-danger"> · {failed.toLocaleString()} failed</span>}</>
+                ? <>{settled.toLocaleString()}/{total.toLocaleString()} settled{failed > 0 && <span className="whitespace-nowrap text-danger"> · {failed.toLocaleString()} failed</span>}</>
                 : 'no queue this session',
             ]}
             onClick={() => setWorkspaceView('activity')}
@@ -402,8 +402,10 @@ function WatchStatus({ ledger, ledgerSelected, onSelectLedger, onOpenFollowing }
             <WatchRow
               icon="bars"
               title={<><span>Deadline ledger</span><Badge tone="violation" className="h-[18px] px-1.5">Counted</Badge></>}
-              figure={`${ledger.misses.toLocaleString()} missed`}
-              lines={[`of ${ledger.requests.toLocaleString()} requests · ${ledger.departments.toLocaleString()} department${ledger.departments === 1 ? '' : 's'} · all\u2011time`]}
+              lines={[
+                `${ledger.misses.toLocaleString()} missed of ${ledger.requests.toLocaleString()} requests`,
+                `${ledger.departments.toLocaleString()} department${ledger.departments === 1 ? '' : 's'} · all\u2011time`,
+              ]}
               current={ledgerSelected}
               onClick={onSelectLedger}
             />

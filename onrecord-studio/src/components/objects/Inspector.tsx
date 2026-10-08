@@ -71,7 +71,7 @@ export default function Inspector() {
   return (
     <aside
       aria-labelledby="inspector-title"
-      className="motion-slide-in fixed inset-y-0 right-0 z-[90] flex w-full max-w-[480px] flex-col border-l border-line-strong bg-canvas shadow-2xl"
+      className="motion-slide-in fixed inset-y-0 right-0 z-[90] flex w-full max-w-[480px] flex-col border-l border-line-strong bg-canvas shadow-2xl viz-surface-canvas"
     >
       <header className="shrink-0 border-b border-line px-4 pb-3 pt-3">
         <div className="flex items-center gap-2">

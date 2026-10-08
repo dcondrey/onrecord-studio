@@ -67,9 +67,12 @@ export function Bar({ orient = 'horizontal', band, value, scale, claim = 'descri
   const negative = value.value < 0;
   // Inset an outline by half its stroke so it occupies the same footprint as a filled bar.
   const inset = outline ? paint.strokeWidth / 2 : 0;
+  // A short outline keeps square-ish ends: a full 4px rounding on its one drawn end reads as a
+  // letter D beside the value label.
+  const radius = outline ? Math.min(4, Math.abs(end - base) / 8) : 4;
   const path = horizontal
-    ? hBarPath(base, end + (negative ? inset : -inset), cross + inset, t - 2 * inset)
-    : vBarPath(base, end + (negative ? -inset : inset), cross + inset, t - 2 * inset);
+    ? hBarPath(base, end + (negative ? inset : -inset), cross + inset, t - 2 * inset, radius)
+    : vBarPath(base, end + (negative ? -inset : inset), cross + inset, t - 2 * inset, radius);
 
   let labelNode = null;
   if (text) {

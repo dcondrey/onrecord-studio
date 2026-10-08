@@ -17,24 +17,26 @@ type ProvenanceState = { status: 'pending' } | { status: 'ready'; record: Proven
 /**
  * One finding drawn as the chain a reader must be able to walk: the claim, what it was measured
  * on, each cited passage, the file that holds it, and the last provenance check of that file.
- * A link the record does not have is drawn as missing, never filled in.
+ * A link the record does not have is drawn as missing, never filled in. Where the claim is already
+ * the page's headline (the workbench stage), `claimShown` starts the chain at its basis.
  */
-export default function EvidenceChain({ dossier }: { dossier: LeadDossier }) {
+export default function EvidenceChain({ dossier, claimShown = false }: { dossier: LeadDossier; claimShown?: boolean }) {
   const { finding, evidence, evidenceTruncated } = dossier;
   const provenance = useProvenance(evidence);
   const tone = severityTone(finding.severity);
   const prose = leadProse(finding.explanation).trim();
   return (
     <ol aria-label="Evidence chain" className="relative space-y-0">
-      <ChainNode icon="flag" tone={tone} title={`${severityLabel(finding.severity)} · ${findingKindLabel(finding.kind)}`} caption={claimBasisLabel(finding.kind)}>
-        <p className="font-semibold text-fg">{finding.headline}</p>
-        {/* A table lead's tables and query follow its prose; they are listed apart, in full. */}
-        {prose && <p className="mt-1 whitespace-pre-line text-muted [overflow-wrap:anywhere]">{prose}</p>}
-      </ChainNode>
+      {!claimShown && (
+        <ChainNode icon="flag" tone={tone} title={`${severityLabel(finding.severity)} · ${findingKindLabel(finding.kind)}`} caption={claimBasisLabel(finding.kind)}>
+          <p className="font-semibold text-fg">{finding.headline}</p>
+          {/* A table lead's tables and query follow its prose; they are listed apart, in full. */}
+          {prose && <p className="mt-1 whitespace-pre-line text-muted [overflow-wrap:anywhere]">{prose}</p>}
+        </ChainNode>
+      )}
       <ChainNode icon="sliders" tone={finding.confidence.kind === 'MEASURED' ? 'accent' : 'muted'} title="Basis" caption={confidenceLabel(finding.confidence)}>
-        <p className="text-muted">
-          Detector <span className="font-mono text-fg-secondary">{finding.sourceDetector}</span> · first seen {formatShortDate(finding.discoveredAt)}
-        </p>
+        {/* The detector is method, not evidence: each surface shows it under its own Method disclosure. */}
+        <p className="text-muted">First seen {formatShortDate(finding.discoveredAt)}</p>
       </ChainNode>
       {evidence.length === 0 ? (
         <ChainNode icon="evidence" tone="warning" title="Sources" caption="None cited" last>

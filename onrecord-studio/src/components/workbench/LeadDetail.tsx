@@ -19,6 +19,7 @@ import Button from '../ui/Button';
 import DigestCopy from '../ui/DigestCopy';
 import Icon from '../ui/icons';
 import InlineError from '../ui/InlineError';
+import MethodNote from '../ui/MethodNote';
 import { keepIdentifiers, LeadByline, LeadKicker } from './LeadMeta';
 import { Pane, PaneSection } from './Workbench';
 
@@ -161,8 +162,6 @@ function Stage({ dossier, figure, storyLead, rank, compare, source, onDraft, act
   const drawn = 'figure' in figure ? figure.figure : null;
   const counted = isLegalClaimKind(finding.kind);
   const briefing = findingToBriefingEvidence(finding);
-  // The evidence chain restates the claim; the stage already leads with it.
-  const chain = useMemo(() => ({ ...dossier, finding: { ...finding, explanation: '' } }), [dossier, finding]);
 
   const inspectRecords = () => {
     if (finding.subject.portalKey) setActivePortal(finding.subject.portalKey);
@@ -219,7 +218,8 @@ function Stage({ dossier, figure, storyLead, rank, compare, source, onDraft, act
         {dossier.evidence.length > 0 || !sources ? (
           <section aria-labelledby="stage-chain">
             <h3 id="stage-chain" className="mb-3 text-overline uppercase text-muted">Evidence chain</h3>
-            <EvidenceChain dossier={chain} />
+            <EvidenceChain dossier={dossier} claimShown />
+            <div className="text-caption text-muted"><DetectorNote detector={finding.sourceDetector} /></div>
           </section>
         ) : (
           <ComputedFrom sources={sources} detector={finding.sourceDetector} />
@@ -271,6 +271,15 @@ function Dek({ text, label }: { text: string; label: string }) {
   );
 }
 
+/** The detector that recorded a finding, one click away under Method rather than in the reading text. */
+function DetectorNote({ detector }: { detector: string }) {
+  return (
+    <MethodNote label="Method">
+      Recorded by the <span className="font-mono">{detector}</span> detector.
+    </MethodNote>
+  );
+}
+
 /** What a table lead was computed from: each table with its retrieval date and digest, the query, the method. */
 function ComputedFrom({ sources, detector }: { sources: TableLeadSources; detector: string }) {
   return (
@@ -296,7 +305,7 @@ function ComputedFrom({ sources, detector }: { sources: TableLeadSources; detect
         </summary>
         <pre tabIndex={0} role="region" aria-label="The query" className="focus-ring mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md bg-raised/60 p-3 font-mono text-code text-fg-secondary">{sources.sql}</pre>
       </details>
-      <p className="mt-3 text-caption text-muted">Method <span className="font-mono text-fg-secondary">{detector}</span></p>
+      <div className="mt-3 text-caption text-muted"><DetectorNote detector={detector} /></div>
     </section>
   );
 }
@@ -442,8 +451,8 @@ function Context({ dossier, onSelectFinding, draftOpen, onOpenDraft, onDraftsSet
           <ul className="space-y-3">
             {dossier.gaps.map((gap, index) => (
               <li key={index} className="text-body text-fg-secondary">
-                <p className="break-words">{gapLine(gap)}</p>
-                <GapRequest gap={gap} />
+                <p className="break-words">{gapLine(gap, dossier.evidence)}</p>
+                <GapRequest gap={gap} evidence={dossier.evidence} />
               </li>
             ))}
           </ul>

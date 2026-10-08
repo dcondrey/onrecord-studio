@@ -211,7 +211,7 @@ export default function CommandPalette() {
   const questionRows = useMemo<CommandAction[]>(() => SUGGESTED_QUESTIONS.map((question, index) => ({
     id: `question-${index}`,
     label: `Ask: ${question}`,
-    detail: ASK_DETAIL,
+    detail: '',
     group: 'Questions' as const,
     icon: 'search' as const,
     keywords: question,
@@ -486,7 +486,7 @@ export default function CommandPalette() {
     const askRow: CommandAction = {
       id: 'ask-intent',
       label: `Ask: ${trimmedQuery}`,
-      detail: ASK_DETAIL,
+      detail: '',
       group: 'Ask',
       icon: 'search',
       keywords: '',
@@ -638,7 +638,7 @@ export default function CommandPalette() {
       <div aria-hidden="true" className="motion-fade absolute inset-0 bg-scrim" onMouseDown={closePalette} />
       <section
         ref={dialogRef}
-        className="glass motion-pop relative h-fit w-[min(640px,92vw)] overflow-hidden rounded-2xl shadow-dialog"
+        className="motion-pop relative h-fit w-[min(640px,92vw)] overflow-hidden rounded-2xl border border-line-strong bg-panel shadow-dialog"
         role="dialog"
         aria-modal="true"
         aria-labelledby="command-palette-title"
@@ -709,6 +709,8 @@ export default function CommandPalette() {
                 {group !== 'Search' && (
                   <div role="presentation" className="flex items-center gap-3 px-3 pb-1.5 pt-3 text-overline uppercase text-muted">
                     {groupTitle(group)}
+                    {/* Said once in the heading rather than cut short on every question row. */}
+                    {(group === 'Questions' || group === 'Ask') && <span className="normal-case tracking-normal text-caption">{ASK_DETAIL}</span>}
                     <span aria-hidden="true" className="h-px flex-1 bg-line" />
                   </div>
                 )}

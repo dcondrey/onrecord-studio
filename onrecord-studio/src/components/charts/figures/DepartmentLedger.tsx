@@ -163,7 +163,8 @@ function ledgerLayout(width: number, nameNeed: number): Layout {
   const start = narrow ? 0 : nameWidth + 12;
   const rest = width - start - 2 * GUTTER;
   const a = Math.round(rest * 0.38);
-  const b = Math.round(rest * 0.2);
+  // The rapid-closure column holds small counts but never breaks its two-word title.
+  const b = Math.max(Math.round(rest * 0.2), Math.ceil(measureText(COLUMN_TITLES.b, HEADER_FONT)) + 2);
   const cols = {
     a: [start, start + a] as [number, number],
     b: [start + a + GUTTER, start + a + GUTTER + b] as [number, number],

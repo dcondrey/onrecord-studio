@@ -128,7 +128,8 @@ export default function OverviewDashboard() {
           )}
           actions={<>
             {hasSources && !loading && !showStarter && <SinceControl />}
-            <Button onClick={() => setWorkspaceView('evidence')}>Review evidence</Button>
+            {/* With no source, or sources that didn't load, Evidence has nothing to review. */}
+            {hasSources && !failed && <Button onClick={() => setWorkspaceView('evidence')}>Review evidence</Button>}
           </>}
         />
 
@@ -136,7 +137,7 @@ export default function OverviewDashboard() {
         <PostIngestBrief />
         <div id="overview-perspective" role="tabpanel" aria-label={PERSPECTIVES.find((option) => option.value === perspective)?.label} className={cn('flex flex-col gap-3', fillsView ? 'min-h-0 flex-1' : perspective !== 'leads' && 'motion-fade')}>
           {failed ? (
-            <div className="mx-auto w-full max-w-[46rem] pt-6"><WorkspaceSourcesUnavailable detail={workspaceInitializationError} /></div>
+            <div className="mx-auto w-full max-w-[46rem]"><WorkspaceSourcesUnavailable detail={workspaceInitializationError} /></div>
           ) : <>
             <SubjectDossier />
             {perspective === 'leads' && (
@@ -453,10 +454,12 @@ function WorkspaceSourcesUnavailable({ detail }: { detail: string | null }) {
       <div className="flex items-start gap-3">
         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-raised text-fg-secondary"><Icon name="database" size="md" /></span>
         <div className="min-w-0">
-          <h3 id="sources-unavailable-title" role="alert" className="text-heading text-fg">Your saved sources didn’t load</h3>
-          <p className="mt-1 max-w-prose text-body text-muted">
-            The local evidence store is busy or unavailable. Your sources and documents are not affected.
-          </p>
+          <div role="alert">
+            <h3 id="sources-unavailable-title" className="text-heading text-fg">Your saved sources didn’t load</h3>
+            <p className="mt-1 max-w-prose text-body text-muted">
+              The local evidence store is busy or unavailable. Your sources and documents are not affected.
+            </p>
+          </div>
           {detail && (
             <details className="mt-2">
               <summary className="text-caption text-muted">Technical details</summary>

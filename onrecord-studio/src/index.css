@@ -942,6 +942,12 @@ a[href] {
   animation: none !important;
 }
 
+/* A chart paints --viz-surface behind its plot and knocks marks out against it, so a container
+   whose own background is not --panel (the inspector sits on --canvas) restates it. */
+.viz-surface-canvas {
+  --viz-surface: rgb(var(--canvas));
+}
+
 /* Chart system (src/components/charts). Under forced colours every data mark is CanvasText,
    tracks and comparison marks are GrayText, focus is Highlight; the excluded hatch survives because
    it is a pattern, not a fill colour. The selector list outranks each theme and contrast block. */
@@ -949,7 +955,8 @@ a[href] {
   :root,
   :root[data-theme="dark"],
   :root[data-contrast="more"],
-  :root[data-contrast="more"][data-theme="dark"] {
+  :root[data-contrast="more"][data-theme="dark"],
+  .viz-surface-canvas {
     --viz-surface: Canvas;
     --viz-ink: CanvasText;
     --viz-mark: CanvasText;
