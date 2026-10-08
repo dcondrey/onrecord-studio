@@ -5,6 +5,7 @@ import type { CalendarMeeting, FindingCitation, MeetingCalendar, MeetingDocument
 const bridge = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock('../ipc', async (importOriginal) => ({ ...(await importOriginal<typeof import('../ipc')>()), invokeCommand: bridge.invoke }));
 import MeetingsView from '../components/dashboard/MeetingsView';
+import PostingLeadTime, { postingLeadTimeData } from '../components/charts/figures/PostingLeadTime';
 
 const cite = (quote: string, start: number | null = 0): FindingCitation => ({
   portalKey: 'city', documentId: 2, characterStart: start, characterEnd: start === null ? null : start + quote.length, quote, label: 'agenda.pdf',
@@ -81,7 +82,14 @@ describe('meetings view', () => {
     bridge.invoke.mockResolvedValue(calendar([posted, docket], { agendaFilesWithBothTimes: 1, under72HoursBeforeStart: 1, afterMeetingStart: 0 }));
     render(<MeetingsView />);
     const card = await screen.findByRole('article', { name: 'Privacy Advisory Board 2026-10-01' });
-    expect(card.textContent).toContain('per the file’s Last-Modified header · 2 days 23 hours before the start');
+    expect(card.textContent).toContain('per the file’s Last-Modified header');
+    // The lead time is plotted, not printed on the card: 71 h 59 min sits left of the 72 h yardstick, in the one dot colour.
+    expect(screen.getByRole('img', { name: /Privacy Advisory Board · Oct 1, 2026, agenda\.pdf: Last-Modified 2026-09-28 21:00 UTC, 71 h 59 min before stated start/ })).toBeTruthy();
+    expect(screen.getByText('72 h before start (reference; no notice rule is evaluated)')).toBeTruthy();
+    expect(document.body.innerHTML).not.toMatch(/--viz-(counted|lead)/);
+    // A file without a posting time is counted in the rail by reason and never plotted.
+    expect(screen.getByLabelText('Not plotted').textContent).toContain('host reports request time 1');
+    expect(screen.queryByRole('img', { name: /docket\.html/ })).toBeNull();
     expect(card.querySelector('time')?.getAttribute('dateTime')).toBe('2026-09-28T21:00:00Z');
     const docketCard = screen.getByRole('article', { name: 'Audit Committee 2026-10-08' });
     expect(docketCard.textContent).toContain('Posting time not recorded: this host reports the time of the request as Last-Modified');
@@ -123,4 +131,25 @@ describe('meetings view', () => {
     expect(unchanged).toContain('No item was added, removed or changed between these copies.');
     expect(unchanged).toContain('ordered by when the app collected them');
   });
+
+  it('lists a recorded posting on a meeting with no stated start as not plotted, never as having no posting time', async () => {
+    const noStart = meeting('nostart', 'Budget Review Committee', { documents: [agendaFile({ label: 'brc.pdf', posting: { state: 'RECORDED', lastModified: '2026-09-29T17:30:00Z' } })] });
+    const posted = meeting('posted', 'Privacy Advisory Board', { startTime: '14:00', documents: [agendaFile({ documentId: 5, posting: { state: 'RECORDED', lastModified: '2026-09-28T21:00:00Z' }, minutesBeforeMeeting: 4319 })] });
+    bridge.invoke.mockResolvedValue(calendar([noStart, posted], { agendaFilesWithBothTimes: 1, under72HoursBeforeStart: 1, afterMeetingStart: 0 }));
+    render(<MeetingsView />);
+    expect(await screen.findByText('1 of 1 agenda files with both times recorded were posted less than 72 hours before the stated start, per Last-Modified.')).toBeTruthy();
+    expect(screen.getByLabelText('Not plotted').textContent).toContain('meeting start time not recorded 1');
+    fireEvent.click(screen.getByRole('button', { name: 'View as table' }));
+    const row = screen.getByText('brc.pdf').closest('tr');
+    expect(row?.textContent).toContain('2026-09-29 17:30 UTC');
+  });
+
+  it('orders rows latest first through the today rule, and states a late header as hours after the start', () => {
+    const posted = (id: string, date: string, timing: CalendarMeeting['timing'], minutes: number) => meeting(id, `Body ${id}`, { date, timing, startTime: '14:00', documents: [agendaFile({ documentId: Number(id.slice(1)), posting: { state: 'RECORDED', lastModified: '2026-09-28T21:00:00Z' }, minutesBeforeMeeting: minutes })] });
+    const { upcoming, past } = postingLeadTimeData([posted('m1', '2026-10-05', 'UPCOMING', 6000), posted('m2', '2026-10-20', 'UPCOMING', 6000), posted('m3', '2026-09-01', 'PAST', 6000), posted('m4', '2026-09-20', 'PAST', -180)]);
+    expect([...upcoming, ...past].map((row) => row.meeting.date)).toEqual(['2026-10-20', '2026-10-05', '2026-09-20', '2026-09-01']);
+    render(<PostingLeadTime meetings={[posted('m4', '2026-09-20', 'PAST', -180)]} counts={{ agendaFilesWithBothTimes: 1, under72HoursBeforeStart: 1, afterMeetingStart: 1 }} onOpen={() => {}} />);
+    expect(document.querySelector('g[aria-label^="Body m4"]')?.getAttribute('aria-label')).toBe('Body m4 · Sep 20, 2026: agenda posted 3 hours after stated start.');
+  });
 });
+

@@ -213,6 +213,19 @@ const select = (description, locate, value) => async (page, log) => {
 const event = (name, detail) => store(`dispatch window event '${name}'`, ([eventName, eventDetail]) => window.dispatchEvent(new CustomEvent(eventName, { detail: eventDetail })), [name, detail]);
 const inspect = (target) => store(`store.inspect(${JSON.stringify(target)})`, (t) => window.__uiReview.store.getState().inspect(t), target);
 
+const spendingTab = [
+  nav('overview'),
+  click('"Open casework and research tools"', (page) => page.getByRole('button', { name: 'Open casework and research tools' })),
+  click('tab "Spending"', (page) => page.getByRole('main').getByRole('tab', { name: 'Spending', exact: true })),
+];
+const spendingChains = click('"Spending chains"', (page) => page.getByRole('button', { name: 'Spending chains', exact: true }));
+const budgetComparison = [
+  nav('analysis'),
+  type('the SQL editor', (page) => page.getByRole('textbox', { name: 'Analytical SQL' }), 'SELECT * FROM budget_comparison -- fund 100000, FY25: actual_minus_budget'),
+  click('"Run"', (page) => page.getByRole('button', { name: 'Run', exact: true })),
+];
+const measure = click('"Measure"', (page) => page.getByRole('button', { name: 'Measure', exact: true }));
+
 const selectRequest = click('evidence result "Encampment abatement notices…"', (page) => page.getByRole('main').getByText(/Encampment abatement notices posted along Imperial/));
 const openDocument = click('document "ESD_Response_Letter_26-0412.pdf"', (page) => page.getByRole('button', { name: /ESD_Response_Letter_26-0412\.pdf/ }));
 
@@ -296,6 +309,14 @@ const VIEWS = [
     primary: ['get_organisation_filings'],
     states: [],
   },
+  // Populated figures (scenario.figures): `anchor` is scrolled to the top of the viewport before each capture.
+  { view: 'figures-reconcile', scenario: { figures: { payments: true } }, steps: [...spendingTab], anchor: (page) => page.getByRole('heading', { name: 'Actual against revised authority, by department' }), primary: [], states: [] },
+  { view: 'figures-contracts', scenario: { figures: { payments: true } }, steps: [...spendingTab, spendingChains], anchor: (page) => page.getByRole('heading', { name: 'Contract authority and posted payments' }), primary: [], states: [] },
+  { view: 'figures-contracts-no-payments', scenario: { figures: { payments: false } }, steps: [...spendingTab, spendingChains], anchor: (page) => page.getByRole('heading', { name: 'Contract authority and posted payments' }), primary: [], states: [] },
+  { view: 'figures-budget-dots', scenario: { figures: {} }, steps: budgetComparison, anchor: (page) => page.getByRole('heading', { name: /^Actuals minus budget, by account line/ }), primary: [], states: [] },
+  { view: 'figures-budget-dots-truncated', scenario: { figures: { truncated: true } }, steps: budgetComparison, anchor: (page) => page.getByRole('heading', { name: /^Actuals minus budget, by account line/ }), primary: [], states: [] },
+  { view: 'figures-ordinance-time', scenario: { figures: {} }, steps: [nav('analysis'), measure], anchor: (page) => page.getByRole('heading', { name: /^Time of day/ }), primary: [], states: [] },
+  { view: 'figures-ordinance-distance', scenario: { figures: {} }, steps: [nav('analysis'), measure], anchor: (page) => page.getByRole('heading', { name: /^Distance to the nearer/ }), primary: [], states: [] },
 ];
 
 const TOP_LEVEL = new Set(Object.keys(NAV_LABELS).concat('evidence-timeline'));

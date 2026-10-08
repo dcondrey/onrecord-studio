@@ -46,6 +46,8 @@ const rows = execute(buildBudgetComparison(schema, selection));
 assert.equal(rows.length, 5);
 const at = code => rows.find(row => row.funds_center_number === code);
 assert.equal(at('010').fund_number, '000100');
+// Matched lines lead, largest |difference| first, so a result cut at the row limit keeps the true top lines.
+assert.deepEqual(rows.map(row => row.funds_center_number).slice(0, 2), ['010', '050']);
 // CLI versions encode DECIMAL/BIGINT as numbers or strings; these small fixture integers are exact.
 assert.equal(Number(at('010').budget_amount), 100);
 assert.equal(Number(at('010').actuals_amount), 30);

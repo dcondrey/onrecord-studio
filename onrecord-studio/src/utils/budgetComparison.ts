@@ -59,5 +59,82 @@ SELECT ${keys.map((key) => `COALESCE(b.${key}, a.${key}) AS ${key}`).join(', ')}
        THEN ROUND(100 * (a.actuals_amount - b.budget_amount) / NULLIF(ABS(b.budget_amount), 0), 2) END AS variance_percent
 FROM budget b FULL OUTER JOIN actuals a
   ON ${keys.map((key) => `b.${key} = a.${key}`).join(' AND ')}
-ORDER BY comparison_status, fund_number, funds_center_number, account_number`;
+ORDER BY CASE WHEN comparison_status = 'Matched' THEN 0 ELSE 1 END,
+  ABS(actual_minus_budget) DESC NULLS LAST, comparison_status, fund_number, funds_center_number, account_number`;
+}
+
+/** The columns `buildBudgetComparison` returns that the difference chart reads. */
+const COMPARISON_COLUMNS = [...keys.slice(1), 'budget_amount', 'actuals_amount', 'comparison_status', 'actual_minus_budget', 'variance_percent'] as const;
+
+export interface BudgetComparisonLine {
+  key: string;
+  label: string;
+  departments: string | null;
+  status: string;
+  fund: string | null;
+  center: string | null;
+  account: string | null;
+  /** Decimal strings as the engine returned them; null where the side has no complete amount. */
+  budget: string | null;
+  actuals: string | null;
+  difference: string | null;
+  variancePercent: string | null;
+}
+
+/**
+ * A cell as a decimal string. DECIMAL arrives as a string and is kept exactly; a DOUBLE arrives as a
+ * number and is printed to cents. Anything else is not an amount.
+ */
+function decimalText(cell: unknown): string | null {
+  if (typeof cell === 'string') return /^-?\d+(?:\.\d+)?$/.test(cell.trim()) ? cell.trim() : null;
+  if (typeof cell === 'number' && Number.isFinite(cell)) return cell.toFixed(2);
+  return null;
+}
+
+function cellText(cell: unknown): string | null {
+  if (cell === null || cell === undefined) return null;
+  const value = String(cell).trim();
+  return value ? value : null;
+}
+
+/**
+ * The comparison lines of a SQL result that carries the budget-comparison columns, or null for any
+ * other result. Only a 'Matched' line keeps a difference; every other status is a line that was not
+ * compared, whatever its difference cell holds.
+ */
+export function readBudgetComparison(result: { columns: string[]; rows: unknown[][] }): BudgetComparisonLine[] | null {
+  const index = new Map(result.columns.map((column, i) => [column, i] as const));
+  if (!COMPARISON_COLUMNS.every((column) => index.has(column))) return null;
+  const at = (row: unknown[], column: string) => {
+    const i = index.get(column);
+    return i === undefined ? null : row[i];
+  };
+  return result.rows.map((row, i) => {
+    const fund = cellText(at(row, 'fund_number'));
+    const center = cellText(at(row, 'funds_center_number'));
+    const account = cellText(at(row, 'account_number'));
+    const status = cellText(at(row, 'comparison_status')) ?? 'Status not recorded';
+    const matched = status === 'Matched';
+    return {
+      key: `${i}:${fund ?? ''}:${center ?? ''}:${account ?? ''}`,
+      label: `Fund ${fund ?? '?'} / ${center ?? '?'} / ${account ?? '?'}`,
+      departments: cellText(at(row, 'budget_departments')) ?? cellText(at(row, 'actuals_departments')),
+      status,
+      fund,
+      center,
+      account,
+      budget: decimalText(at(row, 'budget_amount')),
+      actuals: decimalText(at(row, 'actuals_amount')),
+      difference: matched ? decimalText(at(row, 'actual_minus_budget')) : null,
+      variancePercent: matched ? decimalText(at(row, 'variance_percent')) : null,
+    };
+  });
+}
+
+/** One comparison line's row, for the SQL editor: the comparison query filtered to its keys. */
+export function budgetComparisonLineQuery(comparisonSql: string, line: Pick<BudgetComparisonLine, 'fund' | 'center' | 'account'>): string {
+  const condition = ([['fund_number', line.fund], ['funds_center_number', line.center], ['account_number', line.account]] as const)
+    .map(([column, value]) => (value === null ? `${column} IS NULL` : `${column} = ${literal(value)}`))
+    .join(' AND ');
+  return `SELECT * FROM (\n${comparisonSql}\n) AS comparison\nWHERE ${condition}`;
 }

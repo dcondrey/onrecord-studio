@@ -21,6 +21,7 @@ import InlineError from '../ui/InlineError';
 import Button from '../ui/Button';
 import { Field, Textarea } from '../ui/Field';
 import { openSourceConnector } from './sourceEvents';
+import PostingLeadTime from '../charts/figures/PostingLeadTime';
 
 const SECTIONS: Array<{ timing: MeetingTiming; title: string }> = [
   { timing: 'UPCOMING', title: 'Upcoming' },
@@ -57,20 +58,6 @@ const CHANGE_TEXT: Record<AgendaItemChangeKind, string> = {
   TEXT_CHANGED: 'Text changed below the title',
 };
 
-const plural = (count: number, unit: string) => `${count} ${unit}${count === 1 ? '' : 's'}`;
-
-/** The span between the header time and the stated start, in whole units; never rounded up. */
-function describeLeadTime(minutes: number): string {
-  const size = Math.abs(minutes);
-  const days = Math.floor(size / 1440);
-  const hours = Math.floor((size % 1440) / 60);
-  const rest = size % 60;
-  const span = days > 0
-    ? [plural(days, 'day'), hours > 0 ? plural(hours, 'hour') : null].filter(Boolean).join(' ')
-    : [hours > 0 ? plural(hours, 'hour') : null, rest > 0 || hours === 0 ? plural(rest, 'minute') : null].filter(Boolean).join(' ');
-  return minutes < 0 ? `${span} after the start` : `${span} before the start`;
-}
-
 // A meeting date is a calendar date as the agenda states it, so it is formatted without a zone shift.
 const MEETING_DATE = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 const POSTED_AT = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -96,7 +83,6 @@ function Posting({ document }: { document: MeetingDocument }) {
       {posting.state === 'RECORDED' ? (
         <span title={`Last-Modified header: ${posting.lastModified.slice(0, 16).replace('T', ' ')} UTC`}>
           Posted <time dateTime={posting.lastModified} className="tabular-nums">{postedAt && !Number.isNaN(postedAt.valueOf()) ? POSTED_AT.format(postedAt) : posting.lastModified}</time>, per the file’s Last-Modified header
-          {document.minutesBeforeMeeting !== null && ` · ${describeLeadTime(document.minutesBeforeMeeting)}`}
         </span>
       ) : posting.reason === 'NO_FETCH_RECORD' ? (
         <>Posting time not recorded: this file was never fetched</>
@@ -211,6 +197,16 @@ function SuggestionDetail({ suggestion, draft, onDraft }: { suggestion: MeetingS
   );
 }
 
+const meetingAnchor = (id: string) => `meeting-${id.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+
+/** Scrolls to a meeting's card and moves focus there; instant unless motion is full. */
+function openMeeting(id: string) {
+  const card = document.getElementById(meetingAnchor(id));
+  if (!card) return;
+  card.scrollIntoView?.({ block: 'start', behavior: document.documentElement.dataset.motion === 'full' ? 'smooth' : 'auto' });
+  card.focus({ preventScroll: true });
+}
+
 function MeetingCard({ meeting, selected, onSelect, drafts, onDraft }: {
   meeting: CalendarMeeting;
   selected: string | null;
@@ -219,7 +215,7 @@ function MeetingCard({ meeting, selected, onSelect, drafts, onDraft }: {
   onDraft: (id: string, text: string) => void;
 }) {
   return (
-    <article className="app-panel divide-y divide-line" aria-label={`${meeting.body} ${meeting.date ?? 'date not recorded'}`}>
+    <article id={meetingAnchor(meeting.id)} tabIndex={-1} className="app-panel focus-ring scroll-mt-4 divide-y divide-line" aria-label={`${meeting.body} ${meeting.date ?? 'date not recorded'}`}>
       <div className="p-4">
         <p className="text-caption tabular-nums text-fg-secondary" title={meeting.startTime ? `${meeting.startTime} as stated on the agenda` : undefined}>
           {meeting.date ? formatMeetingDate(meeting.date) : 'Date not recorded'}
@@ -330,11 +326,14 @@ export default function MeetingsView() {
           )}
         />
         {calendar && calendar.postingCounts.agendaFilesWithBothTimes > 0 && (
-          <p className="max-w-3xl text-headline text-fg" aria-label="Posting time counts">
+          <p className="sr-only" aria-label="Posting time counts">
             <span className="tabular-nums">{calendar.postingCounts.under72HoursBeforeStart} of {calendar.postingCounts.agendaFilesWithBothTimes}</span> agenda files with a recorded posting
             time and a stated start time were posted less than 72 hours before the meeting, per the file’s Last-Modified header.
             {calendar.postingCounts.afterMeetingStart > 0 && ` ${calendar.postingCounts.afterMeetingStart} carry a header later than the stated start.`}
           </p>
+        )}
+        {calendar && calendar.meetings.length > 0 && (
+          <PostingLeadTime meetings={calendar.meetings} counts={calendar.postingCounts} onOpen={openMeeting} />
         )}
         {error && <InlineError summary="Meetings couldn’t be read from your records." detail={error} onRetry={load} />}
         {!calendar && !error && (

@@ -47,6 +47,8 @@ import {
   useDiscoveryController,
 } from '../components/dashboard/AutomaticDiscoveryProvider';
 import type { DiscoveryController } from '../utils/discoveryController';
+import { readBudgetComparison } from '../utils/budgetComparison';
+import DifferenceDots from '../components/charts/figures/DifferenceDots';
 
 let capturedController: DiscoveryController | null = null;
 function ControllerCapture() {
@@ -438,5 +440,47 @@ describe('AnalysisWorkbench hybrid search result gating', () => {
 
     expect(screen.queryByText('STALE_FILE')).toBeNull();
     expect(screen.getByText('FRESH_FILE')).toBeTruthy();
+  });
+});
+
+describe('budget comparison difference chart', () => {
+  const columns = ['report_fy', 'fund_number', 'funds_center_number', 'account_number', 'budget_departments', 'actuals_departments', 'budget_amount', 'actuals_amount', 'budget_rows', 'actuals_rows', 'budget_missing_amounts', 'actuals_missing_amounts', 'comparison_status', 'actual_minus_budget', 'variance_percent'];
+  const row = (account: string, budget: unknown, actuals: unknown, status: string, difference: unknown, percent: unknown) => ['25', '100000', '1914', account, 'Police', 'Police', budget, actuals, 1, 1, 0, 0, status, difference, percent];
+
+  it('compares only matched lines, keeps decimal digits, and lists every other status as not compared', () => {
+    const lines = readBudgetComparison({
+      columns,
+      rows: [
+        row('512000', '1000000.10', '1236200.35', 'Matched', '236200.25', '23.62'),
+        row('512001', '500000.00', '400000.00', 'Matched', '-100000.00', '-20.00'),
+        // A difference cell beside a non-Matched status is not a comparison.
+        row('512002', null, '90000.00', 'Missing budget baseline', '0', '0'),
+        row('512003', '7000.00', null, 'Missing actuals', null, null),
+      ],
+    });
+    if (!lines) throw new Error('comparison columns not recognised');
+    expect(lines.filter((line) => line.difference !== null).map((line) => line.account)).toEqual(['512000', '512001']);
+    expect(readBudgetComparison({ columns: ['a', 'b'], rows: [] })).toBeNull();
+
+    const compared = lines.flatMap((line) => (line.difference && line.budget && line.actuals ? [{ key: line.key, label: line.label, context: line.departments, from: line.budget, to: line.actuals, difference: line.difference, percent: line.variancePercent }] : []));
+    const uncompared = lines.filter((line) => line.difference === null).map((line) => ({ key: line.key, label: line.label, status: line.status }));
+    render(<DifferenceDots title="Actuals minus budget" sources={{ tables: ['analysis_budget', 'analysis_actuals'] }} compared={compared} uncompared={uncompared} fromLabel="budget" toLabel="actual" truncated={false} />);
+
+    expect(screen.getByText(/exceeds its budget amount by the most: \+\$236K \(\+23\.62%\)/)).toBeTruthy();
+    expect(screen.getAllByRole('img', { name: /a difference of/ })).toHaveLength(2);
+    expect(screen.getByRole('img', { name: /100000 \/ 1914 \/ 512000: actual \$1,236,200\.35 against budget \$1,000,000\.10, a difference of \+\$236,200\.25/ })).toBeTruthy();
+    expect(screen.getByLabelText('Not compared').textContent).toMatch(/Missing actuals 1 · Missing budget baseline 1/);
+    expect(screen.queryByRole('img', { name: /512002/ })).toBeNull();
+    cleanup();
+
+    // A result cut at the row limit is a subset: no line is called the largest, and the plot says so.
+    render(<DifferenceDots title="Actuals minus budget" sources={{ tables: ['analysis_budget', 'analysis_actuals'] }} compared={compared} uncompared={uncompared} fromLabel="budget" toLabel="actual" truncated />);
+    expect(screen.queryByText(/by the most/)).toBeNull();
+    expect(screen.getByText(/^Among the 2 compared lines returned, the largest excess over the budget amount is .*512000: \+\$236K.*cut at the row limit/)).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Actuals minus budget: largest among returned rows' })).toBeTruthy();
+    // Unmatched lines sort last, so a cut result can hold none of them: the gap is stated, never read as 'all matched'.
+    cleanup();
+    render(<DifferenceDots title="Actuals minus budget" sources={{ tables: ['analysis_budget'] }} compared={compared} uncompared={[]} fromLabel="budget" toLabel="actual" truncated />);
+    expect(screen.getByText(/could not be compared sort after compared ones, so any beyond the limit are not counted here/)).toBeTruthy();
   });
 });

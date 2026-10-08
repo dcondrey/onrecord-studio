@@ -1,24 +1,33 @@
 import { useState } from 'react';
+import { DistanceStrip, NightHoursStrip, activityKey, incidentKey } from '../charts/figures/OrdinanceStrips';
 import { invokeCommand } from '../../ipc';
 import type { EncampmentOrdinanceReport, ObservationSource } from '../../types';
 import Icon from '../ui/icons';
 
 const NOT_MEASURED = 'not measured';
+const anchor = (key: string) => `ordinance-${key.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+const shaName = (source: ObservationSource) => `${source.displayName} (SHA-256 ${source.sourceSha256.slice(0, 12)}…)`;
 const band = (value: number | null) => (value === null ? NOT_MEASURED : value.toLocaleString());
 const feet = (value: number | undefined) => (value === undefined ? NOT_MEASURED : `${Math.round(value).toLocaleString()} ft`);
-
-function Sources({ label, sources }: { label: string; sources: ObservationSource[] }) {
-  return (
-    <p className="mt-1 text-caption text-muted">
-      {label}: {sources.map((source) => `${source.displayName} (SHA-256 ${source.sourceSha256.slice(0, 12)}…)`).join('; ')}
-    </p>
-  );
-}
 
 export default function EncampmentOrdinancePanel() {
   const [report, setReport] = useState<EncampmentOrdinanceReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [highlight, setHighlight] = useState<string | null>(null);
+  const [openRecords, setOpenRecords] = useState<{ night: boolean; locations: boolean }>({ night: false, locations: false });
+
+  /** A dot opens its Records table and moves to its row. */
+  const showRecord = (key: string) => {
+    setOpenRecords((current) => ({ ...current, [key.startsWith('activity:') ? 'night' : 'locations']: true }));
+    setHighlight(key);
+    window.requestAnimationFrame(() => {
+      const row = document.getElementById(anchor(key));
+      row?.scrollIntoView?.({ block: 'nearest', behavior: document.documentElement.dataset.motion === 'full' ? 'smooth' : 'auto' });
+      row?.focus({ preventScroll: true });
+    });
+  };
+  const rowClass = (key: string) => (highlight === key ? 'bg-accent/10 outline outline-1 outline-focus' : undefined);
 
   const load = async () => {
     setLoading(true);
@@ -49,67 +58,76 @@ export default function EncampmentOrdinancePanel() {
       {error && <p className="mt-2 text-label text-danger" role="alert">{error}</p>}
 
       {night && (
-        <div className="mt-4">
-          <h3 className="analysis-label">Time of day (63.0405(b): 9:00 p.m. to 5:30 a.m.)</h3>
-          <Sources label="Arrest and citation logs" sources={night.sources} />
-          <p className="mt-1 text-caption text-muted">
-            Logs cover {night.firstActivity ?? NOT_MEASURED} to {night.lastActivity ?? NOT_MEASURED}. Times are as SDPD recorded them. The night-hours limit applies to 63.0404(a); other subsections are shown for comparison. Activities exactly at 9:00 p.m. or 5:30 a.m. are listed apart because the ordinance does not say whether “between” includes them.
+        <div className="mt-4 grid gap-2">
+          <p className="text-caption text-muted">
+            Logs cover {night.firstActivity ?? NOT_MEASURED} to {night.lastActivity ?? NOT_MEASURED}. Times are as SDPD recorded them. The night-hours limit applies to 63.0404(a); other subsections are shown for comparison. Activities exactly at 9:00 p.m. or 5:30 a.m. are drawn hollow because the ordinance does not say whether “between” includes them.
           </p>
-          <table className="mt-2 w-full text-label">
-            <thead><tr className="text-left text-muted"><th>Section</th><th>Type</th><th>Activities</th><th>9 p.m.–5:30 a.m.</th><th>At an endpoint</th><th>Outside</th><th>Time not recorded</th></tr></thead>
-            <tbody>
-              {night.sections.map((row) => (
-                <tr key={`${row.section}:${row.activityType}`}>
-                  <td>{row.section}</td><td>{row.activityType || NOT_MEASURED}</td><td>{row.activities}</td><td>{row.insideWindow}</td><td>{row.atWindowBoundary}</td><td>{row.outsideWindow}</td><td>{row.timeNotRecorded}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {night.listedActivities.length > 0 && (
-            <ul className="mt-2 space-y-1 text-caption text-fg-secondary">
-              {night.listedActivities.map((activity) => (
-                <li key={`${activity.activityNumber}:${activity.section}:${activity.recordedAt}`}>
-                  {activity.recordedAt} · {activity.activityType} {activity.section} · activity {activity.activityNumber} · {activity.location}{activity.atWindowBoundary ? ' · at an endpoint' : ''}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-
-      {locations && (
-        <div className="mt-4">
-          <h3 className="analysis-label">Distance to schools and transit stations (63.0404(c))</h3>
-          <Sources label="NIBRS offenses" sources={locations.incidentSources} />
-          {locations.schoolSource && <Sources label="Schools" sources={[locations.schoolSource]} />}
-          {locations.stationSource && <Sources label="Transit stations (GTFS location_type 1)" sources={[locations.stationSource]} />}
-          <p className="mt-1 text-caption text-muted">
-            Bands use the nearer of the closest school or station. 1,320 ft (a quarter mile) stands in for “two blocks”; the ordinance states no distance. Rows are NIBRS offenses; cases counts distinct case numbers.
-          </p>
-          <table className="mt-2 w-full text-label">
-            <thead><tr className="text-left text-muted"><th>Section</th><th>Offenses</th><th>Cases</th><th>Not geocoded</th><th>≤ 1,320 ft</th><th>1,320–2,640 ft</th><th>&gt; 2,640 ft</th></tr></thead>
-            <tbody>
-              {locations.sections.map((row) => (
-                <tr key={row.section}>
-                  <td>{row.section}</td><td>{row.offenses}</td><td>{row.distinctCases}</td><td>{row.notGeocoded}</td><td>{band(row.withinNearBand)}</td><td>{band(row.withinFarBand)}</td><td>{band(row.beyondFarBand)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="mt-2 max-h-72 overflow-y-auto">
-            <table className="w-full text-caption">
-              <thead><tr className="text-left text-muted"><th>Occurred</th><th>Case</th><th>Section</th><th>Block</th><th>Nearest school</th><th>Nearest station</th></tr></thead>
+          <NightHoursStrip night={night} sources={{ tables: ['analytical_rows (SDPD arrest and citation logs)'], note: night.sources.map(shaName).join('; ') }} onRecord={showRecord} />
+          <details open={openRecords.night} onToggle={(event) => { const open = event.currentTarget.open; setOpenRecords((current) => (current.night === open ? current : { ...current, night: open })); }} className="rounded-lg border border-line p-3">
+            <summary className="focus-ring w-fit cursor-pointer rounded text-control text-fg-secondary hover:text-fg">Records: counts by section and listed activities</summary>
+            <table className="mt-2 w-full text-label">
+              <thead><tr className="text-left text-muted"><th>Section</th><th>Type</th><th>Activities</th><th>9 p.m.–5:30 a.m.</th><th>At an endpoint</th><th>Outside</th><th>Time not recorded</th></tr></thead>
               <tbody>
-                {locations.incidents.map((incident) => (
-                  <tr key={`${incident.caseNumber}:${incident.occurredOn}:${incident.blockAddress}`}>
-                    <td>{incident.occurredOn ?? NOT_MEASURED}</td><td>{incident.caseNumber}</td><td>{incident.section}</td><td>{incident.blockAddress}</td>
-                    <td>{incident.nearestSchool ? `${incident.nearestSchool.name}, ${feet(incident.nearestSchool.distanceFeet)}` : NOT_MEASURED}</td>
-                    <td>{incident.nearestStation ? `${incident.nearestStation.name}, ${feet(incident.nearestStation.distanceFeet)}` : NOT_MEASURED}</td>
+                {night.sections.map((row) => (
+                  <tr key={`${row.section}:${row.activityType}`} className="tabular-nums">
+                    <td>{row.section}</td><td>{row.activityType || NOT_MEASURED}</td><td>{row.activities}</td><td>{row.insideWindow}</td><td>{row.atWindowBoundary}</td><td>{row.outsideWindow}</td><td>{row.timeNotRecorded}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+            {night.listedActivities.length > 0 && (
+              <ul className="mt-2 space-y-1 text-caption text-fg-secondary">
+                {night.listedActivities.map((activity) => (
+                  <li key={activityKey(activity)} id={anchor(activityKey(activity))} tabIndex={-1} className={rowClass(activityKey(activity))}>
+                    {activity.recordedAt} · {activity.activityType} {activity.section} · activity {activity.activityNumber} · {activity.location}{activity.atWindowBoundary ? ' · at an endpoint' : ''}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </details>
+        </div>
+      )}
+
+      {locations && (
+        <div className="mt-4 grid gap-2">
+          <p className="text-caption text-muted">
+            Distance uses the nearer of the closest school or station. 1,320 ft (a quarter mile) stands in for “two blocks”; the ordinance states no distance. Rows are NIBRS offenses; cases counts distinct case numbers.
+          </p>
+          <DistanceStrip
+            locations={locations}
+            sources={{
+              tables: ['analytical_rows (NIBRS offenses, schools, GTFS stations)'],
+              note: [...locations.incidentSources, ...(locations.schoolSource ? [locations.schoolSource] : []), ...(locations.stationSource ? [locations.stationSource] : [])].map(shaName).join('; '),
+            }}
+            onRecord={showRecord}
+          />
+          <details open={openRecords.locations} onToggle={(event) => { const open = event.currentTarget.open; setOpenRecords((current) => (current.locations === open ? current : { ...current, locations: open })); }} className="rounded-lg border border-line p-3">
+            <summary className="focus-ring w-fit cursor-pointer rounded text-control text-fg-secondary hover:text-fg">Records: distance bands and offenses</summary>
+            <table className="mt-2 w-full text-label">
+              <thead><tr className="text-left text-muted"><th>Section</th><th>Offenses</th><th>Cases</th><th>Not geocoded</th><th>≤ 1,320 ft</th><th>1,320–2,640 ft</th><th>&gt; 2,640 ft</th></tr></thead>
+              <tbody>
+                {locations.sections.map((row) => (
+                  <tr key={row.section} className="tabular-nums">
+                    <td>{row.section}</td><td>{row.offenses}</td><td>{row.distinctCases}</td><td>{row.notGeocoded}</td><td>{band(row.withinNearBand)}</td><td>{band(row.withinFarBand)}</td><td>{band(row.beyondFarBand)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="mt-2 max-h-72 overflow-y-auto">
+              <table className="w-full text-caption">
+                <thead><tr className="text-left text-muted"><th>Occurred</th><th>Case</th><th>Section</th><th>Block</th><th>Nearest school</th><th>Nearest station</th></tr></thead>
+                <tbody>
+                  {locations.incidents.map((incident) => (
+                    <tr key={incidentKey(incident)} id={anchor(incidentKey(incident))} tabIndex={-1} className={rowClass(incidentKey(incident))}>
+                      <td>{incident.occurredOn ?? NOT_MEASURED}</td><td>{incident.caseNumber}</td><td>{incident.section}</td><td>{incident.blockAddress}</td>
+                      <td>{incident.nearestSchool ? `${incident.nearestSchool.name}, ${feet(incident.nearestSchool.distanceFeet)}` : NOT_MEASURED}</td>
+                      <td>{incident.nearestStation ? `${incident.nearestStation.name}, ${feet(incident.nearestStation.distanceFeet)}` : NOT_MEASURED}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
         </div>
       )}
 
