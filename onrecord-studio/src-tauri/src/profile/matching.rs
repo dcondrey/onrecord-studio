@@ -55,7 +55,7 @@ pub fn normalize_name(value: &str) -> String {
 
 /// The resolver keeps a leading capitalized article inside an organization run ("The City
 /// Clerk"), so it is dropped for comparison only. Stored decisions keep the resolver's form.
-fn without_leading_article(normalized: &str) -> &str {
+pub(super) fn without_leading_article(normalized: &str) -> &str {
     normalized.strip_prefix("the ").unwrap_or(normalized)
 }
 
@@ -201,10 +201,7 @@ pub fn find_candidates(
                     portal_key: None,
                     agency_id: None,
                     entity_id: None,
-                    decision: match decision.decision {
-                        MatchDecisionKind::Confirmed => CandidateDecision::Confirmed,
-                        MatchDecisionKind::Rejected => CandidateDecision::Rejected,
-                    },
+                    decision: candidate_decision(decision.decision),
                     currently_present: false,
                 });
             }
@@ -272,11 +269,15 @@ fn decision_for(
                 && decision.normalized_name == normalized
         })
         .map_or(CandidateDecision::Pending, |decision| {
-            match decision.decision {
-                MatchDecisionKind::Confirmed => CandidateDecision::Confirmed,
-                MatchDecisionKind::Rejected => CandidateDecision::Rejected,
-            }
+            candidate_decision(decision.decision)
         })
+}
+
+fn candidate_decision(decision: MatchDecisionKind) -> CandidateDecision {
+    match decision {
+        MatchDecisionKind::Confirmed => CandidateDecision::Confirmed,
+        MatchDecisionKind::Rejected => CandidateDecision::Rejected,
+    }
 }
 
 fn method_rank(method: AffiliationMatchMethod) -> u8 {
