@@ -5,6 +5,8 @@ import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import Button, { buttonClass } from '../ui/Button';
 import Dialog, { DialogBody, DialogHeader } from '../ui/Dialog';
 import Skeleton from '../ui/Skeleton';
+import { Field, Input, Select } from '../ui/Field';
+import InlineError from '../ui/InlineError';
 import { formatShortDate } from '../objects/labels';
 import { cn } from '../../utils/cn';
 import { CALIFORNIA_CPRA_JURISDICTION, TRACKER_LIMITS } from '../../types';
@@ -46,17 +48,16 @@ const REASON_LABELS: Record<StatutoryExtensionReason, string> = {
   DECLARED_EMERGENCY_OPERATIONAL_IMPACT: 'Declared emergency affected operations',
 };
 
-const field = 'analysis-input focus-ring mt-1 block w-full';
 const button = cn(buttonClass({ size: 'sm' }), 'focus-ring');
 const primaryButton = cn(buttonClass({ variant: 'primary', size: 'sm' }), 'focus-ring');
 
 function KindSelect({ value, onChange, label }: { value: TimelineEventKind; onChange: (kind: TimelineEventKind) => void; label: string }) {
   return (
-    <select aria-label={label} className={field} value={value} onChange={(event) => onChange(event.target.value as TimelineEventKind)}>
+    <Select label={label} className="focus-ring" value={value} onChange={(event) => onChange(event.target.value as TimelineEventKind)}>
       {(Object.keys(KIND_LABELS) as TimelineEventKind[]).map((kind) => (
         <option key={kind} value={kind}>{KIND_LABELS[kind]}</option>
       ))}
-    </select>
+    </Select>
   );
 }
 
@@ -81,23 +82,17 @@ function ExtensionFields({
   onReason: (value: StatutoryExtensionReason | '') => void;
   onExpected: (value: string) => void;
 }) {
-  const hintId = useId();
   return (
     <>
-      <label className="block">
-        Statutory reason for the extension (required)
-        <select className={field} value={reason} onChange={(event) => onReason(event.target.value as StatutoryExtensionReason | '')}>
-          <option value="">Choose the reason the notice gives</option>
-          {(Object.keys(REASON_LABELS) as StatutoryExtensionReason[]).map((value) => (
-            <option key={value} value={value}>{REASON_LABELS[value]}</option>
-          ))}
-        </select>
-      </label>
-      <label className="block">
-        Agency's promised response date (optional)
-        <input type="datetime-local" className={field} aria-describedby={hintId} value={expected} onChange={(event) => onExpected(event.target.value)} />
-      </label>
-      <p id={hintId} className="text-caption text-muted">Without it, the extension is not applied to the deadline.</p>
+      <Select label="Statutory reason for the extension (required)" className="focus-ring" value={reason} onChange={(event) => onReason(event.target.value as StatutoryExtensionReason | '')}>
+        <option value="">Choose the reason the notice gives</option>
+        {(Object.keys(REASON_LABELS) as StatutoryExtensionReason[]).map((value) => (
+          <option key={value} value={value}>{REASON_LABELS[value]}</option>
+        ))}
+      </Select>
+      <Field label="Agency's promised response date (optional)" help="Without it, the extension is not applied to the deadline.">
+        <Input type="datetime-local" className="focus-ring tabular-nums" value={expected} onChange={(event) => onExpected(event.target.value)} />
+      </Field>
     </>
   );
 }
@@ -113,6 +108,7 @@ function ClaimForm({ portals, onSubmit, isBusy }: {
   const [portalKey, setPortalKey] = useState('');
   const [jurisdiction, setJurisdiction] = useState('');
   const [otherJurisdiction, setOtherJurisdiction] = useState('');
+  const headingId = useId();
   const submit = (event: FormEvent) => {
     event.preventDefault();
     onSubmit({
@@ -127,42 +123,36 @@ function ClaimForm({ portals, onSubmit, isBusy }: {
     setSourceUrl('');
   };
   return (
-    <form onSubmit={submit} className="flex flex-col gap-1.5" aria-label="Claim a request">
-      <label>
-        Request number, as the portal shows it
-        <input required maxLength={TRACKER_LIMITS.referenceCharacters} className={field} value={reference} onChange={(event) => setReference(event.target.value)} />
-      </label>
-      <label>
-        Title (optional)
-        <input maxLength={TRACKER_LIMITS.titleCharacters} className={field} value={title} onChange={(event) => setTitle(event.target.value)} />
-      </label>
-      <label>
-        Link to the request (optional, https only)
-        <input type="url" maxLength={TRACKER_LIMITS.sourceUrlCharacters} className={field} value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} />
-      </label>
-      <label>
-        Portal (optional)
-        <select className={field} value={portalKey} onChange={(event) => setPortalKey(event.target.value)}>
-          <option value="">Not linked to a registered portal</option>
-          {portals.map((portal) => (
-            <option key={portal.key} value={portal.key}>{portal.name}</option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Jurisdiction
-        <select className={field} value={jurisdiction} onChange={(event) => setJurisdiction(event.target.value)}>
-          <option value="">Not set</option>
-          <option value={CALIFORNIA_CPRA_JURISDICTION}>California (Public Records Act)</option>
-          <option value="OTHER">Other (no deadline model)</option>
-        </select>
-      </label>
+    <form onSubmit={submit} className="flex flex-col gap-3 border-t border-line pt-5" aria-labelledby={headingId}>
+      <div>
+        <h3 id={headingId} className="text-heading text-fg">Track a request</h3>
+        <p className="mt-1 text-caption text-muted">
+          Nothing here is sent anywhere, and no portal login is used or stored. Only the dates you enter or confirm from emails count.
+        </p>
+      </div>
+      <Field label="Request number, as the portal shows it">
+        <Input required maxLength={TRACKER_LIMITS.referenceCharacters} className="focus-ring" value={reference} onChange={(event) => setReference(event.target.value)} />
+      </Field>
+      <Field label="Title (optional)">
+        <Input maxLength={TRACKER_LIMITS.titleCharacters} className="focus-ring" value={title} onChange={(event) => setTitle(event.target.value)} />
+      </Field>
+      <Field label="Link to the request (optional, https only)">
+        <Input type="url" maxLength={TRACKER_LIMITS.sourceUrlCharacters} className="focus-ring" value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} />
+      </Field>
+      <Select label="Portal (optional)" className="focus-ring" value={portalKey} onChange={(event) => setPortalKey(event.target.value)}>
+        <option value="">Not linked to a registered portal</option>
+        {portals.map((portal) => (
+          <option key={portal.key} value={portal.key}>{portal.name}</option>
+        ))}
+      </Select>
+      <Select label="Jurisdiction" className="focus-ring" value={jurisdiction} onChange={(event) => setJurisdiction(event.target.value)}>
+        <option value="">Not set</option>
+        <option value={CALIFORNIA_CPRA_JURISDICTION}>California (Public Records Act)</option>
+        <option value="OTHER">Other (no deadline model)</option>
+      </Select>
       {jurisdiction === 'OTHER' && (
-        <input aria-label="Jurisdiction name" maxLength={TRACKER_LIMITS.jurisdictionCharacters} className={field} value={otherJurisdiction} onChange={(event) => setOtherJurisdiction(event.target.value)} />
+        <Input aria-label="Jurisdiction name" maxLength={TRACKER_LIMITS.jurisdictionCharacters} className="focus-ring" value={otherJurisdiction} onChange={(event) => setOtherJurisdiction(event.target.value)} />
       )}
-      <p className="text-caption text-muted">
-        Nothing here is sent anywhere, and no portal login is used or stored. Only the dates you enter or confirm from emails count.
-      </p>
       <button type="submit" disabled={isBusy || reference.trim() === ''} className={cn(primaryButton, 'self-start')}>Track this request</button>
     </form>
   );
@@ -183,26 +173,25 @@ function SuggestionCard({ claim, suggestion, isBusy, onConfirm, onReject }: {
   const needsReason = kind === 'EXTENSION_NOTICE';
   const ready = occurredAt !== null && (!needsReason || reason !== '');
   return (
-    <li className="rounded border border-dashed border-line-strong p-2" aria-label={`Suggested ${KIND_LABELS[suggestion.kind]} for ${claim.reference}`}>
-      <p className="text-label font-semibold text-fg">Suggested, not counted until you confirm</p>
-      <blockquote className="mt-1 border-l-2 border-line-strong pl-1.5 italic">{suggestion.evidence.matchedSentence}</blockquote>
-      <p className="text-label text-muted">
+    <li className="rounded-xl border border-dashed border-line-strong p-4" aria-label={`Suggested ${KIND_LABELS[suggestion.kind]} for ${claim.reference}`}>
+      <p className="text-control text-fg">Suggested, not counted until you confirm</p>
+      <blockquote className="mt-2 border-l-2 border-line-strong pl-2 italic">{suggestion.evidence.matchedSentence}</blockquote>
+      <p className="mt-1 text-caption text-muted">
         From an email{suggestion.evidence.subjectExcerpt ? ` titled "${suggestion.evidence.subjectExcerpt}"` : ''}.
       </p>
-      <div className="mt-1 grid gap-1.5">
+      <div className="mt-3 grid gap-3">
         <KindSelect label="What this describes" value={kind} onChange={setKind} />
-        <label>
-          Date
-          <input type="datetime-local" className={field} aria-describedby={`${suggestion.id}-date-hint`} value={when} onChange={(event) => setWhen(event.target.value)} />
-        </label>
-        <p id={`${suggestion.id}-date-hint`} className="text-caption text-muted">
-          {suggestion.candidateOccurredAt
+        <Field
+          label="Date"
+          help={suggestion.candidateOccurredAt
             ? 'Filled from the email date, which is not necessarily the date of the event.'
             : 'The email had no readable date; enter the date of the event.'}
-        </p>
+        >
+          <Input type="datetime-local" className="focus-ring tabular-nums" value={when} onChange={(event) => setWhen(event.target.value)} />
+        </Field>
         {needsReason && <ExtensionFields reason={reason} expected={expected} onReason={setReason} onExpected={setExpected} />}
       </div>
-      <div className="mt-1.5 flex gap-2">
+      <div className="mt-3 flex gap-2">
         <button
           type="button"
           disabled={isBusy || !ready}
@@ -285,34 +274,39 @@ function Detail({ claim, deadline, tracker }: { claim: ClaimedRequest; deadline:
   };
 
   return (
-    <div className="flex flex-col gap-3" aria-label={`Request ${claim.reference}`}>
-      <section aria-label="Deadline" className="rounded border border-line-strong p-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-label font-semibold text-fg">{claim.reference}</h3>
-          {deadline && <DeadlineChip deadline={deadline} />}
-        </div>
-        {claim.title && <p>{claim.title}</p>}
+    <div className="flex flex-col gap-6" aria-label={`Request ${claim.reference}`}>
+      <section aria-label="Deadline">
+        <h3 className="text-heading text-fg">{claim.title || `Request ${claim.reference}`}</h3>
+        <p className="mt-0.5 text-caption tabular-nums text-muted">
+          {claim.title ? `Request ${claim.reference}` : 'No title recorded'}
+          {claim.sourceUrl && (
+            <>
+              {' · '}
+              <a href={claim.sourceUrl} target="_blank" rel="noreferrer" title={claim.sourceUrl} className="focus-ring inline-block max-w-[16rem] truncate align-bottom text-accent underline-offset-2 hover:underline">
+                {linkLabel(claim.sourceUrl)}
+              </a>
+            </>
+          )}
+        </p>
+        {deadline && <div className="mt-3"><DeadlineChip deadline={deadline} /></div>}
         {deadline ? (
           <>
-            <p className="mt-1" data-testid="basis-statement">{deadline.basisStatement}</p>
+            <p className="mt-2" data-testid="basis-statement">{deadline.basisStatement}</p>
             {deadline.notes.map((note) => (
-              <p key={note} className="text-label text-muted">{note}</p>
+              <p key={note} className="mt-1 text-caption text-muted">{note}</p>
             ))}
           </>
         ) : (
-          <p className="mt-1 text-muted">Loading the deadline.</p>
-        )}
-        {claim.sourceUrl && (
-          <p className="mt-1 break-all text-label text-muted">Link you saved: {claim.sourceUrl}</p>
+          <Skeleton variant="lines" lines={2} label="Loading the deadline" className="mt-3" />
         )}
       </section>
 
-      <section aria-label="Timeline">
-        <h3 className="text-label font-semibold text-fg">Timeline</h3>
+      <section aria-label="Timeline" className="border-t border-line pt-5">
+        <h3 className="text-heading text-fg">Timeline</h3>
         {events.length === 0 ? (
-          <p className="text-muted">No dates recorded yet.</p>
+          <p className="mt-1 text-muted">No dates recorded yet.</p>
         ) : (
-          <ol className="flex flex-col gap-1">
+          <ol className="mt-2 flex flex-col gap-1.5">
             {events.map((event) => (
               <li key={event.id} className="flex items-start justify-between gap-2 rounded-lg border border-line p-2">
                 <span>
@@ -349,7 +343,7 @@ function Detail({ claim, deadline, tracker }: { claim: ClaimedRequest; deadline:
           </div>
         )}
         <form
-          className="mt-2 grid gap-1.5"
+          className="mt-4 grid gap-3"
           aria-label="Add a date"
           onSubmit={(submitted) => {
             submitted.preventDefault();
@@ -366,17 +360,16 @@ function Detail({ claim, deadline, tracker }: { claim: ClaimedRequest; deadline:
           }}
         >
           <KindSelect label="Kind of date" value={kind} onChange={setKind} />
-          <label>
-            Date and time
-            <input type="datetime-local" className={field} value={when} onChange={(event) => setWhen(event.target.value)} />
-          </label>
+          <Field label="Date and time">
+            <Input type="datetime-local" className="focus-ring tabular-nums" value={when} onChange={(event) => setWhen(event.target.value)} />
+          </Field>
           {needsReason && <ExtensionFields reason={reason} expected={expected} onReason={setReason} onExpected={setExpected} />}
           <button type="submit" className={cn(primaryButton, 'justify-self-start')} disabled={tracker.isBusy || !occurredAt || (needsReason && reason === '')}>Add this date</button>
         </form>
       </section>
 
-      <section aria-label="Suggested events">
-        <h3 className="text-label font-semibold text-fg">Suggested from emails</h3>
+      <section aria-label="Suggested events" className="border-t border-line pt-5">
+        <h3 className="mb-2 text-heading text-fg">Suggested from emails</h3>
         {claim.suggestions.length === 0 ? (
           <p className="text-muted">Nothing waiting for confirmation.</p>
         ) : (
@@ -404,9 +397,9 @@ function Detail({ claim, deadline, tracker }: { claim: ClaimedRequest; deadline:
         )}
       </section>
 
-      <section aria-label="Import emails">
-        <h3 className="text-label font-semibold text-fg">Notification emails</h3>
-        <p className="text-label text-muted">
+      <section aria-label="Import emails" className="border-t border-line pt-5">
+        <h3 className="text-heading text-fg">Notification emails</h3>
+        <p className="mb-3 mt-1 text-caption text-muted">
           Choose .eml or .msg files the portal emailed you. They are read on this device only; attachments and remote content are never opened.
         </p>
         <button type="button" className={button} disabled={tracker.isBusy} onClick={() => void choose()}>Choose email files</button>
@@ -468,36 +461,34 @@ export default function MyRequestsPanel({ onClose }: { onClose: () => void }) {
     <Dialog onClose={onClose} placement="sheet-right">
       <DialogHeader title="My requests" />
       <DialogBody className="text-body text-fg-secondary">
-        {tracker.error && tracker.status !== 'failed' && <p role="alert" className="mt-2 text-danger">{tracker.error}</p>}
-        {portalError && <p role="alert" className="mt-2 text-danger">Couldn't load saved portals: {portalError}</p>}
+        {tracker.error && tracker.status !== 'failed' && <InlineError className="mt-2" summary={tracker.error} />}
+        {portalError && <InlineError className="mt-2" summary={`Saved portals could not be loaded, so none can be linked. ${portalError}`} />}
 
         {tracker.status === 'loading' ? (
           <Skeleton variant="lines" lines={2} label="Loading your tracked requests" className="mt-3" />
         ) : tracker.status === 'failed' ? (
-          <div role="alert" className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3">
-            <p className="text-danger" title={tracker.error ?? undefined}>Your tracked requests could not be loaded.</p>
-            <Button size="sm" onClick={() => void tracker.refresh()} className="focus-ring">Try again</Button>
-          </div>
+          <InlineError className="mt-3" summary="Your tracked requests could not be loaded." detail={tracker.error ?? undefined} onRetry={() => void tracker.refresh()} />
         ) : selected ? (
           <div className="mt-3">
-            <button type="button" className={button} onClick={() => setSelectedId(null)}>Back to the list</button>
-            <div className="mt-2">
+            <Button variant="ghost" size="sm" icon="back" onClick={() => setSelectedId(null)} className="focus-ring -ml-2">All requests</Button>
+            <div className="mt-3">
               <Detail claim={selected} deadline={tracker.deadlines[selected.id]} tracker={tracker} />
             </div>
           </div>
         ) : (
-          <div className="mt-3 flex flex-col gap-4">
+          <div className="mt-1 flex flex-col gap-6">
             {tracker.claims.length === 0 ? (
               <p className="text-muted">You are not tracking any request yet.</p>
             ) : (
-              <ul className="flex flex-col gap-1.5" aria-label="Tracked requests">
+              <ul className="flex flex-col gap-2" aria-label="Tracked requests">
                 {tracker.claims.map((claim) => (
                   <li key={claim.id}>
-                    <button type="button" className="focus-ring w-full rounded-lg border border-line p-3 text-left transition-colors hover:border-line-strong hover:bg-raised" onClick={() => setSelectedId(claim.id)}>
-                      <span className="block font-medium text-fg">{claim.reference}{claim.title ? `: ${claim.title}` : ''}</span>
+                    <button type="button" className="focus-ring flex w-full flex-col items-start gap-1.5 rounded-xl border border-line bg-panel/60 p-4 text-left transition-colors hover:border-line-strong hover:bg-raised" onClick={() => setSelectedId(claim.id)}>
+                      <span className="block text-body font-medium text-fg">{claim.title || `Request ${claim.reference}`}</span>
+                      {claim.title && <span className="block text-caption tabular-nums text-muted">Request {claim.reference}</span>}
                       {tracker.deadlines[claim.id] && <DeadlineChip deadline={tracker.deadlines[claim.id]} />}
                       {claim.suggestions.length > 0 && (
-                        <span className="ml-2 text-caption text-fg-secondary">{claim.suggestions.length} suggested event{claim.suggestions.length === 1 ? '' : 's'} to review</span>
+                        <span className="text-caption text-fg-secondary">{claim.suggestions.length} suggested event{claim.suggestions.length === 1 ? '' : 's'} to review</span>
                       )}
                     </button>
                   </li>
@@ -514,4 +505,14 @@ export default function MyRequestsPanel({ onClose }: { onClose: () => void }) {
       </DialogBody>
     </Dialog>
   );
+}
+
+/** A saved link as its host and path, so it reads as a link rather than a wrapped URL; the full URL is the tooltip. */
+function linkLabel(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.host}${parsed.pathname === '/' ? '' : parsed.pathname}`;
+  } catch {
+    return url;
+  }
 }
