@@ -203,6 +203,12 @@ const VIEWS = [
   { view: 'evidence-authority-library', steps: [nav('evidence'), selectRequest, click('"Authority library"', (page) => page.getByRole('button', { name: 'Authority library' }))], primary: ['list_legal_authorities'], states: ['error'] },
   { view: 'overview-response-analytics', steps: [nav('overview'), click('"Show response analytics"', (page) => page.getByRole('button', { name: 'Show response analytics' }))], primary: ['get_agency_performance_profiles', 'get_cross_agency_correlations'], states: ['error'] },
   { view: 'overview-casework-tools', steps: [nav('overview'), click('"Open casework and research tools"', (page) => page.getByRole('button', { name: 'Open casework and research tools' }))], primary: ['get_casework_state', 'get_research_status'], states: ['empty', 'error'], discover: true },
+  { view: 'overview-casework-case', steps: [nav('overview'), click('"Open casework and research tools"', (page) => page.getByRole('button', { name: 'Open casework and research tools' })), async (page, log) => {
+    await page.getByRole('combobox', { name: 'Open saved case' }).filter({ visible: true }).first().selectOption('case-storage', { timeout: 8_000 });
+    log.push('select saved case "Storage contract ceiling"');
+    await page.getByText('Request determination clocks').first().scrollIntoViewIfNeeded({ timeout: 8_000 });
+    log.push('scroll to "Request determination clocks"');
+  }], primary: ['get_casework_state'], states: [] },
   { view: 'overview-subject-dossier', steps: [nav('overview'), store("store.openSubjectDossier({ kind: 'entity', value: 'e-org-harborview' })", () => window.__uiReview.store.getState().openSubjectDossier({ kind: 'entity', value: 'e-org-harborview' }))], primary: ['get_corpus_entity_neighborhood'], states: ['error'] },
   { view: 'overview-post-ingest-brief', steps: [nav('overview'), store('store.setPostIngestBriefOpen(true)', () => window.__uiReview.store.getState().setPostIngestBriefOpen(true))], primary: [], states: [] },
   { view: 'overview-sidebar-collapsed', steps: [nav('overview'), store('store.toggleSidebarCollapsed()', () => window.__uiReview.store.getState().toggleSidebarCollapsed())], primary: [], states: [] },

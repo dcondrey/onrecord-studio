@@ -451,6 +451,14 @@ const CASE_CITATIONS = RESEARCH_EVIDENCE.map((e) => ({
   portalKey: e.portalKey, documentId: e.documentId, characterOffset: e.characterOffset, verification: 'VERIFIED',
 }));
 
+/** The ranking rule's four factors (storage/casework.rs), so a lead's score is their sum out of 11. */
+const leadFactors = (consequence, evidence, novelty, urgency) => [
+  { label: 'Public consequence', score: consequence, maximum: 3, reason: consequence === 3 ? 'Finding concerns access to essential services or oversight; assess local impact before prioritizing.' : 'Finding concerns an allocation or public contract; verify materiality.' },
+  { label: 'Evidence available', score: evidence, maximum: 3, reason: `${evidence} distinct cited source identities, capped at three. This counts available records, not independent corroboration or correctness.` },
+  { label: 'New lead', score: novelty, maximum: 2, reason: novelty === 2 ? 'No identical title and interpretation found in saved earlier dossiers; changed wording can affect this signal.' : 'Same title and interpretation appeared in an earlier dossier.' },
+  { label: 'Decision urgency', score: urgency, maximum: 3, reason: urgency > 0 ? `A cited source also supports an agenda item dated ${day(-6)}; verify its relevance, latest agenda and participation deadline.` : 'No linked cited decision window in the next 14 days.' },
+];
+
 /** @type {import('../src/types').CaseworkCase[]} */
 const CASES = [
   {
@@ -460,10 +468,32 @@ const CASES = [
     requests: [{
       id: 'cr1', title: 'Amendments to H-24-1180', custodian: 'Purchasing & Contracting', gap: 'Amendments after No. 3', resolves: 'Ceiling authority', draft: 'Please produce all amendments…', state: 'SUBMITTED',
       expectedRecordTypes: ['Contract amendment', 'Purchase order'], expectedFields: ['Ceiling', 'Approver'], expectedPeriod: 'FY2025', submittedAt: iso(24 * 12), responseDue: day(-2),
-      externalReference: '26-0790', productions: [], unresolvedOmissions: ['Approval memo'], followUpDraft: '', citationIds: ['cc-ev-2'], compiledDraft: '', filingPlan: null,
+      externalReference: '26-0790', productions: [], unresolvedOmissions: ['Approval memo'], followUpDraft: '', citationIds: ['cc-ev-2'], compiledDraft: '',
+      filingPlan: {
+        statuteCitation: 'Gov. Code § 7922.535', evaluatedAt: day(0), filedOn: day(12), determinationDueOn: day(2), calendarDaysElapsed: 12, allowedCalendarDays: 10,
+        determinationBasis: 'OBSERVATION_WITHOUT_RECORDED_ACTIVITY', measuredTo: null, deadlinePassedWithoutRecordedResponse: true,
+        followUps: [{ trigger: 'DETERMINATION_OVERDUE', scheduledFor: day(-1), rationale: 'No determination is recorded two days after the modelled date; ask the custodian for a date certain.' }],
+      },
+    }, {
+      id: 'cr2', title: 'Storage facility intake logs', custodian: 'Environmental Services', gap: 'Intake counts by month', resolves: 'Utilization claims', draft: 'Please produce intake logs…', state: 'ACKNOWLEDGED',
+      expectedRecordTypes: ['Intake log'], expectedFields: ['Date', 'Items stored'], expectedPeriod: 'FY2025', submittedAt: iso(24 * 4), responseDue: null,
+      externalReference: '26-0811', productions: [{ id: 'pr1', receivedAt: iso(24 * 1), description: 'First installment: July to September logs', recordTypes: ['Intake log'], fields: ['Date'], period: 'Q1 FY2025', citationIds: [], notes: '' }],
+      unresolvedOmissions: [], followUpDraft: '', citationIds: [], compiledDraft: '',
+      filingPlan: {
+        statuteCitation: 'Gov. Code § 7922.535', evaluatedAt: day(0), filedOn: day(4), determinationDueOn: day(-6), calendarDaysElapsed: 4, allowedCalendarDays: 10,
+        determinationBasis: 'OBSERVATION_WITHOUT_RECORDED_ACTIVITY', measuredTo: null, deadlinePassedWithoutRecordedResponse: false,
+        followUps: [{ trigger: 'DETERMINATION_DUE', scheduledFor: day(-6), rationale: 'The modelled determination date; check the portal for a response that day.' }],
+      },
+    }, {
+      id: 'cr3', title: 'Council ratification memo', custodian: 'City Clerk', gap: 'Ratification record', resolves: 'Approval chain', draft: 'Draft only', state: 'DRAFT',
+      expectedRecordTypes: ['Memo'], expectedFields: [], expectedPeriod: '', submittedAt: null, responseDue: null,
+      externalReference: '', productions: [], unresolvedOmissions: [], followUpDraft: '', citationIds: [], compiledDraft: '', filingPlan: null,
     }],
     decisions: [{ id: 'd1', body: 'City Council', date: day(-6), agendaItem: 'Item 331', proposedDecision: 'Ratify shelter operations contracts', action: 'Public comment', outcome: '', vote: '', state: 'UPCOMING', citationIds: [], outcomeCitationIds: [] }],
-    commitments: [{ id: 'cm1', promise: 'Publish quarterly storage utilization', responsibleParty: 'Environmental Services', dueDate: day(10), completionTest: 'Report posted on sandiego.gov', state: 'OVERDUE', assessment: 'No report located.', citationIds: [], completionCitationIds: [] }],
+    commitments: [
+      { id: 'cm1', promise: 'Publish quarterly storage utilization', responsibleParty: 'Environmental Services', dueDate: day(10), completionTest: 'Report posted on sandiego.gov', state: 'OVERDUE', assessment: 'No report located.', citationIds: [], completionCitationIds: [] },
+      { id: 'cm2', promise: 'Brief Council on storage capacity', responsibleParty: 'Homelessness Strategies', dueDate: null, completionTest: 'Briefing on a Council agenda', state: 'PENDING', assessment: '', citationIds: [], completionCitationIds: [] },
+    ],
     evidence: CASE_CITATIONS, notes: 'Coordinate with Council District 3 staff before the Oct 13 hearing.',
   },
   {
@@ -515,11 +545,55 @@ const CLAIMS = [
     importedEmails: [{ messageIdHash: hex('m2'), subjectExcerpt: 'Records released: 26-533', emailDate: iso(24 * 3), importedAt: iso(24 * 2), suggestionCount: 1 }],
   },
   {
-    id: 'claim-2', portalKey: 'sandiego', reference: '26-0561', title: 'Public restroom cleaning logs', sourceUrl: null, jurisdiction: 'CA_CPRA', claimedAt: iso(24 * 21),
-    events: [{ id: 'ev-sub2', kind: 'SUBMITTED', occurredAt: iso(24 * 21), basis: 'USER_ENTERED', evidence: null, extensionReason: null, expectedDeterminationAt: null, createdAt: iso(24 * 21) }],
+    id: 'claim-2', portalKey: 'sandiego', reference: '26-0561', title: 'Public restroom cleaning logs', sourceUrl: null, jurisdiction: 'CA_CPRA', claimedAt: iso(24 * 7),
+    events: [{ id: 'ev-sub2', kind: 'SUBMITTED', occurredAt: iso(24 * 7), basis: 'USER_ENTERED', evidence: null, extensionReason: null, expectedDeterminationAt: null, createdAt: iso(24 * 7) }],
+    suggestions: [], importedEmails: [],
+  },
+  {
+    id: 'claim-3', portalKey: 'sandiego', reference: '26-0540', title: 'Safe Sleeping Program nightly census', sourceUrl: null, jurisdiction: 'CA_CPRA', claimedAt: iso(24 * 30),
+    events: [
+      { id: 'ev-sub3', kind: 'SUBMITTED', occurredAt: iso(24 * 30), basis: 'USER_ENTERED', evidence: null, extensionReason: null, expectedDeterminationAt: null, createdAt: iso(24 * 30) },
+      { id: 'ev-det3', kind: 'DETERMINATION', occurredAt: iso(24 * 22), basis: 'EMAIL_CONFIRMED', evidence: { messageIdHash: hex('m3'), subjectExcerpt: 'Records request 26-540', emailDate: iso(24 * 22), excerpt: 'The City has determined that responsive records exist and will produce them by October 20.', sentenceStart: 0, sentenceEnd: 90, matchedSentence: 'The City has determined that responsive records exist.' }, extensionReason: null, expectedDeterminationAt: null, createdAt: iso(24 * 22) },
+    ],
+    suggestions: [], importedEmails: [],
+  },
+  {
+    id: 'claim-4', portalKey: 'sandiego', reference: '26-0615', title: 'Outreach provider property storage emails', sourceUrl: null, jurisdiction: 'CA_CPRA', claimedAt: iso(24 * 50),
+    events: [
+      { id: 'ev-sub4', kind: 'SUBMITTED', occurredAt: iso(24 * 50), basis: 'USER_ENTERED', evidence: null, extensionReason: null, expectedDeterminationAt: null, createdAt: iso(24 * 50) },
+      { id: 'ev-det4', kind: 'DETERMINATION', occurredAt: iso(24 * 26), basis: 'EMAIL_CONFIRMED', evidence: { messageIdHash: hex('m4'), subjectExcerpt: 'RE: 26-615 determination', emailDate: iso(24 * 26), excerpt: 'We have completed our search and determined that 41 records are responsive.', sentenceStart: 0, sentenceEnd: 76, matchedSentence: 'determined that 41 records are responsive.' }, extensionReason: null, expectedDeterminationAt: null, createdAt: iso(24 * 26) },
+    ],
     suggestions: [], importedEmails: [],
   },
 ];
+
+/**
+ * The statute engine's analysis as the tracker and the portal read command return it. Days are
+ * counted back from FIXTURE_NOW; `determination` is [daysAgo, basis] or null.
+ * @param {number} requestId @param {number} createdDaysAgo @param {{ allowed?: number, extension?: string | null, determination?: [number, string] | null, observedDaysAgo?: number }} options
+ */
+const deadlineAnalysis = (requestId, createdDaysAgo, { allowed = 10, extension = null, determination = null, observedDaysAgo = 0 } = {}) => {
+  const endDaysAgo = determination ? determination[0] : observedDaysAgo;
+  return {
+    requestId, statuteCitation: 'Gov. Code § 7922.535', createdAt: iso(createdDaysAgo * 24),
+    determinationAt: determination ? iso(determination[0] * 24) : null,
+    determinationSource: determination?.[1] === 'SOURCED_DETERMINATION_EVENT' ? 'email' : null,
+    determinationBasis: determination ? determination[1] : 'OBSERVATION_WITHOUT_RECORDED_ACTIVITY',
+    observedAt: iso(observedDaysAgo * 24),
+    initialDeadlineAt: iso((createdDaysAgo - 10) * 24), effectiveDeadlineAt: iso((createdDaysAgo - allowed) * 24),
+    calendarDaysElapsed: createdDaysAgo - endDaysAgo, allowedCalendarDays: allowed,
+    extensionStatus: extension ? 'VALID' : 'NOT_INVOKED', extensionReason: extension,
+    isViolation: createdDaysAgo - endDaysAgo > allowed, anomalyMarkers: [], evidenceSummary: '',
+  };
+};
+
+/** @type {Record<string, import('../src/types').RequestDeadline>} */
+const TRACKER_DEADLINES = {
+  'claim-1': { claimId: 'claim-1', model: 'CALIFORNIA_CPRA', analysis: deadlineAnalysis(260533, 64, { allowed: 24, extension: 'SEPARATE_FIELD_FACILITIES' }), countdown: { kind: 'DEADLINE_PASSED', days: 40 }, determinationBasis: 'OBSERVATION_WITHOUT_RECORDED_ACTIVITY', violationAsserted: false, basisStatement: 'No determination is recorded. The extended period ended 40 days ago, counted from the submission date you entered.', notes: [], pendingSuggestionCount: 1 },
+  'claim-2': { claimId: 'claim-2', model: 'CALIFORNIA_CPRA', analysis: deadlineAnalysis(260561, 7), countdown: { kind: 'DAYS_REMAINING', days: 3 }, determinationBasis: 'OBSERVATION_WITHOUT_RECORDED_ACTIVITY', violationAsserted: false, basisStatement: 'The period is still running and is counted from the submission date you entered.', notes: [], pendingSuggestionCount: 0 },
+  'claim-3': { claimId: 'claim-3', model: 'CALIFORNIA_CPRA', analysis: deadlineAnalysis(260540, 30, { determination: [22, 'SOURCED_DETERMINATION_EVENT'] }), countdown: { kind: 'DETERMINATION_RECORDED', days: null }, determinationBasis: 'SOURCED_DETERMINATION_EVENT', violationAsserted: false, basisStatement: 'A determination confirmed from an email is recorded on day 8 of 10.', notes: [], pendingSuggestionCount: 0 },
+  'claim-4': { claimId: 'claim-4', model: 'CALIFORNIA_CPRA', analysis: deadlineAnalysis(260615, 50, { determination: [26, 'SOURCED_DETERMINATION_EVENT'] }), countdown: { kind: 'DETERMINATION_RECORDED', days: null }, determinationBasis: 'SOURCED_DETERMINATION_EVENT', violationAsserted: true, basisStatement: 'The determination confirmed from an email is dated 24 days after submission; 10 are allowed.', notes: [], pendingSuggestionCount: 0 },
+};
 
 /** @type {import('../src/types').WatchSummary[]} */
 const WATCHES = [
@@ -573,12 +647,34 @@ const provenance = (documentId, portalKey) => ({
 });
 
 /** @param {number} requestId @param {string} portalKey @returns {import('../src/types').LegalComplianceFinding[]} */
-const legalFindings = (requestId, portalKey) => [{
-  violationId: `lv-${requestId}`, requestId, portalKey, matchedStatuteId: 'ca-cpra', matchedVersionId: 'ca-cpra-2023', mandateId: 'determination-10-day', statuteCitation: 'Gov. Code § 7922.535',
-  authorityTitle: 'California Public Records Act', mandateTitle: 'Determination within 10 days', classification: 'STATUTORY_DEADLINE', calculatedVarianceMetric: '+29 days', varianceDays: 29,
-  confidenceBasisPoints: 9000, evidenceSummary: 'Determination letter dated 39 days after submission; no valid extension notice recorded.', supportingDocumentIds: [9002], missingEvidencePhrases: [],
-  reviewStatus: 'OPEN', firstDetectedAt: iso(24 * 3), evaluatedAt: iso(3),
-}];
+const legalFinding = (requestId, portalKey, varianceDays, reviewStatus, id = `lv-${requestId}`) => ({
+  violationId: id, requestId, portalKey, matchedStatuteId: 'ca-cpra', matchedVersionId: 'ca-cpra-2023', mandateId: 'determination-10-day', statuteCitation: 'Gov. Code § 7922.535',
+  authorityTitle: 'California Public Records Act', mandateTitle: 'Determination within 10 days', classification: 'STATUTORY_DEADLINE', calculatedVarianceMetric: `+${varianceDays} days`, varianceDays,
+  confidenceBasisPoints: 9000, evidenceSummary: `Determination dated ${varianceDays + 10} days after submission; no valid extension notice recorded.`, supportingDocumentIds: [9002], missingEvidencePhrases: [],
+  reviewStatus, firstDetectedAt: iso(24 * 3), evaluatedAt: iso(3),
+});
+
+/**
+ * Stored findings per request: an open one and an older dismissed one on 26-0412, an open one
+ * measured three hours ago on the still-open 26-0533, and one re-evaluation withdrew on 26-0418.
+ */
+const legalFindings = (requestId, portalKey) => {
+  if (requestId === 26_0412) return [legalFinding(requestId, portalKey, 29, 'OPEN'), legalFinding(requestId, portalKey, 31, 'DISMISSED', `lv-${requestId}-old`)];
+  if (requestId === 26_0533) return [legalFinding(requestId, portalKey, 54, 'OPEN')];
+  if (requestId === 26_0418) return [legalFinding(requestId, portalKey, 12, 'RESOLVED_BY_NEW_EVIDENCE')];
+  if (requestId === 26_0615) return [legalFinding(requestId, portalKey, 27, 'CONFIRMED')];
+  return [];
+};
+
+/** The portal deadline read: 26-0418 has a sourced determination and an extension; any other closed request uses closure as its proxy. */
+const portalDeadline = (requestId) => {
+  const row = REQUEST_ROWS.find(([id]) => id === requestId) ?? REQUEST_ROWS[0];
+  const [, , , status, created, closed] = row;
+  const analysis = requestId === 26_0418
+    ? deadlineAnalysis(requestId, created, { allowed: 24, extension: 'VOLUMINOUS_RECORDS', determination: [created - 30, 'SOURCED_DETERMINATION_EVENT'] })
+    : deadlineAnalysis(requestId, created, { determination: closed === null ? null : [closed, 'EARLIEST_RECORDED_ACTIVITY_PROXY'] });
+  return { ...analysis, status, closedAt: closed === null ? null : iso(closed * 24) };
+};
 
 /** @type {import('../src/types').LegalAuthoritySummary[]} */
 const AUTHORITIES = [
@@ -666,6 +762,7 @@ const full = {
   read_document_original: ({ documentId }) => originalFrame(documentId),
   get_request_statutory_extension: () => null,
   list_request_legal_findings: ({ requestId, portalKey }) => legalFindings(requestId, portalKey),
+  get_portal_request_deadline: ({ requestId }) => portalDeadline(requestId),
   evaluate_request_legal_compliance: ({ requestId, portalKey }) => ({ requestId, portalKey, evaluatedMandateCount: 6, applicableMandateCount: 2, corpusCharacterCount: 18_220, evaluationComplete: true, warnings: [], findings: legalFindings(requestId, portalKey) }),
   list_legal_authorities: () => AUTHORITIES,
   list_legal_authority_versions: ({ statuteId }) => [{ versionId: `${statuteId}-v1`, statuteId, contentSha256: hex(statuteId), effectiveFrom: null, effectiveTo: null, sourceUri: null, importedAt: iso(24 * 60) }],
@@ -710,7 +807,10 @@ const full = {
   list_standing_queries: () => STANDING,
   run_standing_queries: () => [],
   list_series_number_gaps: () => ({ gaps: [{ label: 'Agreement H-24-####', prefix: 'H-24-', fromNumber: 1181, toNumber: 1184, width: 4, before: { entityId: 'e-series-h24', displayValue: 'H-24-1180', documentCount: 9 }, after: { entityId: 'e-series-h24b', displayValue: 'H-24-1185', documentCount: 2 }, seriesMemberCount: 14 }], seriesCount: 3, truncated: false }),
-  get_casework_state: () => ({ availableEvidence: CASE_CITATIONS, cases: CASES, events: [{ caseId: 'case-storage', revision: 7, author: 'R. Alvarez', at: iso(5), summary: 'Added request 26-0790' }], leads: [{ reportId: RESEARCH_REPORT.id, findingIndex: 0, title: 'Payments exceed ceiling by $236,200', nextAction: 'Request amendments', score: 82, factors: [{ label: 'Money', score: 30, maximum: 30, reason: '$236,200' }], citations: CASE_CITATIONS.slice(0, 2), caseId: 'case-storage' }] }),
+  get_casework_state: () => ({ availableEvidence: CASE_CITATIONS, cases: CASES, events: [{ caseId: 'case-storage', revision: 7, author: 'R. Alvarez', at: iso(5), summary: 'Added request 26-0790' }], leads: [
+    { reportId: RESEARCH_REPORT.id, findingIndex: 0, title: 'Payments exceed ceiling by $236,200', nextAction: 'Request amendments', score: 10, factors: leadFactors(2, 3, 2, 3), citations: CASE_CITATIONS.slice(0, 2), caseId: 'case-storage' },
+    { reportId: RESEARCH_REPORT.id, findingIndex: 1, title: 'Storage utilization report not published', nextAction: 'Ask Environmental Services for the Q1 report', score: 5, factors: leadFactors(3, 1, 1, 0), citations: CASE_CITATIONS.slice(0, 1), caseId: 'case-storage' },
+  ] }),
   get_case_scope: ({ caseId }) => ({ caseId, documents: [{ portalKey: 'sandiego', documentId: 9011 }, { portalKey: 'sandiego', documentId: 9012 }], requests: [{ portalKey: 'sandiego', requestId: 26_0418 }], findingIds: ['f-contract-ceiling'] }),
   get_record_gap_requests: () => [],
   compromised_case_imports: () => [],
@@ -731,9 +831,7 @@ const full = {
   list_affiliation_matches: () => ({ status: 'NO_MATCH_YET', candidates: [], searchedPortalCount: 4, searchedAgencyCount: 8, searchedEntityCount: 12, limitations: [] }),
   get_affiliation_disclosure: () => ({ status: 'DECLARED', sentence: 'The author is affiliated with Voice of the Bay Newsroom.', affiliations: [{ name: 'Voice of the Bay Newsroom', basis: 'SELF_DECLARED' }], ownPortalKeys: [], ownAgencies: [], ownEntityIds: [] }),
   list_claimed_requests: () => CLAIMS,
-  get_request_deadline: ({ claimId }) => claimId === 'claim-1'
-    ? { claimId, model: 'CALIFORNIA_CPRA', analysis: null, countdown: { kind: 'DEADLINE_PASSED', days: 40 }, determinationBasis: 'OBSERVATION_WITHOUT_RECORDED_ACTIVITY', violationAsserted: false, basisStatement: 'No determination is recorded. The extended period ended 40 days ago, counted from the submission date you entered.', notes: [], pendingSuggestionCount: 1 }
-    : { claimId, model: 'CALIFORNIA_CPRA', analysis: null, countdown: { kind: 'DAYS_REMAINING', days: 3 }, determinationBasis: 'OBSERVATION_WITHOUT_RECORDED_ACTIVITY', violationAsserted: false, basisStatement: 'The period is still running and is counted from the submission date you entered.', notes: [], pendingSuggestionCount: 0 },
+  get_request_deadline: ({ claimId }) => TRACKER_DEADLINES[claimId] ?? TRACKER_DEADLINES['claim-2'],
   list_resolution_candidates: () => ({ candidates: [{ pairId: 'pair-1', leftEntityId: 'e-org-harborview', rightEntityId: 'e-org-harborview-inc', evidence: { basis: 'STRONG_IDENTIFIER', left: { key: { kind: 'ORGANIZATION', value: 'harborview shelter partners' }, displayValue: 'Harborview Shelter Partners', documentCount: 38, examples: [] }, right: { key: { kind: 'ORGANIZATION', value: 'harborview shelter partners inc' }, displayValue: 'Harborview Shelter Partners, Inc.', documentCount: 6, examples: [] }, sharedIdentifier: { kind: 'EIN', displayValue: '95-4417820', leftDocuments: 4, rightDocuments: 2 }, nameVariants: ['HARBORVIEW SHELTER PTNRS'] } }], nextCursor: null, remaining: 0, scanTruncated: false, guards: { skippedNameGroups: 0, skippedIdentifiers: 0 }, ledgerHead: hex('ledger') }),
   list_resolution_ledger: () => ({ items: [], nextCursor: null, total: 0, entryCount: 0, head: hex('ledger'), summary: { byBasis: [] }, contradictions: [] }),
   get_corpus_state_digest: () => ({ digest: hex('corpus'), documentCount: 1842 }),

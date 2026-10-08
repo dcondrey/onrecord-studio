@@ -379,6 +379,20 @@ export function miniClocksHeadline(found: CaseworkCase): string {
   return `${clauses.join('; ')}.`;
 }
 
+/** The recorded response-due date as a day on the request's own axis; null when none conflicts with the model. */
+function recordedDueDay(request: CaseworkRequest): number | null {
+  const plan = request.filingPlan;
+  if (!plan || !request.responseDue || !dueConflict(request)) return null;
+  return (parseDate(request.responseDue) - parseDate(plan.filedOn)) / DAY;
+}
+
+/** Where a mini clock's end words start: past its furthest mark (bar end with chevron, deadline tick, recorded-due tick). */
+function miniEndX(x: (value: number) => number, request: CaseworkRequest): number {
+  const plan = request.filingPlan!;
+  const barEnd = x(plan.calendarDaysElapsed) + (plan.measuredTo === null ? 10 : 2);
+  return Math.max(barEnd, x(plan.allowedCalendarDays), x(recordedDueDay(request) ?? 0)) + 6;
+}
+
 function MiniPlot({ found, width, onOpen }: { found: CaseworkCase; width: number; onOpen(requestId: string): void }) {
   const tooltip = useTooltip();
   const requests = found.requests;
@@ -387,7 +401,7 @@ function MiniPlot({ found, width, onOpen }: { found: CaseworkCase; width: number
   const rowHeight = miniRowHeight(width);
   const labelColumn = stacked ? 0 : Math.min(Math.round(width * 0.45), Math.max(40, ...requests.map((request) => measureText(miniLabel(request), LABEL_FONT_12))) + 4);
   const barLeft = stacked ? 0 : labelColumn + 8;
-  const max = Math.max(1, ...requests.map((request) => request.filingPlan ? Math.max(request.filingPlan.allowedCalendarDays, request.filingPlan.calendarDaysElapsed) : 0));
+  const max = Math.max(1, ...requests.map((request) => request.filingPlan ? Math.max(request.filingPlan.allowedCalendarDays, request.filingPlan.calendarDaysElapsed, recordedDueDay(request) ?? 0) : 0));
   const endRoom = Math.max(40, ...requests.map((request) => measureText(miniEndText(request)))) + 26;
   const x = scaleLinear([0, max * 1.08], [barLeft, Math.max(barLeft + 48, width - endRoom)], { zero: true });
   const axisY = requests.length * rowHeight + 6;
@@ -424,8 +438,7 @@ function MiniPlot({ found, width, onOpen }: { found: CaseworkCase; width: number
                 <line x1={Math.round(x(plan.allowedCalendarDays)) + 0.5} x2={Math.round(x(plan.allowedCalendarDays)) + 0.5} y1={cy - 7} y2={cy + 7} style={{ stroke: REFERENCE_PAINT.statute.stroke, strokeWidth: 1 }} />
                 {dueConflict(request) && request.responseDue && (() => {
                   // The recorded due date as its own day on this request's axis, tied to the model's tick by the ≠ connector.
-                  const recordedDay = (parseDate(request.responseDue) - parseDate(plan.filedOn)) / DAY;
-                  const rx = Math.round(x(Math.max(0, recordedDay))) + 0.5;
+                  const rx = Math.round(x(Math.max(0, recordedDueDay(request) ?? 0))) + 0.5;
                   const mx = Math.round(x(plan.allowedCalendarDays)) + 0.5;
                   return (
                     <g data-due-conflict="">
@@ -437,8 +450,8 @@ function MiniPlot({ found, width, onOpen }: { found: CaseworkCase; width: number
                   );
                 })()}
                 <ClockBar x={x} y={cy - 3} thickness={6} endDay={plan.calendarDaysElapsed} deadlineDay={plan.deadlinePassedWithoutRecordedResponse ? plan.allowedCalendarDays : null} past="uncounted" open={plan.measuredTo === null} />
-                {received && <Dot cx={x(plan.calendarDaysElapsed) + (plan.measuredTo === null ? 14 : 6)} cy={cy} r={3} role="positive" title="Production received" />}
-                <text x={x(plan.calendarDaysElapsed) + (plan.measuredTo === null ? 14 : 6) + (received ? 8 : 0)} y={cy} dy="0.32em" className="viz-num fill-fg-secondary text-[11px]">
+                {received && <Dot cx={miniEndX(x, request) + 3} cy={cy} r={3} role="positive" title="Production received" />}
+                <text x={miniEndX(x, request) + (received ? 11 : 0)} y={cy} dy="0.32em" className="viz-num fill-fg-secondary text-[11px]">
                   {miniEndText(request)}
                 </text>
               </>
