@@ -90,8 +90,8 @@ impl AssetProvenance {
 
     /// Whether the asset carries a signature claim at all.
     ///
-    /// Deliberately independent of [`Self::signature_issuer`], which is now gated to `Some` only
-    /// on a validated signature: an *invalid* manifest still claims a signature (that is what
+    /// Deliberately independent of [`Self::signature_issuer`], which is `Some` only on a
+    /// validated signature: an *invalid* manifest still claims a signature (that is what
     /// failed to validate), so basing this on the issuer would render that claim as an absence.
     /// `validation` is set whenever `c2pa::Reader` actually parsed and assessed a claim's
     /// signature, which is exactly this condition, regardless of what it concluded.

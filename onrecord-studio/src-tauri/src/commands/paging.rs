@@ -1,8 +1,6 @@
 //! Exact counts and cursor pages for evidence search and entity neighbourhoods.
 //!
-//! These replace the capped reads the views once used for evidence search and
-//! `get_corpus_entity_neighborhood`: a result set is a total plus pages of any size, never a list that stopped at
-//! a ceiling.
+//! A result set is a total plus pages of any size, never a list that stopped at a ceiling.
 
 use crate::commands::query::refuse_while_indexing;
 use crate::commands::validation::{optional_portal_key, optional_text, validate_text};

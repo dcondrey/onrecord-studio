@@ -208,10 +208,9 @@ pub struct DocumentProvenanceVerification {
     ///
     /// This is true only at [`ProvenanceConfidence::TrustedChainOfCustody`], which requires the
     /// signer to chain to a configured trust anchor. No anchors are configured by default, so it
-    /// is false in a default deployment. It previously reported true whenever
-    /// recorded manifest claims looked complete, which presented stored assertions as validated
-    /// evidence. Consumers wanting the old, weaker signal should read
-    /// [`Self::provenance_confidence`] and decide explicitly what it is worth.
+    /// is false in a default deployment. Complete-looking recorded manifest claims never set it:
+    /// that would present stored assertions as validated evidence. A consumer wanting a weaker
+    /// signal reads [`Self::provenance_confidence`] and decides explicitly what it is worth.
     pub chain_of_custody_confirmed: bool,
     pub verification_errors: Vec<String>,
 }
