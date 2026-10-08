@@ -366,11 +366,15 @@ challenged and stays.
 | ca-homelessness-system | `hud_pit_veteran_counts_by_coc` | `https://www.huduser.gov/portal/sites/default/files/xls/2011-2025-PIT-Veteran-Counts-by-CoC.xlsx` (sheet `2025`) |
 | ca-homelessness-system | `hud_hic_projects` | `https://www.huduser.gov/portal/sites/default/files/xls/2025-HIC-Counts-by-State.csv` |
 
-| ca-public-money | `usaspending_hud_assistance` | `https://files.usaspending.gov/award_data_archive/FY{year}_086_Assistance_Full_{yyyymmdd}.zip`, 2007 to 2026 |
+The app's client refuses a 202 rather than keeping its empty body as the file.
 
 `usaspending_hud_assistance` is held for another reason: the archive names each file by the date
 it was generated, and the registry substitutes only `{year}`, so the URL keeps a literal
 `{yyyymmdd}` and answers 404. It needs the current file names resolved from the archive listing.
+
+| Pack | Table | URL |
+|---|---|---|
+| ca-public-money | `usaspending_hud_assistance` | `https://files.usaspending.gov/award_data_archive/FY{year}_086_Assistance_Full_{yyyymmdd}.zip`, 2007 to 2026 |
 
 The FAC files are held because `app.fac.gov/robots.txt` is `User-agent: * / Disallow: /`, which
 the app's client honours ("Portal security policy rejected the operation: 'app.fac.gov' excludes
@@ -385,9 +389,9 @@ this path through robots.txt rule '/'"):
 The HCD dashboard worksheets are held because their header is not the sheet's first row: one or
 two rows of explanatory text (or, in `ERF 2R `, a transposed layout) sit above it, and the
 worksheet reader takes the first row of the box its values span as the header. Built as listed,
-every column of `hcd_hhap1_fiscal_snapshot` was named after the banner text ("Per Health and
-Safety Code 50220 ...") and `hcd_hhap4_alternative_disbursement_plans` had no key column. They
-need a header-row setting in the registry.
+the first column of each `hcd_hhap<n>_fiscal_snapshot` was named after the banner text ("Per
+Health and Safety Code 50220 ...") and `hcd_hhap4_alternative_disbursement_plans` had no key
+column. They need a header-row setting in the registry.
 
 | Pack | Table | Worksheet of `hhap-dashboard-fiscal-snapshot.xlsx` / `erf-all-rounds-encampment-projections-and-status.xlsx` |
 |---|---|---|
