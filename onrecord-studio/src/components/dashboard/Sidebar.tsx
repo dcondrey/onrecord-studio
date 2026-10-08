@@ -4,6 +4,7 @@ import { cn } from '../../utils/cn';
 import { PRODUCT_BYLINE, PRODUCT_NAME } from '../../config/brand';
 import Icon, { type IconName } from '../ui/icons';
 import { openSourceConnector } from './sourceEvents';
+import { OPEN_COMMAND_PALETTE_EVENT } from './CommandPalette';
 import { isApplePlatform } from './NavigationControls';
 import { useWorkspaceBadges } from '../../hooks/useWorkspaceBadges';
 import { workspaceCommandRegistry } from '../../commands/registry';
@@ -89,6 +90,26 @@ export default function Sidebar() {
         </div>
 
         <nav aria-label="Primary navigation" className="shrink-0 px-2 py-3">
+          {/* The command palette's visible entry point; ⌘K is not discoverable on its own. */}
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event(OPEN_COMMAND_PALETTE_EVENT))}
+            aria-label="Open command palette"
+            aria-keyshortcuts={isApplePlatform() ? 'Meta+K' : 'Control+K'}
+            title={`Search and commands (${modifier}K)`}
+            className={cn(
+              'focus-ring mb-3 flex h-8 w-full items-center rounded-md border border-line bg-canvas text-muted transition-colors duration-fast hover:border-line-strong hover:text-fg-secondary',
+              isCollapsed ? 'justify-center' : 'gap-2 px-2',
+            )}
+          >
+            <Icon name="search" size="sm" className="shrink-0" />
+            {!isCollapsed && (
+              <>
+                <span className="min-w-0 flex-1 truncate text-left text-control font-normal">Search and commands</span>
+                <kbd aria-hidden="true" className="text-caption tabular-nums text-muted">{isApplePlatform() ? '⌘K' : 'Ctrl K'}</kbd>
+              </>
+            )}
+          </button>
           {!isCollapsed && <div className="mb-1 px-2 text-overline uppercase text-muted">Workspace</div>}
           <div className="space-y-px">
             {workspaceCommandRegistry.map((item) => {
@@ -257,8 +278,20 @@ export default function Sidebar() {
             <div className="mx-1 mt-3 rounded-lg border border-dashed border-line p-3">
               <p className="text-body font-medium text-fg-secondary">No sources yet</p>
               <p className="mt-1 text-caption text-muted">Add a records portal, website or file to start.</p>
-              <Button variant="primary" size="sm" onClick={openSourceConnector} className="mt-3 w-full">Add a source</Button>
+              {/* Secondary: the main pane's empty state carries the one primary action. */}
+              <Button size="sm" onClick={openSourceConnector} className="mt-3 w-full">Add a source</Button>
             </div>
+          )}
+
+          {workspaceInitializationStatus === 'error' && portals.length === 0 && (
+            <p
+              role="status"
+              title={isCollapsed ? 'Sources couldn’t load' : undefined}
+              className={cn('mt-px flex h-8 items-center gap-2 text-caption text-danger', isCollapsed ? 'justify-center' : 'px-2')}
+            >
+              <span className="grid h-6 w-6 shrink-0 place-items-center"><Icon name="flag" size="sm" /></span>
+              <span className={isCollapsed ? 'sr-only' : 'min-w-0 truncate'}>Sources couldn’t load</span>
+            </p>
           )}
         </nav>
 
