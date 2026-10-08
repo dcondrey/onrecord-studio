@@ -89,9 +89,11 @@ function copyFor(status: LicenseStatus | null): Copy {
 
 const SHOWS_SIGN_IN: ReadonlySet<LicenseState> = new Set(['SIGN_IN_REQUIRED', 'UNVERIFIED', 'BUNDLE_MISMATCH']);
 
-function sameWords(left: string, right: string): boolean {
-  const normalize = (text: string) => text.trim().toLowerCase().split('.').join('');
-  return normalize(left) === normalize(right);
+/** True when every word of `message` already appears in `shown`, so repeating it adds nothing. */
+function sameWords(message: string, shown: string): boolean {
+  const words = (text: string) => text.toLowerCase().split('.').join('').split(' ').filter(Boolean);
+  const present = new Set(words(shown));
+  return words(message).every((word) => present.has(word));
 }
 
 /** The server counts "devices"; everything this screen says counts Macs. */
