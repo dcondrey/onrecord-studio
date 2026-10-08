@@ -14,6 +14,12 @@ fn derives_stable_javascript_safe_archive_entry_identifiers() {
 
     assert_eq!(first, repeated);
     assert_ne!(first, different);
+    // The same member gets the same identifier on every platform, and the value never drifts.
+    assert_eq!(
+        first,
+        archive_entry_id(42, &digest, 1, &Path::new("folder").join("evidence.txt"))
+    );
+    assert_eq!(first, 6_017_228_482_553_958);
     assert!(first >= SYNTHETIC_DOCUMENT_NAMESPACE);
     assert!(first < (1_u64 << 53));
 }

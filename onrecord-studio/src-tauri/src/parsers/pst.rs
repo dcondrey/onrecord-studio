@@ -1122,8 +1122,10 @@ mod tests {
     fn relative(directory: &tempfile::TempDir, path: &Path) -> String {
         path.strip_prefix(directory.path().join("contents"))
             .expect("inside destination")
-            .to_string_lossy()
-            .into_owned()
+            .components()
+            .map(|component| component.as_os_str().to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("/")
     }
 
     #[test]

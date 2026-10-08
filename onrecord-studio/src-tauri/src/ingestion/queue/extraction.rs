@@ -439,7 +439,7 @@ async fn expand_container(
             description: Some(format!(
                 "Extracted from document {} at {}",
                 source_document.id,
-                relative_path.display()
+                member_path(relative_path)
             )),
             content_type: None,
             download_url: None,
@@ -659,12 +659,28 @@ pub(super) fn archive_entry_id(
     digest.update(source_document_id.to_le_bytes());
     digest.update((container_depth as u64).to_le_bytes());
     digest.update(raw_file_sha256.as_bytes());
-    digest.update(relative_path.as_os_str().as_encoded_bytes());
+    // Hashed as the '/'-joined member path, not the OS path, so a container yields the same
+    // document identifiers on Windows as on Unix (where the bytes are unchanged).
+    for (index, component) in relative_path.components().enumerate() {
+        if index > 0 {
+            digest.update(b"/");
+        }
+        digest.update(component.as_os_str().as_encoded_bytes());
+    }
     let hash = digest.finalize();
     let mut identifier_bytes = [0_u8; 8];
     identifier_bytes.copy_from_slice(&hash[..8]);
     let identifier = u64::from_le_bytes(identifier_bytes);
     SYNTHETIC_DOCUMENT_NAMESPACE | (identifier & (SYNTHETIC_DOCUMENT_NAMESPACE - 1))
+}
+
+/// The location of an extracted entry inside its container, '/'-separated on every platform.
+fn member_path(relative_path: &Path) -> String {
+    relative_path
+        .components()
+        .map(|component| component.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 fn is_empty_ocr(error: &AppError) -> bool {
