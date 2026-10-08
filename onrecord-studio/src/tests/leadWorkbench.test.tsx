@@ -7,23 +7,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { StoryLead } from '../types';
 
-vi.hoisted(() => {
-  const entries = new Map<string, string>();
-  Object.defineProperty(globalThis, 'localStorage', {
-    configurable: true,
-    value: {
-      getItem: (key: string) => entries.get(key) ?? null,
-      setItem: (key: string, value: string) => void entries.set(key, String(value)),
-      removeItem: (key: string) => void entries.delete(key),
-      clear: () => entries.clear(),
-      key: (index: number) => [...entries.keys()][index] ?? null,
-      get length() {
-        return entries.size;
-      },
-    },
-  });
-});
-
 const bridge = vi.hoisted(() => ({
   leads: [] as ((leads: unknown) => void)[],
   dossiers: new Map<string, (dossier: unknown) => void>(),
