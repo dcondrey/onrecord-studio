@@ -8,6 +8,7 @@ use crate::integrity::{
     rotate_signing_key, sha256_hex, sign_package, verify_package, verify_package_detailed,
     SignedPackage, SIGNATURE_ALGORITHM,
 };
+use crate::report::output::{commit_new_file, validate_output_path_with_extension};
 use crate::storage::casework::{EXPORT_OUTCOME_FAILED, EXPORT_OUTCOME_WRITTEN};
 use crate::storage::pii::mask_pii;
 use crate::storage::sqlite::{DuckDbRepository, EvidenceDocument, LegalBriefEvidence};
@@ -21,8 +22,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use tauri::State;
-use tokio::io::AsyncWriteExt;
-use uuid::Uuid;
 
 const REPORT_TEMPLATE: &str = include_str!("../../../templates/report_template.md");
 /// Embedded so an installed app can produce a package's verifier alongside it. The UI must never
@@ -221,7 +220,8 @@ pub async fn export_legal_brief(
             .to_string_lossy()
             .into_owned()
     });
-    let output_path = validate_report_path(&target_path, &report_directory, "md").await?;
+    let output_path =
+        validate_output_path_with_extension(&target_path, &report_directory, "md").await?;
     let package_path = output_path.with_extension("evidence.json");
     if tokio::fs::try_exists(&package_path)
         .await
@@ -293,8 +293,8 @@ pub async fn export_legal_brief(
         )));
     }
     let package_sha256 = sha256_hex(&package_bytes);
-    commit_new_report(&output_path, report.as_bytes()).await?;
-    if let Err(error) = commit_new_report(&package_path, &package_bytes).await {
+    commit_new_file(&output_path, report.as_bytes()).await?;
+    if let Err(error) = commit_new_file(&package_path, &package_bytes).await {
         return match tokio::fs::remove_file(&output_path).await {
             Ok(()) => Err(error),
             Err(cleanup_error) => Err(AppError::Export(format!(
@@ -358,7 +358,8 @@ pub async fn export_case_evidence_package(
     // Resolved and checked for a pre-existing file *before* the export is signed and the ledger
     // sequence reserved, so a bad output path (the overwhelmingly common failure) never burns a
     // position in the case's append-only export chain.
-    let output_path = validate_report_path(&target_path, &report_directory, "json").await?;
+    let output_path =
+        validate_output_path_with_extension(&target_path, &report_directory, "json").await?;
     let signing_key = load_or_create_signing_key(&key_directory.0).await?;
     let verifiers = ensure_verifier_script(&report_directory).await?;
     let generated_at = chrono::Utc::now().to_rfc3339();
@@ -393,7 +394,7 @@ pub async fn export_case_evidence_package(
         )));
     }
     let package_sha256 = sha256_hex(&package_bytes);
-    if let Err(error) = commit_new_report(&output_path, &package_bytes).await {
+    if let Err(error) = commit_new_file(&output_path, &package_bytes).await {
         // The ledger reservation for `sequence` now stands with no confirmed outcome; a chain
         // reader must see it as "reserved, not written," never silently as delivered or as a gap
         // that looks like a withheld export. Recording the failure is best-effort: if it too fails,
@@ -475,7 +476,8 @@ pub async fn export_request_filing_record(
             .to_string_lossy()
             .into_owned()
     });
-    let output_path = validate_report_path(&target_path, &report_directory, "json").await?;
+    let output_path =
+        validate_output_path_with_extension(&target_path, &report_directory, "json").await?;
     let signing_key = load_or_create_signing_key(&key_directory.0).await?;
     let verifiers = ensure_verifier_script(&report_directory).await?;
     let generated_at = chrono::Utc::now().to_rfc3339();
@@ -495,7 +497,7 @@ pub async fn export_request_filing_record(
         )));
     }
     let package_sha256 = sha256_hex(&package_bytes);
-    commit_new_report(&output_path, &package_bytes).await?;
+    commit_new_file(&output_path, &package_bytes).await?;
     Ok(RequestFilingRecordResult {
         case_id,
         request_id,
@@ -1057,98 +1059,6 @@ fn validate_template_variables() -> Result<(), AppError> {
         }
         remainder = &remainder[end + 2..];
     }
-    Ok(())
-}
-
-/// Shared by every export command that writes to the managed report directory. `allowed_extension`
-/// exists because each caller's output is a different, fixed format: `export_legal_brief` always
-/// writes `.md`, `export_case_evidence_package` always writes `.json`. This is not a general path
-/// validator; a caller that accepted either extension for both exports would let a legal brief
-/// silently overwrite where a chain-of-custody package was expected, or vice versa.
-async fn validate_report_path(
-    value: &str,
-    output_root: &Path,
-    allowed_extension: &str,
-) -> Result<PathBuf, AppError> {
-    let path = PathBuf::from(value.trim());
-    if path.as_os_str().is_empty()
-        || !path
-            .extension()
-            .and_then(|value| value.to_str())
-            .is_some_and(|extension| extension.eq_ignore_ascii_case(allowed_extension))
-    {
-        return Err(AppError::Export(format!(
-            "Output must be a non-empty .{allowed_extension} file path"
-        )));
-    }
-    if tokio::fs::try_exists(&path)
-        .await
-        .map_err(|error| AppError::Export(format!("Failed to inspect report path: {error}")))?
-    {
-        return Err(AppError::Export(format!(
-            "Report path '{}' already exists; evidence exports are never overwritten",
-            path.display()
-        )));
-    }
-    let parent = path
-        .parent()
-        .filter(|value| !value.as_os_str().is_empty())
-        .ok_or_else(|| AppError::Export("Output must include a parent directory".to_string()))?;
-    let parent = tokio::fs::canonicalize(parent).await.map_err(|error| {
-        AppError::Export(format!("Report parent directory is inaccessible: {error}"))
-    })?;
-    let output_root = tokio::fs::canonicalize(output_root)
-        .await
-        .map_err(|error| {
-            AppError::Export(format!("Managed report directory is inaccessible: {error}"))
-        })?;
-    if !parent.starts_with(&output_root) {
-        return Err(AppError::Export(
-            "Exports are restricted to the managed report directory".to_string(),
-        ));
-    }
-    let file_name = path
-        .file_name()
-        .ok_or_else(|| AppError::Export("Output has no file name".to_string()))?;
-    Ok(parent.join(file_name))
-}
-
-async fn commit_new_report(path: &Path, bytes: &[u8]) -> Result<(), AppError> {
-    let parent = path.parent().ok_or_else(|| {
-        AppError::Export("Legal brief output has no parent directory".to_string())
-    })?;
-    let temporary = parent.join(format!(".onrecord-report-{}.tmp", Uuid::new_v4()));
-    let mut file = tokio::fs::OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .open(&temporary)
-        .await
-        .map_err(|error| {
-            AppError::Export(format!("Failed to create report staging file: {error}"))
-        })?;
-    if let Err(error) = file.write_all(bytes).await {
-        drop(file);
-        let _ = tokio::fs::remove_file(&temporary).await;
-        return Err(AppError::Export(format!("Failed to write report: {error}")));
-    }
-    if let Err(error) = file.sync_all().await {
-        drop(file);
-        let _ = tokio::fs::remove_file(&temporary).await;
-        return Err(AppError::Export(format!("Failed to sync report: {error}")));
-    }
-    drop(file);
-    if let Err(error) = tokio::fs::hard_link(&temporary, path).await {
-        let cleanup_error = tokio::fs::remove_file(&temporary).await.err();
-        return Err(AppError::Export(format!(
-            "Failed to commit report: {error}{}",
-            cleanup_error
-                .map(|cleanup| format!("; staging cleanup also failed: {cleanup}"))
-                .unwrap_or_default()
-        )));
-    }
-    // The final report is already committed at this point; a stale hidden staging link
-    // must not turn a successful, non-overwriting export into a misleading failure.
-    let _ = tokio::fs::remove_file(&temporary).await;
     Ok(())
 }
 
