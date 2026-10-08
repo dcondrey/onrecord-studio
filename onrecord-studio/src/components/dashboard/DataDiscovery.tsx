@@ -219,10 +219,12 @@ function GroupsFigure({ result, plan, sources, onInspect }: { result: SqlQueryRe
       status={result.rowCount === 0 ? 'empty' : 'ready'}
       emptyText="No matching results for this check."
       rowHeader={plan.selection.dimension || 'Group'}
+      layout="stacked"
+      hatchLabel="Values missing (outside the measure)"
       columns={[
-        { key: 'value', label: plan.selection.aggregation === 'count' ? 'Records' : plan.selection.aggregation === 'sum' ? 'Sum' : 'Mean', scale: 'own-max', barWidth: 96 },
-        { key: 'share', label: 'Share of records', scale: 'own-0-100', barWidth: 56 },
-        ...(anyMissing ? [{ key: 'missing', label: 'Values missing', note: 'outside the measure', scale: 'own-max' as const, hatched: true, barWidth: 40 }] : []),
+        { key: 'value', label: plan.selection.aggregation === 'count' ? 'Records' : plan.selection.aggregation === 'sum' ? 'Sum' : 'Mean', scale: 'own-max', barWidth: 88 },
+        { key: 'share', label: 'Share of records', scale: 'own-0-100', barWidth: 48 },
+        ...(anyMissing ? [{ key: 'missing', label: 'Missing', note: 'outside the measure', scale: 'own-max' as const, hatched: true, barWidth: 36 }] : []),
       ]}
       rows={rows}
       onRowActivate={(key) => { const row = byKey.get(key); if (row) onInspect(discoveryDrilldown(plan, row[at('group_value')])); }}
@@ -283,6 +285,7 @@ function QualityFigure({ result, sources }: { result: SqlQueryResult; sources: C
       status={result.rowCount === 0 ? 'empty' : 'ready'}
       rowHeader="Column"
       columns={[{ key: 'reported', label: 'Reported', note: 'hatched: missing', scale: 'own-0-100', barWidth: 120 }]}
+      hatchLabel="Missing share"
       rows={rows}
       twin={{
         caption: 'Column completeness',

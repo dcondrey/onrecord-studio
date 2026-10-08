@@ -161,7 +161,9 @@ export default function SeriesSmallMultiples(props: SeriesSmallMultiplesProps) {
         {({ width }) => {
           const cols = columnsFor(width, panels.length);
           const panelWidth = (width - (cols - 1) * GAP_X) / cols;
-          const xs = slots.map((_, i) => (slots.length === 1 ? LEFT + (panelWidth - LEFT - RIGHT) / 2 : LEFT + (i * (panelWidth - LEFT - RIGHT)) / (slots.length - 1)));
+          // Direct end labels need room past the last point; a single line has none.
+          const right = Math.max(RIGHT, ...panels.filter((panel) => panel.lines.length > 1).flatMap((panel) => panel.lines.map((line) => measureText(line.label) + 16)));
+          const xs = slots.map((_, i) => (slots.length === 1 ? LEFT + (panelWidth - LEFT - right) / 2 : LEFT + (i * (panelWidth - LEFT - right)) / (slots.length - 1)));
           const x = (i: number) => xs[i];
           const yOf = (extent: [number, number] | null): ContinuousScale => scaleLinear(extent ?? [0, 1], [TITLE_HEIGHT + PANEL_HEIGHT, TITLE_HEIGHT + 6], { zero });
           const shared = yOf(sharedExtent);
@@ -220,7 +222,7 @@ export default function SeriesSmallMultiples(props: SeriesSmallMultiplesProps) {
                 {panel.value && <text x={panelWidth} y={14} textAnchor="end" className={LABEL_CLASS}>{panel.value}</text>}
                 {ticks.map((tick) => (
                   <g key={tick} aria-hidden="true">
-                    <line x1={LEFT} x2={panelWidth - RIGHT} y1={Math.round(y(tick)) + 0.5} y2={Math.round(y(tick)) + 0.5} style={{ stroke: tick === 0 ? VIZ.baseline : VIZ.grid, strokeWidth: 1 }} />
+                    <line x1={LEFT} x2={xs[xs.length - 1] ?? panelWidth - right} y1={Math.round(y(tick)) + 0.5} y2={Math.round(y(tick)) + 0.5} style={{ stroke: tick === 0 ? VIZ.baseline : VIZ.grid, strokeWidth: 1 }} />
                     <text x={LEFT - 6} y={y(tick)} dy="0.32em" textAnchor="end" className={TICK_CLASS}>{formatValue(tick, { kind, compact: true, digits: step < 1 ? 1 : undefined })}</text>
                   </g>
                 ))}

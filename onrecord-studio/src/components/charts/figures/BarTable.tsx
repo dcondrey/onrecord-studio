@@ -1,4 +1,4 @@
-import { Fragment, useId, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { cn } from '../../../utils/cn';
 import Badge from '../../ui/Badge';
 import Button from '../../ui/Button';
@@ -12,6 +12,7 @@ import { TableTwin, type TwinTable } from '../frame/TableTwin';
 import { TooltipContent, type TooltipRow } from '../frame/Tooltip';
 import { HatchProvider, VizDefs, useHatchFill, useSvgId } from '../frame/VizDefs';
 import { ChartMotionContext, useChartMotion } from '../hooks/useChartMotion';
+import { useChartSize } from '../hooks/useChartSize';
 import { useDrillDown } from '../hooks/useDrillDown';
 import { useRovingFocus } from '../hooks/useRovingFocus';
 import { useTooltip } from '../hooks/useTooltip';
@@ -113,6 +114,8 @@ export interface BarTableProps {
   footer?: ReactNode;
   /** 'stacked' sets each value above its bar, for tables with many narrow columns. */
   layout?: 'inline' | 'stacked';
+  /** What the hatch stands for here ('Missing values'), when 'Outside this measure' is too general. */
+  hatchLabel?: string;
   className?: string;
 }
 
@@ -211,6 +214,11 @@ export default function BarTable(props: BarTableProps) {
   const drillDown = useDrillDown();
   const [view, setView] = useState<'chart' | 'table'>('chart');
   const showsData = status === 'ready' || status === 'stale';
+  const frameRef = useRef<HTMLElement>(null);
+  const { width } = useChartSize(frameRef, { fallbackWidth: 1024 });
+  // Too narrow for a name column beside the values: each row's name moves to a line above them.
+  const narrow = width > 0 && width < 160 + columns.length * (props.layout === 'stacked' ? 70 : 110);
+  const span = columns.length + (narrow ? 0 : 1);
   const maxes = useMemo(() => {
     const byGroup = new Map<string, number[]>();
     for (const row of rows) {
@@ -220,7 +228,7 @@ export default function BarTable(props: BarTableProps) {
     return byGroup;
   }, [columns, rows, props.sharedMax]);
   const mins = useMemo(() => columns.map((column) => columnMin(column, rows)), [columns, rows]);
-  const legend = [...(props.legend ?? []), ...absenceLegend(absenceStatesOf(rows, columns))];
+  const legend = [...(props.legend ?? []), ...absenceLegend(absenceStatesOf(rows, columns)).map((item) => (item.key === 'absence-excluded' && props.hatchLabel ? { ...item, label: props.hatchLabel } : item))];
 
   const keyOf = (rowKey: string, columnKey: string | null) => (drill?.mode === 'cell' && columnKey ? `${rowKey}\u0000${columnKey}` : rowKey);
   const activate = (i: number, j: number | undefined) => {
@@ -257,7 +265,7 @@ export default function BarTable(props: BarTableProps) {
         <table aria-labelledby={titleId} className="w-full border-collapse text-body">
           <thead>
             <tr>
-              <th scope="col" className="border-b border-line px-2 pb-2 text-left align-bottom text-caption font-medium text-fg-secondary">{props.rowHeader}</th>
+              {!narrow && <th scope="col" className="border-b border-line px-2 pb-2 text-left align-bottom text-caption font-medium text-fg-secondary">{props.rowHeader}</th>}
               {columns.map((column) => {
                 const sorted = sort?.key === column.key;
                 const label = (
@@ -295,9 +303,21 @@ export default function BarTable(props: BarTableProps) {
                 <Fragment key={row.key}>
                   {row.group && row.group.key !== rows[i - 1]?.group?.key && (
                     <tr>
-                      <th scope="colgroup" colSpan={columns.length + 1} className="border-b border-line px-2 pb-1 pt-3 text-left text-caption font-medium text-fg">
+                      <th scope="colgroup" colSpan={span} className="border-b border-line px-2 pb-1 pt-3 text-left text-caption font-medium text-fg">
                         {row.group.label}
                         {row.group.note && <span className="ml-2 font-normal text-muted">{row.group.note}</span>}
+                      </th>
+                    </tr>
+                  )}
+                  {narrow && (
+                    <tr>
+                      <th scope="row" colSpan={span} className="px-2 pt-2 text-left font-normal">
+                        {row.header}
+                        {drill?.mode === 'row' && (
+                          <button type="button" {...drillDown.buttonProps(row.key)} className="focus-ring mt-1 block rounded text-caption text-muted hover:text-fg">
+                            {rowOpen ? 'Hide details' : 'Details'}
+                          </button>
+                        )}
                       </th>
                     </tr>
                   )}
@@ -309,14 +329,16 @@ export default function BarTable(props: BarTableProps) {
                       rowOpen && 'bg-raised/40 outline outline-2 -outline-offset-2 outline-focus',
                     )}
                   >
-                    <th scope="row" className="min-w-[10rem] px-2 py-2 text-left font-normal">
-                      {row.header}
-                      {drill?.mode === 'row' && (
-                        <button type="button" {...drillDown.buttonProps(row.key)} className="focus-ring mt-1 block rounded text-caption text-muted hover:text-fg">
-                          {rowOpen ? 'Hide details' : 'Details'}
-                        </button>
-                      )}
-                    </th>
+                    {!narrow && (
+                      <th scope="row" className="min-w-[10rem] px-2 py-2 text-left font-normal">
+                        {row.header}
+                        {drill?.mode === 'row' && (
+                          <button type="button" {...drillDown.buttonProps(row.key)} className="focus-ring mt-1 block rounded text-caption text-muted hover:text-fg">
+                            {rowOpen ? 'Hide details' : 'Details'}
+                          </button>
+                        )}
+                      </th>
+                    )}
                     {columns.map((column, j) => {
                       const cell = row.cells[column.key];
                       const item = roving.getItemProps(i, j);
@@ -368,7 +390,7 @@ export default function BarTable(props: BarTableProps) {
                   </tr>
                   {drill && expansionKey && (
                     <tr>
-                      <td colSpan={columns.length + 1} className={cn('p-0', drillDown.expanded === expansionKey && 'border-b border-line')}>
+                      <td colSpan={span} className={cn('p-0', drillDown.expanded === expansionKey && 'border-b border-line')}>
                         <div {...drillDown.regionProps(expansionKey)}>
                           {/* A collapsed region stays mounted so it can animate open, but out of reach. */}
                           <div className="min-h-0 overflow-hidden" {...(drillDown.expanded === expansionKey ? {} : { inert: '', 'aria-hidden': true })}>
@@ -388,7 +410,7 @@ export default function BarTable(props: BarTableProps) {
   }
 
   return (
-    <figure aria-labelledby={titleId} aria-describedby={summaryId} className={cn('m-0 grid min-w-0 gap-3', className)}>
+    <figure ref={frameRef} aria-labelledby={titleId} aria-describedby={summaryId} className={cn('m-0 grid min-w-0 gap-3', className)}>
       <svg width={0} height={0} aria-hidden="true" className="absolute">
         <VizDefs hatchId={hatchId} />
       </svg>

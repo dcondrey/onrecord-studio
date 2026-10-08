@@ -473,6 +473,7 @@ function PaymentBars({ lines }: { lines: PublicMoneyLine[] }) {
       status={ordered.length ? 'ready' : 'empty'}
       emptyText="Every payment row is undated."
       rowHeader="City fiscal year"
+      hatchLabel="Rows with an unreadable amount"
       columns={[
         { key: 'amount', label: 'Paid', scale: 'own-max', barWidth: 120 },
         ...(ordered.some((group) => group.unread) ? [{ key: 'unread', label: 'Rows not summed', note: 'amount unreadable', scale: 'own-max' as const, hatched: true, barWidth: 32 }] : []),
