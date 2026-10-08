@@ -7,11 +7,13 @@ export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'dest
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 const VARIANT: Record<ButtonVariant, string> = {
-  primary: 'bg-accent text-on-accent hover:bg-accent/90 active:bg-accent/80',
+  // A disabled fill drops to the neutral surface, not to a faded accent: in dark a half-opacity
+  // cyan still reads as live.
+  primary: 'bg-accent text-on-accent hover:bg-accent/90 active:bg-accent/80 disabled:bg-raised disabled:text-muted disabled:opacity-100',
   secondary: 'border border-line-strong bg-canvas/70 text-fg hover:bg-raised',
   ghost: 'text-fg-secondary hover:bg-raised hover:text-fg',
   danger: 'border border-danger/30 text-danger hover:bg-danger/10',
-  destructive: 'bg-danger text-on-accent hover:bg-danger/90 active:bg-danger/80',
+  destructive: 'bg-danger text-on-danger hover:bg-danger/90 active:bg-danger/80 disabled:bg-raised disabled:text-muted disabled:opacity-100',
   link: 'text-accent underline-offset-2 hover:underline',
 };
 

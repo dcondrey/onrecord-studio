@@ -12,6 +12,7 @@ import {
 import Button from '../ui/Button';
 import Dialog, { DialogBody, DialogFooter, DialogHeader } from '../ui/Dialog';
 import { Input } from '../ui/Field';
+import InlineError from '../ui/InlineError';
 import { useProfile } from './useProfile';
 import WorkEmailVerification from './WorkEmailVerification';
 
@@ -120,9 +121,14 @@ function sameDraft(left: ReturnType<typeof draftFromProfile>, right: ReturnType<
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-/** A field's character count, under the field so it is not part of the field's name. */
-function Counter({ id, used, limit }: { id: string; used: number; limit: number }) {
-  return <p id={id} className="mt-1 text-right text-caption tabular-nums text-muted">{used}/{limit}</p>;
+/** A field's label with its character count on the same line; the count describes the field, it does not name it. */
+function LabelRow({ htmlFor, label, countId, used, limit }: { htmlFor?: string; label: string; countId?: string; used: number; limit: number }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      {htmlFor ? <label htmlFor={htmlFor} className="text-control text-fg-secondary">{label}</label> : <span className="text-control text-fg-secondary">{label}</span>}
+      <span id={countId} className="text-caption tabular-nums text-muted">{used}/{limit}</span>
+    </div>
+  );
 }
 
 export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
@@ -157,6 +163,7 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
 
   // Saving before the stored profile is read would write an empty profile over it.
   const dirty = profile.loaded && !sameDraft(draft, draftFromProfile(stored));
+  const failedToRead = !profile.loaded && Boolean(profile.error);
   const save = async () => {
     const ok = await profile.save({
       displayName: draft.displayName.trim() === '' ? null : draft.displayName,
@@ -175,11 +182,8 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
         description="Affiliation is self-declared and stored only on this Mac. It never changes a finding, confidence, severity, statutory result or ranking; it only filters, highlights and adds a disclosure to what you export."
       />
       <DialogBody className="text-body text-fg-secondary">
-        {!profile.loaded && profile.error ? (
-          <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3">
-            <p className="text-danger">Your profile could not be read. {profile.error}</p>
-            <Button size="sm" onClick={profile.refresh}>Try again</Button>
-          </div>
+        {failedToRead ? (
+          <InlineError summary={`Your profile could not be read. ${profile.error}`} onRetry={profile.refresh} />
         ) : !profile.loaded ? (
           <div role="status" aria-busy="true" className="flex flex-col gap-3">
             <span className="sr-only">Loading your profile</span>
@@ -189,8 +193,8 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
         ) : (
           <>
             {profile.error && <p role="alert" className="mb-3 text-danger">{profile.error}</p>}
-            {profile.state?.status === 'UNSET' && <p className="mb-3 text-muted">No profile is set.</p>}
-            <label htmlFor={`${ids}-name`} className="text-control text-fg-secondary">Display name</label>
+            {profile.state?.status === 'UNSET' && <p className="mb-4 text-muted">No profile is set yet. Add a name or an organization and save to create one.</p>}
+            <LabelRow htmlFor={`${ids}-name`} label="Display name" countId={`${ids}-name-count`} used={draft.displayName.length} limit={PROFILE_LIMITS.displayName} />
             <Input
               id={`${ids}-name`}
               value={draft.displayName}
@@ -199,15 +203,14 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
               onChange={(event) => setDraft({ ...draft, displayName: event.target.value })}
               className="mt-1.5"
             />
-            <Counter id={`${ids}-name-count`} used={draft.displayName.length} limit={PROFILE_LIMITS.displayName} />
 
-            <div className="mt-4 flex items-baseline justify-between">
+            <div className="mt-6 flex items-baseline justify-between">
               <h3 className="text-heading text-fg">Organizations</h3>
               <span className="text-caption tabular-nums text-muted">{draft.affiliations.length}/{PROFILE_LIMITS.affiliations}</span>
             </div>
             {draft.affiliations.map((affiliation, index) => (
-              <fieldset key={affiliation.id ?? `new-${index}`} className="mt-2 rounded-lg border border-line p-3">
-                <label htmlFor={`${ids}-org-${index}`} className="text-control text-fg-secondary">Organization name</label>
+              <fieldset key={affiliation.id ?? `new-${index}`} className="mt-3 rounded-xl border border-line bg-panel/60 p-4">
+                <LabelRow htmlFor={`${ids}-org-${index}`} label="Organization name" countId={`${ids}-org-${index}-count`} used={affiliation.name.length} limit={PROFILE_LIMITS.affiliationName} />
                 <Input
                   id={`${ids}-org-${index}`}
                   value={affiliation.name}
@@ -216,10 +219,8 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
                   onChange={(event) => updateAffiliation(index, { ...affiliation, name: event.target.value })}
                   className="mt-1.5"
                 />
-                <Counter id={`${ids}-org-${index}-count`} used={affiliation.name.length} limit={PROFILE_LIMITS.affiliationName} />
-                <div className="flex items-baseline justify-between text-control text-fg-secondary">
-                  <span>Aliases</span>
-                  <span className="text-caption tabular-nums text-muted">{affiliation.aliases.length}/{PROFILE_LIMITS.aliasesPerAffiliation}</span>
+                <div className="mt-4">
+                  <LabelRow label="Aliases" used={affiliation.aliases.length} limit={PROFILE_LIMITS.aliasesPerAffiliation} />
                 </div>
                 {affiliation.aliases.map((alias, aliasIndex) => (
                   <div key={aliasIndex} className="mt-1.5 flex items-center gap-1">
@@ -248,7 +249,7 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
                     />
                   </div>
                 ))}
-                <div className="mt-2 flex gap-2">
+                <div className="mt-2 flex items-center gap-2">
                   <Button
                     size="sm"
                     disabled={affiliation.aliases.length >= PROFILE_LIMITS.aliasesPerAffiliation}
@@ -259,6 +260,7 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
                   <Button
                     variant="ghost"
                     size="sm"
+                    className="ml-auto text-danger hover:bg-danger/10 hover:text-danger"
                     onClick={() =>
                       setDraft((current) => ({
                         ...current,
@@ -290,8 +292,9 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
               Add organization
             </Button>
 
-            <h3 className="mt-5 text-heading text-fg">Matches</h3>
-            {profile.matches && (
+            {/* Matching needs a declared name to compare; before a profile exists there is nothing to report. */}
+            {stored && <h3 className="mt-6 text-heading text-fg">Matches</h3>}
+            {stored && profile.matches && (
               <div className="mt-1">
                 <MatchStatusNotice list={profile.matches} />
                 <ul className="mt-2 flex flex-col gap-2" aria-label="Affiliation match candidates">
@@ -332,8 +335,8 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
               >
                 Open records self-review
               </Button>
-              {!confirmingDelete ? (
-                <Button variant="danger" size="sm" disabled={!stored} onClick={() => setConfirmingDelete(true)} className="ml-auto">
+              {!stored ? null : !confirmingDelete ? (
+                <Button variant="danger" size="sm" onClick={() => setConfirmingDelete(true)} className="ml-auto">
                   Delete local profile
                 </Button>
               ) : (
@@ -359,11 +362,17 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
         )}
       </DialogBody>
       <DialogFooter>
-        {saved && <p role="status" className="mr-auto text-caption text-success">Saved</p>}
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="primary" disabled={!dirty || profile.isBusy} onClick={() => void save()}>
-          Save
-        </Button>
+        {failedToRead ? (
+          <Button onClick={onClose}>Close</Button>
+        ) : (
+          <>
+            {saved && <p role="status" className="mr-auto text-caption text-success">Saved</p>}
+            <Button onClick={onClose}>Cancel</Button>
+            <Button variant="primary" disabled={!dirty || profile.isBusy} onClick={() => void save()}>
+              Save
+            </Button>
+          </>
+        )}
       </DialogFooter>
     </Dialog>
   );
