@@ -12,18 +12,15 @@ import Table, { Td, Th } from '../ui/Table';
 import { openSourceConnector } from './sourceEvents';
 import ObjectLink from '../objects/ObjectLink';
 import DispositionCounts from './DispositionCounts';
+import DepartmentLedger, {
+  isSlowerThanPeers,
+  NO_MEASURABLE_CLOSURE,
+  PEER_LATENCY_OUTLIER_Z_SCORE,
+  SLOWER_THAN_PEERS,
+  SMALL_SAMPLE_CLOSURES,
+} from '../charts/figures/DepartmentLedger';
 
-/**
- * Mirrors `STATUTORY_DEADLINE_Z_SCORE` in `src-tauri/src/analysis/anomaly.rs`, which is not
- * exposed over IPC. Like the backend, only a positive score qualifies: a z-score this far below
- * the mean is faster than peers, and calling it "slower" would be a false statement.
- */
-export const PEER_LATENCY_OUTLIER_Z_SCORE = 2.0;
-
-/** Below this many measured closures a single closure moves the average by a fifth or more. */
-const SMALL_SAMPLE_CLOSURES = 5;
-
-export const NO_MEASURABLE_CLOSURE = 'no measurable closure';
+export { NO_MEASURABLE_CLOSURE, PEER_LATENCY_OUTLIER_Z_SCORE };
 
 type ComparisonColumn =
   | 'averageClosureDays'
@@ -57,7 +54,7 @@ const COLUMNS: readonly ColumnDefinition[] = [
   },
   { key: 'validLatencySampleSize', label: 'Measured closures', full: 'Closures with a measurable latency', format: (p) => p.validLatencySampleSize.toLocaleString() },
   { key: 'statutoryViolationCount', label: 'Violations', full: 'Counted statutory violations', format: (p) => p.statutoryViolationCount.toLocaleString() },
-  { key: 'statutoryViolationRate', label: 'Violation rate', full: 'Share of measured requests past the statutory deadline', format: (p) => `${(p.statutoryViolationRate * 100).toFixed(1)}%` },
+  { key: 'statutoryViolationRate', label: 'Violation rate', full: 'Counted statutory violations as a share of all requests', format: (p) => `${(p.statutoryViolationRate * 100).toFixed(1)}%` },
   {
     key: 'suspiciousFastClosureCount',
     label: 'Fast closures',
@@ -72,10 +69,6 @@ const DEFAULT_COLUMN: ComparisonColumn = 'averageClosureDays';
 
 /** Two-word headers wrap onto two lines, bottom-aligned, so every column fits at 1280. */
 const NUMERIC_HEADER = 'h-auto min-w-[5rem] whitespace-normal px-2 py-2 align-bottom leading-4';
-
-function isPeerLatencyOutlier(profile: AgencyPerformanceProfile): boolean {
-  return profile.performanceZScore !== null && profile.performanceZScore >= PEER_LATENCY_OUTLIER_Z_SCORE;
-}
 
 /**
  * Descending order on the column, with an absent measurement (`null`) always last regardless of
@@ -110,6 +103,7 @@ export default function AgencyComparison() {
   const analyticsStatus = useAppStore((s) => s.analyticsStatus);
   const requestAnalyticsRefresh = useAppStore((s) => s.requestAnalyticsRefresh);
   const setWorkspaceView = useAppStore((s) => s.setWorkspaceView);
+  const inspect = useAppStore((s) => s.inspect);
   const savedSources = useAppStore((s) => s.portals);
   const [column, setColumn] = useState<ComparisonColumn>(DEFAULT_COLUMN);
   const [direction, setDirection] = useState<'asc' | 'desc'>('desc');
@@ -186,16 +180,27 @@ export default function AgencyComparison() {
             />
           )
         ) : (
-          <section className="app-panel overflow-hidden" aria-label="Agency comparison table">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
-              <Select size="sm" aria-label="Portal filter" value={portalFilter} onChange={(event) => setPortalFilter(event.target.value)} className="w-auto min-w-[12rem]">
-                <option value="">All portals</option>
-                {portals.map((portal) => (
-                  <option key={portal} value={portal}>{portalName(portal)}</option>
-                ))}
-              </Select>
-              <span className="text-caption tabular-nums text-muted">{rows.length.toLocaleString()} {rows.length === 1 ? 'agency' : 'agencies'}</span>
-            </div>
+          <section className="app-panel grid min-w-0 grid-cols-1 gap-6 p-5" aria-label="Agency comparison">
+            <DepartmentLedger
+              variant="compare"
+              profiles={rows}
+              scaleProfiles={agencyProfiles}
+              status="ready"
+              portalName={portalName}
+              onInspect={(profile) => inspect({ kind: 'agency', portalKey: profile.portalSubdomain, agencyId: profile.agencyId, label: profile.agencyName })}
+              controls={<>
+                <Select size="sm" aria-label="Portal filter" value={portalFilter} onChange={(event) => setPortalFilter(event.target.value)} className="w-auto min-w-[12rem]">
+                  <option value="">All portals</option>
+                  {portals.map((portal) => (
+                    <option key={portal} value={portal}>{portalName(portal)}</option>
+                  ))}
+                </Select>
+                <span className="text-caption tabular-nums text-muted">{rows.length.toLocaleString()} {rows.length === 1 ? 'agency' : 'agencies'}</span>
+              </>}
+            />
+            <div className="grid min-w-0 gap-2">
+              <h3 className="text-heading text-fg">Exact values</h3>
+              <p className="text-caption text-muted">The same agencies, in the same order; a header sorts both the table and the ledger above.</p>
             <Table label="Agency comparison">
               <thead>
                 <tr>
@@ -227,7 +232,7 @@ export default function AgencyComparison() {
               </thead>
               <tbody>
                 {rows.map((profile, index) => {
-                  const outlier = isPeerLatencyOutlier(profile);
+                  const outlier = isSlowerThanPeers(profile);
                   const smallSample = profile.validLatencySampleSize < SMALL_SAMPLE_CLOSURES;
                   return (
                     <tr key={`${profile.portalSubdomain}-${profile.agencyId}`} className="group">
@@ -242,10 +247,11 @@ export default function AgencyComparison() {
                           </ObjectLink>
                           {outlier && (
                             <Badge
-                              tone="danger"
+                              tone="neutral"
+                              dashed
                               title={`Closure latency ${profile.performanceZScore?.toFixed(2)}σ above the peer mean (threshold ${PEER_LATENCY_OUTLIER_Z_SCORE.toFixed(1)}σ). Not a statutory finding.`}
                             >
-                              Slower than peers
+                              {SLOWER_THAN_PEERS.charAt(0).toUpperCase() + SLOWER_THAN_PEERS.slice(1)}
                             </Badge>
                           )}
                           {smallSample && (
@@ -269,6 +275,7 @@ export default function AgencyComparison() {
                 })}
               </tbody>
             </Table>
+            </div>
           </section>
         )}
 

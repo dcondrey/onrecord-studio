@@ -3,7 +3,8 @@ import { invokeCommand } from '../../ipc';
 import { useGatedLoad } from '../../hooks/useGatedLoad';
 import { nextUpcomingMeeting } from '../../hooks/useWorkspaceBadges';
 import { useAppStore } from '../../store/useAppStore';
-import type { Finding, FindingSeverity, MeetingCalendar, SavedSource, WatchChange } from '../../types';
+import type { AgencyPerformanceProfile, Finding, FindingSeverity, MeetingCalendar, SavedSource, WatchChange } from '../../types';
+import { countedHeadline } from '../charts/figures/DepartmentLedger';
 import { findingFamily } from '../objects/findingFamily';
 import { claimBasisLabel } from '../objects/labels';
 import Badge from '../ui/Badge';
@@ -40,7 +41,16 @@ interface FeedSources {
   changes: WatchChange[];
 }
 
-export default function AttentionFeed() {
+/**
+ * The one feed row for counted deadline misses. They are all-time totals, not items found in this
+ * window, so the row sits outside the ranked list and its count; it opens the deadline ledger.
+ */
+export function deadlineLedgerHeadline(profiles: readonly AgencyPerformanceProfile[]): string | null {
+  const withRequests = profiles.filter((profile) => profile.totalRequestsProcessed > 0);
+  return withRequests.some((profile) => profile.statutoryViolationCount > 0) ? countedHeadline(withRequests) : null;
+}
+
+export default function AttentionFeed({ onOpenLedger }: { onOpenLedger?: () => void } = {}) {
   const since = useSinceInstant();
   const findingsRefreshRequests = useAppStore((state) => state.findingsRefreshRequests);
   const portals = useAppStore((state) => state.portals);
@@ -52,6 +62,12 @@ export default function AttentionFeed() {
   const changes = useGatedLoad(`changes:${findingsRefreshRequests}`, () => invokeCommand('list_watch_changes', { watchId: null, limit: 20 }));
 
   const caseScope = useCaseScope();
+  const agencyProfiles = useAppStore((state) => state.agencyProfiles);
+  const activePortalKey = useAppStore((state) => state.activePortalKey);
+  const ledger = useMemo(
+    () => deadlineLedgerHeadline(agencyProfiles.filter((profile) => !activePortalKey || profile.portalSubdomain === activePortalKey)),
+    [activePortalKey, agencyProfiles],
+  );
   const items = useMemo(() => rankFeed({
     findings: findings.status === 'ready'
       ? findings.data.filter((finding) => caseScope.status !== 'ready' || caseScope.value.findingIds.has(finding.id))
@@ -85,6 +101,20 @@ export default function AttentionFeed() {
         </Button>
       </div>
       <div className="px-5 pt-4 empty:hidden"><CaseScopeBar state={caseScope} noun="findings" /></div>
+      {ledger && onOpenLedger && (caseScope.status === 'off' ? (
+        <div className="px-4 pt-4">
+          <InsightCard
+            nested
+            badges={<Badge tone="violation">Counted</Badge>}
+            headline={ledger}
+            open={{ onOpen: onOpenLedger }}
+            subject="Deadline ledger"
+            meta="all-time totals · opens the ledger in Response analytics"
+          />
+        </div>
+      ) : (
+        <p className="px-5 pt-3 text-caption text-muted">The deadline ledger is hidden while a case scope is active: its totals cover every request, not this case's.</p>
+      ))}
       {pending ? (
         <AttentionFeedSkeleton />
       ) : shown.length === 0 ? (

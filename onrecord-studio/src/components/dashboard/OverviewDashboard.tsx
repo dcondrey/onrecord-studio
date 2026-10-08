@@ -1,17 +1,17 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import AnomalyRadar from '../charts/AnomalyRadar';
-import LifecycleFunnel from '../charts/LifecycleFunnel';
-import PerformanceScatter from '../charts/PerformanceScatter';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import TemporalMap from '../charts/TemporalMap';
-import AnalyticsUnavailable from '../charts/AnalyticsUnavailable';
+import DepartmentLedger, { ledgerOrder, SMALL_SAMPLE_CLOSURES } from '../charts/figures/DepartmentLedger';
+import Dumbbells, { changeText, type DumbbellKind, type DumbbellRow } from '../charts/figures/Dumbbells';
+import { formatDateRange, formatValue } from '../charts/core/format';
+import { absent, measured, type Measured } from '../charts/core/nulls';
 import { useAppStore } from '../../store/useAppStore';
 import MetricsGrid from './MetricsGrid';
 import Icon from '../ui/icons';
 import PageHeader from '../ui/PageHeader';
 import Panel, { PanelHeader } from '../ui/Panel';
 import Button from '../ui/Button';
-import InlineError from '../ui/InlineError';
 import { Select } from '../ui/Field';
+import SegmentedControl from '../ui/SegmentedControl';
 import { cn } from '../../utils/cn';
 import SanDiegoWorkspace from './SanDiegoWorkspace';
 import InvestigationDesk from './InvestigationDesk';
@@ -65,10 +65,14 @@ export default function OverviewDashboard() {
     () => profiles.filter((profile) => !activePortalKey || profile.portalSubdomain === activePortalKey),
     [activePortalKey, profiles],
   );
-  const outlierDepartments = scopedProfiles.filter(
-    (profile) => profile.performanceZScore !== null && profile.performanceZScore >= 2,
-  ).length;
-  const monitoredDepartments = scopedProfiles.length;
+  const analyticsStatus = useAppStore((state) => state.analyticsStatus);
+  const caseScoped = useAppStore((state) => state.activeCaseId !== null && state.scopeToCase);
+  const inspectDepartment = useInspectDepartment();
+  const portalName = usePortalName();
+  const openLedger = useCallback(() => {
+    setShowAnalytics(true);
+    requestAnimationFrame(() => document.getElementById('deadline-ledger')?.scrollIntoView({ block: 'start' }));
+  }, []);
   const openWorkbench = () => setWorkbench({ reportId: '', review: false });
 
   return (
@@ -106,7 +110,7 @@ export default function OverviewDashboard() {
           <ProfessionalWorkbench key={`${workbench.reportId}:${workbench.review}`} initialReportId={workbench.reportId} initialTab={workbench.review ? 'Evidence review' : 'Cases'} />
         ) : <>
           <SubjectDossier />
-          {portals.length > 0 && <AttentionFeed />}
+          {portals.length > 0 && <AttentionFeed onOpenLedger={openLedger} />}
           <section aria-label="Following" className="grid grid-cols-1 items-start gap-4 2xl:grid-cols-2">
             <WatchlistPanel />
             <StandingSearchPanel />
@@ -130,17 +134,20 @@ export default function OverviewDashboard() {
               {showAnalytics && (
                 <div id="response-analytics-body" className="motion-reveal space-y-4 p-5">
                   {analyticsUnavailable ? <MetricsGrid /> : <>
-                    <PeriodComparison activePortalKey={activePortalKey} />
                     <MetricsGrid />
-                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
-                      <PerformanceScatter />
-                      <SignalSummary outlierDepartments={outlierDepartments} monitoredDepartments={monitoredDepartments} />
+                    <div id="deadline-ledger" className="scroll-mt-4 rounded-lg border border-line p-4">
+                      <DepartmentLedger
+                        variant="overview"
+                        profiles={ledgerOrder(scopedProfiles)}
+                        scaleProfiles={scopedProfiles}
+                        status={caseScoped ? 'scoped-out' : profiles.length === 0 && analyticsStatus === 'pending' ? 'loading' : 'ready'}
+                        scopedOutText="Hidden while a case scope is active: these are all-time totals for every request, not the case's."
+                        portalName={portalName}
+                        onInspect={(profile) => inspectDepartment(profile.portalSubdomain, profile.agencyId)}
+                      />
                     </div>
-                    <section aria-label="Investigative analytics" className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-[1.15fr_.8fr_1.05fr]">
-                      <AnomalyRadar />
-                      <LifecycleFunnel />
-                      <div className="lg:col-span-2 2xl:col-span-1"><TemporalMap /></div>
-                    </section>
+                    <PeriodComparison activePortalKey={activePortalKey} />
+                    <TemporalMap />
                   </>}
                 </div>
               )}
@@ -184,91 +191,229 @@ function ToolDrawer({ label, children }: { label: string; children: ReactNode })
   );
 }
 
-function PeriodComparison({ activePortalKey }: { activePortalKey: string | null }) {
+type PeriodMeasure = 'requests' | 'closure' | 'counted' | 'latency';
+
+const PERIOD_MEASURES: { value: PeriodMeasure; label: string }[] = [
+  { value: 'counted', label: 'Counted deadline misses' },
+  { value: 'closure', label: 'Closure rate' },
+  { value: 'latency', label: 'Avg. closure days' },
+  { value: 'requests', label: 'Requests' },
+];
+
+const NO_REQUESTS = 'no requests in window';
+
+/**
+ * A request's statutory clock can still be running this many days after it was created: 10 days to
+ * determine plus a 14-day extension (statute.rs CPRA_INITIAL_DETERMINATION_DAYS and
+ * CPRA_MAXIMUM_EXTENSION_DAYS), a last day carried past a weekend and holidays, and one more day
+ * because a miss is counted only once the elapsed days exceed the entitlement. A window ending
+ * sooner would count its young requests as on time and show an improvement that is only censoring.
+ */
+export const PERIOD_MATURITY_DAYS = 30;
+
+/** Every measure but the request count depends on how a request ended, so it waits for maturity. */
+const maturityLag = (measure: PeriodMeasure) => (measure === 'requests' ? 0 : PERIOD_MATURITY_DAYS);
+
+interface PeriodWindows {
+  current: AgencyPerformanceProfile[];
+  prior: AgencyPerformanceProfile[];
+  /** Window bounds, ms: start of prior, start of current, end of current. */
+  bounds: [number, number, number];
+  /** Days the windows end before today; 0 when they end today. */
+  lag: number;
+}
+
+/**
+ * This interval against the one before it, as dumbbells per department. The two windows are read
+ * together behind one gate: a slower response for an interval or portal the reader has since left
+ * is discarded, never drawn as the current comparison.
+ */
+export function PeriodComparison({ activePortalKey }: { activePortalKey: string | null }) {
   const [days, setDays] = useState(30);
-  const [current, setCurrent] = useState<AgencyPerformanceProfile[]>([]);
-  const [prior, setPrior] = useState<AgencyPerformanceProfile[]>([]);
+  const [measure, setMeasure] = useState<PeriodMeasure>('counted');
+  const [windows, setWindows] = useState<PeriodWindows | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const comparisonGate = useLatestRequestGate();
+  const inspectDepartment = useInspectDepartment();
+  const portalName = usePortalName();
+  const lag = maturityLag(measure);
 
   useEffect(() => {
     const request = comparisonGate.begin();
-    const end = new Date();
-    const middle = new Date(end.valueOf() - days * 86_400_000);
-    const start = new Date(end.valueOf() - days * 2 * 86_400_000);
+    const end = Date.now() - lag * 86_400_000;
+    const middle = end - days * 86_400_000;
+    const start = end - days * 2 * 86_400_000;
     setIsLoading(true);
     setError(null);
+    const inScope = (profile: AgencyPerformanceProfile) => !activePortalKey || profile.portalSubdomain === activePortalKey;
     void Promise.all([
-      invokeCommand('get_agency_performance_profiles', { config: { created_from: middle.toISOString(), created_to: end.toISOString() } }),
-      invokeCommand('get_agency_performance_profiles', { config: { created_from: start.toISOString(), created_to: middle.toISOString() } }),
+      invokeCommand('get_agency_performance_profiles', { config: { created_from: new Date(middle).toISOString(), created_to: new Date(end).toISOString() } }),
+      invokeCommand('get_agency_performance_profiles', { config: { created_from: new Date(start).toISOString(), created_to: new Date(middle).toISOString() } }),
     ]).then(([currentProfiles, priorProfiles]) => {
       if (!comparisonGate.isCurrent(request)) return;
-      setCurrent(currentProfiles.filter((profile) => !activePortalKey || profile.portalSubdomain === activePortalKey));
-      setPrior(priorProfiles.filter((profile) => !activePortalKey || profile.portalSubdomain === activePortalKey));
+      setWindows({ current: currentProfiles.filter(inScope), prior: priorProfiles.filter(inScope), bounds: [start, middle, end], lag });
     }).catch((reason) => {
       if (comparisonGate.isCurrent(request)) setError(formatNativeError(reason));
     }).finally(() => {
       if (comparisonGate.isCurrent(request)) setIsLoading(false);
     });
     return comparisonGate.invalidate;
-  }, [activePortalKey, comparisonGate, days]);
+  }, [activePortalKey, comparisonGate, days, lag]);
 
-  const currentSummary = summarizePeriod(current);
-  const priorSummary = summarizePeriod(prior);
+  // A read for the other lag is still the last result while the new one loads; it never stands for
+  // the selected measure.
+  const current = windows && windows.lag === lag ? windows : null;
+  const model = current ? periodModel(current, measure, days, portalName, inspectDepartment) : null;
+  const status = error ? 'error' : !model ? 'loading' : isLoading ? 'stale' : model.empty ? 'empty' : 'ready';
+  const range = current ? { prior: formatDateRange(current.bounds[0], current.bounds[1]), current: formatDateRange(current.bounds[1], current.bounds[2]) } : null;
   return (
     <section className="rounded-lg border border-line p-4" aria-label="Response behavior period comparison">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          <h4 className="text-body font-medium text-fg">Period comparison</h4>
-          <p className="mt-0.5 text-caption text-muted">This interval against the one before it, by request creation time.</p>
-        </div>
-        <Select size="sm" aria-label="Interval" value={days} onChange={(event) => setDays(Number(event.target.value))} className="w-auto tabular-nums">
-          <option value={7}>7 days</option><option value={30}>30 days</option><option value={90}>90 days</option><option value={365}>365 days</option>
-        </Select>
-      </div>
-      {error ? (
-        <InlineError className="mt-3" summary="The period comparison couldn’t be calculated." detail={error} />
-      ) : (
-        <div className="mt-3 grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(10rem,1fr))]">
-          <ComparisonMetric label="Closure rate" current={currentSummary.closureRate} prior={priorSummary.closureRate} percent loading={isLoading} />
-          <ComparisonMetric label="Missed statutory deadlines" current={currentSummary.violationRate} prior={priorSummary.violationRate} percent inverse loading={isLoading} />
-          <ComparisonMetric label="Avg. closure days" current={currentSummary.averageClosureDays} prior={priorSummary.averageClosureDays} inverse loading={isLoading} />
-        </div>
-      )}
+      <Dumbbells
+        title="Period comparison"
+        storageKey="period-comparison"
+        headline={model?.headline ?? null}
+        claim={measure === 'counted' ? 'counted' : undefined}
+        sources={{
+          tables: ['requests', 'statutory_extensions', 'agencies'],
+          note: range
+            ? `requests created ${range.current} vs ${range.prior}${lag > 0 ? `; both windows end ${lag} days ago, so every request in them is past its longest statutory deadline (10 days plus a 14-day extension, carried to a court day)` : ''}`
+            : undefined,
+        }}
+        status={status}
+        error={error}
+        emptyText={lag > 0
+          ? `No requests were created in the ${days * 2} days before ${lag} days ago, so there is nothing to compare.`
+          : `No requests were created in the last ${days * 2} days, so there is nothing to compare.`}
+        kind={model?.kind ?? 'rate'}
+        rows={model?.rows ?? []}
+        tooFew={model?.tooFew}
+        priorLabel={lag > 0 ? (range ? `Created ${range.prior}` : `Earlier ${days} days`) : `Prior ${days} days`}
+        currentLabel={lag > 0 ? (range ? `Created ${range.current}` : `Later ${days} days`) : `Last ${days} days`}
+        controls={<>
+          <SegmentedControl<PeriodMeasure> label="Measure" mode="filter" size="sm" value={measure} onChange={setMeasure} options={PERIOD_MEASURES} />
+          <Select size="sm" aria-label="Interval" value={days} onChange={(event) => setDays(Number(event.target.value))} className="w-auto tabular-nums">
+            <option value={7}>7 days</option><option value={30}>30 days</option><option value={90}>90 days</option><option value={365}>365 days</option>
+          </Select>
+        </>}
+      />
     </section>
   );
 }
 
-function summarizePeriod(profiles: AgencyPerformanceProfile[]) {
+interface PeriodSide {
+  requests: number;
+  closed: number;
+  violations: number;
+  closures: number;
+  /** Closure days weighted by the closures each average rests on; null when nothing closed. */
+  averageClosureDays: number | null;
+}
+
+function summarizePeriod(profiles: readonly AgencyPerformanceProfile[]): PeriodSide {
   const requests = profiles.reduce((sum, profile) => sum + profile.totalRequestsProcessed, 0);
   const closed = profiles.reduce((sum, profile) => sum + profile.totalClosed, 0);
   const violations = profiles.reduce((sum, profile) => sum + profile.statutoryViolationCount, 0);
-  const latencySamples = profiles.reduce((sum, profile) => sum + profile.validLatencySampleSize, 0);
-  const latencyTotal = profiles.reduce((sum, profile) => sum + (profile.averageClosureDays ?? 0) * profile.validLatencySampleSize, 0);
-  return { requests, closureRate: requests ? closed / requests : null, violationRate: requests ? violations / requests : null, averageClosureDays: latencySamples ? latencyTotal / latencySamples : null };
+  const measuredProfiles = profiles.filter((profile) => profile.averageClosureDays !== null && profile.validLatencySampleSize > 0);
+  const closures = measuredProfiles.reduce((sum, profile) => sum + profile.validLatencySampleSize, 0);
+  const latencyTotal = measuredProfiles.reduce((sum, profile) => sum + (profile.averageClosureDays as number) * profile.validLatencySampleSize, 0);
+  return { requests, closed, violations, closures, averageClosureDays: closures > 0 ? latencyTotal / closures : null };
 }
 
-function ComparisonMetric({ label, current, prior, percent = false, inverse = false, loading = false }: { label: string; current: number | null; prior: number | null; percent?: boolean; inverse?: boolean; loading?: boolean }) {
-  const delta = current === null || prior === null || prior === 0 ? null : (current - prior) / Math.abs(prior);
-  // An unchanged figure is neither better nor worse, so it takes no tone.
-  const favorable = delta === null || Math.abs(delta) < 0.0005 ? null : inverse ? delta < 0 : delta > 0;
-  const format = (value: number) => percent ? `${(value * 100).toFixed(1)}%` : Number.isInteger(value) ? value.toLocaleString() : value.toFixed(1);
-  return (
-    <div className="min-w-0 rounded-md bg-raised/60 px-3 py-2">
-      <p className="truncate text-caption text-muted" title={label}>{label}</p>
-      {loading ? (
-        <div aria-hidden="true" className="mt-1 space-y-1.5"><div className="skeleton h-5 w-16 rounded" /><div className="skeleton h-3 w-24 rounded" /></div>
-      ) : (
-        <>
-          <p className={cn('mt-1 text-heading tabular-nums', current === null ? 'font-normal text-muted' : 'text-fg')}>{current === null ? 'Not measured' : format(current)}</p>
-          <p className={cn('text-caption tabular-nums', favorable === null ? 'text-muted' : favorable ? 'text-success' : 'text-warning')}>
-            {delta === null ? 'No comparable prior baseline' : favorable === null ? 'No change vs prior' : `${delta > 0 ? '+' : ''}${(delta * 100).toFixed(1)}% vs prior`}
-          </p>
-        </>
-      )}
-    </div>
-  );
+/** One window's value of the measure; a window with no requests has no rate, never a 0% rate. */
+function sideValue(side: PeriodSide, measure: PeriodMeasure): Measured {
+  if (measure === 'requests') return measured(side.requests);
+  if (side.requests === 0) return absent('not-recorded', NO_REQUESTS);
+  if (measure === 'closure') return measured(side.closed / side.requests);
+  if (measure === 'counted') return measured(side.violations / side.requests);
+  return side.averageClosureDays === null ? absent('not-recorded', 'no measurable closure in window') : measured(side.averageClosureDays);
+}
+
+function sideBasis(side: PeriodSide, measure: PeriodMeasure): string {
+  const plural = (n: number, word: string) => `${n.toLocaleString('en-US')} ${word}${n === 1 ? '' : 's'}`;
+  if (measure === 'latency') {
+    const open = side.requests - side.closed;
+    return `${plural(side.closures, 'closure')}${open > 0 ? `; ${open.toLocaleString('en-US')} still open, not measured` : ''}`;
+  }
+  if (measure === 'counted') return `${side.violations.toLocaleString('en-US')} of ${plural(side.requests, 'request')}`;
+  if (measure === 'closure') return `${side.closed.toLocaleString('en-US')} of ${plural(side.requests, 'request')}`;
+  return plural(side.requests, 'request');
+}
+
+/** Below this many requests (or closures, for latency) in either window a change is not compared. */
+const PERIOD_MINIMUM = SMALL_SAMPLE_CLOSURES;
+
+function periodModel(
+  { current, prior, bounds, lag }: PeriodWindows,
+  measure: PeriodMeasure,
+  days: number,
+  portalName: (portalKey: string) => string,
+  onInspect: (portalKey: string, agencyId: number) => void,
+) {
+  const kind: DumbbellKind = measure === 'requests' ? 'count' : measure === 'latency' ? 'days' : 'rate';
+  const totalCurrent = summarizePeriod(current);
+  const totalPrior = summarizePeriod(prior);
+  const empty = totalCurrent.requests === 0 && totalPrior.requests === 0;
+  const departments = new Map<string, { portalKey: string; agencyId: number; name: string; current: AgencyPerformanceProfile[]; prior: AgencyPerformanceProfile[] }>();
+  for (const [side, list] of [['current', current], ['prior', prior]] as const) {
+    for (const profile of list) {
+      const key = `${profile.portalSubdomain}:${profile.agencyId}`;
+      const entry = departments.get(key) ?? { portalKey: profile.portalSubdomain, agencyId: profile.agencyId, name: profile.agencyName, current: [], prior: [] };
+      entry[side].push(profile);
+      departments.set(key, entry);
+    }
+  }
+  const spansPortals = new Set([...departments.values()].map((entry) => entry.portalKey)).size > 1;
+  const rows: DumbbellRow[] = [{
+    key: 'total',
+    label: 'All departments',
+    total: true,
+    prior: sideValue(totalPrior, measure),
+    current: sideValue(totalCurrent, measure),
+    priorBasis: sideBasis(totalPrior, measure),
+    currentBasis: sideBasis(totalCurrent, measure),
+  }];
+  const tooFew: string[] = [];
+  for (const [key, entry] of departments) {
+    const a = summarizePeriod(entry.prior);
+    const b = summarizePeriod(entry.current);
+    const label = spansPortals ? `${entry.name} (${portalName(entry.portalKey)})` : entry.name;
+    const basisOf = (side: PeriodSide) => (measure === 'latency' ? side.closures : side.requests);
+    if (measure !== 'requests' && (basisOf(a) < PERIOD_MINIMUM || basisOf(b) < PERIOD_MINIMUM) && (basisOf(a) > 0 || basisOf(b) > 0)) {
+      tooFew.push(label);
+      continue;
+    }
+    rows.push({
+      key,
+      label,
+      prior: sideValue(a, measure),
+      current: sideValue(b, measure),
+      priorBasis: sideBasis(a, measure),
+      currentBasis: sideBasis(b, measure),
+      onActivate: () => onInspect(entry.portalKey, entry.agencyId),
+    });
+  }
+  return {
+    kind,
+    rows,
+    empty,
+    tooFew: { labels: tooFew.sort((x, y) => x.localeCompare(y)), reason: `fewer than ${PERIOD_MINIMUM} ${measure === 'latency' ? 'closures' : 'requests'} in a window` },
+    headline: periodHeadline(totalPrior, totalCurrent, measure, lag > 0 ? `created ${formatDateRange(bounds[1], bounds[2])}` : `created in the last ${days} days`, days),
+  };
+}
+
+function periodHeadline(prior: PeriodSide, current: PeriodSide, measure: PeriodMeasure, created: string, days: number): string {
+  const requests = `${current.requests.toLocaleString('en-US')} request${current.requests === 1 ? '' : 's'} ${created}`;
+  if (measure === 'requests') return `${requests}, against ${prior.requests.toLocaleString('en-US')} in the ${days} days before.`;
+  if (current.requests === 0) return `No requests were ${created}, so there is no current rate to compare.`;
+  const kind: DumbbellKind = measure === 'latency' ? 'days' : 'rate';
+  const now = sideValue(current, measure);
+  const before = sideValue(prior, measure);
+  const name = measure === 'counted' ? 'Counted deadline-miss rate' : measure === 'closure' ? 'Closure rate' : 'Average closure';
+  const show = (value: number) => (kind === 'rate' ? formatValue(value, { kind: 'percent' }) : formatValue(value, { kind: 'days' }));
+  if (now.state !== 'value') return `${name}: no measurable closure among the ${requests}.`;
+  if (before.state !== 'value') return `${name} ${show(now.value)} across ${requests}; no comparable prior window.`;
+  return `${name} ${show(now.value)} vs ${show(before.value)} (${changeText(before.value, now.value, kind)}) across ${requests}.`;
 }
 
 function WorkspaceSourcesUnavailable({ detail }: { detail: string | null }) {
@@ -295,78 +440,24 @@ function WorkspaceSourcesUnavailable({ detail }: { detail: string | null }) {
   );
 }
 
-
-function SignalSummary({ outlierDepartments, monitoredDepartments }: { outlierDepartments: number; monitoredDepartments: number }) {
-  const profiles = useAppStore((state) => state.agencyProfiles);
-  const analyticsError = useAppStore((state) => state.analyticsError);
-  const activePortalKey = useAppStore((state) => state.activePortalKey);
+/** The overview's department action: scope Evidence to that department's requests. */
+function useInspectDepartment() {
   const setActivePortal = useAppStore((state) => state.setActivePortal);
   const setSearchFilters = useAppStore((state) => state.setSearchFilters);
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
-  const priority = useMemo(
-    () => profiles
-      .filter((profile) => !activePortalKey || profile.portalSubdomain === activePortalKey)
-      .sort((left, right) => {
-        const leftScore = left.statutoryViolationCount * 2 + left.suspiciousFastClosureCount;
-        const rightScore = right.statutoryViolationCount * 2 + right.suspiciousFastClosureCount;
-        return rightScore - leftScore;
-      })
-      .slice(0, 4),
-    [activePortalKey, profiles],
-  );
-  const unmeasured = analyticsError !== null && profiles.length === 0;
-
-  const inspect = (portalKey: string, agencyId: number) => {
+  return useCallback((portalKey: string, agencyId: number) => {
     setActivePortal(portalKey);
     setSearchFilters('', agencyId, null, null);
     setWorkspaceView('evidence');
-  };
+  }, [setActivePortal, setSearchFilters, setWorkspaceView]);
+}
 
-  return (
-    <aside aria-labelledby="signal-summary-title" className="flex min-h-[390px] flex-col overflow-hidden rounded-lg border border-line">
-      <div className="border-b border-line px-4 py-3">
-        <h4 id="signal-summary-title" className="text-body font-medium text-fg">Departments to look at first</h4>
-      </div>
-      <dl className="grid grid-cols-2 divide-x divide-line border-b border-line">
-        <div className="p-4">
-          <dt className="text-caption text-muted">Outliers (≥2σ)</dt>
-          <dd className={cn('mt-1 text-metric tabular-nums', unmeasured ? 'text-body text-muted' : 'text-fg')}>{unmeasured ? 'Not measured' : outlierDepartments}</dd>
-        </div>
-        <div className="p-4">
-          <dt className="text-caption text-muted">Departments mapped</dt>
-          <dd className={cn('mt-1 text-metric tabular-nums', unmeasured ? 'text-body text-muted' : 'text-fg')}>{unmeasured ? 'Not measured' : monitoredDepartments}</dd>
-        </div>
-      </dl>
-      <div className="min-h-0 flex-1 p-3">
-        {priority.length === 0 && analyticsError ? (
-          <AnalyticsUnavailable heading="Department summary unavailable" />
-        ) : priority.length === 0 ? (
-          <div className="grid h-full min-h-40 place-items-center p-4 text-center">
-            <div>
-              <p className="text-body font-medium text-fg-secondary">No department profiles yet</p>
-              <p className="mt-1 text-caption text-muted">This updates as agency profiles are calculated.</p>
-            </div>
-          </div>
-        ) : (
-          <ul className="space-y-1">
-            {priority.map((profile) => (
-              <li key={`${profile.portalSubdomain}-${profile.agencyId}`}>
-                <button type="button" onClick={() => inspect(profile.portalSubdomain, profile.agencyId)} className="focus-ring group flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors duration-fast hover:bg-raised">
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-body font-medium text-fg">{profile.agencyName}</span>
-                    <span className="mt-0.5 block text-caption tabular-nums text-muted">
-                      {profile.statutoryViolationCount} counted deadline violation{profile.statutoryViolationCount === 1 ? '' : 's'} · {profile.suspiciousFastClosureCount} fast closure{profile.suspiciousFastClosureCount === 1 ? '' : 's'} · {profile.performanceZScore === null ? 'deviation not measured' : `${profile.performanceZScore >= 0 ? '+' : ''}${profile.performanceZScore.toFixed(1)}σ vs peers`}
-                    </span>
-                  </span>
-                  <Icon name="chevron" size="xs" className="text-muted group-hover:text-fg-secondary" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </aside>
-  );
+function usePortalName() {
+  const portals = useAppStore((state) => state.portals);
+  return useMemo(() => {
+    const names = new Map(portals.map(({ registration }) => [registration.portalKey, registration.displayName]));
+    return (portalKey: string) => names.get(portalKey) ?? portalKey;
+  }, [portals]);
 }
 
 function formatRelativeTime(value: string) {

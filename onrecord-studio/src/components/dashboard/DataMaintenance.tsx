@@ -4,6 +4,9 @@ import type { DataMaintenancePolicy } from '../../types';
 import Button from '../ui/Button';
 import { Field, Input, Select } from '../ui/Field';
 import { useAutomaticDiscovery } from './AutomaticDiscoveryProvider';
+import { Meter } from '../charts/marks/Meter';
+import { SourceCaption } from '../charts/frame/SourceCaption';
+import { formatValue } from '../charts/core/format';
 
 const gib = 1024 ** 3;
 /** Binary units with the short labels Activity uses, so one size reads the same everywhere. */
@@ -47,6 +50,7 @@ export default function DataMaintenance() {
       </summary>
       <div className="mt-4 max-w-prose space-y-4 text-muted">
         <p>While the app is open, it imports acquired tables, retries recoverable failures and rechecks active sources within their saved scope.</p>
+        {status && <StorageMeter retained={status.retainedFileBytes} budget={status.policy.retainedFileBudgetBytes} reclaimed={status.reclaimedFileBytes} />}
         {draft && (
           <fieldset disabled={saving} className="space-y-4">
             <div className="flex flex-wrap gap-x-5 gap-y-2 text-fg-secondary">
@@ -91,5 +95,32 @@ export default function DataMaintenance() {
         )}
       </div>
     </details>
+  );
+}
+
+/** F16, managed files on disk against the budget at which new downloads pause. */
+function StorageMeter({ retained, budget, reclaimed }: { retained: number; budget: number; reclaimed: number }) {
+  const bytes = (value: number) => formatValue(value, { kind: 'bytes' });
+  const share = budget > 0 ? retained / budget : null;
+  const headline = share === null
+    ? `${bytes(retained)} of managed files; no budget is set.`
+    : `${formatValue(share, { kind: 'percent', digits: 0 })} of the managed-file budget in use: ${bytes(retained)} of ${bytes(budget)}.`;
+  return (
+    <figure className="m-0 grid gap-2" aria-label="Managed-file storage">
+      <figcaption className="text-body text-fg">{headline}</figcaption>
+      <Meter
+        label="Managed-file storage"
+        max={Math.max(budget, retained, 1)}
+        valueText={headline}
+        segments={[
+          { key: 'retained', value: retained, step: 3, text: `${bytes(retained)} retained` },
+        ]}
+      />
+      <p className="text-caption text-muted">
+        {budget > retained ? `${bytes(budget - retained)} left before new downloads pause. ` : budget > 0 ? 'New downloads are paused at the budget. ' : ''}
+        {bytes(reclaimed)} of original downloads released so far.
+      </p>
+      <SourceCaption sources={{ tables: ['data_maintenance_policy', 'data_retention_receipts'], note: 'retained size measured on disk' }} />
+    </figure>
   );
 }

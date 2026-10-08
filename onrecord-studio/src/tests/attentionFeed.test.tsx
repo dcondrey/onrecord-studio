@@ -16,7 +16,7 @@ vi.hoisted(() => {
   });
 });
 
-import { rankFeed } from '../components/dashboard/AttentionFeed';
+import { deadlineLedgerHeadline, rankFeed } from '../components/dashboard/AttentionFeed';
 import type { Finding, FindingKind, FindingSeverity } from '../types';
 
 const finding = (id: string, severity: FindingSeverity, kind: FindingKind, dismissedAt: string | null = null): Finding => ({
@@ -34,4 +34,16 @@ describe('rankFeed', () => {
     }, [], () => {});
     expect(items.map((item) => item.key)).toEqual(['finding:counted', 'finding:pattern']);
   });
+
+  it('adds one deadline ledger row only when a counted miss exists, outside the ranked items', () => {
+    const profile = (agencyName: string, statutoryViolationCount: number, totalRequestsProcessed: number) => ({
+      agencyId: 1, portalSubdomain: 'p', agencyName, totalRequestsProcessed, totalClosed: 0, validLatencySampleSize: 0, excludedInvalidLifetimeCount: 0,
+      averageClosureDays: null, globalMeanClosureDays: null, globalStddevClosureDays: null, performanceZScore: null, complianceIndicator: 'Compliant' as const,
+      anomalyCount: 0, statutoryViolationCount, statutoryViolationRate: 0, suspiciousFastClosureCount: 0, totalDocumentsReleased: 0, keywordFrequencyMap: {},
+    });
+    expect(deadlineLedgerHeadline([profile('Parks', 0, 12)])).toBeNull();
+    expect(deadlineLedgerHeadline([profile('Police', 22, 268), profile('Library', 3, 40), profile('Parks', 0, 12)]))
+      .toBe('2 departments missed the statutory deadline on 25 of 320 requests; Police accounts for 22.');
+  });
 });
+
