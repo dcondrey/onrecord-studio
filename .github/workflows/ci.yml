@@ -56,7 +56,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Pushes and pull requests build on Linux; a manual run adds macOS and Windows, whose runner
+        # minutes cost several times more.
+        os: ${{ github.event_name == 'workflow_dispatch' && fromJSON('["ubuntu-latest", "macos-latest", "windows-latest"]') || fromJSON('["ubuntu-latest"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -109,6 +111,8 @@ jobs:
   bundle:
     name: Bundle ${{ matrix.os }}
     needs: [checks, rust]
+    # Bundles are compile evidence for every platform; built on a manual run only.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
