@@ -20,6 +20,8 @@ export interface BulletProps {
   base?: Measured;
   /** The measured bar: e.g. posted payments. */
   bar: Measured;
+  /** A lighter segment continuing the bar from its end: e.g. encumbered beside actual. */
+  extension?: Measured;
   ticks?: readonly BulletTick[];
   claim?: Claim;
   /** Printed at the bar's end ('$1.24M paid'). */
@@ -29,17 +31,36 @@ export interface BulletProps {
    * overrun is a comparison of retrieved figures, shown by position and words, never by crimson.
    */
   overrunLabel?: string;
+  /** Words for an absent track, after the bar's words. Default from its absence; '' when the bar label already says it. */
+  trackSlotText?: string;
+  /** Words for an absent bar. Default from its absence; '' when the bar label already says it. */
+  barSlotText?: string;
   /** Right edge the bar's words may reach, px. Default: the end of the scale's range. */
   labelLimit?: number;
   interaction?: MarkInteraction;
 }
 
+const STUB = 22;
+const ABSENT_WORDS: Record<string, string> = { 'not-recorded': 'not recorded', 'not-covered': 'not checked', excluded: 'outside this measure' };
+
+/** Moves a label's start past any tick its box would cross, so a tick never cuts through words. */
+function clearOfTicks(x: number, width: number, ticks: readonly number[]): number {
+  let at = x;
+  for (let pass = 0; pass < ticks.length + 1; pass++) {
+    const hit = ticks.find((t) => t >= at - 2 && t <= at + width + 2);
+    if (hit === undefined) break;
+    at = hit + 4;
+  }
+  return at;
+}
+
 /**
- * A bullet row: a receding track, an optional inner base band, a thinner ink bar for the measure,
- * and target ticks. An absent track is its slot ('not retrieved'), and the bar is still drawn
- * against the axis.
+ * A bullet row: a receding track, an optional inner base band (2px short of the amendments), a
+ * thinner ink bar for the measure with an optional lighter extension, and target ticks. An absent
+ * track is a short dashed stub at the baseline, never a footprint across the axis; its words join
+ * the bar's words, so the two never collide.
  */
-export function Bullet({ band, scale, track, base, bar, ticks = [], claim = 'descriptive', barLabel, overrunLabel, labelLimit, interaction }: BulletProps) {
+export function Bullet({ band, scale, track, base, bar, extension, ticks = [], claim = 'descriptive', barLabel, overrunLabel, trackSlotText, barSlotText, labelLimit, interaction }: BulletProps) {
   const zero = scale(Math.max(Math.min(0, Math.max(...scale.domain)), Math.min(...scale.domain)));
   const { pos, thickness } = band;
   const barThickness = Math.max(4, Math.round(thickness * 0.42));
@@ -47,17 +68,27 @@ export function Bullet({ band, scale, track, base, bar, ticks = [], claim = 'des
   const paint = paintFor(claim, claim === 'statistical' ? 'outline' : 'fill', 'primary');
   const trackEnd = isValue(track) ? scale(track.value) : null;
   const barEnd = isValue(bar) ? scale(bar.value) : null;
+  const extensionEnd = barEnd !== null && isValue(bar) && extension && isValue(extension) && extension.value > 0 ? scale(bar.value + extension.value) : null;
+  const baseEnd = base && isValue(base) ? scale(base.value) : null;
   const over = trackEnd !== null && barEnd !== null && barEnd > trackEnd;
-  const text = over && overrunLabel ? overrunLabel : barLabel;
-  const textX = Math.max(barEnd ?? zero, trackEnd ?? zero) + 6;
-  const fitsRight = text ? textX + measureText(text) <= (labelLimit ?? Math.max(...scale.range)) + 2 : false;
+  const trackWords = isValue(track) ? '' : trackSlotText ?? `track ${ABSENT_WORDS[track.state]}`;
+  const barWords = isValue(bar) ? '' : barSlotText ?? (bar.state === 'not-covered' ? 'not checked' : 'not recorded');
+  const text = [over && overrunLabel ? overrunLabel : isValue(bar) ? barLabel : barLabel ?? barWords, trackWords].filter(Boolean).join(' · ');
+  const tickXs = ticks.flatMap((tick) => (isValue(tick.at) ? [Math.round(scale(tick.at.value)) + 0.5] : []));
+  const textWidth = text ? measureText(text) : 0;
+  const textX = text ? clearOfTicks(Math.max(barEnd ?? zero, extensionEnd ?? zero, trackEnd ?? zero + STUB) + 6, textWidth, tickXs) : 0;
+  const fitsRight = text ? textX + textWidth <= (labelLimit ?? Math.max(...scale.range)) + 2 : false;
   return (
-    <MarkGroup interaction={interaction} box={{ x: zero, y: pos, width: Math.max(trackEnd ?? 0, barEnd ?? 0, zero + 1) - zero, height: thickness }}>
+    <MarkGroup interaction={interaction} box={{ x: zero, y: pos, width: Math.max(trackEnd ?? zero + STUB, extensionEnd ?? 0, barEnd ?? 0, zero + 1) - zero, height: thickness }}>
       {isValue(track)
         ? <rect x={zero} y={pos} width={Math.max(0, (trackEnd ?? zero) - zero)} height={thickness} rx={2} style={{ fill: VIZ.track }} />
-        : <AbsentSlot absence={track} box={{ x: zero, y: pos, width: Math.max(...scale.range) - zero, height: thickness }} text="not retrieved" align="end" />}
-      {base && isValue(base) && (
-        <rect x={zero} y={pos} width={Math.max(0, scale(base.value) - zero)} height={thickness} rx={2} style={{ fill: 'var(--viz-ord-1)', opacity: 0.45 }} />
+        : <AbsentSlot absence={track} box={{ x: zero, y: pos, width: STUB, height: thickness }} text="" />}
+      {baseEnd !== null && (
+        // 2px of surface where the base ends and the amendments begin, so the split reads in both themes.
+        <rect x={zero} y={pos} width={Math.max(0, baseEnd - zero - (trackEnd !== null && trackEnd - baseEnd > 3 ? 2 : 0))} height={thickness} rx={2} style={{ fill: 'var(--viz-ord-2)' }} />
+      )}
+      {extensionEnd !== null && barEnd !== null && (
+        <rect x={barEnd} y={barTop} width={Math.max(0, extensionEnd - barEnd)} height={barThickness} style={{ fill: VIZ.context }} />
       )}
       {isValue(bar) && barEnd !== null && (
         barEnd === zero
@@ -73,9 +104,8 @@ export function Bullet({ band, scale, track, base, bar, ticks = [], claim = 'des
           </line>
         );
       })}
-      {!isValue(bar) && <text x={zero + 4} y={pos + thickness / 2} dy="0.32em" className={MUTED_LABEL_CLASS}>{bar.state === 'not-covered' ? 'not checked' : 'not recorded'}</text>}
       {text && fitsRight && (
-        <text x={textX} y={pos + thickness / 2} dy="0.32em" className={over ? 'viz-num fill-fg text-[11px] font-medium' : LABEL_CLASS}>{text}</text>
+        <text x={textX} y={pos + thickness / 2} dy="0.32em" className={over ? 'viz-num fill-fg text-[11px] font-medium' : isValue(bar) ? LABEL_CLASS : MUTED_LABEL_CLASS}>{text}</text>
       )}
     </MarkGroup>
   );

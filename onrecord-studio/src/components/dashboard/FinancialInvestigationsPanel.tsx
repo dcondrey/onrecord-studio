@@ -134,7 +134,9 @@ function ContractChart({ chains, paymentsMapped, onInspect }: { chains: Financia
     const authority = chain.totalAuthority === null ? 'authority not retrieved' : `${money(chain.totalAuthority, chain.currency, { compact: true })} authority`;
     const stages: StageNode[] = STAGES.map(([role, stageLabel]) => {
       const ids = chain.stages[role];
-      return { key: role, label: stageLabel, state: ids === undefined ? 'not-retrieved' : ids.length ? 'linked' : 'not-linked', count: ids?.length ?? 0, onOpen: ids?.length ? () => onInspect(ids) : undefined };
+      // With no payments dataset mapped, no payment link was looked for: that is not 'not linked'.
+      const state = role === 'payment' && !paymentsMapped ? 'not-mapped' : ids === undefined ? 'not-retrieved' : ids.length ? 'linked' : 'not-linked';
+      return { key: role, label: stageLabel, state, count: ids?.length ?? 0, onOpen: state === 'linked' && ids ? () => onInspect(ids) : undefined };
     });
     return {
       key: `${chain.contractId}:${chain.currency}`,
@@ -145,6 +147,9 @@ function ContractChart({ chains, paymentsMapped, onInspect }: { chains: Financia
       ticks: chain.baseAuthority === null ? [] : [{ key: 'base', at: measured(Number(chain.baseAuthority)), label: `Base authority ${financialAmount(chain.baseAuthority, chain.currency)}` }],
       barLabel: `${paid} / ${authority}`,
       overrunLabel: negative(chain.remainingAuthority) ? `${overBy(chain)} over retrieved authority` : undefined,
+      // The bar label already names an absent authority or payments, so the slots carry no second copy.
+      trackSlotText: '',
+      barSlotText: '',
       name: `${label}: base authority ${fig(chain.baseAuthority)}, amendment deltas ${fig(chain.amendments)}, current authority ${fig(chain.totalAuthority)}, posted payments ${paymentsMapped ? fig(chain.payments) : 'no payments dataset mapped'}.`,
       tooltip: {
         title: label,
@@ -180,10 +185,11 @@ function ContractChart({ chains, paymentsMapped, onInspect }: { chains: Financia
       }}
       legend={[
         { key: 'track', label: 'Retrieved authority', swatch: 'rect', tone: 'track' },
-        { key: 'base', label: 'Base authority', swatch: 'line', tone: 'ink' },
+        { key: 'base', label: 'Base authority (tick; darker band before it)', swatch: 'line', tone: 'ink' },
         { key: 'bar', label: 'Posted payments', swatch: 'rect', tone: 'ink' },
         { key: 'linked', label: 'Stage linked (cited rows)', swatch: 'dot', tone: 'ink' },
         { key: 'unlinked', label: 'Stage not linked', swatch: 'hollow', tone: 'ink' },
+        ...(paymentsMapped ? [] : [{ key: 'absence-unmapped', label: 'Stage not mapped (no dataset for its role)', swatch: 'slot-dotted' as const }]),
       ]}
       groups={groups}
       storageKey="financial-contract-bullets"
@@ -203,17 +209,20 @@ function ReconcileChart({ lines, onInspect }: { lines: FinancialReconciliation[]
   const groups = grouped(shown, (line) => ({ key: `${line.department}\u0000${line.currency}`, label: `${line.department || 'Department not recorded'} · ${line.currency || 'currency not recorded'}`, currency: line.currency }), (line): BulletRow => {
     const label = `${line.account} / ${line.center || 'unknown'} · ${line.accountLabel}`;
     const fig = (v: string | null) => (v === null ? 'not recorded' : financialAmount(v, line.currency));
-    const delta = line.actualMinusAdopted === null ? null : `${money(line.actualMinusAdopted, line.currency, { compact: true, signed: true })} vs adopted`;
     const actual = line.actual === null ? 'no actual' : `${money(line.actual, line.currency, { compact: true })} actual`;
     return {
       key: line.key,
       label,
       track: plotted(line.revised, absent('not-recorded', 'no revised authority recorded')),
       bar: plotted(line.actual, absent('not-recorded', 'no actual recorded')),
+      extension: line.encumbered === null ? undefined : measured(Number(line.encumbered)),
       ticks: line.adopted === null ? [] : [{ key: 'adopted', at: measured(Number(line.adopted)), label: `Adopted ${financialAmount(line.adopted, line.currency)}` }],
-      // An absent actual is labelled by its slot; a second label would sit on top of it.
-      barLabel: line.actual === null ? undefined : delta ? `${actual} · ${delta}` : actual,
+      // The actual − adopted delta has its own column on every row, including those above revised.
+      barLabel: line.actual === null ? undefined : actual,
       overrunLabel: `${actual} · above revised`,
+      trackSlotText: 'revised not recorded',
+      barSlotText: 'actual not recorded',
+      delta: line.actualMinusAdopted === null ? null : { value: Number(line.actualMinusAdopted), label: money(line.actualMinusAdopted, line.currency, { compact: true, signed: true }) },
       name: `${label}: adopted ${fig(line.adopted)}, revised ${fig(line.revised)}, actual ${fig(line.actual)}, encumbered ${fig(line.encumbered)}.${line.citations.length ? ' Press Enter to inspect its cited rows.' : ''}`,
       tooltip: {
         title: label,
@@ -252,9 +261,12 @@ function ReconcileChart({ lines, onInspect }: { lines: FinancialReconciliation[]
         legend={[
           { key: 'track', label: 'Revised authority', swatch: 'rect', tone: 'track' },
           { key: 'bar', label: 'Actual', swatch: 'rect', tone: 'ink' },
+          { key: 'enc', label: 'Encumbered, after actual', swatch: 'rect', tone: 'context' },
           { key: 'tick', label: 'Adopted', swatch: 'line', tone: 'ink' },
+          { key: 'delta', label: 'Actual − adopted (right column; sign in the label)', swatch: 'rect', tone: 'context' },
         ]}
         groups={groups}
+        deltaTitle="actual − adopted"
         storageKey="financial-reconcile-bullets"
       />
       {lines.length > RECONCILE_PLOTTED && (

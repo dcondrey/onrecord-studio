@@ -66,4 +66,7 @@ it('draws a contract overrun in ink from the decimal strings and says when no pa
  await mounted();await run();fireEvent.click(screen.getByRole('button',{name:'Spending chains'}));
  expect(screen.getByText(/No payments dataset mapped, so none of 1 contract is compared/)).toBeTruthy();
  expect(screen.queryByText(/over retrieved authority/)).toBeNull();
+ // With no payments dataset mapped, no payment link was looked for: the stage says 'not mapped', never 'not linked'.
+ expect(screen.queryByRole('img',{name:/Payment: not linked/})).toBeNull();
+ expect([...document.querySelectorAll('[data-absence="not-covered"] title')].some((title)=>/Payment: no dataset is mapped/.test(title.textContent??''))).toBe(true);
 });

@@ -3,7 +3,6 @@ import ChartFrame, { type ChartStatus } from '../frame/ChartFrame';
 import { Axis } from '../frame/Axis';
 import { Grid } from '../frame/Grid';
 import type { LegendItem } from '../frame/Legend';
-import { ReferenceBand } from '../frame/ReferenceLine';
 import type { ChartSources } from '../frame/SourceCaption';
 import type { TwinTable } from '../frame/TableTwin';
 import { TooltipContent, type TooltipRow } from '../frame/Tooltip';
@@ -15,7 +14,7 @@ import { useRovingFocus } from '../hooks/useRovingFocus';
 import { useTooltip } from '../hooks/useTooltip';
 import { Bullet, type BulletTick } from '../marks/Bullet';
 import { Dot } from '../marks/Dot';
-import { AbsentSlot, MUTED_LABEL_CLASS, type MarkInteraction } from '../marks/shared';
+import { AbsentSlot, LABEL_CLASS, MUTED_LABEL_CLASS, type MarkInteraction } from '../marks/shared';
 
 const ROW_LABEL_FONT = '12px -apple-system, BlinkMacSystemFont, sans-serif';
 export const ROW_LABEL_CLASS = 'fill-fg-secondary text-[12px]';
@@ -59,7 +58,8 @@ export function RowLabel({ row, title }: { row: RowPlacement; title?: string }) 
   );
 }
 
-export type StageState = 'linked' | 'not-linked' | 'not-retrieved';
+/** 'not-mapped': no dataset is mapped to the stage's role, so no link was looked for; not the same as a link not found. */
+export type StageState = 'linked' | 'not-linked' | 'not-retrieved' | 'not-mapped';
 
 export interface StageNode {
   key: string;
@@ -76,11 +76,20 @@ export interface BulletRow {
   track: Measured;
   base?: Measured;
   bar: Measured;
+  /** A lighter segment continuing the bar (encumbered beside actual). */
+  extension?: Measured;
   ticks: BulletTick[];
   /** Printed at the bar's end; built from decimal strings by the container. */
   barLabel?: string;
   /** Printed in ink when the bar runs past the track. */
   overrunLabel?: string;
+  /** Words for an absent track or bar; '' when the bar label already says it. */
+  trackSlotText?: string;
+  barSlotText?: string;
+  /** A signed difference drawn as a small diverging bar in the right-hand column, its label signed. */
+  delta?: { value: number; label: string } | null;
+  /** This row's app yardstick band on the value axis (a different band on each row). */
+  yardstick?: { lo: number; hi: number; label: YardstickLabel };
   /** A full sentence with every figure, 'not retrieved' where one is absent. */
   name: string;
   tooltip: { title: string; rows: TooltipRow[]; note?: string };
@@ -107,8 +116,8 @@ export interface BulletRowsProps {
   table: TwinTable;
   legend: LegendItem[];
   groups: BulletGroup[];
-  /** An app yardstick band on the value axis (the spending-lead threshold). */
-  yardstick?: { lo: number; hi: number; label: YardstickLabel };
+  /** Heading of the right-hand delta column, when rows carry a delta ('actual − adopted'). */
+  deltaTitle?: string;
   storageKey: string;
   controls?: ReactNode;
 }
@@ -154,15 +163,17 @@ function StageStrip({ y, x0, x1, stages, interaction }: { y: number; x0: number;
   const xs = stages.map((_, j) => x0 + 6 + j * step);
   return (
     <g>
+      {/* The strip is a row of its own: the surface hides the value gridlines, so a node never reads as an amount. */}
+      <rect x={x0} y={y + 2} width={Math.max(0, x1 - x0)} height={STAGE_STRIP - 2} style={{ fill: VIZ.surface }} aria-hidden="true" />
       <line x1={xs[0]} x2={xs[xs.length - 1]} y1={cy} y2={cy} style={{ stroke: VIZ.track, strokeWidth: 2 }} aria-hidden="true" />
       {stages.map((stage, j) => {
-        const words = stage.state === 'linked' ? `${stage.label} ${stage.count}` : stage.state === 'not-linked' ? `${stage.label}: not linked` : `${stage.label}: not retrieved`;
+        const words = stage.state === 'linked' ? `${stage.label} ${stage.count}` : `${stage.label}: ${STAGE_WORDS[stage.state]}`;
         const room = step - 18;
         const text = fitsInside(words, room) ? words : fitsInside(stage.label, room) ? stage.label : '';
         return (
           <Fragment key={stage.key}>
-            {stage.state === 'not-retrieved'
-              ? <AbsentSlot absence={{ state: 'not-recorded', reason: `${stage.label}: no records of this stage were retrieved` }} box={{ x: xs[j] - 5, y: cy - 5, width: 10, height: 10 }} text="" />
+            {stage.state === 'not-retrieved' || stage.state === 'not-mapped'
+              ? <AbsentSlot absence={stage.state === 'not-mapped' ? { state: 'not-covered', reason: `${stage.label}: no dataset is mapped to this role, so no link was looked for` } : { state: 'not-recorded', reason: `${stage.label}: no records of this stage were retrieved` }} box={{ x: xs[j] - 5, y: cy - 5, width: 10, height: 10 }} text="" />
               : <Dot cx={xs[j]} cy={cy} r={4} role="primary" hollow={stage.state === 'not-linked'} interaction={interaction(j)} />}
             {text && <text x={xs[j] + 9} y={cy} dy="0.32em" className={MUTED_LABEL_CLASS}>{text}</text>}
           </Fragment>
@@ -172,7 +183,25 @@ function StageStrip({ y, x0, x1, stages, interaction }: { y: number; x0: number;
   );
 }
 
-function Plot({ groups, width, yardstick }: { groups: BulletGroup[]; width: number; yardstick?: BulletRowsProps['yardstick'] }) {
+const STAGE_WORDS: Record<Exclude<StageState, 'linked'>, string> = { 'not-linked': 'not linked', 'not-retrieved': 'not retrieved', 'not-mapped': 'not mapped' };
+const DELTA_COLUMN = 150;
+
+/** The signed delta as a small bar about its own zero in the right-hand column; neutral both ways, the sign in words. */
+function DeltaBar({ delta, x0, y, max }: { delta: { value: number; label: string }; x0: number; y: number; max: number }) {
+  const half = 32;
+  const centre = x0 + half + 2;
+  const length = max > 0 ? (Math.abs(delta.value) / max) * half : 0;
+  const from = delta.value < 0 ? centre - length : centre;
+  return (
+    <g aria-hidden="true">
+      <line x1={centre + 0.5} x2={centre + 0.5} y1={y - 1} y2={y + BAND + 1} style={{ stroke: VIZ.baseline, strokeWidth: 1 }} />
+      <rect x={from} y={y + BAND / 2 - 3} width={Math.max(length, delta.value === 0 ? 0 : 1)} height={6} style={{ fill: VIZ.context }} />
+      <text x={centre + half + 6} y={y + BAND / 2} dy="0.32em" className={LABEL_CLASS}>{delta.label}</text>
+    </g>
+  );
+}
+
+function Plot({ groups, width, deltaTitle }: { groups: BulletGroup[]; width: number; deltaTitle?: string }) {
   const tooltip = useTooltip();
   const blocks = groupLayout(groups, width);
   const flat = blocks.flatMap((block) => block.rows.map((row, i) => ({ row, data: block.group.rows[i] })));
@@ -185,9 +214,15 @@ function Plot({ groups, width, yardstick }: { groups: BulletGroup[]; width: numb
     onEscape: tooltip.hide,
   });
   // Room on the right for the longest words at a bar's end, so an overrun label is never dropped.
-  const words = Math.max(0, ...groups.flatMap((group) => group.rows.map((row) => Math.max(measureText(row.overrunLabel ?? ''), measureText(row.barLabel ?? '')))));
+  const words = Math.max(0, ...groups.flatMap((group) => group.rows.map((row) => {
+    const slot = isValue(row.track) || !row.trackSlotText ? 0 : measureText(` · ${row.trackSlotText}`);
+    return Math.max(measureText(row.overrunLabel ?? ''), measureText(row.barLabel ?? row.barSlotText ?? '')) + slot;
+  })));
   const plotLeft = Math.max(0, ...blocks.map((block) => block.plotX));
-  const right = Math.max(plotLeft + 80, width - Math.min(words + 12, Math.round(width * 0.55)));
+  const hasDelta = groups.some((group) => group.rows.some((row) => row.delta));
+  const deltaX = width - (hasDelta ? DELTA_COLUMN : 0);
+  const right = Math.max(plotLeft + 80, deltaX - Math.min(words + 12, Math.round(width * 0.55)));
+  const deltaMax = (currency: string) => Math.max(0, ...groups.filter((group) => group.currency === currency).flatMap((group) => group.rows.map((row) => Math.abs(row.delta?.value ?? 0))));
   const scales = new Map<string, ContinuousScale>();
   for (const block of blocks) {
     if (!scales.has(block.group.currency)) {
@@ -207,7 +242,7 @@ function Plot({ groups, width, yardstick }: { groups: BulletGroup[]; width: numb
               <text x={0} y={block.headerY + 12} className="fill-fg text-[12px] font-medium">{block.group.label}</text>
             )}
             <Grid scale={x} extent={[top, block.axisY]} vertical />
-            {yardstick && <ReferenceBand axis="x" from={x(yardstick.lo)} to={x(yardstick.hi)} extent={[top, block.axisY]} label={yardstick.label} />}
+            {hasDelta && deltaTitle && <text x={deltaX + 2} y={top - 2} className={MUTED_LABEL_CLASS}>{deltaTitle}</text>}
             {block.rows.map((row, i) => {
               const data = block.group.rows[i];
               const index = flatIndex++;
@@ -216,16 +251,24 @@ function Plot({ groups, width, yardstick }: { groups: BulletGroup[]; width: numb
               return (
                 <g key={row.key}>
                   <RowLabel row={row} title={data.label} />
+                  {data.yardstick && (
+                    <rect x={x(data.yardstick.lo)} y={row.markY - 3} width={Math.max(1, x(data.yardstick.hi) - x(data.yardstick.lo))} height={BAND + 6} rx={2} style={{ fill: 'none', stroke: VIZ.baseline, strokeWidth: 1, strokeDasharray: '3 2' }}>
+                      <title>{data.yardstick.label}</title>
+                    </rect>
+                  )}
                   <Bullet
                     band={{ pos: row.markY, thickness: BAND }}
                     scale={x}
                     track={data.track}
                     base={data.base}
                     bar={data.bar}
+                    extension={data.extension}
                     ticks={data.ticks}
                     barLabel={data.barLabel}
                     overrunLabel={data.overrunLabel}
-                    labelLimit={width - 4}
+                    trackSlotText={data.trackSlotText}
+                    barSlotText={data.barSlotText}
+                    labelLimit={deltaX - 4}
                     interaction={{
                       name: data.name,
                       item: rowFocus.getItemProps(index),
@@ -236,17 +279,18 @@ function Plot({ groups, width, yardstick }: { groups: BulletGroup[]; width: numb
                       onBlurMark: tooltip.hide,
                     }}
                   />
+                  {data.delta && <DeltaBar delta={data.delta} x0={deltaX} y={row.markY} max={deltaMax(block.group.currency)} />}
                   {stagesAt !== null && data.stages && (
                     <StageStrip
                       y={row.markY + BAND + 2}
                       x0={block.plotX}
-                      x1={width}
+                      x1={right}
                       stages={data.stages}
                       interaction={(j) => {
                         const stage = (data.stages as StageNode[])[j];
                         const sentence = stage.state === 'linked'
                           ? `${data.label}, ${stage.label}: ${stage.count} cited ${stage.count === 1 ? 'row' : 'rows'}. Press Enter to inspect.`
-                          : `${data.label}, ${stage.label}: not linked.`;
+                          : `${data.label}, ${stage.label}: ${STAGE_WORDS[stage.state]}.`;
                         return {
                           name: sentence,
                           item: stageFocus.getItemProps(stagesAt, j),
@@ -271,7 +315,8 @@ function Plot({ groups, width, yardstick }: { groups: BulletGroup[]; width: numb
 
 /**
  * F6 BulletRows: one bullet per line on a currency's own axis. Track = authority (or revised), an
- * inner band for the base, ink bar = the measured amount, ink ticks = targets. An overrun is drawn
+ * inner band for the base, ink bar = the measured amount with an optional lighter extension, ink
+ * ticks = targets, an optional per-row yardstick band, and an optional signed delta column. An overrun is drawn
  * by position past the track and words in ink, never crimson: retrieved authority can be
  * incomplete, so it compares retrieved figures. Mixed currencies are separate groups and axes.
  */
@@ -294,7 +339,7 @@ export default function BulletRows(props: BulletRowsProps) {
       interactive={{ roledescription: 'bullet chart' }}
       storageKey={props.storageKey}
     >
-      {({ width }) => <Plot groups={groups} width={width} yardstick={props.yardstick} />}
+      {({ width }) => <Plot groups={groups} width={width} deltaTitle={props.deltaTitle} />}
     </ChartFrame>
   );
 }
