@@ -342,6 +342,11 @@ export default function WatchlistPanel() {
             </h4>
             {dimensionFilter && <Button size="sm" variant="ghost" onClick={() => setDimensionFilter(null)}>Show every dimension</Button>}
           </div>
+          {dimensionFilter && (selected?.lastDimensions.find((result) => result.dimension === dimensionFilter)?.changeCount ?? 0) > shownChanges.length && (
+            <p className="text-caption text-muted">
+              {shownChanges.length} of {selected?.lastDimensions.find((result) => result.dimension === dimensionFilter)?.changeCount} changes shown: only the latest 100 of this watch are loaded.
+            </p>
+          )}
           {shownChanges.length === 0 ? (
             <p className="mt-1 text-muted">No changes recorded. This lists only changes that were detected; see each watch above for what a check could and could not observe.</p>
           ) : (

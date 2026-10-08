@@ -228,6 +228,16 @@ describe('FindingsInbox', () => {
     expect(screen.getByText('Environmental critical')).toBeTruthy();
     expect(screen.queryByText('Environmental serious')).toBeNull();
     expect(screen.queryByText('Unattributed critical')).toBeNull();
+
+    // A newer sweep with more findings than a page withholds the matrix; the agency filter it set
+    // still narrows the list, so it stays visible and clearable.
+    bridge.listRows = [...bridge.listRows, ...Array.from({ length: 50 }, (_, i) => sampleFinding({ id: `x${i}`, headline: `Extra ${i}` }))];
+    await act(async () => {
+      useAppStore.getState().requestFindingsRefresh();
+    });
+    await waitFor(() => expect(screen.queryByRole('grid')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(screen.getByText('Unattributed critical')).toBeTruthy();
     useAppStore.setState({ agencyProfiles: [] });
   });
 

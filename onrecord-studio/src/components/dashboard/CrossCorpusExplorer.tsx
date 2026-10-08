@@ -65,12 +65,14 @@ export function jurisdictionGrid(findings: readonly CrossCorpusFinding[]) {
   return { rows, jurisdictions, headline };
 }
 
+const FINDINGS_LOADED = 200;
+
 function isCrossCorpusFinding(finding: Finding): finding is CrossCorpusFinding {
   return (CROSS_CORPUS_KINDS as readonly string[]).includes(finding.kind);
 }
 
 export default function CrossCorpusExplorer() {
-  const load = useFindings(null, 200);
+  const load = useFindings(null, FINDINGS_LOADED);
   const findings = useMemo(() => load.findings.filter(isCrossCorpusFinding), [load.findings]);
   const error = load.status === 'failed' ? load.message : null;
   const isLoading = load.status === 'loading';
@@ -106,7 +108,7 @@ export default function CrossCorpusExplorer() {
             title="Cross-corpus findings by jurisdiction"
             storageKey="cross-corpus-jurisdictions"
             headline={grid.headline}
-            sources={{ tables: ['findings'], note: 'cross-corpus detectors only; counts are detector output, not legal findings' }}
+            sources={{ tables: ['findings'], note: `cross-corpus detectors only; counts are detector output, not legal findings${load.findings.length >= FINDINGS_LOADED ? `; counted over the first ${FINDINGS_LOADED} findings loaded, so a 0 may hide later ones` : ''}` }}
             summary={`${findings.length} findings in ${grid.rows.length} jurisdictions by ${CROSS_CORPUS_KINDS.length} detectors. Activate a cell to list its findings.`}
             status="ready"
             rowHeader="Jurisdiction"

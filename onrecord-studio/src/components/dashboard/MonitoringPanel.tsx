@@ -81,7 +81,7 @@ export default function MonitoringPanel({ caseId = null, topic = 'homelessness' 
   const [newObservation, setNewObservation] = useState(false);
   const [selectedObservation, setSelectedObservation] = useState<string | null>(null);
   const [coverageView, setCoverageView] = useState<'matrix' | 'list'>('matrix');
-  const [expandedCell, setExpandedCell] = useState<{ row: number; col: number } | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [dateFrom, setDateFrom] = useState(''); const [dateTo, setDateTo] = useState('');
   // Every read and save begins a request on one gate, and the effect below begins a new one
   // whenever the case or topic changes, so a result for the previous case is never written.
@@ -101,7 +101,7 @@ export default function MonitoringPanel({ caseId = null, topic = 'homelessness' 
   }, [caseId, gate, topic]);
 
   useEffect(() => {
-    setStatus(null); setNewCoverage(false); setNewObservation(false); setSelectedObservation(null); setExpandedCell(null);
+    setStatus(null); setNewCoverage(false); setNewObservation(false); setSelectedObservation(null); setExpandedId(null);
     void load();
     return gate.invalidate;
   }, [gate, load]);
@@ -125,7 +125,11 @@ export default function MonitoringPanel({ caseId = null, topic = 'homelessness' 
   const points = observationPoints(observations);
   const selected = observations.find(o => o.id === selectedObservation);
   const matrix = status ? acquisitionMatrix(status.coverage) : null;
-  const expandedItem = matrix && expandedCell ? matrix.rows[expandedCell.row]?.items[expandedCell.col] ?? null : null;
+  // Keyed by expectation id: a save re-sorts the rows, and an index would then open another expectation.
+  const expandedItem = status?.coverage.find((item) => item.expectation.id === expandedId) ?? null;
+  const expandedCell = matrix && expandedItem
+    ? matrix.rows.flatMap((row, i) => row.items.flatMap((item, j) => (item?.expectation.id === expandedItem.expectation.id ? [{ row: i, col: j }] : [])))[0] ?? null
+    : null;
   return <section aria-label="Evidence monitoring">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <p className="max-w-prose text-body text-muted">Turn unresolved questions into records to acquire, and compare cited versions before drawing conclusions.</p>
@@ -157,8 +161,11 @@ export default function MonitoringPanel({ caseId = null, topic = 'homelessness' 
         columns={matrix.periods.map((period) => ({ key: period, label: period }))}
         rows={matrix.rows}
         selected={expandedCell ? [expandedCell] : []}
-        onActivate={(row, col) => setExpandedCell((current) => current?.row === row && current.col === col ? null : { row, col })}
-        onEscape={() => setExpandedCell(null)}
+        onActivate={(row, col) => {
+          const id = matrix.rows[row]?.items[col]?.expectation.id ?? null;
+          setExpandedId((current) => (current === id ? null : id));
+        }}
+        onEscape={() => setExpandedId(null)}
         legend={[
           { key: 'missing', label: 'Expected, not found (a record to request)', swatch: 'slot-dashed', tone: 'lead' },
           { key: 'received', label: 'Receipt recorded', swatch: 'dot', tone: 'positive' },

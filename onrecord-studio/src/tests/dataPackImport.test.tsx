@@ -143,7 +143,7 @@ describe('DataPackImport', () => {
     render(<DataPackImport />);
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Choose pack folder' })); });
 
-    expect(screen.getByText('call_types: +13 / −10 / 2 changed (1 pair not separated) across 3 retrievals since Sep 1, 2026; last checked Oct 6, 2026, no change since.')).toBeTruthy();
+    expect(screen.getByText('call_types: +13 / −10 / 2 changed (1 pair not separated) across 3 retrievals since Sep 1, 2026; last checked Oct 6, 2026: unchanged from the latest snapshot.')).toBeTruthy();
     const whole = screen.getByRole('img', { name: /^Sep 15, 2026 to Oct 1, 2026: 9 added, 9 removed, changed not separated/ });
     expect(whole.textContent).toContain('not separated');
     fireEvent.click(screen.getAllByRole('button', { name: 'View as table' }).at(-1)!);

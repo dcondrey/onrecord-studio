@@ -40,7 +40,7 @@ function fileName(path: string): string {
   return path.split('/').pop() ?? path;
 }
 
-/** '<table>: +A / −R / C changed across N retrievals since <first>; last checked <date>, no change since'. */
+/** '<table>: +A / −R / C changed across N retrievals since <first>; last checked <date>: unchanged from the latest snapshot'. */
 export function changeHeadline({ table, changes, unchangedChecks, lastCheckedAt }: ChangeTimelineProps): string {
   const added = changes.reduce((sum, change) => sum + change.added, 0);
   const removed = changes.reduce((sum, change) => sum + change.removed, 0);
@@ -51,7 +51,7 @@ export function changeHeadline({ table, changes, unchangedChecks, lastCheckedAt 
   const first = changes.map((change) => change.previousRetrievedAt).find((at) => at !== null) ?? null;
   const retrievals = changes.length + 1;
   const lead = `${table}: +${added.toLocaleString('en-US')} / −${removed.toLocaleString('en-US')} / ${changedText} across ${retrievals} retrievals since ${day(first)}`;
-  if (unchangedChecks > 0 && lastCheckedAt) return `${lead}; last checked ${day(lastCheckedAt)}, no change since.`;
+  if (unchangedChecks > 0 && lastCheckedAt) return `${lead}; last checked ${day(lastCheckedAt)}: unchanged from the latest snapshot.`;
   return `${lead}.`;
 }
 

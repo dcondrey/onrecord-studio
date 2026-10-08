@@ -395,9 +395,9 @@ export default function FindingsInbox() {
 
       {findings.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 text-caption text-muted">
-          {(severityFilter || agencyLabel) && !hasMore && (
+          {(agencyFilter !== null || (severityFilter !== null && !hasMore)) && (
             <span className="flex items-center gap-1">
-              <Badge>{[agencyLabel, severityFilter ? severityLabel(severityFilter) : null].filter(Boolean).join(' · ')}</Badge>
+              <Badge>{[agencyFilter === null ? null : agencyLabel ?? 'Selected agency', severityFilter ? severityLabel(severityFilter) : null].filter(Boolean).join(' · ')}</Badge>
               <Button size="sm" variant="ghost" onClick={() => { setAgencyFilter(null); setSeverityFilter(null); }}>Clear</Button>
             </span>
           )}
