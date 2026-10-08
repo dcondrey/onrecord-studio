@@ -208,9 +208,8 @@ fn lead_for(finding: &Finding, live: &[&Finding], now: DateTime<Utc>) -> StoryLe
                 name: "evidence strength".into(),
                 basis_points: scaled,
                 evidence: format!(
-                    "measured confidence {}.{:02}%",
-                    basis_points / 100,
-                    basis_points % 100
+                    "measured confidence {}",
+                    crate::report::percent(basis_points)
                 ),
             });
         }
