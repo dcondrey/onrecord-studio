@@ -272,6 +272,18 @@ pub mod sql {
         )
     }
 
+    /// A request whose effective deadline (extension included) has passed by the observation
+    /// date, so [`statutory_violation_predicate`] can no longer change its verdict: the
+    /// determination proxy moves with later activity until then. Every request that predicate
+    /// counts satisfies this one, because a determination is never dated after the observation.
+    pub fn statutory_deadline_passed_predicate() -> String {
+        format!(
+            "created_timestamp IS NOT NULL
+          AND created_date IS NOT NULL
+          AND date_diff('day', created_date, {OBSERVATION_CALENDAR_DATE}) > allowed_calendar_days"
+        )
+    }
+
     /// Lifecycle anomaly, not a statutory finding: a closure too fast to represent real review.
     pub fn suspicious_fast_closure_predicate() -> String {
         format!(
@@ -311,6 +323,10 @@ pub mod sql {
             .replace(
                 "{statutory_violation_predicate}",
                 &statutory_violation_predicate(),
+            )
+            .replace(
+                "{statutory_deadline_passed_predicate}",
+                &statutory_deadline_passed_predicate(),
             )
             .replace(
                 "{suspicious_fast_closure_predicate}",

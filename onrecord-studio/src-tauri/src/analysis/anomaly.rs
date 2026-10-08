@@ -143,6 +143,9 @@ request_counts AS (
             WHERE {statutory_violation_predicate}
         ) AS statutory_violation_count,
         COUNT(*) FILTER (
+            WHERE {statutory_deadline_passed_predicate}
+        ) AS statutory_deadline_passed_count,
+        COUNT(*) FILTER (
             WHERE {suspicious_fast_closure_predicate}
         ) AS suspicious_fast_closure_count
     FROM evaluated
@@ -213,7 +216,8 @@ SELECT
     CAST(request_counts.statutory_violation_count AS DOUBLE)
         / NULLIF(CAST(request_counts.total_requests AS DOUBLE), 0.0),
     request_counts.suspicious_fast_closure_count,
-    COALESCE(released_documents.total_documents_released, 0)
+    COALESCE(released_documents.total_documents_released, 0),
+    request_counts.statutory_deadline_passed_count
 FROM request_counts
 CROSS JOIN global_latency
 LEFT JOIN agency_latency
@@ -286,6 +290,7 @@ struct RawAgencyPerformanceProfile {
     statutory_violation_rate: f64,
     suspicious_fast_closure_count: i64,
     total_documents_released: i64,
+    statutory_deadline_passed_count: i64,
 }
 
 struct KeywordPattern {
@@ -441,6 +446,7 @@ fn query_agency_performance_profiles(
                     statutory_violation_rate: row.get(13)?,
                     suspicious_fast_closure_count: row.get(14)?,
                     total_documents_released: row.get(15)?,
+                    statutory_deadline_passed_count: row.get(16)?,
                 })
             },
         )
@@ -650,6 +656,10 @@ fn convert_raw_profile(
         anomaly_count: count(raw.anomaly_count, "latency anomaly count")?,
         statutory_violation_count,
         statutory_violation_rate: raw.statutory_violation_rate,
+        statutory_deadline_passed_count: count(
+            raw.statutory_deadline_passed_count,
+            "deadline-passed request count",
+        )?,
         suspicious_fast_closure_count: count(
             raw.suspicious_fast_closure_count,
             "fast closure count",
@@ -801,6 +811,44 @@ mod tests {
                 .unwrap(),
             Vec::new()
         );
+    }
+
+    /// A request still inside its clock is neither a counted miss nor in the miss rate's
+    /// denominator, even when activity already stands in as its determination: later activity
+    /// can still move that proxy past the deadline. Every counted miss is past its deadline.
+    #[test]
+    fn counts_only_requests_past_their_deadline_as_settled() {
+        let connection = connection();
+        let day = |offset: i64| (chrono::Utc::now() + chrono::Duration::days(offset)).to_rfc3339();
+        connection
+            .execute_batch(&format!(
+                "DELETE FROM db.requests;
+                 INSERT INTO db.requests VALUES
+                    (20, 'city', 1, 'Young, active', 'x', 'open', '{young}', '{young_update}', NULL, NULL, NULL),
+                    (21, 'city', 1, 'Young, quiet', 'x', 'open', '{young}', NULL, NULL, NULL, NULL),
+                    (22, 'city', 1, 'Answered in time', 'x', 'closed', '{old}', '{old_answer}', '{old_answer}', NULL, NULL),
+                    (23, 'city', 1, 'Never answered', 'x', 'open', '{old}', NULL, NULL, NULL, NULL);",
+                young = day(-3),
+                young_update = day(-1),
+                old = day(-60),
+                old_answer = day(-55),
+            ))
+            .unwrap();
+        let profiles = query_agency_performance_profiles(
+            &connection,
+            90.0,
+            "",
+            "",
+            AnalyticsSource::ForeignSqlite.table_prefix(),
+        )
+        .unwrap();
+        let routine = profiles
+            .iter()
+            .find(|profile| profile.agency_id == 1)
+            .unwrap();
+        assert_eq!(routine.total_requests_processed, 4);
+        assert_eq!(routine.statutory_deadline_passed_count, 2);
+        assert_eq!(routine.statutory_violation_count, 1);
     }
 
     #[test]

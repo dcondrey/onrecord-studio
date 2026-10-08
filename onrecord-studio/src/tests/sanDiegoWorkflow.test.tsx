@@ -119,7 +119,7 @@ describe('San Diego research workflow', () => {
   });
 
   it('keeps a department tied to its source when agency IDs collide', () => {
-    const profile = { agencyId: 7, totalRequestsProcessed: 1, totalClosed: 1, validLatencySampleSize: 1, excludedInvalidLifetimeCount: 0, averageClosureDays: 1, globalMeanClosureDays: 1, globalStddevClosureDays: null, performanceZScore: null, complianceIndicator: 'Compliant' as const, anomalyCount: 0, statutoryViolationCount: 0, statutoryViolationRate: 0, suspiciousFastClosureCount: 0, totalDocumentsReleased: 1, keywordFrequencyMap: {} };
+    const profile = { agencyId: 7, totalRequestsProcessed: 1, totalClosed: 1, validLatencySampleSize: 1, excludedInvalidLifetimeCount: 0, averageClosureDays: 1, globalMeanClosureDays: 1, globalStddevClosureDays: null, performanceZScore: null, complianceIndicator: 'Compliant' as const, anomalyCount: 0, statutoryViolationCount: 0, statutoryViolationRate: 0, statutoryDeadlinePassedCount: 0, suspiciousFastClosureCount: 0, totalDocumentsReleased: 1, keywordFrequencyMap: {} };
     useAppStore.setState({ agencyProfiles: [
       { ...profile, agencyName: 'Police Department', portalSubdomain: 'sandiego' },
       { ...profile, agencyName: 'Public Works', portalSubdomain: 'other-source' },

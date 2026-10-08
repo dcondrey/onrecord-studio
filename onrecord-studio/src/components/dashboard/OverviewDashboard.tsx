@@ -201,18 +201,17 @@ const PERIOD_MEASURES: { value: PeriodMeasure; label: string }[] = [
 ];
 
 const NO_REQUESTS = 'no requests in window';
+const NONE_PAST_DEADLINE = 'no request in window is past its statutory deadline yet';
 
 /**
- * A request's statutory clock can still be running this many days after it was created: 10 days to
- * determine plus a 14-day extension (statute.rs CPRA_INITIAL_DETERMINATION_DAYS and
- * CPRA_MAXIMUM_EXTENSION_DAYS), a last day carried past a weekend and holidays, and one more day
- * because a miss is counted only once the elapsed days exceed the entitlement. A window ending
- * sooner would count its young requests as on time and show an improvement that is only censoring.
+ * Closure has no deadline to mature against, so a closure measure's windows end this many days
+ * ago: a request created last week has had no time to close, and counting it would show a decline
+ * that is only censoring. The miss rate needs no lag: its denominator is the requests whose
+ * statutory deadline has passed (`statutoryDeadlinePassedCount`), and younger ones are left out.
  */
 export const PERIOD_MATURITY_DAYS = 30;
 
-/** Every measure but the request count depends on how a request ended, so it waits for maturity. */
-const maturityLag = (measure: PeriodMeasure) => (measure === 'requests' ? 0 : PERIOD_MATURITY_DAYS);
+const maturityLag = (measure: PeriodMeasure) => (measure === 'closure' || measure === 'latency' ? PERIOD_MATURITY_DAYS : 0);
 
 interface PeriodWindows {
   current: AgencyPerformanceProfile[];
@@ -277,7 +276,7 @@ export function PeriodComparison({ activePortalKey }: { activePortalKey: string 
         sources={{
           tables: ['requests', 'statutory_extensions', 'agencies'],
           note: range
-            ? `requests created ${range.current} vs ${range.prior}${lag > 0 ? `; both windows end ${lag} days ago, so every request in them is past its longest statutory deadline (10 days plus a 14-day extension, carried to a court day)` : ''}`
+            ? `requests created ${range.current} vs ${range.prior}${lag > 0 ? `; both windows end ${lag} days ago, so no request in them is younger than ${lag} days` : ''}${measure === 'counted' ? '; the rate counts only requests past their statutory deadline (extension included), never one still within its clock' : ''}`
             : undefined,
         }}
         status={status}
@@ -305,6 +304,8 @@ interface PeriodSide {
   requests: number;
   closed: number;
   violations: number;
+  /** Requests whose statutory deadline has passed: the only ones a miss rate may count. */
+  pastDeadline: number;
   closures: number;
   /** Closure days weighted by the closures each average rests on; null when nothing closed. */
   averageClosureDays: number | null;
@@ -314,10 +315,11 @@ function summarizePeriod(profiles: readonly AgencyPerformanceProfile[]): PeriodS
   const requests = profiles.reduce((sum, profile) => sum + profile.totalRequestsProcessed, 0);
   const closed = profiles.reduce((sum, profile) => sum + profile.totalClosed, 0);
   const violations = profiles.reduce((sum, profile) => sum + profile.statutoryViolationCount, 0);
+  const pastDeadline = profiles.reduce((sum, profile) => sum + profile.statutoryDeadlinePassedCount, 0);
   const measuredProfiles = profiles.filter((profile) => profile.averageClosureDays !== null && profile.validLatencySampleSize > 0);
   const closures = measuredProfiles.reduce((sum, profile) => sum + profile.validLatencySampleSize, 0);
   const latencyTotal = measuredProfiles.reduce((sum, profile) => sum + (profile.averageClosureDays as number) * profile.validLatencySampleSize, 0);
-  return { requests, closed, violations, closures, averageClosureDays: closures > 0 ? latencyTotal / closures : null };
+  return { requests, closed, violations, pastDeadline, closures, averageClosureDays: closures > 0 ? latencyTotal / closures : null };
 }
 
 /** One window's value of the measure; a window with no requests has no rate, never a 0% rate. */
@@ -325,7 +327,7 @@ function sideValue(side: PeriodSide, measure: PeriodMeasure): Measured {
   if (measure === 'requests') return measured(side.requests);
   if (side.requests === 0) return absent('not-recorded', NO_REQUESTS);
   if (measure === 'closure') return measured(side.closed / side.requests);
-  if (measure === 'counted') return measured(side.violations / side.requests);
+  if (measure === 'counted') return side.pastDeadline === 0 ? absent('not-recorded', NONE_PAST_DEADLINE) : measured(side.violations / side.pastDeadline);
   return side.averageClosureDays === null ? absent('not-recorded', 'no measurable closure in window') : measured(side.averageClosureDays);
 }
 
@@ -335,7 +337,10 @@ function sideBasis(side: PeriodSide, measure: PeriodMeasure): string {
     const open = side.requests - side.closed;
     return `${plural(side.closures, 'closure')}${open > 0 ? `; ${open.toLocaleString('en-US')} still open, not measured` : ''}`;
   }
-  if (measure === 'counted') return `${side.violations.toLocaleString('en-US')} of ${plural(side.requests, 'request')}`;
+  if (measure === 'counted') {
+    const running = side.requests - side.pastDeadline;
+    return `${side.violations.toLocaleString('en-US')} of ${plural(side.pastDeadline, 'request')} past the deadline${running > 0 ? `; ${running.toLocaleString('en-US')} still within their clock, not counted` : ''}`;
+  }
   if (measure === 'closure') return `${side.closed.toLocaleString('en-US')} of ${plural(side.requests, 'request')}`;
   return plural(side.requests, 'request');
 }
@@ -378,7 +383,7 @@ function periodModel(
     const a = summarizePeriod(entry.prior);
     const b = summarizePeriod(entry.current);
     const label = spansPortals ? `${entry.name} (${portalName(entry.portalKey)})` : entry.name;
-    const basisOf = (side: PeriodSide) => (measure === 'latency' ? side.closures : side.requests);
+    const basisOf = (side: PeriodSide) => (measure === 'latency' ? side.closures : measure === 'counted' ? side.pastDeadline : side.requests);
     if (measure !== 'requests' && (basisOf(a) < PERIOD_MINIMUM || basisOf(b) < PERIOD_MINIMUM) && (basisOf(a) > 0 || basisOf(b) > 0)) {
       tooFew.push(label);
       continue;
@@ -397,7 +402,7 @@ function periodModel(
     kind,
     rows,
     empty,
-    tooFew: { labels: tooFew.sort((x, y) => x.localeCompare(y)), reason: `fewer than ${PERIOD_MINIMUM} ${measure === 'latency' ? 'closures' : 'requests'} in a window` },
+    tooFew: { labels: tooFew.sort((x, y) => x.localeCompare(y)), reason: `fewer than ${PERIOD_MINIMUM} ${measure === 'latency' ? 'closures' : measure === 'counted' ? 'requests past the deadline' : 'requests'} in a window` },
     headline: periodHeadline(totalPrior, totalCurrent, measure, lag > 0 ? `created ${formatDateRange(bounds[1], bounds[2])}` : `created in the last ${days} days`, days),
   };
 }
@@ -411,9 +416,11 @@ function periodHeadline(prior: PeriodSide, current: PeriodSide, measure: PeriodM
   const before = sideValue(prior, measure);
   const name = measure === 'counted' ? 'Counted deadline-miss rate' : measure === 'closure' ? 'Closure rate' : 'Average closure';
   const show = (value: number) => (kind === 'rate' ? formatValue(value, { kind: 'percent' }) : formatValue(value, { kind: 'days' }));
-  if (now.state !== 'value') return `${name}: no measurable closure among the ${requests}.`;
-  if (before.state !== 'value') return `${name} ${show(now.value)} across ${requests}; no comparable prior window.`;
-  return `${name} ${show(now.value)} vs ${show(before.value)} (${changeText(before.value, now.value, kind)}) across ${requests}.`;
+  // The miss rate rests on the requests past their deadline, never the ones still within their clock.
+  const basis = measure === 'counted' ? `${current.pastDeadline.toLocaleString('en-US')} of the ${requests} past the deadline` : requests;
+  if (now.state !== 'value') return measure === 'counted' ? `${name}: none of the ${requests} is past its statutory deadline yet.` : `${name}: no measurable closure among the ${requests}.`;
+  if (before.state !== 'value') return `${name} ${show(now.value)} across ${basis}; no comparable prior window.`;
+  return `${name} ${show(now.value)} vs ${show(before.value)} (${changeText(before.value, now.value, kind)}) across ${basis}.`;
 }
 
 function WorkspaceSourcesUnavailable({ detail }: { detail: string | null }) {

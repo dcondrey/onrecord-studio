@@ -43,6 +43,7 @@ function profile(overrides: Partial<AgencyPerformanceProfile> & { agencyId: numb
     anomalyCount: 0,
     statutoryViolationCount: 0,
     statutoryViolationRate: 0,
+    statutoryDeadlinePassedCount: 0,
     suspiciousFastClosureCount: 0,
     totalDocumentsReleased: 3,
     keywordFrequencyMap: {},

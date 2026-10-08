@@ -59,6 +59,9 @@ pub struct AgencyPerformanceProfile {
     pub anomaly_count: usize,
     pub statutory_violation_count: usize,
     pub statutory_violation_rate: f64,
+    /// Requests whose effective statutory deadline has passed, so their counted verdict is
+    /// final. The denominator for a miss rate that a still-running clock cannot flatter.
+    pub statutory_deadline_passed_count: usize,
     pub suspicious_fast_closure_count: usize,
     pub total_documents_released: usize,
     pub keyword_frequency_map: HashMap<String, usize>,

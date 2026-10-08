@@ -406,6 +406,8 @@ const PROFILES = AGENCIES.map((a, index) => {
     anomalyCount: [4, 11, 6, 1, 0, 7, 9, 13][index],
     statutoryViolationCount: [9, 22, 14, 0, 1, 12, 17, 31][index],
     statutoryViolationRate: [0.04, 0.23, 0.09, 0, 0.02, 0.09, 0.06, 0.17][index],
+    // Requests past their statutory deadline; the rest are still within their clock.
+    statutoryDeadlinePassedCount: total - [12, 3, 7, 2, 1, 6, 15, 9][index],
     suspiciousFastClosureCount: [2, 0, 1, 5, 0, 1, 3, 0][index],
     totalDocumentsReleased: total * 3,
     keywordFrequencyMap: { encampment: 40 - index * 3, shelter: 22 + index, citation: 12, contract: 9 + index * 2 },
