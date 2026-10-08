@@ -5,6 +5,9 @@ export default {
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
+    // `control` is the 3:1 border/fill step, never a text colour; `text-control` is the control type
+    // size and must not also set a colour.
+    textColor: ({ theme }) => Object.fromEntries(Object.entries(theme('colors')).filter(([name]) => name !== 'control')),
     extend: {
       colors: {
         'fg': 'rgb(var(--fg) / <alpha-value>)',

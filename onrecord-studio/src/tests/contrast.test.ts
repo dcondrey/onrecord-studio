@@ -1,6 +1,8 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { cn } from '../utils/cn';
 
 // Every UI colour is a semantic role defined once per mode in index.css. These checks are the
 // basis of the App Store "Sufficient Contrast" label: each text role must stay readable on each
@@ -39,6 +41,20 @@ function contrast(a: string, b: string) {
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
 }
 
+/** `top` at `alpha` over `bottom`, composited per 8-bit channel as the browser paints it. */
+function over(top: string, alpha: number, bottom: string) {
+  const [t, b] = [top, bottom].map((channels) => channels.split(' ').map(Number));
+  return t.map((value, index) => Math.round(value * alpha + b[index] * (1 - alpha))).join(' ');
+}
+
+/** A declaration this file's channel parser skips: `--name: <number>` or `--name: rgb(r g b / a)`. */
+function declared(selector: string, name: string) {
+  const start = css.indexOf(`${selector} {`);
+  const match = css.slice(start, css.indexOf('}', start)).match(new RegExp(`--${name}:\\s*(?:rgb\\((\\d+ \\d+ \\d+) / )?([\\d.]+)\\)?;`));
+  if (start < 0 || !match) throw new Error(`missing --${name} in ${selector}`);
+  return { channels: match[1], alpha: Number(match[2]) };
+}
+
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
@@ -75,6 +91,47 @@ describe('colour roles', () => {
       }
     }
     expect(failures).toEqual([]);
+  });
+
+  // A tone's text on its own /10 tint is the badge and selected-row treatment. It sits on every
+  // opaque surface, on glass over those surfaces (popovers and menus), and on glass over the scrim
+  // over them (dialogs, the darkest backdrop glass gets). The sidebar's count badge stacks a second
+  // accent/10 on the selected row. Increased contrast makes glass opaque, so it has no glass rows.
+  it('keep tone text readable on its own tint, on glass and stacked in the sidebar', () => {
+    const failures: string[] = [];
+    for (const [mode, tokens] of Object.entries(MODES)) {
+      const selector = mode.startsWith('dark') ? ':root[data-theme="dark"]' : ':root';
+      const glass = declared(selector, 'glass-alpha').alpha;
+      const scrim = declared(selector, 'scrim');
+      const backdrops: [string, string][] = SURFACES.flatMap((surface) => {
+        const opaque: [string, string] = [surface, tokens[surface]];
+        if (mode.includes('increased')) return [opaque];
+        return [
+          opaque,
+          [`glass over ${surface}`, over(tokens.panel, glass, tokens[surface])],
+          [`dialog glass over scrim over ${surface}`, over(tokens.panel, glass, over(scrim.channels!, scrim.alpha, tokens[surface]))],
+        ];
+      });
+      const pairs: [string, string, string][] = [
+        ...['accent', 'lead', 'success', 'warning', 'danger'].flatMap((tone) =>
+          backdrops.map(([name, backdrop]): [string, string, string] => [`${tone} on ${tone}/10 on ${name}`, tokens[tone], over(tokens[tone], 0.1, backdrop)])),
+        ['accent count badge on the selected sidebar row', tokens.accent, over(tokens.accent, 0.1, over(tokens.accent, 0.1, tokens.surface))],
+      ];
+      for (const [pair, text, background] of pairs) {
+        const ratio = contrast(text, background);
+        if (ratio < 4.5) failures.push(`${mode}: ${pair} ${ratio.toFixed(2)}:1 < 4.5`);
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
+  // `control` is the 3:1 border step. Generated as a text colour too, `text-control` (the control
+  // type size) painted labels in it, and cn() read it as a colour and dropped the tone beside it.
+  it('keep text-control a type size, never a text colour', async () => {
+    const { default: resolveConfig } = await import('tailwindcss/resolveConfig');
+    const { default: config } = await import(/* @vite-ignore */ pathToFileURL(join(__dirname, '..', '..', 'tailwind.config.js')).href);
+    expect(Object.keys(resolveConfig(config).theme.textColor)).not.toContain('control');
+    expect(cn('text-success text-caption', 'text-control')).toBe('text-success text-control');
   });
 
   it('are the only colours components use', () => {

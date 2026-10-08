@@ -11,8 +11,9 @@
      the only place a UI colour value is written. The canvas is achromatic and a hue means exactly
      one thing: accent = you can act on it, lead = the app surfaced this, success = healthy,
      danger = a failure or a statistical flag, warning = degraded, highlight = a selection or a
-     search hit. A role's plain name is its text step (4.5:1 on bg, panel and raised); `-mark` is
-     the fill and chart-mark step (3:1); `on-` is text set on the solid fill. */
+     search hit. A role's plain name is its text step (4.5:1 on bg, panel and raised, and on its own
+     /10 tint over each, the selected-row and badge treatment); `-mark` is the fill and chart-mark
+     step (3:1); `on-` is text set on the solid fill. */
   --bg: 248 250 252;
   --panel: 255 255 255;
   --canvas: 255 255 255;
@@ -27,7 +28,9 @@
   --fg: 15 23 42;
   --fg-secondary: 51 65 85;
   --muted: 82 97 116;
-  --accent: 14 116 144;
+  /* Darker than cyan-700 so a count badge's accent/10 tint stacked on the selected row's tint still
+     reads at 4.5:1 (4.93:1 on the sidebar). */
+  --accent: 12 98 122;
   --on-accent: 255 255 255;
   /* The counted-violation badge: crimson with white text in both themes (6.47:1), so its weight does
      not change with the theme; dark mode's pastel danger text step would make it the loudest block. */
@@ -36,7 +39,7 @@
   --lead: 109 40 217;
   --lead-mark: 124 58 237;
   --on-lead: 255 255 255;
-  --success: 4 120 87;
+  --success: 4 108 78;
   --success-mark: 5 150 105;
   --danger: 185 28 28;
   --danger-mark: 239 68 68;
