@@ -493,12 +493,17 @@ const MEETINGS = [
   },
   {
     id: 'm-luh-1015', jurisdiction: 'City of San Diego', body: 'Land Use and Housing Committee', bodyCitation: citation(9002, 0, 17, 'LU&H agenda'),
-    date: day(-8), dateCitation: null, dateNote: null, timing: 'UPCOMING', startTime: '13:00', documents: [], revisions: [], commentDeadlines: [], commentInstructions: [], suggestions: [],
+    date: day(-8), dateCitation: null, dateNote: null, timing: 'UPCOMING', startTime: '13:00',
+    documents: [{ role: 'AGENDA', portalKey: 'sd-council-agendas', documentId: 9104, label: 'LU&H agenda, October 15, 2026', sourceUrl: null, posting: { state: 'RECORDED', lastModified: iso(30) }, minutesBeforeMeeting: 9000, differingFetches: 0 }],
+    revisions: [], commentDeadlines: [], commentInstructions: [], suggestions: [],
   },
   {
     id: 'm-cpp-0924', jurisdiction: 'City of San Diego', body: 'Commission on Police Practices', bodyCitation: citation(9002, 0, 17, 'CPP agenda'),
     date: day(13), dateCitation: null, dateNote: null, timing: 'PAST', startTime: '18:00',
-    documents: [{ role: 'MINUTES', portalKey: 'sd-council-agendas', documentId: 9103, label: 'CPP minutes, September 24, 2026', sourceUrl: null, posting: { state: 'RECORDED', lastModified: iso(24 * 5) }, minutesBeforeMeeting: -11520, differingFetches: 0 }],
+    documents: [
+      { role: 'AGENDA', portalKey: 'sd-council-agendas', documentId: 9105, label: 'CPP agenda, September 24, 2026', sourceUrl: null, posting: { state: 'RECORDED', lastModified: iso(24 * 16) }, minutesBeforeMeeting: 4300, differingFetches: 0 },
+      { role: 'MINUTES', portalKey: 'sd-council-agendas', documentId: 9103, label: 'CPP minutes, September 24, 2026', sourceUrl: null, posting: { state: 'RECORDED', lastModified: iso(24 * 5) }, minutesBeforeMeeting: -11520, differingFetches: 0 },
+    ],
     revisions: [], commentDeadlines: [], commentInstructions: [], suggestions: [],
   },
 ];
@@ -703,7 +708,7 @@ const full = {
   list_topic_packs: () => ({ topics: [{ id: 'encampments', title: 'Encampments and abatements', cues: ['encampment', 'abatement', '63.0403', 'unsafe camping'], documentTotal: 44, documents: [{ portalKey: 'sandiego', documentId: 9001, requestId: 26_0412, fileName: 'Abatement_Notices_Imperial_Ave_Q1-2026.pdf', matchedCues: ['abatement', '63.0403'], textCoverage: 'FULL' }], requestTotal: 6, requests: [{ portalKey: 'sandiego', requestId: 26_0412, title: REQUESTS[0].title, matchedCues: ['abatement'] }], findingTotal: 2, findings: [{ basis: 'COUNTED', anchorRequestId: 26_0412, finding: FINDINGS[1] }] }, { id: 'restrooms', title: 'Public restrooms', cues: ['restroom', 'comfort station'], documentTotal: 3, documents: [], requestTotal: 1, requests: [], findingTotal: 0, findings: [] }], documentsScanned: 1842, documentsPrefixOnly: 120, documentsFileNameOnly: 8, documentLimitReached: false, requestsScanned: 412, requestLimitReached: false, textPrefixCharacters: 20_000 }),
   list_starter_sets: () => ({ registryVersion: 4, sets: [{ id: 'homelessness', title: 'Homelessness accountability', summary: 'Sources for shelter capacity, abatements and spending.', entries: [{ id: 'sd-hssd', kind: 'SOURCE', title: 'Homelessness Strategies and Solutions', url: 'https://www.sandiego.gov/homelessness-strategies-and-solutions', what: 'Program reports and shelter dashboards', publisher: 'City of San Diego', termsNote: null, verifiedAsOf: day(20) }, { id: 'sd-nextrequest', kind: 'RECORD_REQUEST_TARGET', title: 'City of San Diego public records portal', url: 'https://sandiego.nextrequest.com', what: 'Released records and request status', publisher: 'City of San Diego', termsNote: null, verifiedAsOf: day(20) }] }] }),
   run_intent_query: ({ utterance }) => ({ utterance, status: 'ANSWERED', plan: { kind: 'FINDINGS_FOR_AGENCY', agency: 'Environmental Services Department' }, summary: '4 stored findings name Environmental Services Department.', rows: FINDINGS.slice(0, 4).map((f) => ({ id: f.id, headline: f.headline, detail: f.explanation, basis: 'STORED_FINDING', basisStatement: 'A stored finding with its own citations.', relationshipKind: null, confidenceBasisPoints: f.confidence.kind === 'MEASURED' ? f.confidence.basisPoints : null, agencyName: 'Environmental Services Department', portalKeys: ['sandiego'], citations: f.citations, omittedCitationCount: 0, citationsUnavailableReason: null })), truncated: false, rowLimit: 25, notes: [], options: [] }),
-  get_meeting_calendar: () => ({ today: day(0), meetings: MEETINGS, postingCounts: { agendaFilesWithBothTimes: 14, under72HoursBeforeStart: 2, afterMeetingStart: 0 }, limitations: ['Posting times come from HTTP Last-Modified headers, not the Clerk\'s posting log.'] }),
+  get_meeting_calendar: () => ({ today: day(0), meetings: MEETINGS, postingCounts: { agendaFilesWithBothTimes: 3, under72HoursBeforeStart: 1, afterMeetingStart: 0 }, limitations: ['Posting times come from HTTP Last-Modified headers, not the Clerk\'s posting log.'] }),
   list_watches: () => WATCHES,
   list_watch_changes: ({ limit }) => WATCH_CHANGES.slice(0, limit),
   check_watches: () => [],
@@ -813,13 +818,115 @@ const collectionPlan = {
   get_collection_plan: () => ({ sources: PORTALS.slice(0, 3).map((p, index) => ({ portalKey: p.portalKey, displayName: p.displayName, canonicalUrl: p.canonicalUrl, sourceKind: p.sourceKind, hasUnfinishedWork: index < 2, subject: index === 0 ? 'encampment abatement' : null })) }),
 };
 
+// ---- Populated figure fixtures (scenario.figures) -------------------------------------------
+
+const FIN_CITATION = { id: 'fin-1', role: 'budget', snapshotId: 'snap-budget-fy25', sourceUrl: 'https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv', sourceSha256: hex('snap-budget-fy25'), queryId: 'q-fin', columns: ['amount'], row: ['3600000.00'] };
+const reconcileLine = (account, accountLabel, department, adopted, revised, actual, encumbered, currency = 'USD') => ({
+  agency: 'City of San Diego', fundingDuration: 'ongoing', key: `fin-${account}`, fiscalYear: '2025', fund: '100000', account, accountLabel, department, center: '1914', program: accountLabel, currency,
+  adopted, revised, actual, encumbered,
+  actualMinusAdopted: adopted !== null && actual !== null ? (Number(actual) - Number(adopted)).toFixed(2) : null,
+  uncommittedRevised: revised !== null && actual !== null && encumbered !== null ? (Number(revised) - Number(actual) - Number(encumbered)).toFixed(2) : null,
+  citations: ['fin-1'], limitations: [],
+});
+const chain = (contractId, program, currency, base, amendments, payments, stages, payMapped) => {
+  const total = base === null ? null : (Number(base) + Number(amendments ?? 0)).toFixed(2);
+  const paid = payMapped ? payments : null;
+  return {
+    agency: 'City of San Diego', contractId, program, vendor: 'V-2201', currency, baseAuthority: base, amendments, totalAuthority: total, payments: paid,
+    remainingAuthority: total !== null && paid !== null ? (Number(total) - Number(paid)).toFixed(2) : null,
+    stages: payMapped ? stages : Object.fromEntries(Object.entries(stages).filter(([role]) => role !== 'payment')), missingLinks: [], limitations: [],
+  };
+};
+const financialReport = (payMapped) => ({
+  id: 'fin-report', createdAt: iso(1), scope: { fiscalYear: 2025, fund: '100000', department: null },
+  reconciliation: [
+    reconcileLine('512010', 'Shelter operations', 'Homelessness Strategies and Solutions', '3200000.00', '3600000.00', '3910000.00', '120000.00'),
+    reconcileLine('512020', 'Property storage services', 'Homelessness Strategies and Solutions', '1000000.00', '1250000.00', '1486200.10', '0.00'),
+    reconcileLine('512030', 'Outreach', 'Homelessness Strategies and Solutions', '900000.00', '850000.00', '640000.00', '95000.00'),
+    reconcileLine('512040', 'Safe parking', 'Homelessness Strategies and Solutions', '450000.00', null, '410000.00', null),
+    reconcileLine('512050', 'Hygiene stations', 'Homelessness Strategies and Solutions', '300000.00', '300000.00', null, '40000.00'),
+    reconcileLine('511000', 'Overtime, abatement details', 'Police', '2000000.00', '2100000.00', '2350000.00', '60000.00'),
+  ],
+  chains: [
+    chain('H-24-1180', 'Property storage', 'USD', '1000000.00', '250000.00', '1486200.10', { budget: ['fin-1'], contract: ['fin-1'], amendment: ['fin-1'], payment: ['fin-1'], outcome: [] }, payMapped),
+    chain('H-23-0412', 'Shelter operations', 'USD', '3000000.00', '600000.00', '2940000.00', { budget: ['fin-1'], contract: ['fin-1'], amendment: ['fin-1'], payment: ['fin-1'], outcome: ['fin-1'] }, payMapped),
+    chain('H-25-0077', 'Outreach', 'USD', '850000.00', null, '312500.00', { budget: ['fin-1'], contract: ['fin-1'], payment: ['fin-1'] }, payMapped),
+    chain('H-25-0102', 'Safe parking', 'USD', null, null, '205000.00', { budget: ['fin-1'], payment: ['fin-1'] }, payMapped),
+    chain('HUD-CoC-17', 'Rapid rehousing grant', '', '480000.00', '0.00', '120000.00', { contract: ['fin-1'], payment: ['fin-1'], outcome: [] }, payMapped),
+  ],
+  findings: [], outcomes: [], gaps: [], evidence: [FIN_CITATION], queries: { 'q-fin': 'SELECT amount FROM analysis_fin_budget WHERE fund_number = \'100000\'' }, records: [], incompleteRoles: [], limitations: [],
+});
+const financialWorkspace = (payMapped) => ({
+  datasets: [{ snapshotId: 'snap-budget-fy25', name: 'Operating budget FY2025', tableName: 'analysis_fin_budget', sourceUrl: FIN_CITATION.sourceUrl, sourceSha256: FIN_CITATION.sourceSha256, columns: ['fund_number', 'dept_name', 'account', 'amount'], partial: false }],
+  mappings: ['budget', 'actual', 'encumbrance', 'contract', 'amendment', ...(payMapped ? ['payment'] : [])].map((role) => ({ role, snapshotId: 'snap-budget-fy25', columns: {}, currency: 'USD', agency: 'City of San Diego' })),
+  defaultScope: { fiscalYear: 2025, fund: '100000', department: null },
+  roles: ['budget', 'actual', 'encumbrance', 'contract', 'amendment', 'payment', 'outcome'], fields: ['amount', 'fund', 'department'], requirements: {},
+  warnings: payMapped ? [] : ['No payments dataset mapped.'], fiscalYears: [2024, 2025], funds: ['100000'], departments: ['Homelessness Strategies and Solutions', 'Police'],
+});
+/** The budget-comparison query's columns, largest |difference| first as the builder orders them. */
+const comparisonResult = (truncated) => {
+  const columns = ['report_fy', 'fund_number', 'funds_center_number', 'account_number', 'budget_departments', 'actuals_departments', 'budget_amount', 'actuals_amount', 'budget_rows', 'actuals_rows', 'budget_missing_amounts', 'actuals_missing_amounts', 'comparison_status', 'actual_minus_budget', 'variance_percent'];
+  const matched = Array.from({ length: 26 }, (_, i) => {
+    const budget = 400_000 + ((i * 7919) % 23) * 85_000;
+    const difference = Math.round((((i * 4111) % 41) - 18) * 9_250 * (1 + (i % 3)));
+    return { budget, actual: budget + difference, difference };
+  }).sort((a, b) => Math.abs(b.difference) - Math.abs(a.difference));
+  const rows = [
+    ...matched.map((line, i) => ['25', '100000', `19${String(10 + i).padStart(2, '0')}`, `5120${String(i).padStart(2, '0')}`, 'Homelessness Strategies and Solutions', 'Homelessness Strategies and Solutions', line.budget.toFixed(2), line.actual.toFixed(2), 3, 12, 0, 0, 'Matched', line.difference.toFixed(2), ((100 * line.difference) / line.budget).toFixed(2)]),
+    ['25', '100000', '1990', '512900', 'Homelessness Strategies and Solutions', null, '220000.00', null, 2, null, 0, null, 'Missing actuals', null, null],
+    ['25', '100000', '1991', '512901', 'Homelessness Strategies and Solutions', null, '75000.00', null, 1, null, 0, null, 'Missing actuals', null, null],
+    ['25', '100000', '1992', '512902', null, 'Homelessness Strategies and Solutions', null, '18250.00', null, 4, null, 0, 'Missing budget baseline', null, null],
+    ['25', '100000', '1993', '512903', 'Homelessness Strategies and Solutions', 'Homelessness Strategies and Solutions', '91000.00', null, 2, 3, 0, 1, 'Incomplete amounts', null, null],
+  ];
+  const kept = truncated ? rows.slice(0, 20) : rows;
+  return { columns, rows: kept, rowCount: kept.length, truncated, elapsedMs: 52, provenance: ['snap-budget-fy25', 'snap-actuals-fy25'] };
+};
+const clock = (minutes) => `${String(Math.floor(minutes / 60) % 24).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+/** Night-window activities: spread over 9 p.m.–5:30 a.m., a pile at 10 p.m., and the two endpoints. */
+const listedActivities = (section, activityType, count, prefix) => Array.from({ length: count }, (_, i) => {
+  const pile = i % 4 === 0;
+  const minutes = pile ? 22 * 60 : (21 * 60 + ((i * 47) % 510)) % 1440;
+  const boundary = i === 1 || i === 2;
+  return { activityNumber: `${prefix}-${String(1000 + i)}`, activityType, section, recordedAt: `2025-${String(1 + (i % 12)).padStart(2, '0')}-${String(1 + (i % 27)).padStart(2, '0')} ${boundary ? (i === 1 ? '21:00' : '05:30') : clock(minutes)}`, atWindowBoundary: boundary, location: `${1400 + i * 100} block Imperial Ave` };
+});
+const incident = (i, feet) => ({ caseNumber: `25-${String(40_100 + i)}`, occurredOn: i % 9 === 0 ? null : `2025-${String(1 + (i % 12)).padStart(2, '0')}-${String(1 + (i % 27)).padStart(2, '0')}`, section: '63.0404(c)', blockAddress: `${1200 + i * 50} block Market St`, latitude: 32.71, longitude: -117.15, nearestSchool: feet === null ? null : { name: 'Washington Elementary', distanceFeet: feet }, nearestStation: feet === null ? null : { name: '25th & Commercial', distanceFeet: feet + 600 } });
+const INCIDENTS = [...Array.from({ length: 53 }, (_, i) => incident(i, i < 3 ? 5600 + i * 400 : 120 + ((i * 2971) % 4800))), incident(60, null), incident(61, null)];
+const measuredFeet = INCIDENTS.flatMap((row) => (row.nearestSchool ? [row.nearestSchool.distanceFeet] : []));
+const ENCAMPMENT_FIGURES = {
+  nightHours: {
+    sources: [{ snapshotId: 'snap-arrests-2025', displayName: 'SDPD arrests and citations 2025', sourceSha256: hex('snap-arrests-2025') }], firstActivity: '2025-01-01', lastActivity: '2025-12-30',
+    sections: [
+      { section: '63.0404(a)', activityType: 'Citation', activities: 168, insideWindow: 41, atWindowBoundary: 2, outsideWindow: 112, timeNotRecorded: 13 },
+      { section: '63.0404(a)', activityType: 'Arrest', activities: 22, insideWindow: 9, atWindowBoundary: 0, outsideWindow: 11, timeNotRecorded: 2 },
+      { section: '63.0404(b)', activityType: 'Citation', activities: 60, insideWindow: 12, atWindowBoundary: 0, outsideWindow: 42, timeNotRecorded: 6 },
+    ],
+    listedActivities: [...listedActivities('63.0404(a)', 'Citation', 43, 'E25'), ...listedActivities('63.0404(a)', 'Arrest', 9, 'A25').map((a) => ({ ...a, atWindowBoundary: false, recordedAt: a.recordedAt.replace(/ (21:00|05:30)$/, ' 23:40') })), ...listedActivities('63.0404(b)', 'Citation', 12, 'B25').map((a) => ({ ...a, atWindowBoundary: false, recordedAt: a.recordedAt.replace(/ (21:00|05:30)$/, ' 01:15') }))],
+  },
+  locations: {
+    incidentSources: [{ snapshotId: 'snap-nibrs-2025', displayName: 'SDPD NIBRS offenses 2025', sourceSha256: hex('snap-nibrs-2025') }], schoolSource: { snapshotId: 'snap-schools', displayName: 'SANDAG schools', sourceSha256: hex('snap-schools') }, stationSource: { snapshotId: 'snap-gtfs', displayName: 'MTS GTFS stops', sourceSha256: hex('snap-gtfs') },
+    sections: [{ section: '63.0404(c)', offenses: INCIDENTS.length + 6, distinctCases: INCIDENTS.length + 6, notGeocoded: 6, withinNearBand: measuredFeet.filter((f) => f <= 1320).length, withinFarBand: measuredFeet.filter((f) => f > 1320 && f <= 2640).length, beyondFarBand: measuredFeet.filter((f) => f > 2640).length }],
+    incidents: INCIDENTS,
+  },
+  notMeasured: ['Shelter availability on the night of each citation is not in these datasets.'],
+};
+
+/** @param {{ payments?: boolean, truncated?: boolean }} figures */
+function figureHandlers({ payments = true, truncated = false }) {
+  return {
+    get_financial_workspace: () => financialWorkspace(payments),
+    run_financial_investigation: () => financialReport(payments),
+    run_analytical_sql: ({ sql }) => (sql.toLowerCase().includes('actual_minus_budget') ? comparisonResult(truncated) : sqlResult(sql)),
+    get_encampment_ordinance_report: () => ENCAMPMENT_FIGURES,
+  };
+}
+
 /**
- * @param {{ mode?: 'full' | 'empty', license?: keyof typeof LICENSE_VARIANTS | null, collectionPlan?: boolean }} scenario
+ * @param {{ mode?: 'full' | 'empty', license?: keyof typeof LICENSE_VARIANTS | null, collectionPlan?: boolean, figures?: { payments?: boolean, truncated?: boolean } }} scenario
  * @returns {Record<string, (args: any) => unknown>}
  */
 export function createHandlers(scenario) {
   /** @type {Handlers} */
-  const merged = { ...full, ...(scenario.mode === 'empty' ? empty : {}), ...(scenario.collectionPlan ? collectionPlan : {}) };
+  const merged = { ...full, ...(scenario.mode === 'empty' ? empty : {}), ...(scenario.collectionPlan ? collectionPlan : {}), ...(scenario.figures ? figureHandlers(scenario.figures) : {}) };
   if (scenario.license) {
     const status = { ...LICENSE, ...LICENSE_VARIANTS[scenario.license] };
     merged.get_license_status = () => status;
