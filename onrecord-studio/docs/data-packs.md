@@ -372,6 +372,31 @@ challenged and stays.
 it was generated, and the registry substitutes only `{year}`, so the URL keeps a literal
 `{yyyymmdd}` and answers 404. It needs the current file names resolved from the archive listing.
 
+The FAC files are held because `app.fac.gov/robots.txt` is `User-agent: * / Disallow: /`, which
+the app's client honours ("Portal security policy rejected the operation: 'app.fac.gov' excludes
+this path through robots.txt rule '/'"):
+
+| Pack | Table | URL |
+|---|---|---|
+| ca-public-money | `fac_general` | `https://app.fac.gov/dissemination/public-data/gsa/federal-fiscal-year/{year}-ffy-general.csv`, 2016 to 2027 |
+| ca-public-money | `fac_federal_awards` | `https://app.fac.gov/dissemination/public-data/gsa/federal-fiscal-year/{year}-ffy-federal_awards.csv`, 2016 to 2027 |
+| ca-public-money | `fac_findings` | `https://app.fac.gov/dissemination/public-data/gsa/federal-fiscal-year/{year}-ffy-findings.csv`, 2016 to 2027 |
+
+The HCD dashboard worksheets are held because their header is not the sheet's first row: one or
+two rows of explanatory text (or, in `ERF 2R `, a transposed layout) sit above it, and the
+worksheet reader takes the first row of the box its values span as the header. Built as listed,
+every column of `hcd_hhap1_fiscal_snapshot` was named after the banner text ("Per Health and
+Safety Code 50220 ...") and `hcd_hhap4_alternative_disbursement_plans` had no key column. They
+need a header-row setting in the registry.
+
+| Pack | Table | Worksheet of `hhap-dashboard-fiscal-snapshot.xlsx` / `erf-all-rounds-encampment-projections-and-status.xlsx` |
+|---|---|---|
+| ca-homelessness-system | `hcd_hhap1_fiscal_snapshot` ... `hcd_hhap6_fiscal_snapshot` | `HHAP 1` ... `HHAP 6` |
+| ca-homelessness-system | `hcd_hhap4_alternative_disbursement_plans` | `HHAP 4 ADPs` |
+| ca-homelessness-system | `hcd_erf_active_projects_persons_served` | `All Active Projects` |
+| ca-homelessness-system | `hcd_erf_status_by_round` | `ERF 2R ` |
+| ca-homelessness-system | `hcd_erf_persons_served_by_county` | `Summary - by County` |
+
 The full entries (licence evidence, headers, sizes) are in `sources.json` at commit `3a6b013`.
 
 ## Open
