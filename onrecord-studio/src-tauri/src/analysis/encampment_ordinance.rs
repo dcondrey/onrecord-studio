@@ -8,6 +8,7 @@
 //! publisher recorded them (Pacific wall-clock), never converted.
 
 use crate::error::AppError;
+use crate::storage::quote_ident;
 use crate::types::{
     EncampmentIncidentDistance, EncampmentLocationObservation, EncampmentOrdinanceReport,
     LocationSectionCount, NearestFeature, NightHoursObservation, NightHoursSectionCount,
@@ -107,10 +108,6 @@ fn storage(error: impl std::fmt::Display) -> AppError {
     AppError::Storage(error.to_string())
 }
 
-fn quote(identifier: &str) -> String {
-    format!("\"{}\"", identifier.replace('"', "\"\""))
-}
-
 /// Imported tables whose original headers include every `required` name, with the stored column
 /// alias for each original header (lowercased).
 fn tables_with_columns(
@@ -175,7 +172,7 @@ fn select_text(
     let projection = columns
         .iter()
         .map(|column| match column {
-            Some(column) => format!("CAST({} AS VARCHAR)", quote(column)),
+            Some(column) => format!("CAST({} AS VARCHAR)", quote_ident(column)),
             None => "NULL".into(),
         })
         .collect::<Vec<_>>()
@@ -184,14 +181,14 @@ fn select_text(
         .map(|(column, prefix)| {
             format!(
                 " WHERE upper(trim(CAST({} AS VARCHAR))) LIKE '{prefix}%'",
-                quote(column)
+                quote_ident(column)
             )
         })
         .unwrap_or_default();
     let mut statement = conn
         .prepare(&format!(
             "SELECT {projection} FROM {}{condition}",
-            quote(table)
+            quote_ident(table)
         ))
         .map_err(storage)?;
     let width = columns.len();
@@ -248,8 +245,8 @@ fn night_hours(conn: &Connection) -> Result<Option<NightHoursObservation>, AppEr
                 &format!(
                     "SELECT strftime(min(t), '%Y-%m-%d %H:%M:%S'), strftime(max(t), '%Y-%m-%d %H:%M:%S')
                      FROM (SELECT try_strptime(CAST({} AS VARCHAR), '%Y-%m-%d %H:%M:%S') AS t FROM {})",
-                    quote(date_column),
-                    quote(table)
+                    quote_ident(date_column),
+                    quote_ident(table)
                 ),
                 [],
                 |row| Ok((row.get::<_, Option<String>>(0)?, row.get::<_, Option<String>>(1)?)),

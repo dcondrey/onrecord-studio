@@ -12,6 +12,7 @@ use crate::error::AppError;
 use crate::integrity::digest_hex;
 use crate::normalization::normalize_delimited_field as sanitize_field;
 use crate::parsers::source::{inspect_regular_file, read_regular_file};
+use crate::storage::quote_ident;
 
 const MAX_DATABASE_BYTES: u64 = 8 * 1024 * 1024 * 1024;
 const MAX_TABLES: usize = 10_000;
@@ -88,7 +89,7 @@ pub fn extract_sqlite_text<P: AsRef<Path>>(file_path: P) -> Result<String, AppEr
             ),
             path,
         )?;
-        let sql = format!("SELECT * FROM {} LIMIT ?1", quote_identifier(&table_name));
+        let sql = format!("SELECT * FROM {} LIMIT ?1", quote_ident(&table_name));
         let mut statement = connection.prepare(&sql).map_err(|error| {
             AppError::DataParsing(format!(
                 "SQLITE_TABLE_READ_FAILED: failed to prepare table '{}': {error}",
@@ -233,8 +234,8 @@ pub fn extract_duckdb_text<P: AsRef<Path>>(file_path: P) -> Result<String, AppEr
         append_output(&mut output, "\n", path)?;
         let sql = format!(
             "SELECT * FROM {}.{} LIMIT {}",
-            quote_identifier(&schema_name),
-            quote_identifier(&table_name),
+            quote_ident(&schema_name),
+            quote_ident(&table_name),
             MAX_ROWS_PER_TABLE
         );
         let mut statement = connection.prepare(&sql).map_err(|error| {
@@ -412,10 +413,6 @@ fn harden_untrusted_connection(connection: &Connection, path: &Path) -> Result<(
                 path.display()
             ))
         })
-}
-
-fn quote_identifier(identifier: &str) -> String {
-    format!("\"{}\"", identifier.replace('"', "\"\""))
 }
 
 fn append_value(output: &mut String, value: ValueRef<'_>, path: &Path) -> Result<(), AppError> {
