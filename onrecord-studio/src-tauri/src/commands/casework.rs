@@ -317,103 +317,73 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn verify_and_unwrap_packet_rejects_a_packet_that_was_never_signed() {
-        let directory = tempfile::tempdir().unwrap();
-        let payload = serde_json::to_string(&packet()).unwrap();
-        let error = verify_and_unwrap_packet(&payload, directory.path())
-            .await
-            .unwrap_err();
-        assert!(error.to_string().contains("not signed"));
-    }
-
-    #[tokio::test]
-    async fn verify_and_unwrap_packet_rejects_a_packet_edited_after_signing() {
+    async fn verify_and_unwrap_packet_rejects_unsigned_edited_and_reforged_packets() {
         let directory = tempfile::tempdir().unwrap();
         let key = SigningKey::from_bytes(&[9_u8; 32]);
-        let mut signed = sign_package(packet(), &key).unwrap();
-        signed.manifest.contributor = "Attacker-edited contributor".into();
-        let payload = serde_json::to_string(&signed).unwrap();
-        let error = verify_and_unwrap_packet(&payload, directory.path())
-            .await
-            .unwrap_err();
-        assert!(error.to_string().contains("does not verify"));
-    }
-
-    #[tokio::test]
-    async fn verify_and_unwrap_packet_rejects_a_packet_signed_by_a_different_key() {
-        let directory = tempfile::tempdir().unwrap();
-        let signed = sign_package(packet(), &SigningKey::from_bytes(&[1_u8; 32])).unwrap();
-        let mut forged = signed.clone();
-        forged.signature.public_key_hex =
+        let unsigned = serde_json::to_string(&packet()).unwrap();
+        let mut edited = sign_package(packet(), &key).unwrap();
+        edited.manifest.contributor = "Attacker-edited contributor".into();
+        let mut reforged = sign_package(packet(), &key).unwrap();
+        reforged.signature.public_key_hex =
             sign_package(packet(), &SigningKey::from_bytes(&[2_u8; 32]))
                 .unwrap()
                 .signature
                 .public_key_hex;
-        let payload = serde_json::to_string(&forged).unwrap();
-        assert!(verify_and_unwrap_packet(&payload, directory.path())
-            .await
-            .is_err());
+        for (payload, expected) in [
+            (unsigned, "not signed"),
+            (serde_json::to_string(&edited).unwrap(), "does not verify"),
+            (serde_json::to_string(&reforged).unwrap(), ""),
+        ] {
+            let error = verify_and_unwrap_packet(&payload, directory.path())
+                .await
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains(expected), "{error}");
+        }
     }
 
+    /// A compromised signer's packet is refused with the recorded reason; a routinely retired
+    /// signer's packet still imports.
     #[tokio::test]
-    async fn verify_and_unwrap_packet_rejects_a_packet_from_a_key_this_installation_revoked() {
-        let directory = tempfile::tempdir().unwrap();
-        let retired_key = SigningKey::from_bytes(&[9_u8; 32]);
-        // Seed the active signing key file with exactly the key that will sign the packet, so
-        // rotating it below retires *that* key rather than some unrelated freshly generated one.
-        tokio::fs::write(
-            directory.path().join(crate::integrity::SIGNING_KEY_FILE),
-            retired_key.to_bytes(),
-        )
-        .await
-        .unwrap();
-        let signed = sign_package(packet(), &retired_key).unwrap();
-        let payload = serde_json::to_string(&signed).unwrap();
-
-        crate::integrity::rotate_signing_key(
-            directory.path(),
-            directory.path(),
-            "Key left the organization.".into(),
-            true,
-        )
-        .await
-        .unwrap();
-
-        let error = verify_and_unwrap_packet(&payload, directory.path())
+    async fn verify_and_unwrap_packet_refuses_only_a_compromised_revoked_signer() {
+        for (reason, compromised) in [
+            ("Key left the organization.", true),
+            ("Routine hygiene rotation.", false),
+        ] {
+            let directory = tempfile::tempdir().unwrap();
+            let key = SigningKey::from_bytes(&[3_u8; 32]);
+            // Seed the active key file with exactly this key so rotation retires it.
+            tokio::fs::write(
+                directory.path().join(crate::integrity::SIGNING_KEY_FILE),
+                key.to_bytes(),
+            )
             .await
-            .unwrap_err();
-        assert!(error.to_string().contains("revoked"));
-        assert!(error.to_string().contains("Key left the organization."));
-    }
-
-    #[tokio::test]
-    async fn verify_and_unwrap_packet_accepts_a_packet_from_a_routinely_retired_key() {
-        let directory = tempfile::tempdir().unwrap();
-        let retiring_key = SigningKey::from_bytes(&[3_u8; 32]);
-        tokio::fs::write(
-            directory.path().join(crate::integrity::SIGNING_KEY_FILE),
-            retiring_key.to_bytes(),
-        )
-        .await
-        .unwrap();
-        let signed = sign_package(packet(), &retiring_key).unwrap();
-        let payload = serde_json::to_string(&signed).unwrap();
-
-        crate::integrity::rotate_signing_key(
-            directory.path(),
-            directory.path(),
-            "Routine hygiene rotation.".into(),
-            false,
-        )
-        .await
-        .unwrap();
-
-        let (inner, signer_key_id) = verify_and_unwrap_packet(&payload, directory.path())
+            .unwrap();
+            let signed = sign_package(packet(), &key).unwrap();
+            let payload = serde_json::to_string(&signed).unwrap();
+            crate::integrity::rotate_signing_key(
+                directory.path(),
+                directory.path(),
+                reason.into(),
+                compromised,
+            )
             .await
-            .expect("a packet from a routinely retired (non-compromising) key must still import");
-        assert_eq!(signer_key_id, signed.signature.signer_key_id);
-        let round_tripped: CaseworkPacket = serde_json::from_str(&inner).unwrap();
-        assert_eq!(round_tripped.contributor, "Origin desk");
+            .unwrap();
+
+            let result = verify_and_unwrap_packet(&payload, directory.path()).await;
+            if compromised {
+                let error = result.unwrap_err().to_string();
+                assert!(
+                    error.contains("revoked") && error.contains(reason),
+                    "{error}"
+                );
+            } else {
+                let (inner, signer_key_id) = result.expect("a retired key's packet still imports");
+                assert_eq!(signer_key_id, signed.signature.signer_key_id);
+                let round_tripped: CaseworkPacket = serde_json::from_str(&inner).unwrap();
+                assert_eq!(round_tripped.contributor, "Origin desk");
+            }
+        }
     }
 
     fn revoked_entry(key_id: &str, status: &str) -> crate::types::investigation::RevokedSigningKey {
@@ -438,6 +408,7 @@ mod tests {
             (1_u64, Some("compromised-key".to_string())),
             (2_u64, Some("retired-key".to_string())),
             (3_u64, None),
+            (4_u64, Some("never-revoked-key".to_string())),
         ];
 
         let warnings = compromised_case_imports_inner(signers, &revocations);
@@ -445,21 +416,10 @@ mod tests {
         assert_eq!(
             warnings.len(),
             1,
-            "a retired (non-compromising) signer and a legacy import with no recorded signer \
+            "a retired signer, an unrevoked signer and a legacy import with no recorded signer \
              must never be flagged, only the compromised one"
         );
         assert_eq!(warnings[0].revision, 1);
         assert_eq!(warnings[0].signer_key_id, "compromised-key");
-    }
-
-    #[test]
-    fn compromised_case_imports_inner_ignores_a_signer_with_no_revocation_entry_at_all() {
-        let revocations = SigningKeyRevocations {
-            schema_version: "onrecord-signing-key-revocations-v1".to_string(),
-            entries: vec![],
-        };
-        let signers = vec![(1_u64, Some("never-revoked-key".to_string()))];
-
-        assert!(compromised_case_imports_inner(signers, &revocations).is_empty());
     }
 }
