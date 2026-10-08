@@ -15,6 +15,7 @@ import { cn } from '../../utils/cn';
 import { SearchField } from '../ui/Field';
 import RedactionInferencePanel from './RedactionInferencePanel';
 import { displayError } from '../../utils/errorMessage';
+import { MinimapGutter, MinimapKey, minimapHeadline, type MinimapMark } from '../charts/figures/DocumentMinimap';
 
 // pdf.js loads only when a reader opens the page view.
 const PdfPageView = lazy(() => import('./PdfPageView'));
@@ -30,18 +31,24 @@ interface DocumentViewerProps {
   textPositionLabel?: string;
   characterOffset?: number;
   knownMaskedFindingCount?: number;
+  /** Characters in the whole stored text, for the minimap; omitted when the caller has no chunk. */
+  totalCharacterCount?: number;
   onNextChunk?: () => void;
   onPreviousChunk?: () => void;
+  /** Loads the chunk starting at this source character offset; lets the minimap open a mark outside the loaded text. */
+  onOpenAtOffset?: (characterOffset: number) => void;
   onSaveEvidence?: (selection: { excerpt: string; characterOffset: number }) => void;
   /** False when a surrounding dialog header already names the file. */
   titled?: boolean;
 }
 
 const TEXT_PAGE_CHARACTERS = 12_000;
+/** Characters of context loaded before an off-chunk mark, so it does not sit at the very top. */
+const OFF_CHUNK_LEAD = 2_000;
 const TOOL_CLASS = buttonClass({ size: 'sm', className: 'focus-ring' });
 const GHOST_CLASS = buttonClass({ variant: 'ghost', size: 'sm', className: 'focus-ring' });
 
-export default function DocumentViewer({ documentId, requestId, portalKey, fileName, originalAvailable = true, textContent, fileSizeFormatted, textPositionLabel, characterOffset = 0, knownMaskedFindingCount = 0, onNextChunk, onPreviousChunk, onSaveEvidence, titled = true }: DocumentViewerProps) {
+export default function DocumentViewer({ documentId, requestId, portalKey, fileName, originalAvailable = true, textContent, fileSizeFormatted, textPositionLabel, characterOffset = 0, knownMaskedFindingCount = 0, totalCharacterCount, onNextChunk, onPreviousChunk, onOpenAtOffset, onSaveEvidence, titled = true }: DocumentViewerProps) {
   const { verifyAssetProvenance, activeManifest, isValidating, error: provenanceError } = useC2PA();
   const [recoveryProfile, setRecoveryProfile] = useState<RecoveredVersionProfile | null>(null);
   const [isRecovering, setIsRecovering] = useState(false);
@@ -75,6 +82,13 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
   const claimGate = useLatestRequestGate();
   const packGate = useLatestRequestGate();
   const originGate = useLatestRequestGate();
+  const minimapGate = useLatestRequestGate();
+  // The minimap's stored marks for this document: finding citations and annotations. Cleared on
+  // every document switch and written only by the latest read (minimapGate).
+  const [storedMarks, setStoredMarks] = useState<MinimapMark[] | null>(null);
+  const [activeMark, setActiveMark] = useState<string | null>(null);
+  // A mark waiting on its chunk, tied to the document it was chosen in so a switch never applies it elsewhere.
+  const pendingMarkRef = useRef<{ documentId: number; portalKey: string; mark: MinimapMark } | null>(null);
   const [originReport, setOriginReport] = useState<DocumentOriginReport | null>(null);
   const [originFailed, setOriginFailed] = useState(false);
   const [internalMetadata, setInternalMetadata] = useState<DocumentInternalMetadata | null>(null);
@@ -216,6 +230,42 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
 
   useEffect(() => { setTextPage(0); setActiveMatch(0); }, [characterOffset, textContent]);
 
+  useEffect(() => {
+    const request = minimapGate.begin();
+    setStoredMarks(null);
+    void Promise.allSettled([
+      invokeCommand('list_findings', { filter: { portalKey, documentId }, limit: MINIMAP_FINDING_LIMIT }),
+      invokeCommand('list_document_annotations', { portalKey, documentId }),
+      invokeCommand('get_casework_state', {}),
+    ]).then(([findings, annotations, casework]) => {
+      if (!minimapGate.isCurrent(request)) return;
+      const marks: MinimapMark[] = [];
+      if (findings.status === 'fulfilled' && Array.isArray(findings.value)) {
+        for (const finding of findings.value) {
+          finding.citations.forEach((citation, index) => {
+            if (citation.documentId !== documentId || citation.portalKey !== portalKey) return;
+            marks.push({ key: `finding:${finding.id}:${index}`, kind: 'finding', start: citation.characterStart, end: citation.characterEnd, label: `Finding: ${finding.headline}`, quote: citation.quote });
+          });
+        }
+      }
+      if (annotations.status === 'fulfilled' && Array.isArray(annotations.value?.annotations)) {
+        for (const annotation of annotations.value.annotations) {
+          marks.push({ key: `annotation:${annotation.id}`, kind: 'annotation', start: annotation.characterOffset, end: annotation.characterOffset === null ? null : annotation.characterOffset + Array.from(annotation.quote).length, label: `Annotation: ${annotation.note || annotation.quote.slice(0, 60)}`, quote: annotation.quote });
+        }
+      }
+      if (casework.status === 'fulfilled' && Array.isArray(casework.value?.cases)) {
+        for (const found of casework.value.cases) {
+          for (const citation of found.evidence) {
+            if (citation.documentId !== documentId || citation.portalKey !== portalKey) continue;
+            marks.push({ key: `case:${found.id}:${citation.id}`, kind: 'annotation', start: citation.characterOffset, end: citation.characterOffset === null ? null : citation.characterOffset + Array.from(citation.quote).length, label: `Case citation (${found.title || 'untitled case'}): ${citation.label}`, quote: citation.quote });
+          }
+        }
+      }
+      setStoredMarks(marks);
+    });
+    return minimapGate.invalidate;
+  }, [documentId, minimapGate, portalKey]);
+
   const searchMatches = useMemo(() => findMatches(textContent, documentSearch), [documentSearch, textContent]);
   const pageCount = Math.max(1, Math.ceil(textContent.length / TEXT_PAGE_CHARACTERS));
   const selectedMatch = searchMatches[activeMatch] ?? null;
@@ -227,10 +277,69 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
     }
   }, [documentSearch, searchMatches]);
 
+  const chunkMarks = useMemo<MinimapMark[]>(() => {
+    const matchOffsets = sourceOffsets(textContent, searchMatches, characterOffset);
+    const needle = Array.from(documentSearch.trim()).length;
+    const redactions = scanRedactionMarkers(textContent);
+    const redactionStarts = sourceOffsets(textContent, redactions.map((span) => span.start), characterOffset);
+    const redactionEnds = sourceOffsets(textContent, redactions.map((span) => span.end), characterOffset);
+    return [
+      ...matchOffsets.map((start, index) => ({ key: `match:${index}`, kind: 'match' as const, start, end: start + needle, label: `Match ${index + 1} of ${searchMatches.length}` })),
+      ...redactionStarts.map((start, index) => ({ key: `redaction:${index}`, kind: 'redaction' as const, start, end: redactionEnds[index], label: 'Redaction marker' })),
+    ];
+  }, [characterOffset, documentSearch, searchMatches, textContent]);
+  const minimapMarks = useMemo(
+    () => [...(storedMarks ?? []), ...chunkMarks],
+    [chunkMarks, storedMarks],
+  );
+  const loadedEnd = characterOffset + Array.from(textContent).length;
+  // The stored text's own count; the masked chunk can differ in length from what it masks.
+  const minimapTotal = totalCharacterCount ?? loadedEnd;
+
+  const activateMark = (mark: MinimapMark) => {
+    setActiveMark(mark.key);
+    if (mark.kind === 'match') {
+      const index = Number(mark.key.slice('match:'.length));
+      setActiveMatch(index);
+      setTextPage(Math.floor(searchMatches[index] / TEXT_PAGE_CHARACTERS));
+      return;
+    }
+    if (mark.start === null) return;
+    if (mark.start < characterOffset || mark.start > loadedEnd) {
+      // Outside the loaded text: load the chunk around it, then select it once that chunk is shown.
+      if (!onOpenAtOffset) return;
+      pendingMarkRef.current = { documentId, portalKey, mark };
+      onOpenAtOffset(Math.max(0, mark.start - OFF_CHUNK_LEAD));
+      return;
+    }
+    const local = utf16Index(textContent, mark.start - characterOffset);
+    setTextPage(Math.floor(local / TEXT_PAGE_CHARACTERS));
+    const pane = textPaneRef.current;
+    if (pane) {
+      const within = (local % TEXT_PAGE_CHARACTERS) / Math.max(1, Math.min(TEXT_PAGE_CHARACTERS, textContent.length - Math.floor(local / TEXT_PAGE_CHARACTERS) * TEXT_PAGE_CHARACTERS));
+      requestAnimationFrame(() => { pane.scrollTop = Math.max(0, within * pane.scrollHeight - pane.clientHeight / 3); });
+    }
+  };
+
+  // Selects a mark chosen outside the loaded text once its chunk arrives, if the document is still the same one.
+  useEffect(() => {
+    const pending = pendingMarkRef.current;
+    if (!pending) return;
+    if (pending.documentId !== documentId || pending.portalKey !== portalKey) {
+      pendingMarkRef.current = null;
+      return;
+    }
+    const start = pending.mark.start;
+    if (start === null || start < characterOffset || start > loadedEnd) return;
+    pendingMarkRef.current = null;
+    activateMark(pending.mark);
+  });
+
   const moveToMatch = (direction: -1 | 1) => {
     if (searchMatches.length === 0) return;
     const next = (activeMatch + direction + searchMatches.length) % searchMatches.length;
     setActiveMatch(next);
+    setActiveMark(`match:${next}`);
     setTextPage(Math.floor(searchMatches[next] / TEXT_PAGE_CHARACTERS));
   };
 
@@ -511,8 +620,15 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
         </Suspense>
       )}
       </div>
-      <div ref={textPaneRef} hidden={showPageView && canViewPages} tabIndex={0} role="region" aria-label="Document text" className="focus-ring min-h-0 flex-1 overflow-y-auto p-5 font-mono text-label leading-relaxed text-fg-secondary selection:bg-highlight/40">
-        <HighlightedTextPage text={textContent} query={documentSearch} page={textPage} activeMatchIndex={selectedMatch} />
+      <div className="border-b border-line px-4 py-1.5">
+        <p className="text-caption text-muted" data-testid="minimap-headline">{minimapHeadline(minimapMarks, minimapTotal)}</p>
+        <MinimapKey marks={minimapMarks} />
+      </div>
+      <div hidden={showPageView && canViewPages} className="flex min-h-0 flex-1">
+        <div ref={textPaneRef} tabIndex={0} role="region" aria-label="Document text" className="focus-ring min-h-0 flex-1 overflow-y-auto p-5 font-mono text-label leading-relaxed text-fg-secondary selection:bg-highlight/40">
+          <HighlightedTextPage text={textContent} query={documentSearch} page={textPage} activeMatchIndex={selectedMatch} />
+        </div>
+        <MinimapGutter marks={minimapMarks} total={minimapTotal} loaded={{ start: characterOffset, end: Math.min(loadedEnd, minimapTotal) }} activeKey={activeMark} onActivate={activateMark} />
       </div>
       {pageCount > 1 && <div className="flex items-center justify-center gap-3 border-t border-line px-4 py-2 text-caption text-muted"><button type="button" disabled={textPage === 0} onClick={() => setTextPage((page) => Math.max(0, page - 1))} className="rounded border border-control px-2 py-1 disabled:opacity-40">Previous text page</button><span className="font-mono">{textPage + 1}/{pageCount}</span><button type="button" disabled={textPage + 1 >= pageCount} onClick={() => setTextPage((page) => Math.min(pageCount - 1, page + 1))} className="rounded border border-control px-2 py-1 disabled:opacity-40">Next text page</button></div>}
     </section>
@@ -640,6 +756,34 @@ function ProvenanceGraphPanel({ graph }: { graph: import('../../types').Provenan
       </ul>
     </details>
   );
+}
+
+const MINIMAP_FINDING_LIMIT = 200;
+
+/** Source offsets (code points from `base`) of ascending UTF-16 indices into `text`, in one pass. */
+function sourceOffsets(text: string, indices: readonly number[], base: number): number[] {
+  const result: number[] = [];
+  let unit = 0;
+  let points = 0;
+  for (const index of indices) {
+    while (unit < index && unit < text.length) {
+      const code = text.charCodeAt(unit);
+      unit += code >= 0xd800 && code <= 0xdbff && unit + 1 < text.length ? 2 : 1;
+      points += 1;
+    }
+    result.push(base + points);
+  }
+  return result;
+}
+
+/** The UTF-16 index of the `points`-th code point of `text`. */
+function utf16Index(text: string, points: number): number {
+  let unit = 0;
+  for (let seen = 0; seen < points && unit < text.length; seen++) {
+    const code = text.charCodeAt(unit);
+    unit += code >= 0xd800 && code <= 0xdbff && unit + 1 < text.length ? 2 : 1;
+  }
+  return unit;
 }
 
 function findMatches(text: string, query: string) {

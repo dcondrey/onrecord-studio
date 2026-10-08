@@ -13,10 +13,22 @@ import type { EvidenceBundle } from '../types/investigation';
 const bridge = vi.hoisted(() => ({
   bundles: new Map<number, EvidenceBundle>(),
   gates: new Map<number, Promise<void>>(),
+  findingGates: new Map<number, Promise<void>>(),
 }));
 
 vi.mock('../ipc', () => ({
-  invokeCommand: (command: string, args?: { documentId?: number }) => {
+  invokeCommand: (command: string, args?: { documentId?: number; filter?: { documentId?: number; portalKey?: string } }) => {
+    if (command === 'list_document_annotations') return Promise.resolve({ annotations: [] });
+    if (command === 'list_findings') {
+      const documentId = args?.filter?.documentId ?? 0;
+      const answer = [{
+        id: `finding-${documentId}`,
+        headline: `finding about document ${documentId}`,
+        citations: [{ portalKey: args?.filter?.portalKey ?? 'example', documentId, characterStart: 10, characterEnd: 20, quote: 'q', label: null }],
+      }];
+      const gate = bridge.findingGates.get(documentId);
+      return gate ? gate.then(() => answer) : Promise.resolve(answer);
+    }
     if (command === 'verify_document_provenance') return Promise.resolve(null);
     if (command === 'get_document_entity_truncations') return Promise.resolve([]);
     if (command === 'describe_document_origin') return Promise.resolve({ origin: 'COLLECTED_FROM_SOURCE', heldRelation: null });
@@ -54,6 +66,39 @@ afterEach(() => {
   cleanup();
   bridge.bundles.clear();
   bridge.gates.clear();
+  bridge.findingGates.clear();
+});
+
+describe('document minimap', () => {
+  it('discards cited passages read for the previous document when they resolve after the switch', async () => {
+    let release = () => {};
+    bridge.findingGates.set(7, new Promise<void>((resolve) => { release = () => resolve(); }));
+    bridge.findingGates.set(8, new Promise<void>(() => {}));
+
+    const view = render(viewer(7));
+    view.rerender(viewer(8));
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    // Document 7's citation, written under document 8, would state where 7's passage sits in 8.
+    expect(screen.getByTestId('minimap-headline').textContent).not.toContain('cited passage');
+    expect(screen.queryByText(/finding about document 7/)).toBeNull();
+  });
+});
+
+describe('document minimap navigation', () => {
+  it('loads the chunk around a citation outside the loaded text and keeps one tab stop', async () => {
+    const height = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(400);
+    const openAt = vi.fn();
+    render(<DocumentViewer documentId={7} portalKey="example" fileName="memo.pdf" textContent="later text" characterOffset={5_000} totalCharacterCount={20_000} fileSizeFormatted="1 KB" onOpenAtOffset={openAt} />);
+    const mark = await screen.findByRole('img', { name: /finding about document 7, at character 10/ });
+    // The gutter is one tab stop: only the active mark is in the tab order.
+    expect(mark.getAttribute('tabindex')).toBe('0');
+    fireEvent.click(mark);
+    expect(openAt).toHaveBeenCalledWith(0);
+    expect(screen.getByTestId('minimap-key').textContent).toContain('finding citation');
+    height.mockRestore();
+  });
 });
 
 describe('document residual-evidence audit', () => {

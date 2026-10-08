@@ -15,11 +15,15 @@ import { isTauri } from '@tauri-apps/api/core';
 import { invokeCommand } from '../../ipc';
 import StatutoryDeadlineAppeal from './StatutoryDeadlineAppeal';
 import type {
+  DeadlineAnalysis,
   DocumentTextChunk,
   LegalBriefExportResult,
+  LegalComplianceFinding,
   RequestDocumentSummary,
   RequestSearchResult,
+  StatutoryExtensionRecord,
 } from '../../types';
+import ClockStrip, { portalClock } from '../charts/figures/ClockStrip';
 import OverviewDashboard from './OverviewDashboard';
 import ActivityDashboard from './ActivityDashboard';
 import PatternExplorer from './PatternExplorer';
@@ -44,6 +48,14 @@ import Button from '../ui/Button';
 import Badge from '../ui/Badge';
 import InlineError from '../ui/InlineError';
 import Skeleton from '../ui/Skeleton';
+
+type RequestClockInputs =
+  | { status: 'idle' | 'pending' }
+  | { status: 'ready'; extension: StatutoryExtensionRecord | null; findings: LegalComplianceFinding[] | null; engine: DeadlineAnalysis | null };
+
+function isDeadlineAnalysis(value: unknown): value is DeadlineAnalysis {
+  return typeof value === 'object' && value !== null && typeof (value as DeadlineAnalysis).effectiveDeadlineAt === 'string' && typeof (value as DeadlineAnalysis).createdAt === 'string';
+}
 
 /** Fixed so the list can be windowed from the scroll offset; the row clamps its text to fit. */
 const RESULT_ROW_HEIGHT = 148;
@@ -129,6 +141,14 @@ export default function MainLayout() {
   const documentListGate = useLatestRequestGate();
   const documentOpenGate = useLatestRequestGate();
   const exportGate = useLatestRequestGate();
+  const clockGate = useLatestRequestGate();
+  const clockOwnerRef = useRef<{ requestId: number; portalKey: string } | null>(null);
+  // Reviewing or re-evaluating a finding in the legal panel changes what is counted; the clock
+  // re-reads the stored findings when it does.
+  const legalReviewSignature = useAppStore((state) => state.activeLegalFindings.map((finding) => `${finding.violationId}:${finding.reviewStatus}`).join("|"));
+  // The selected request's clock inputs. Cleared on every switch, and written only by the latest
+  // read, so request B never shows request A's deadline or counted finding.
+  const [requestClock, setRequestClock] = useState<RequestClockInputs>({ status: 'idle' });
   const selectedSourceUrl = selected
     ? portals.find(({ registration }) => registration.portalKey === selected.portalKey)?.registration.canonicalUrl ?? null
     : null;
@@ -169,6 +189,35 @@ export default function MainLayout() {
     });
     return documentListGate.invalidate;
   }, [documentListGate, documentOpenGate, documentListRetries, evidenceRefreshRequests, selectedRequestPortalKey, selectedRequestId]);
+
+  useEffect(() => {
+    const request = clockGate.begin();
+    if (selectedRequestId === null || !selectedRequestPortalKey) {
+      clockOwnerRef.current = null;
+      setRequestClock({ status: 'idle' });
+      return clockGate.invalidate;
+    }
+    // A refresh of the same request keeps the clock on screen; only a switch clears it.
+    const owner = clockOwnerRef.current;
+    if (owner?.requestId !== selectedRequestId || owner?.portalKey !== selectedRequestPortalKey) setRequestClock({ status: 'pending' });
+    clockOwnerRef.current = { requestId: selectedRequestId, portalKey: selectedRequestPortalKey };
+    const args = { requestId: selectedRequestId, portalKey: selectedRequestPortalKey };
+    void Promise.allSettled([
+      invokeCommand('get_request_statutory_extension', args),
+      invokeCommand('list_request_legal_findings', args),
+      invokeCommand('get_portal_request_deadline', args),
+    ]).then(([extension, findings, engine]) => {
+      if (!clockGate.isCurrent(request)) return;
+      setRequestClock({
+        status: 'ready',
+        extension: extension.status === 'fulfilled' ? extension.value : null,
+        findings: findings.status === 'fulfilled' ? findings.value : null,
+        // Without the engine's analysis the clock draws recorded dates only, never a TS deadline.
+        engine: engine.status === 'fulfilled' && isDeadlineAnalysis(engine.value) ? engine.value : null,
+      });
+    });
+    return clockGate.invalidate;
+  }, [clockGate, evidenceRefreshRequests, legalReviewSignature, selectedRequestId, selectedRequestPortalKey]);
 
   // Below the two-column breakpoint the details sit under the list, so a selection would change
   // nothing visible without bringing them into view.
@@ -472,9 +521,24 @@ export default function MainLayout() {
                       <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line pt-3">
                         <CaseField label="Request ID" value={String(selected.requestId)} />
                         <CaseField label="Documents" value={String(selected.documentCount)} />
-                        <CaseField label="Created" value={formatShortDate(selected.createdAt)} />
-                        <CaseField label="Closed" value={selected.closedAt ? formatShortDate(selected.closedAt) : 'Not recorded'} absent={!selected.closedAt} />
                       </dl>
+                      <dl className="sr-only">
+                        <dt>Created</dt><dd>{selected.createdAt}</dd>
+                        <dt>Closed</dt><dd>{selected.closedAt ?? 'Not recorded'}</dd>
+                      </dl>
+                      <div className="mt-4">
+                        <ClockStrip
+                          data={portalClock({
+                            record: selected,
+                            extension: requestClock.status === 'ready' ? requestClock.extension : null,
+                            engine: requestClock.status === 'ready' ? requestClock.engine : null,
+                            findings: requestClock.status === 'ready' ? requestClock.findings : [],
+                            observedAt: new Date().toISOString(),
+                          })}
+                          status={requestClock.status === 'ready' ? 'ready' : 'loading'}
+                          storageKey="evidence-request-clock"
+                        />
+                      </div>
                       <p className="mt-4 rounded-lg border border-line bg-canvas p-3 text-body text-fg-secondary">
                         {selected.descriptionPreview || 'No public description supplied.'}
                       </p>
@@ -626,8 +690,10 @@ export default function MainLayout() {
                   textPositionLabel={`${activeDocument.chunk.characterOffset.toLocaleString()}–${Math.min(activeDocument.chunk.characterOffset + activeDocument.chunk.returnedCharacterCount, activeDocument.chunk.totalCharacterCount).toLocaleString()} of ${activeDocument.chunk.totalCharacterCount.toLocaleString()} characters`}
                   characterOffset={activeDocument.chunk.characterOffset}
                   knownMaskedFindingCount={activeDocument.chunk.maskedFindingCount}
+                  totalCharacterCount={activeDocument.chunk.totalCharacterCount}
                   onPreviousChunk={activeDocument.chunk.characterOffset > 0 ? () => void openDocument(activeDocument.summary, Math.max(0, (activeDocument.chunk?.characterOffset ?? 0) - 100000)) : undefined}
                   onNextChunk={activeDocument.chunk.nextCharacterOffset === null ? undefined : () => void openDocument(activeDocument.summary, activeDocument.chunk?.nextCharacterOffset ?? 0)}
+                  onOpenAtOffset={(offset) => void openDocument(activeDocument.summary, offset)}
                   onSaveEvidence={({ excerpt, characterOffset }) => {
                     if (!selected) return;
                     addBriefingEvidence(documentBriefingEvidence({

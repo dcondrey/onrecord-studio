@@ -545,7 +545,7 @@ export default function EvidenceTimeline(props: EvidenceTimelineProps) {
   const dense = rows.some((row) => row.items.length > DENSE_LANE);
   const legend: LegendItem[] = [
     { key: 'occurred', label: 'Event date (lane line)', swatch: 'dot', tone: 'ink' },
-    { key: 'due', label: 'Owed or modelled date', swatch: 'diamond', tone: 'ink' },
+    { key: 'due', label: 'Owed or modelled date', swatch: 'hollow-diamond', tone: 'ink' },
     { key: 'seen', label: 'Date this app saw it (dotted line)', swatch: 'ring-dotted', tone: 'ink' },
     { key: 'finding', label: 'Finding (lead)', swatch: 'ring', tone: 'lead' },
     ...(props.contradictions.length ? [{ key: 'contradiction', label: 'Contradicting dates (≠)', swatch: 'dashed-line' as const, tone: 'ink' as const }] : []),

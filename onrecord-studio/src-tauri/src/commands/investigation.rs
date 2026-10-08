@@ -171,6 +171,37 @@ pub async fn get_request_statutory_extension(
         .await
 }
 
+/// The statutory engine's deadline for one portal request, evaluated now from its stored dates and
+/// any recorded extension, with the same inputs the timeline audit uses. Read-only: it writes no
+/// flag or finding. A counted violation is still only what `list_request_legal_findings` returns;
+/// `is_violation` here is the evaluator's arithmetic, not a stored finding.
+#[tauri::command]
+pub async fn get_portal_request_deadline(
+    portal_key: String,
+    request_id: u64,
+    repository: State<'_, DuckDbRepository>,
+) -> Result<crate::analysis::timeline::PortalRequestDeadline, AppError> {
+    let portal_key = validate_portal_key(&portal_key)?;
+    let evidence = repository
+        .load_legal_brief_evidence(request_id, portal_key)
+        .await?;
+    let analysis = crate::analysis::evaluate_statutory_compliance_with_determination_at(
+        request_id,
+        &evidence.created_at,
+        Some(&evidence.updated_at),
+        evidence.closed_at.as_deref(),
+        evidence.determination_at.as_deref(),
+        evidence.determination_source.as_deref(),
+        evidence.extension.as_ref(),
+        &chrono::Utc::now().to_rfc3339(),
+    )?;
+    Ok(crate::analysis::timeline::PortalRequestDeadline {
+        analysis,
+        status: evidence.status,
+        closed_at: evidence.closed_at,
+    })
+}
+
 #[tauri::command]
 pub async fn import_legal_authority(
     input: LegalAuthorityImport,

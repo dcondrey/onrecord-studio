@@ -47,6 +47,21 @@ pub struct StatutoryComplianceAnalysis {
     pub evidence_summary: String,
 }
 
+/// One request's evaluated deadline under its IPC name (`DeadlineAnalysis` in TypeScript), shared
+/// by the tracker and the portal read command so both surfaces read the same evaluator output.
+pub type DeadlineAnalysis = StatutoryComplianceAnalysis;
+
+/// A portal request's evaluated deadline with the recorded closure it was evaluated from, so a
+/// surface that never loaded the request row can still tell "not closed" from "not loaded".
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PortalRequestDeadline {
+    #[serde(flatten)]
+    pub analysis: DeadlineAnalysis,
+    pub status: String,
+    pub closed_at: Option<String>,
+}
+
 pub fn calculate_operational_latency_for_status(
     request_id: u64,
     status: &str,

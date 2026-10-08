@@ -21,6 +21,8 @@ import type {
 import { DeadlineChip } from './DeadlineChip';
 import { localInputToRfc3339, rfc3339ToLocalInput } from './rfc3339';
 import { useMyRequests } from './useMyRequests';
+import ClockStrip, { trackerClock } from '../charts/figures/ClockStrip';
+import DeadlineRunway, { runwayModel } from '../charts/figures/DeadlineRunway';
 import { displayError } from '../../utils/errorMessage';
 
 export const KIND_LABELS: Record<TimelineEventKind, string> = {
@@ -222,6 +224,9 @@ function Detail({ claim, deadline, tracker }: { claim: ClaimedRequest; deadline:
   const [pickError, setPickError] = useState<string | null>(null);
   const [confirmingRemoval, setConfirmingRemoval] = useState(false);
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  // Shared between the clock's ticks and the chronology rows: pointing at one marks the other.
+  const [highlighted, setHighlighted] = useState<string | null>(null);
+  const eventRows = useRef(new Map<string, HTMLLIElement>());
   // A removed date stays recoverable for five seconds: it is the user's own evidence.
   const [removed, setRemoved] = useState<{ input: AddTimelineEventInput; label: string } | null>(null);
   const undoTimer = useRef<number | null>(null);
@@ -273,8 +278,15 @@ function Detail({ claim, deadline, tracker }: { claim: ClaimedRequest; deadline:
     }
   };
 
+  const focusEventRow = (eventId: string) => {
+    const row = eventRows.current.get(eventId);
+    row?.scrollIntoView?.({ block: 'nearest' });
+    row?.focus();
+    setHighlighted(eventId);
+  };
+
   return (
-    <div className="flex flex-col gap-6" aria-label={`Request ${claim.reference}`}>
+    <div className="flex min-w-0 flex-col gap-6" aria-label={`Request ${claim.reference}`}>
       <section aria-label="Deadline">
         <h3 className="text-heading text-fg">{claim.title || `Request ${claim.reference}`}</h3>
         <p className="mt-0.5 text-caption tabular-nums text-muted">
@@ -288,14 +300,20 @@ function Detail({ claim, deadline, tracker }: { claim: ClaimedRequest; deadline:
             </>
           )}
         </p>
-        {deadline && <div className="mt-3"><DeadlineChip deadline={deadline} /></div>}
         {deadline ? (
-          <>
-            <p className="mt-2" data-testid="basis-statement">{deadline.basisStatement}</p>
+          <div className="mt-3 grid min-w-0 gap-2">
+            <ClockStrip
+              data={trackerClock(claim, deadline, KIND_LABELS)}
+              storageKey="my-requests-detail-clock"
+              highlightedEvent={highlighted}
+              onEventHover={setHighlighted}
+              onEventActivate={focusEventRow}
+            />
+            <p className="text-caption text-muted" data-testid="basis-statement">{deadline.basisStatement}</p>
             {deadline.notes.map((note) => (
-              <p key={note} className="mt-1 text-caption text-muted">{note}</p>
+              <p key={note} className="text-caption text-muted">{note}</p>
             ))}
-          </>
+          </div>
         ) : (
           <Skeleton variant="lines" lines={2} label="Loading the deadline" className="mt-3" />
         )}
@@ -308,7 +326,18 @@ function Detail({ claim, deadline, tracker }: { claim: ClaimedRequest; deadline:
         ) : (
           <ol className="mt-2 flex flex-col gap-1.5">
             {events.map((event) => (
-              <li key={event.id} className="flex items-start justify-between gap-2 rounded-lg border border-line p-2">
+              <li
+                key={event.id}
+                tabIndex={-1}
+                ref={(element) => {
+                  if (element) eventRows.current.set(event.id, element);
+                  else eventRows.current.delete(event.id);
+                }}
+                onPointerEnter={() => setHighlighted(event.id)}
+                onPointerLeave={() => setHighlighted(null)}
+                data-highlighted={highlighted === event.id ? '' : undefined}
+                className={cn('flex items-start justify-between gap-2 rounded-lg border p-2 outline-none transition-colors', highlighted === event.id ? 'border-line-strong bg-raised' : 'border-line')}
+              >
                 <span>
                   <strong className="font-medium text-fg">{KIND_LABELS[event.kind]}</strong> on{' '}
                   <time dateTime={event.occurredAt} title={event.occurredAt} className="whitespace-nowrap tabular-nums">{formatShortDate(event.occurredAt)}</time> ·{' '}
@@ -441,6 +470,7 @@ export default function MyRequestsPanel({ onClose }: { onClose: () => void }) {
   const [portals, setPortals] = useState<{ key: string; name: string }[]>([]);
   const [portalError, setPortalError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [runwayHighlight, setRunwayHighlight] = useState<string | null>(null);
 
   useEffect(() => {
     const token = portalGate.begin();
@@ -480,10 +510,17 @@ export default function MyRequestsPanel({ onClose }: { onClose: () => void }) {
             {tracker.claims.length === 0 ? (
               <p className="text-muted">You are not tracking any request yet.</p>
             ) : (
+              <>
+              <DeadlineRunway
+                model={runwayModel(tracker.claims, tracker.deadlines)}
+                highlighted={runwayHighlight}
+                onHover={setRunwayHighlight}
+                onOpen={setSelectedId}
+              />
               <ul className="flex flex-col gap-2" aria-label="Tracked requests">
                 {tracker.claims.map((claim) => (
-                  <li key={claim.id}>
-                    <button type="button" className="focus-ring flex w-full flex-col items-start gap-1.5 rounded-xl border border-line bg-panel/60 p-4 text-left transition-colors hover:border-line-strong hover:bg-raised" onClick={() => setSelectedId(claim.id)}>
+                  <li key={claim.id} onPointerEnter={() => setRunwayHighlight(claim.id)} onPointerLeave={() => setRunwayHighlight(null)}>
+                    <button type="button" data-highlighted={runwayHighlight === claim.id ? '' : undefined} className={cn('focus-ring flex w-full flex-col items-start gap-1.5 rounded-xl border bg-panel/60 p-4 text-left transition-colors hover:border-line-strong hover:bg-raised', runwayHighlight === claim.id ? 'border-line-strong bg-raised' : 'border-line')} onClick={() => setSelectedId(claim.id)}>
                       <span className="block text-body font-medium text-fg">{claim.title || `Request ${claim.reference}`}</span>
                       {claim.title && <span className="block text-caption tabular-nums text-muted">Request {claim.reference}</span>}
                       {tracker.deadlines[claim.id] && <DeadlineChip deadline={tracker.deadlines[claim.id]} />}
@@ -494,6 +531,7 @@ export default function MyRequestsPanel({ onClose }: { onClose: () => void }) {
                   </li>
                 ))}
               </ul>
+              </>
             )}
             <ClaimForm
               portals={portals}
