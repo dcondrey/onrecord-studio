@@ -101,18 +101,9 @@ pub(super) fn update_automatic_audit_status(
     Ok(())
 }
 
-/// Whether a stored digest is a well-formed SHA-256 value.
-///
-/// Read paths need this as a question rather than an error. A digest that was never valid must be
-/// reported as a corrupt record; comparing against it instead would fail and present an intact
-/// file as a substituted one.
-pub(super) fn is_well_formed_sha256(value: &str) -> bool {
-    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
-}
-
 pub(super) fn normalize_sha256(sha256_hash: &str) -> Result<String, AppError> {
     let trimmed_hash = sha256_hash.trim();
-    if !is_well_formed_sha256(trimmed_hash) {
+    if !crate::integrity::is_sha256_hex(trimmed_hash) {
         return Err(AppError::DataParsing(
             "Document SHA-256 signature must contain exactly 64 hexadecimal characters".to_string(),
         ));
