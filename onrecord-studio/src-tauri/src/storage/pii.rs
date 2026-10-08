@@ -269,7 +269,6 @@ fn detect_phone_numbers(text: &str) -> Vec<Candidate> {
         // non-digit, non-phone-punctuation characters (crucially including ordinary letters) is
         // what keeps two unrelated numbers in the same sentence ("Item 605 ... budget of 4500")
         // from being merged into one digit run and read as a single 10-digit phone-shaped window.
-        // Previously allowing letters here let the segment span whole sentences of prose.
         let allowed =
             character.is_ascii_digit() || matches!(character, '+' | '(' | ')' | '-' | '.' | ' ');
         if allowed {
