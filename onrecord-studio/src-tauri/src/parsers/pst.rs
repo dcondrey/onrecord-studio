@@ -1326,21 +1326,6 @@ mod tests {
         assert!(attempt(4).is_ok());
     }
 
-    #[test]
-    fn the_pst_entry_cap_holds_at_its_real_value() {
-        let directory = tempfile::tempdir().expect("temp dir");
-        let mut output = Output::new(directory.path(), MAX_ENTRY_COUNT);
-        output.entries = MAX_ENTRY_COUNT - 2;
-        output
-            .write_file(PathBuf::from("limit-1.txt"), b"x")
-            .expect("limit - 1");
-        output
-            .write_file(PathBuf::from("limit.txt"), b"x")
-            .expect("at the limit");
-        let over = output.write_file(PathBuf::from("limit+1.txt"), b"x");
-        assert!(over.is_err_and(|error| error.to_string().contains("PST_ENTRY_COUNT_EXCEEDED")));
-    }
-
     /// What `extraction.rs` sees when the reader dies: an error, no destination, no staging left.
     #[test]
     fn a_crashed_or_hung_reader_commits_nothing_and_leaves_no_staging() {

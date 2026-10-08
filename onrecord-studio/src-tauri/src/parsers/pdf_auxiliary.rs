@@ -5,6 +5,7 @@ use crate::parsers::forensic_evidence::{
     finding_for_text, EvidenceBundle, EvidenceClass, EvidenceConfidence, EvidenceLocator,
     ForensicAuditOptions,
 };
+use crate::parsers::pdf::{decode_text_string, resolve_object};
 use lopdf::{Document, Object, ObjectId};
 use std::collections::{BTreeMap, HashSet};
 
@@ -314,26 +315,13 @@ fn object_dictionary(object: &Object) -> Option<&lopdf::Dictionary> {
     }
 }
 
-fn resolve_object<'a>(document: &'a Document, mut object: &'a Object) -> &'a Object {
-    for _ in 0..16 {
-        let Object::Reference(reference) = object else {
-            break;
-        };
-        let Ok(resolved) = document.get_object(*reference) else {
-            break;
-        };
-        object = resolved;
-    }
-    object
-}
-
 fn collect_strings(document: &Document, object: &Object, depth: usize, output: &mut Vec<String>) {
     if depth > 4 || output.len() >= 64 {
         return;
     }
     match resolve_object(document, object) {
-        Object::String(bytes, _) => output.push(String::from_utf8_lossy(bytes).into_owned()),
-        Object::Array(values) => {
+        Some(Object::String(bytes, _)) => output.push(decode_text_string(bytes)),
+        Some(Object::Array(values)) => {
             for value in values {
                 collect_strings(document, value, depth + 1, output);
                 if output.len() >= 64 {
@@ -343,21 +331,6 @@ fn collect_strings(document: &Document, object: &Object, depth: usize, output: &
         }
         _ => {}
     }
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OverlayOperationEvidence {
-    pub page_number: u32,
-    pub page_object_reference: String,
-    pub operation_index: usize,
-    pub operator: String,
-    pub operands: Vec<String>,
-    pub current_transform: [f64; 6],
-    pub clipping_active: bool,
-    pub active_graphics_state: Option<String>,
-    pub rectangle: Option<[f64; 4]>,
-    pub form_xobject_name: Option<String>,
 }
 
 #[cfg(test)]
@@ -370,7 +343,14 @@ mod tests {
         let mut document = Document::with_version("1.7");
         let object_id: ObjectId = document.add_object(dictionary! {
             "Type" => "Annot",
-            "Contents" => Object::string_literal("review note"),
+            // Acrobat writes annotation text as UTF-16BE behind a byte-order mark.
+            "Contents" => Object::String(
+                [0xfe, 0xff]
+                    .into_iter()
+                    .chain("review note".encode_utf16().flat_map(u16::to_be_bytes))
+                    .collect(),
+                lopdf::StringFormat::Literal,
+            ),
         });
         let result = collect_pdf_auxiliary_evidence(&document, ForensicAuditOptions::default())
             .expect("audit");
@@ -379,6 +359,7 @@ mod tests {
         assert!(result.findings.iter().any(|finding| {
             finding.kind == "PDF_AUXILIARY_CONTENTS"
                 && finding.locator.object_reference.as_deref() == Some(expected_reference.as_str())
+                && finding.masked_preview.as_deref() == Some("review note")
         }));
         assert!(result.findings.iter().any(|finding| {
             finding.kind == "PDF_UNREFERENCED_OBJECT"

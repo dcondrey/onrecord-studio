@@ -28,75 +28,6 @@ struct CentralDirectoryEntry {
     local_header_offset: usize,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExportContentClass {
-    Public,
-    Sensitive,
-    AttackerControlled,
-}
-
-#[derive(Debug, Clone)]
-pub struct ExportCompressionMember {
-    pub scope_id: String,
-    pub member_name: String,
-    pub content_class: ExportContentClass,
-    pub compression_enabled: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RedactionExportLint {
-    pub safe: bool,
-    pub rejected_scope_ids: Vec<String>,
-    pub explanation: String,
-}
-
-/// Rejects any compression stream that combines attacker-controlled bytes with sensitive bytes.
-/// Independent ZIP entries use independent scopes; a solid archive or compressed response body
-/// must use one shared scope so the unsafe combination is caught before export.
-pub fn lint_redaction_export_compression(
-    members: &[ExportCompressionMember],
-) -> Result<RedactionExportLint, AppError> {
-    if members.len() > MAXIMUM_ENTRIES {
-        return Err(AppError::DataParsing(format!(
-            "REDACTION_EXPORT_MEMBER_LIMIT_EXCEEDED:{MAXIMUM_ENTRIES}"
-        )));
-    }
-    let mut scopes = BTreeMap::<&str, (bool, bool)>::new();
-    for member in members {
-        if member.scope_id.trim().is_empty()
-            || member.member_name.trim().is_empty()
-            || member.scope_id.chars().count() > 256
-            || member.member_name.chars().count() > 1_024
-        {
-            return Err(AppError::DataParsing(
-                "REDACTION_EXPORT_MEMBER_INVALID".to_string(),
-            ));
-        }
-        if !member.compression_enabled {
-            continue;
-        }
-        let state = scopes.entry(&member.scope_id).or_default();
-        state.0 |= member.content_class == ExportContentClass::Sensitive;
-        state.1 |= member.content_class == ExportContentClass::AttackerControlled;
-    }
-    let rejected_scope_ids = scopes
-        .into_iter()
-        .filter(|(_, (sensitive, attacker))| *sensitive && *attacker)
-        .map(|(scope, _)| scope.to_string())
-        .collect::<Vec<_>>();
-    Ok(RedactionExportLint {
-        safe: rejected_scope_ids.is_empty(),
-        explanation: if rejected_scope_ids.is_empty() {
-            "No enabled compression scope mixes attacker-controlled and sensitive bytes."
-                .to_string()
-        } else {
-            "At least one enabled compression scope mixes attacker-controlled and sensitive bytes; use independent uncompressed or separately compressed members."
-                .to_string()
-        },
-        rejected_scope_ids,
-    })
-}
-
 pub fn assess_package_compression_risk(
     package_bytes: &[u8],
     options: ForensicAuditOptions,
@@ -568,7 +499,7 @@ mod tests {
     }
 
     #[test]
-    fn detects_sensitive_plaintext_and_rejects_shared_compression_scopes() {
+    fn detects_sensitive_plaintext() {
         let mut bytes = Vec::new();
         {
             let mut writer = zip::ZipWriter::new(Cursor::new(&mut bytes));
@@ -586,23 +517,5 @@ mod tests {
             .findings
             .iter()
             .any(|finding| finding.kind == "ZIP_SENSITIVE_PLAINTEXT_PRESENT"));
-
-        let lint = lint_redaction_export_compression(&[
-            ExportCompressionMember {
-                scope_id: "response-body".into(),
-                member_name: "redacted-record".into(),
-                content_class: ExportContentClass::Sensitive,
-                compression_enabled: true,
-            },
-            ExportCompressionMember {
-                scope_id: "response-body".into(),
-                member_name: "request-label".into(),
-                content_class: ExportContentClass::AttackerControlled,
-                compression_enabled: true,
-            },
-        ])
-        .expect("lint");
-        assert!(!lint.safe);
-        assert_eq!(lint.rejected_scope_ids, vec!["response-body"]);
     }
 }

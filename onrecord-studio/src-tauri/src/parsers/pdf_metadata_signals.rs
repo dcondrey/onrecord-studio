@@ -20,6 +20,9 @@ use lopdf::{Document, Object};
 use std::path::Path;
 
 use crate::error::AppError;
+use crate::parsers::office::decode_xml_entities;
+use crate::parsers::ooxml_docprops::extract_body;
+use crate::parsers::pdf::{decode_text_string, resolve_dictionary, resolve_object};
 
 /// Hard read cap. A metadata-only extractor never needs a large PDF loaded into memory; a file
 /// larger than this is either not a records-response document (a scanned book) or is deliberately
@@ -133,16 +136,16 @@ fn extract_from_document(document: &Document) -> PdfMetadataSignals {
             };
             match (key.as_slice(), resolved) {
                 (b"CreationDate", Object::String(bytes, _)) => {
-                    signals.info_creation_date = parse_pdf_date_literal(&bytes);
+                    signals.info_creation_date = parse_pdf_date_literal(bytes);
                 }
                 (b"ModDate", Object::String(bytes, _)) => {
-                    signals.info_mod_date = parse_pdf_date_literal(&bytes);
+                    signals.info_mod_date = parse_pdf_date_literal(bytes);
                 }
                 (b"Producer", Object::String(bytes, _)) | (b"Producer", Object::Name(bytes)) => {
-                    signals.info_producer = decode_pdf_string(&bytes);
+                    signals.info_producer = decode_pdf_string(bytes);
                 }
                 (b"Creator", Object::String(bytes, _)) | (b"Creator", Object::Name(bytes)) => {
-                    signals.info_creator = decode_pdf_string(&bytes);
+                    signals.info_creator = decode_pdf_string(bytes);
                 }
                 _ => {}
             }
@@ -163,62 +166,46 @@ fn extract_from_document(document: &Document) -> PdfMetadataSignals {
     signals
 }
 
-fn resolve_dictionary<'a>(
-    document: &'a Document,
-    value: &'a Object,
-) -> Option<&'a lopdf::Dictionary> {
-    match value {
-        Object::Dictionary(dict) => Some(dict),
-        Object::Reference(id) => match document.get_object(*id).ok()? {
-            Object::Dictionary(dict) => Some(dict),
-            _ => None,
-        },
-        _ => None,
-    }
-}
-
-fn resolve_object<'a>(document: &'a Document, value: &'a Object) -> Option<Object> {
-    match value {
-        Object::Reference(id) => document.get_object(*id).ok().cloned(),
-        other => Some(other.clone()),
-    }
-}
-
 fn read_xmp_stream(document: &Document) -> Option<String> {
     let catalog = document.catalog().ok()?;
-    let metadata_ref = catalog.get(b"Metadata").ok()?;
-    let stream = match metadata_ref {
-        Object::Stream(stream) => stream.clone(),
-        Object::Reference(id) => match document.get_object(*id).ok()? {
-            Object::Stream(stream) => stream.clone(),
-            _ => return None,
-        },
-        _ => return None,
-    };
+    let stream = resolve_object(document, catalog.get(b"Metadata").ok()?)?
+        .as_stream()
+        .ok()?
+        .clone();
     let content = stream
         .decompressed_content_with_limit(crate::parsers::pdf::MAX_DECOMPRESSED_STREAM_BYTES)
         .ok()?;
     String::from_utf8(content).ok()
 }
 
-/// Extract the text between `<tag>` and `</tag>` (attributes on the open tag are ignored). Returns
-/// the trimmed body or None if the tag is absent. Not an XML parser; adequate for the well-formed
-/// XMP that Adobe products emit.
+/// An XMP property in either RDF serialization: the element form `<tag>value</tag>` or the
+/// abbreviated attribute form `tag="value"` on `rdf:Description`, which Acrobat writes for simple
+/// properties. Not an XML parser; adequate for the well-formed XMP that producers emit.
 fn extract_xmp_tag(xmp: &str, tag: &str) -> Option<String> {
-    let open_prefix = format!("<{tag}");
-    let start = xmp.find(&open_prefix)?;
-    let after_prefix = &xmp[start + open_prefix.len()..];
-    // Skip attributes and self-closing check.
-    let gt = after_prefix.find('>')?;
-    let after_open = &after_prefix[gt + 1..];
-    let close = format!("</{tag}>");
-    let end = after_open.find(&close)?;
-    let body = after_open[..end].trim();
-    if body.is_empty() {
-        None
-    } else {
-        Some(body.to_string())
+    extract_body(xmp, tag).or_else(|| extract_xmp_attribute(xmp, tag))
+}
+
+fn extract_xmp_attribute(xmp: &str, name: &str) -> Option<String> {
+    let mut cursor = 0;
+    while let Some(relative) = xmp[cursor..].find(name) {
+        let start = cursor + relative;
+        cursor = start + name.len();
+        if !xmp[..start].ends_with(|character: char| character.is_ascii_whitespace()) {
+            continue;
+        }
+        let Some(after_equals) = xmp[cursor..].trim_start().strip_prefix('=') else {
+            continue;
+        };
+        let quoted = after_equals.trim_start();
+        let Some(quote) = quoted.chars().next().filter(|c| *c == '"' || *c == '\'') else {
+            continue;
+        };
+        let body = &quoted[1..];
+        let value = decode_xml_entities(&body[..body.find(quote)?]).ok()?;
+        let value = value.trim();
+        return (!value.is_empty()).then(|| value.to_string());
     }
+    None
 }
 
 fn parse_iso_datetime(value: &str) -> Option<DateTime<Utc>> {
@@ -270,31 +257,10 @@ fn parse_pdf_date_literal(bytes: &[u8]) -> Option<DateTime<Utc>> {
     Some(local.with_timezone(&Utc))
 }
 
-/// Decode a PDF string. UTF-16 BOM strips honored; anything else is UTF-8 lossy.
 fn decode_pdf_string(bytes: &[u8]) -> Option<String> {
-    let value = if let Some(utf16) = bytes.strip_prefix(&[0xfe, 0xff]) {
-        decode_utf16(utf16, u16::from_be_bytes)
-    } else if let Some(utf16) = bytes.strip_prefix(&[0xff, 0xfe]) {
-        decode_utf16(utf16, u16::from_le_bytes)
-    } else {
-        String::from_utf8_lossy(bytes).into_owned()
-    };
+    let value = decode_text_string(bytes);
     let trimmed = value.trim();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed.to_string())
-    }
-}
-
-fn decode_utf16(bytes: &[u8], from_bytes: fn([u8; 2]) -> u16) -> String {
-    let units: Vec<u16> = bytes
-        .as_chunks::<2>()
-        .0
-        .iter()
-        .map(|pair| from_bytes(*pair))
-        .collect();
-    String::from_utf16_lossy(&units)
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
 }
 
 #[cfg(test)]
@@ -302,7 +268,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn extracts_xmp_tag_body_between_open_and_close_tags() {
+    fn extracts_xmp_properties_in_element_and_attribute_form() {
         let xmp = r#"<x:xmpmeta xmlns:x='adobe:ns:meta/'>
             <rdf:RDF><rdf:Description
               xmlns:xmp='http://ns.adobe.com/xap/1.0/'
@@ -320,6 +286,15 @@ mod tests {
             extract_xmp_tag(xmp, "pdf:Producer"),
             Some("Test Producer 1.0".to_string())
         );
+        assert_eq!(
+            extract_xmp_tag(xmp, "xmp:CreateDate"),
+            Some("2024-03-01T14:30:00Z".to_string())
+        );
+        assert_eq!(
+            extract_xmp_tag(xmp, "xmp:CreatorTool"),
+            Some("Adobe Acrobat".to_string())
+        );
+        assert_eq!(extract_xmp_tag(xmp, "xmp:Create"), None);
         assert_eq!(extract_xmp_tag(xmp, "xmp:AbsentTag"), None);
     }
 

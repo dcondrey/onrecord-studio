@@ -10,6 +10,7 @@ use std::io::Read;
 use std::path::Path;
 use std::rc::Rc;
 
+use crate::parsers::pdf::{decode_text_string, resolve_dictionary, resolve_object};
 use crate::parsers::source::read_regular_file;
 
 const MAXIMUM_PDF_BYTES: u64 = 512 * 1024 * 1024;
@@ -2658,21 +2659,6 @@ fn object_integer(object: &Object) -> Option<i64> {
     object.as_i64().ok()
 }
 
-fn resolve_object<'a>(document: &'a Document, object: &'a Object) -> Option<&'a Object> {
-    let mut current = object;
-    let mut visited = HashSet::new();
-    for _ in 0..32 {
-        let Object::Reference(identifier) = current else {
-            return Some(current);
-        };
-        if !visited.insert(*identifier) {
-            return None;
-        }
-        current = document.get_object(*identifier).ok()?;
-    }
-    None
-}
-
 fn collect_metadata(document: &Document) -> Result<Vec<String>, AppError> {
     let Some(dictionary) = document
         .trailer
@@ -2740,16 +2726,7 @@ fn collect_metadata(document: &Document) -> Result<Vec<String>, AppError> {
 
 fn bounded_metadata_value(bytes: &[u8]) -> String {
     let end = bytes.len().min(MAXIMUM_METADATA_VALUE_BYTES);
-    let bounded = &bytes[..end];
-    let mut value = if let Some(utf16) = bounded.strip_prefix(&[0xfe, 0xff]) {
-        decode_utf16_metadata(utf16, u16::from_be_bytes)
-    } else if let Some(utf16) = bounded.strip_prefix(&[0xff, 0xfe]) {
-        decode_utf16_metadata(utf16, u16::from_le_bytes)
-    } else {
-        String::from_utf8_lossy(bounded).into_owned()
-    }
-    .trim()
-    .to_string();
+    let mut value = decode_text_string(&bytes[..end]).trim().to_string();
     if bytes.len() > end {
         value.push_str(" [TRUNCATED]");
     }
@@ -2775,20 +2752,6 @@ fn collect_xmp_metadata(document: &Document) -> Vec<String> {
         }
         Err(_) => vec!["XMP_METADATA_PRESENT_BUT_UNRESOLVED".to_string()],
     }
-}
-
-fn decode_utf16_metadata(bytes: &[u8], decode: fn([u8; 2]) -> u16) -> String {
-    let units = bytes
-        .as_chunks::<2>()
-        .0
-        .iter()
-        .map(|chunk| decode(*chunk))
-        .collect::<Vec<_>>();
-    String::from_utf16_lossy(&units)
-}
-
-fn resolve_dictionary<'a>(document: &'a Document, object: &'a Object) -> Option<&'a Dictionary> {
-    resolve_object(document, object)?.as_dict().ok()
 }
 
 #[cfg(test)]

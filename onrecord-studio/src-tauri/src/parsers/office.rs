@@ -287,7 +287,7 @@ fn find_tag_end(xml: &str, start: usize) -> Option<usize> {
 }
 
 fn append_text_segment(segment: &str, output: &mut String, path: &Path) -> Result<(), AppError> {
-    let decoded = decode_xml_entities(segment, path)?;
+    let decoded = decode_xml_entities(segment).map_err(|entity| invalid_entity(path, &entity))?;
     for word in decoded.split_whitespace() {
         if !output.is_empty() && !output.ends_with(' ') && !output.ends_with('\n') {
             append_character(output, ' ', path)?;
@@ -297,7 +297,9 @@ fn append_text_segment(segment: &str, output: &mut String, path: &Path) -> Resul
     Ok(())
 }
 
-fn decode_xml_entities(segment: &str, path: &Path) -> Result<String, AppError> {
+/// Decodes XML character and named entity references. An unknown name is kept literally; a
+/// numeric reference naming no Unicode scalar is an error carrying the entity text.
+pub(crate) fn decode_xml_entities(segment: &str) -> Result<String, String> {
     let mut decoded = String::with_capacity(segment.len());
     let mut remainder = segment;
     while let Some(start) = remainder.find('&') {
@@ -330,14 +332,14 @@ fn decode_xml_entities(segment: &str, path: &Path) -> Result<String, AppError> {
                 u32::from_str_radix(&entity[2..], 16)
                     .ok()
                     .and_then(char::from_u32)
-                    .ok_or_else(|| invalid_entity(path, entity))?,
+                    .ok_or_else(|| entity.to_string())?,
             ),
             entity if entity.starts_with('#') => Some(
                 entity[1..]
                     .parse::<u32>()
                     .ok()
                     .and_then(char::from_u32)
-                    .ok_or_else(|| invalid_entity(path, entity))?,
+                    .ok_or_else(|| entity.to_string())?,
             ),
             _ => None,
         };
