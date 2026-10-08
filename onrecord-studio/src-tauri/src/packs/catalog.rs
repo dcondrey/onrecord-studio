@@ -246,6 +246,7 @@ pub(crate) fn published_files(
 }
 
 /// Whether `pack` is built from the source registry, so its files carry their own licences.
+#[cfg_attr(not(feature = "pack-builder"), allow(dead_code))]
 pub(crate) fn is_registry_pack(pack: &str) -> bool {
     registry_packs().contains(&pack)
 }

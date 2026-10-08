@@ -33,8 +33,9 @@ pub(crate) struct RegistryEntry {
     #[allow(dead_code)]
     bytes: u64,
     #[allow(dead_code)]
-    rows: u64,
+    rows: Option<u64>,
     #[allow(dead_code)]
+    #[serde(default)]
     notes: String,
 }
 
