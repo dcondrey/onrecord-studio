@@ -328,6 +328,11 @@ a[href] {
     box-shadow: var(--shadow-panel);
   }
 
+  /* A modal panel is opaque: the translucent panel fill would let the page read through it. */
+  [aria-modal="true"] > .app-panel {
+    background: rgb(var(--surface));
+  }
+
   .app-eyebrow,
   .sidebar-section-label {
     @apply text-overline uppercase text-muted;
@@ -439,6 +444,11 @@ a[href] {
 
   .instrument-cell {
     @apply p-4;
+  }
+
+  /* Only a cell that does something responds to the pointer. */
+  :is(button, a).instrument-cell {
+    @apply transition-colors hover:bg-raised/50;
   }
 
   .instrument-cell:focus-visible {
