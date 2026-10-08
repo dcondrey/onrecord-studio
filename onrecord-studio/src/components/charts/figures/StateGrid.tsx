@@ -142,6 +142,19 @@ export function cellWords(cell: StateGridCell, w: number): string | null {
   return null;
 }
 
+/** The words CellMark prints in a cell box of `width` × `height`, or null when it prints none. */
+function drawnWords(cell: StateGridCell, width: number, height: number): string | null {
+  return height - 2 >= 14 ? cellWords(cell, Math.max(0, width - 2)) : null;
+}
+
+/**
+ * A cell's accessible name. Voice control addresses a control by the words it shows, so a name
+ * that does not already contain the printed words leads with them.
+ */
+function cellName(name: string, words: string | null): string {
+  return words && !name.toLowerCase().includes(words.toLowerCase()) ? `${words}: ${name}` : name;
+}
+
 interface Layout {
   stacked: boolean;
   gridLeft: number;
@@ -277,7 +290,7 @@ function CellMark({ cell, x, y, width, height }: { cell: StateGridCell; x: numbe
   const paint = paintOf(cell, hatch);
   const w = Math.max(0, width - 2);
   const h = Math.max(0, height - 2);
-  const words = h >= 14 ? cellWords(cell, w) : null;
+  const words = drawnWords(cell, width, height);
   const title = cellTitle(cell, words);
   const inset = paint.stroked ? 0.75 : 0;
   return (
@@ -574,7 +587,7 @@ export default function StateGrid(props: StateGridProps) {
                       return (
                         <CellShell
                           key={column.key}
-                          name={cell.name}
+                          name={cellName(cell.name, drawnWords(cell, cellWidth * span, cellsHeight - 2))}
                           item={itemFor(i + headerRow, j, span)}
                           box={{ x, y: cellsY + 1, width: cellWidth * span, height: cellsHeight - 2 }}
                           selected={isSelected}
