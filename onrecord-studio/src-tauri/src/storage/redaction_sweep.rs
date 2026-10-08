@@ -14,16 +14,13 @@
 //! A document is identified by portal and id together. Hand-added files (`user_supplied_sources`)
 //! are never taken in, on either side.
 
+use super::sql_literal;
 use super::sqlite::DuckDbRepository;
 use crate::error::AppError;
 use duckdb::{params, Connection};
 
 fn storage(error: impl std::fmt::Display) -> AppError {
     AppError::Storage(format!("Redaction sweep: {error}"))
-}
-
-fn literal(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "''"))
 }
 
 /// Public documents collected from a source, with stored text no larger than the cap.
@@ -502,7 +499,7 @@ impl DuckDbRepository {
                             &format!(
                                 "SELECT COALESCE(MAX(row_number), 0) FROM analytical_rows
                                  WHERE snapshot_id = {}",
-                                literal(&snapshot_id)
+                                sql_literal(&snapshot_id)
                             ),
                             [],
                             |row| row.get(0),
@@ -533,7 +530,7 @@ impl DuckDbRepository {
                 .prepare(&format!(
                     "SELECT row_number, source_payload_json FROM analytical_rows
                      WHERE snapshot_id = {} AND row_number > ?1 AND row_number <= ?2",
-                    literal(&snapshot_id)
+                    sql_literal(&snapshot_id)
                 ))
                 .map_err(storage)?
                 .query_map(params![after_row, through_row], |row| {

@@ -1,7 +1,7 @@
 use crate::{
     analysis::facility_coverage::{parse_daily_hours, summarize_area},
     error::AppError,
-    storage::sqlite::DuckDbRepository,
+    storage::{quote_ident, sqlite::DuckDbRepository},
     types::*,
 };
 use duckdb::params;
@@ -18,9 +18,6 @@ fn error(e: impl std::fmt::Display) -> AppError {
 }
 fn invalid(message: impl Into<String>) -> AppError {
     AppError::DataParsing(message.into())
-}
-fn quote(value: &str) -> String {
-    format!("\"{}\"", value.replace('"', "\"\""))
 }
 fn bounded(value: &str, label: &str) -> Result<(), AppError> {
     if value.trim().is_empty() || value.len() > MAX_TEXT {
@@ -169,12 +166,12 @@ struct FacilityRow {
 
 fn text_expr(column: Option<&String>) -> String {
     column.map_or("CAST(NULL AS VARCHAR)".into(), |c| {
-        format!("NULLIF(trim(CAST({} AS VARCHAR)), '')", quote(c))
+        format!("NULLIF(trim(CAST({} AS VARCHAR)), '')", quote_ident(c))
     })
 }
 fn number_expr(column: Option<&String>) -> String {
     column.map_or("CAST(NULL AS DOUBLE)".into(), |c| {
-        format!("TRY_CAST({} AS DOUBLE)", quote(c))
+        format!("TRY_CAST({} AS DOUBLE)", quote_ident(c))
     })
 }
 
@@ -406,7 +403,7 @@ impl DuckDbRepository {
             number_expr(mapping.longitude_column.as_ref()),
             text_expr(mapping.hours_column.as_ref()),
             text_expr(mapping.category_column.as_ref()),
-            quote(&dataset.table_name)
+            quote_ident(&dataset.table_name)
         );
         let rows = self
             .query_connection("Read facility list", move |conn| {

@@ -19,11 +19,11 @@ use crate::{
     error::AppError,
     storage::{
         monitoring::{packed, unpacked},
+        now_stamp,
         sqlite::DuckDbRepository,
     },
     types::*,
 };
-use chrono::SecondsFormat;
 use duckdb::{params, params_from_iter, Connection, OptionalExt};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
@@ -52,10 +52,6 @@ fn err(e: impl std::fmt::Display) -> AppError {
 
 fn invalid(message: &str) -> AppError {
     AppError::DataParsing(message.to_string())
-}
-
-fn now_stamp() -> String {
-    chrono::Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true)
 }
 
 type Labels = BTreeMap<String, Labeled>;
