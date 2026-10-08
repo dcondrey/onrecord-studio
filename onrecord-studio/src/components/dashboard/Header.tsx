@@ -122,7 +122,7 @@ function SourceActionsMenu({ connector }: { connector: SourceConnectorController
     else if (event.key === 'End') move(items.length - 1);
     else if (event.key === 'Escape' || event.key === 'Tab') { event.preventDefault(); close(true); }
   };
-  const item = 'flex h-8 w-full items-center rounded-md px-2.5 text-left text-control outline-none transition-colors hover:bg-raised focus-visible:bg-raised disabled:pointer-events-none disabled:text-muted';
+  const item = 'flex h-8 w-full items-center rounded-md px-2.5 text-left text-control text-fg outline-none transition-colors hover:bg-raised focus-visible:bg-raised disabled:pointer-events-none disabled:text-muted';
 
   return (
     <div ref={root} className="relative shrink-0">
