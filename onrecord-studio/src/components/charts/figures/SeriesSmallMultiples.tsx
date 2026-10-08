@@ -111,39 +111,46 @@ export function slotPositions(slots: readonly SeriesSlot[], x0: number, x1: numb
   return slots.map((slot, i) => x0 + (((positioned ? (slot.position ?? 0) - first : i) / (span || 1)) * (x1 - x0)));
 }
 
+/** A tick label cut to fit beside its neighbour: '2023' → '’23', 'Sep 2024' → 'Sep'. */
+function shortTick(label: string): string {
+  if (/^\d{4}$/.test(label)) return `’${label.slice(2)}`;
+  const month = /^([A-Z][a-z]{2}) \d{4}$/.exec(label);
+  return month ? month[1] : label;
+}
+
 /**
- * The slots that get a tick label: the `priority` pair (the bracket's from and to; turned away
- * from each other when centred labels would touch), both ends where they do not collide,
- * then as many others as fit. A gap slot (empty label) is never labelled.
+ * The slots that get a tick label: the `priority` pair (the bracket's from and to) always, turned
+ * away from each other when centred labels would touch and shortened when they still do; both
+ * ends; then as many others as fit. A gap slot (empty label) is never labelled.
  */
-export function labelledSlots(slots: readonly SeriesSlot[], xs: readonly number[], priority: readonly number[]): { index: number; anchor: 'start' | 'middle' | 'end' }[] {
+export function labelledSlots(slots: readonly SeriesSlot[], xs: readonly number[], priority: readonly number[]): { index: number; anchor: 'start' | 'middle' | 'end'; text: string }[] {
   const last = slots.length - 1;
   const anchors = new Map<number, 'start' | 'middle' | 'end'>();
+  const texts = new Map<number, string>();
   const anchorOf = (i: number) => anchors.get(i) ?? (slots.length === 1 ? 'middle' : i === 0 ? 'start' : i === last ? 'end' : 'middle');
+  const textOf = (i: number) => texts.get(i) ?? slots[i].label;
   const extent = (i: number): [number, number] => {
-    const w = measureText(slots[i].label);
+    const w = measureText(textOf(i));
     const anchor = anchorOf(i);
     return anchor === 'start' ? [xs[i], xs[i] + w] : anchor === 'end' ? [xs[i] - w, xs[i]] : [xs[i] - w / 2, xs[i] + w / 2];
   };
   const apart = (i: number, j: number) => { const [a0, a1] = extent(i); const [b0, b1] = extent(j); return a1 + 8 <= b0 || b1 + 8 <= a0; };
   const chosen: number[] = [];
   const valid = (i: number) => i >= 0 && i <= last && Boolean(slots[i].label) && !chosen.includes(i);
-  const pair = priority.filter(valid);
+  const pair = [...new Set(priority.filter(valid))];
   if (pair.length === 2 && !apart(pair[0], pair[1])) {
-    // Each label turns away from its partner; an end slot keeps its inward anchor so it never
-    // runs past the panel.
     const [a, b] = [Math.min(...pair), Math.max(...pair)];
     if (a !== 0) anchors.set(a, 'end');
     if (b !== last) anchors.set(b, 'start');
-    // Still touching beside an end slot: the end label stays, and the bracket's own label names
-    // the other period.
-    if (!apart(a, b)) pair.splice(pair.indexOf(b === last ? a : b), 1);
+    const inner = b === last ? a : b;
+    if (!apart(a, b)) texts.set(inner, shortTick(slots[inner].label));
+    if (!apart(a, b)) texts.set(inner === a ? b : a, shortTick(slots[inner === a ? b : a].label));
   }
-  chosen.push(...new Set(pair));
+  chosen.push(...pair);
   for (const i of [0, last, ...slots.map((_, index) => index)]) {
     if (valid(i) && chosen.every((j) => apart(i, j))) chosen.push(i);
   }
-  return chosen.sort((a, b) => a - b).map((index) => ({ index, anchor: anchorOf(index) }));
+  return chosen.sort((a, b) => a - b).map((index) => ({ index, anchor: anchorOf(index), text: textOf(index) }));
 }
 
 function extentOf(values: Iterable<Measured>): [number, number] | null {
@@ -295,8 +302,8 @@ export default function SeriesSmallMultiples(props: SeriesSmallMultiplesProps) {
                     <text x={LEFT - 6} y={y(tick)} dy="0.32em" textAnchor="end" className={TICK_CLASS}>{formatValue(tick, { kind, compact: true, digits: step < 1 ? 1 : undefined })}</text>
                   </g>
                 ))}
-                {tickSlots.map(({ index: i, anchor }) => (
-                  <text key={i} aria-hidden="true" data-tick={slots[i].key} x={x(i)} y={TITLE_HEIGHT + PANEL_HEIGHT + 14} textAnchor={anchor} className={TICK_CLASS}>{slots[i].label}</text>
+                {tickSlots.map(({ index: i, anchor, text }) => (
+                  <text key={i} aria-hidden="true" data-tick={slots[i].key} x={x(i)} y={TITLE_HEIGHT + PANEL_HEIGHT + 14} textAnchor={anchor} className={TICK_CLASS}>{text}</text>
                 ))}
                 {activeSlot !== null && (
                   <g aria-hidden="true">

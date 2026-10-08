@@ -358,6 +358,9 @@ function YearColumns({ run }: { run: Run }) {
                     : count === 0
                       ? <line x1={pos} x2={pos + band.bandwidth} y1={y(0) - 0.75} y2={y(0) - 0.75} style={{ stroke: VIZ.mark, strokeWidth: 1.5 }} />
                       : <Bar orient="vertical" band={{ pos, thickness: band.bandwidth }} value={measured(count)} scale={y} role={estimated ? 'comparison' : 'default'} motionKey={`year:${year}`} />}
+                  {count === 0 && !labelled.has(year) && (
+                    <text x={pos + band.bandwidth / 2} y={y(0) - 4} textAnchor="middle" className={MUTED_LABEL_CLASS}>0</text>
+                  )}
                   {labelled.has(year) && count !== undefined && (
                     <text x={pos + band.bandwidth / 2} y={y(count) - 4} textAnchor="middle" className={LABEL_CLASS}>{textOf(year)}</text>
                   )}

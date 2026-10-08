@@ -250,17 +250,19 @@ export default function BarTable(props: BarTableProps) {
   const span = columns.length + (narrow ? 0 : 1);
   const fitRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
-  // The level is measured per frame width: a new width starts again from the authored layout.
-  const [fit, setFit] = useState<{ width: number; level: FitLevel }>({ width, level: 0 });
-  const level: FitLevel = fit.width === width ? fit.level : 0;
+  // The level is measured per frame width and content: a new width, or other rows or columns,
+  // start again from the authored layout.
+  const signature = `${width}|${columns.map((column) => column.key).join(',')}|${rows.map((row) => row.key).join(',')}`;
+  const [fit, setFit] = useState<{ signature: string; level: FitLevel }>({ signature, level: 0 });
+  const level: FitLevel = fit.signature === signature ? fit.level : 0;
   useLayoutEffect(() => {
     if (view !== 'chart' || !showsData || level === 3) return;
     const frame = fitRef.current;
     const table = tableRef.current;
     // An unlaid-out frame (0 wide) says nothing about fit.
     if (!frame || !table || frame.clientWidth === 0) return;
-    if (table.scrollWidth > frame.clientWidth + 1) setFit({ width, level: (level + 1) as FitLevel });
-    else if (fit.width !== width) setFit({ width, level });
+    if (table.scrollWidth > frame.clientWidth + 1) setFit({ signature, level: (level + 1) as FitLevel });
+    else if (fit.signature !== signature) setFit({ signature, level });
   });
   const maxes = useMemo(() => {
     const byGroup = new Map<string, number[]>();

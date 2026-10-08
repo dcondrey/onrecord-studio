@@ -188,7 +188,7 @@ export function discoveryFindings(report: DiscoveryReport): string[] {
   const findings = [`${String(cell('source_rows'))} records match this analysis.`];
   if (Number(cell('missing_values')) > 0) findings.push(`${String(cell('missing_values'))} records have no value for ${report.plan.selection.measure}.`);
   if (Number(cell('unusable_period_rows')) > 0) findings.push(`${String(cell('unusable_period_rows'))} records cannot be placed in the selected time series.`);
-  if (cell('last_period') != null) findings.push(`Latest observed period in this scope: ${String(cell('last_period'))}. Import time does not establish data freshness.`);
+  if (cell('last_period') != null) findings.push(`Latest observed period in this scope: ${formatPeriod(cell('last_period'), report.plan.selection.periodMode)}. Import time does not establish data freshness.`);
   const changes = report.results.find((item) => item.query.id === 'changes')?.result;
   if (changes) {
     const gapIndex = changes.columns.indexOf('comparison_status');

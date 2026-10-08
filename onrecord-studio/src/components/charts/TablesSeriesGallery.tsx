@@ -170,12 +170,47 @@ function GroupsExample() {
   );
 }
 
+const QUALITY: [name: string, type: string, missing: number, total: number][] = [
+  ['contractor_subcontractor_payment_reference_number', 'VARCHAR', 3120, 4410],
+  ['closed_date', 'DATE', 1204, 4410],
+  ['amount', 'DECIMAL', 37, 4410],
+  ['council_district', 'INTEGER', 0, 4410],
+  ['empty_after_filter', 'VARCHAR', 0, 0],
+];
+
+function CompletenessExample() {
+  return (
+    <BarTable
+      title="Column completeness"
+      headline="1 of 5 columns is more than half empty."
+      sources={{ tables: ['analysis_service_requests'] }}
+      summary="Five columns, sorted by missing share; the hatched remainder is the missing share."
+      status="ready"
+      rowHeader="Column"
+      dense
+      hatchLabel="Missing share"
+      columns={[{ key: 'reported', label: 'Reported', note: 'hatched: missing', scale: 'own-0-100', barWidth: 120 }]}
+      rows={QUALITY.map(([name, type, missing, total]) => {
+        const reported = total > 0 ? 1 - missing / total : null;
+        return {
+          key: name,
+          name,
+          header: <span className="flex min-w-0 items-baseline gap-x-2 whitespace-nowrap"><span className="truncate font-mono text-code text-fg" title={name}>{name}</span><span className="text-caption text-muted">{type}</span></span>,
+          cells: { reported: reported === null ? { value: absent('not-recorded', 'No rows in scope'), text: 'no rows' } : { value: measured(reported), remainder: 1 - reported, text: `${pct(reported)} reported` } },
+        };
+      })}
+      twin={{ caption: 'Column completeness', columns: [{ key: 'name', label: 'Column' }, { key: 'missing', label: 'Missing', align: 'end' }], rows: QUALITY.map(([name, , missing]) => ({ name, missing })) }}
+    />
+  );
+}
+
 export function BarTableExamples() {
   return (
     <div className="grid gap-8">
       <DispositionsExample />
       <LeadsExample />
       <GroupsExample />
+      <CompletenessExample />
     </div>
   );
 }
