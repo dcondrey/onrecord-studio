@@ -224,7 +224,7 @@ describe('FindingsInbox', () => {
       render(<FindingsInbox />);
     });
     await screen.findByText('Environmental Services carries 2 of 3 findings, including 1 of 2 critical.');
-    fireEvent.keyDown(screen.getByRole('img', { name: /^Environmental Services, critical: 1 finding/ }), { key: 'Enter' });
+    fireEvent.keyDown(screen.getByRole('gridcell', { name: /^Environmental Services, critical: 1 finding/ }), { key: 'Enter' });
     expect(screen.getByText('Environmental critical')).toBeTruthy();
     expect(screen.queryByText('Environmental serious')).toBeNull();
     expect(screen.queryByText('Unattributed critical')).toBeNull();
