@@ -1,6 +1,7 @@
-import type { AnalyticalDatasetSummary, AnalyticalSchema, SqlQueryResult } from '../types';
+import type { AnalyticalDatasetSummary, AnalyticalSchema } from '../types';
 import { quoteIdentifier, type DiscoveryQuery } from './dataDiscovery';
 import type { ServiceLead } from './serviceAccountability';
+import { numberOrNull as count, wholeNumber as shown, records, type QueryEntry as Entry } from './leadRows';
 
 const ISSUED_PREFIX = 'https://seshat.datasd.org/development_permits/approvals_issued_';
 const ISSUED_SUFFIX = '_datasd.csv';
@@ -76,16 +77,8 @@ FROM jobs GROUP BY issued_year ORDER BY issued_year NULLS LAST`,
   }];
 }
 
-const count = (value: unknown): number | null => {
-  if (value == null || value === '') return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
-const shown = (value: number) => Math.round(value).toLocaleString('en-US');
 const units = (value: number) => `${shown(value)} unit${Math.round(value) === 1 ? '' : 's'}`;
 const recorded = (value: number | null) => value === null ? 'not recorded' : shown(value);
-const records = (result: SqlQueryResult) => result.rows.map((row) => Object.fromEntries(result.columns.map((name, i) => [name, row[i]])));
-type Entry = { query: DiscoveryQuery; result?: SqlQueryResult };
 /** Extremely-low plus very-low units. A tier no job recorded is named as not recorded, never added as 0. */
 const lowest = (row: Record<string, unknown>) => {
   const eli = count(row.extremely_low); const vli = count(row.very_low);

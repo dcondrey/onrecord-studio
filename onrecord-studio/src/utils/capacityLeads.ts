@@ -1,6 +1,7 @@
 import type { AnalyticalDatasetSummary, AnalyticalSchema, SqlQueryResult } from '../types';
 import { quoteIdentifier, type DiscoveryQuery } from './dataDiscovery';
 import { budgetTable, type ServiceLead } from './serviceAccountability';
+import { numberOrNull as count, wholeNumber as shown, money } from './leadRows';
 
 const GET_IT_DONE = 'https://seshat.datasd.org/get_it_done_reports/';
 export const OPEN_REPORTS = `${GET_IT_DONE}get_it_done_requests_open_datasd.csv`;
@@ -132,13 +133,6 @@ WHERE bed_years.fiscal_year >= ${FIRST_INVENTORY_YEAR} ORDER BY bed_years.fiscal
   }];
 }
 
-const count = (value: unknown): number | null => {
-  if (value == null || value === '') return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
-const shown = (value: number) => Math.round(value).toLocaleString('en-US');
-const money = (value: number) => Math.abs(value) >= 1_000_000 ? `$${(value / 1_000_000).toFixed(1)} million` : `$${shown(value)}`;
 const moved = (from: number, to: number) => from !== to && Math.abs(to - from) * 100 >= CHANGE_PERCENT * Math.abs(from);
 const change = (from: number, to: number) => from === to ? 'unchanged' : from === 0 ? 'up from none' : `${to > from ? 'up' : 'down'} ${(100 * Math.abs(to - from) / Math.abs(from)).toFixed(1)}%`;
 

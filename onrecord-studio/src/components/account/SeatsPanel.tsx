@@ -3,17 +3,12 @@ import ModalDialog from '../licensing/ModalDialog';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { SeatEntry, SeatStatus } from '../../types';
-
-function when(value: string | null): string {
-  if (!value) return '';
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString(undefined, { dateStyle: 'medium' });
-}
+import { formatShortDate } from '../objects/labels';
 
 function seatState(seat: SeatEntry): string {
-  if (seat.revokedAt) return `Revoked ${when(seat.revokedAt)}`;
-  if (seat.claimedAt) return `In use since ${when(seat.claimedAt)}`;
-  return `Invited ${when(seat.invitedAt)}, not yet signed in`;
+  if (seat.revokedAt) return `Revoked ${formatShortDate(seat.revokedAt)}`;
+  if (seat.claimedAt) return `In use since ${formatShortDate(seat.claimedAt)}`;
+  return `Invited ${formatShortDate(seat.invitedAt)}, not yet signed in`;
 }
 
 /** Seat assignment for the purchaser of an organization subscription. Every change re-reads the

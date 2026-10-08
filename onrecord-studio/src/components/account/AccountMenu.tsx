@@ -8,20 +8,15 @@ import DeleteAccountResult from './DeleteAccountResult';
 import SeatsPanel from './SeatsPanel';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { openExternalUrl } from '../../utils/openExternal';
-
-function formatDate(value: string | null): string | null {
-  if (!value) return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString(undefined, { dateStyle: 'medium' });
-}
+import { formatShortDate } from '../objects/labels';
 
 function planLine(status: LicenseStatus): string {
   if (status.state === 'TRIAL') {
-    const ends = formatDate(status.trialEndsAt);
+    const ends = status.trialEndsAt && formatShortDate(status.trialEndsAt);
     return ends ? `Free trial, ends ${ends}` : 'Free trial';
   }
   if (status.state === 'LICENSED') {
-    const until = formatDate(status.entitlementExpiresAt);
+    const until = status.entitlementExpiresAt && formatShortDate(status.entitlementExpiresAt);
     return until ? `Licensed, verified license valid until ${until}` : 'Licensed';
   }
   return 'Plan not reported';

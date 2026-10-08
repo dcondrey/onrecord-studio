@@ -1,15 +1,5 @@
 import fs from 'node:fs';
-import ts from 'typescript';
-const modules = new Map();
-function compile(name) {
-  if (modules.has(name)) return modules.get(name);
-  const source = fs.readFileSync(new URL(`../src/utils/${name}.ts`, import.meta.url), 'utf8');
-  const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
-  const module = { exports: {} };
-  new Function('module', 'exports', 'require', compiled)(module, module.exports, (path) => compile(path.replace('./', '')));
-  modules.set(name, module.exports);
-  return module.exports;
-}
+import { compileUtil as compile } from './compile-util.mjs';
 const { housingQueries } = compile('housingLeads');
 // The published header of approvals_issued_2025_datasd.csv; the created and closed files share it.
 const header = ['DEVELOPMENT_ID', 'PROJECT_ID', 'PROJECT_TYPE', 'PROJECT_STATUS', 'PROJECT_PROCESSING_CODE', 'PROJECT_CREATE_DATE', 'PROJECT_DEEMEDCOMPLETE_DATE', 'PROJECT_TRUST_ACCOUNT_NO',

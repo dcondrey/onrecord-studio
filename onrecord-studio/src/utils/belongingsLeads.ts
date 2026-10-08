@@ -1,6 +1,7 @@
-import type { AnalyticalDatasetSummary, AnalyticalSchema, SqlQueryResult } from '../types';
+import type { AnalyticalDatasetSummary, AnalyticalSchema } from '../types';
 import { quoteIdentifier, type DiscoveryQuery } from './dataDiscovery';
 import type { ServiceLead } from './serviceAccountability';
+import { records, wholeNumber, type QueryEntry } from './leadRows';
 
 /** A stored-property log: one row per entry taken into storage, with what became of it. Found by
  * column names; the disposition wording is counted as the agency wrote it, never interpreted. */
@@ -34,12 +35,12 @@ FROM entries GROUP BY disposition ORDER BY entries DESC, disposition LIMIT ${LIS
   }];
 }
 
-const shown = (value: unknown) => Math.round(Number(value)).toLocaleString('en-US');
+const shown = (value: unknown) => wholeNumber(Number(value));
 
-export function belongingsLeads(results: { query: DiscoveryQuery; result?: SqlQueryResult }[]): ServiceLead[] {
+export function belongingsLeads(results: QueryEntry[]): ServiceLead[] {
   const entry = results.find((item) => item.query.id === 'belongings_disposition');
   if (!entry?.result?.rows.length) return [];
-  const rows = entry.result.rows.map((values) => Object.fromEntries(entry.result!.columns.map((name, index) => [name, values[index]])));
+  const rows = records(entry.result);
   const [top] = rows;
   const named = (row: Record<string, unknown>) => row.disposition == null ? 'no disposition recorded' : `recorded as "${String(row.disposition)}"`;
   const unlisted = Number(top.dispositions) - rows.length;

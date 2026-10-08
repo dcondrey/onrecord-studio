@@ -2,9 +2,8 @@
 //
 // The confidence badge is the only place an investigator sees what a provenance check actually
 // found, so it is pinned by rendering the viewer rather than by type-checking the payload. The
-// regression this guards is a collapsed ladder: a digest mismatch is a substitution finding, and
-// it previously rendered as the same amber "Provenance not confirmed" chip as "no digest was ever
-// recorded" -- a finding presented as an absence of information.
+// ladder must not collapse: a digest mismatch is a substitution finding and must never share the
+// "Provenance not confirmed" chip of "no digest was ever recorded", an absence of information.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import DocumentViewer from '../components/documents/DocumentViewer';
@@ -223,40 +222,24 @@ describe('document evidence navigation', () => {
 });
 
 describe('provenance shield', () => {
-  it('gives every rung of the ladder its own label', async () => {
-    const expected: Array<[ProvenanceConfidence, string]> = [
+  it('gives every rung its own label, and a mismatch the tone of a finding rather than of missing information', async () => {
+    const expected: Array<[ProvenanceConfidence, string, string?]> = [
       ['TRUSTED_CHAIN_OF_CUSTODY', 'Chain of custody verified'],
       ['VERIFIED_SIGNATURE', 'Manifest signature verified'],
       ['LOCAL_DIGEST_MATCH', 'Local file hash verified'],
       ['RECORDED_CLAIM_ONLY', 'Recorded claim, unchecked'],
       ['NO_RECORDED_DIGEST', 'No recorded digest'],
-      ['EVIDENCE_FILE_UNAVAILABLE', 'Evidence file missing'],
-      ['DIGEST_MISMATCH', 'Digest mismatch'],
+      ['EVIDENCE_FILE_UNAVAILABLE', 'Evidence file missing', 'span.text-warning'],
+      ['DIGEST_MISMATCH', 'Digest mismatch', 'span.text-danger'],
     ];
     const labels: string[] = [];
-    for (const [confidence] of expected) {
+    for (const [confidence, , tone] of expected) {
       labels.push((await badgeFor({ provenanceConfidence: confidence }))[0]);
+      if (tone) expect(document.querySelector(tone), confidence).not.toBeNull();
       cleanup();
     }
     expect(labels).toEqual(expected.map(([, label]) => label));
     expect(new Set(labels).size).toBe(expected.length);
-  });
-
-  it('marks a digest mismatch as a finding, not as missing information', async () => {
-    const [badge] = await badgeFor({
-      provenanceConfidence: 'DIGEST_MISMATCH',
-      hashMatches: false,
-      computedSha256: 'c'.repeat(64),
-      verificationErrors: ['Stored bytes do not match the recorded digest.'],
-    });
-    expect(badge).toBe('Digest mismatch');
-    expect(document.querySelector('span.text-danger')).not.toBeNull();
-  });
-
-  it('separates a checked-and-missing evidence file from a check that never ran', async () => {
-    const [missing] = await badgeFor({ provenanceConfidence: 'EVIDENCE_FILE_UNAVAILABLE', evidenceFilePresent: false, hashMatches: false, computedSha256: '' });
-    expect(missing).toBe('Evidence file missing');
-    expect(document.querySelector('span.text-warning')).not.toBeNull();
   });
 
   it('surfaces an invalid manifest signature without discarding the rung the digest earned', async () => {
@@ -296,16 +279,14 @@ describe('provenance verification log', () => {
     await waitFor(() => expect(screen.getByText(/1 recorded check, newest first/)).toBeTruthy());
   });
 
-  it('does not read a row that predates classification as an unrecognized rung', async () => {
-    await openLog([record({ provenanceConfidence: null, recordedDigestSource: null, signatureVerification: null, predatesClassification: true })]);
-    expect(screen.getByText('Logged before classification')).toBeTruthy();
+  it('names a row with no recorded level by why it has none, never as an unrecognized rung', async () => {
+    await openLog([
+      record({ verificationId: 'old', provenanceConfidence: null, recordedDigestSource: null, signatureVerification: null, predatesClassification: true }),
+      record({ verificationId: 'bare', provenanceConfidence: null, predatesClassification: false }),
+    ]);
+    expect(screen.getAllByText('Logged before classification')).toHaveLength(1);
+    expect(screen.getAllByText('No confidence recorded')).toHaveLength(1);
     expect(screen.queryByText('Unrecognized confidence state')).toBeNull();
-  });
-
-  it('separates an unclassified row from one that predates classification', async () => {
-    await openLog([record({ provenanceConfidence: null, predatesClassification: false })]);
-    expect(screen.getByText('No confidence recorded')).toBeTruthy();
-    expect(screen.queryByText('Logged before classification')).toBeNull();
   });
 
   it('states that an empty log is an absence of checks, not a result', async () => {

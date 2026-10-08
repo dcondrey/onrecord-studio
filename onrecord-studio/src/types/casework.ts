@@ -32,7 +32,6 @@ export interface RequestFilingPlan {
   measuredTo: string | null; deadlinePassedWithoutRecordedResponse: boolean;
   followUps: ScheduledFollowUp[];
 }
-export interface FilingIdentifyingSource { label: string; sourceSha256: string; verification: string }
 export interface RequestFilingRecordResult {
   caseId: string; requestId: string; outputPath: string; packageSha256: string;
   signatureAlgorithm: string; signerKeyId: string; generatedAt: string;

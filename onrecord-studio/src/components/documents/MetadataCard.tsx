@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { invokeCommand } from '../../ipc';
 import type { ProvenanceVerificationRecord } from '../../types';
+import { isSha256Hex } from '../../utils/crypto';
+import { formatInstant } from '../objects/labels';
 
 interface MetadataCardProps {
   documentId: number;
@@ -18,14 +20,15 @@ export default function MetadataCard({ documentId, portalKey, sha256, contentTyp
   const digestIsValid = sha256 !== null && isSha256Hex(sha256);
   const [digestFormat, setDigestFormat] = useState<DigestFormat>('hex');
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
-  const [latestVerification, setLatestVerification] = useState<ProvenanceVerificationRecord | null>(null);
+  const [latestVerification, setLatestVerification] = useState<ProvenanceVerificationRecord | null | undefined>(undefined);
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const shownDigest = useMemo(() => formatDigest(sha256, digestFormat), [digestFormat, sha256]);
 
   useEffect(() => {
     let current = true;
-    setLatestVerification(null);
+    setLatestVerification(undefined);
     setVerificationError(null);
+    setCopyStatus(null);
     void invokeCommand('list_document_provenance_verifications', { documentId, portalKey, limit: 1 })
       .then((records) => { if (current) setLatestVerification(records[0] ?? null); })
       .catch((reason) => { if (current) setVerificationError(String(reason)); });
@@ -54,8 +57,8 @@ export default function MetadataCard({ documentId, portalKey, sha256, contentTyp
         <div className="flex items-center justify-between gap-2">
           <span className="text-muted">Recorded SHA-256</span>
           <div className="flex items-center gap-1">
-            <select aria-label="Digest format" value={digestFormat} onChange={(event) => setDigestFormat(event.target.value as DigestFormat)} className="rounded border border-control bg-canvas px-1.5 py-1 text-caption text-muted"><option value="hex">Hex</option><option value="colon">Colon hex</option><option value="base64">Base64</option></select>
-            <button type="button" disabled={!digestIsValid} onClick={() => void copyDigest()} className="rounded border border-control px-1.5 py-1 text-caption text-muted disabled:opacity-40">Copy</button>
+            <select aria-label="Digest format" value={digestFormat} onChange={(event) => { setDigestFormat(event.target.value as DigestFormat); setCopyStatus(null); }} className="focus-ring rounded border border-control bg-canvas px-1.5 py-1 text-caption text-muted"><option value="hex">Hex</option><option value="colon">Colon hex</option><option value="base64">Base64</option></select>
+            <button type="button" aria-label="Copy SHA-256 digest" disabled={!digestIsValid} onClick={() => void copyDigest()} className="focus-ring rounded border border-control px-1.5 py-1 text-caption text-muted disabled:opacity-40">Copy</button>
           </div>
         </div>
         <span className={`block select-text break-all rounded border p-2 text-caption ${digestIsValid ? 'border-success/30 bg-success/5 text-success' : 'border-warning/30 bg-warning/5 text-warning'}`}>
@@ -78,12 +81,13 @@ function formatDigest(sha256: string | null, format: DigestFormat) {
   return normalized;
 }
 
-function verificationLabel(record: ProvenanceVerificationRecord | null, error: string | null) {
+function verificationLabel(record: ProvenanceVerificationRecord | null | undefined, error: string | null) {
   if (error) return 'History unavailable';
-  if (!record) return 'No recorded check';
-  const state = record.provenanceConfidence?.split('_').join(' ').toLocaleLowerCase() ?? 'unclassified';
-  const timestamp = new Date(record.verifiedAt);
-  return `${state} · ${Number.isNaN(timestamp.getTime()) ? record.verifiedAt : timestamp.toLocaleString()}`;
+  if (record === undefined) return 'Reading log…';
+  if (record === null) return 'No recorded check';
+  const state = record.provenanceConfidence?.split('_').join(' ').toLocaleLowerCase()
+    ?? (record.predatesClassification ? 'logged before classification' : 'no confidence recorded');
+  return `${state} · ${formatInstant(record.verifiedAt)}`;
 }
 
 function MetadataRow({ label, value }: { label: string; value: string }) {
@@ -97,4 +101,3 @@ function formatFileSize(value: number | null) {
   if (value < 1024 * 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
   return `${(value / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
-import { isSha256Hex } from '../../utils/crypto';

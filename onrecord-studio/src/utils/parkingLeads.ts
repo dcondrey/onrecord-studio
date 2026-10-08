@@ -1,6 +1,7 @@
-import type { AnalyticalDatasetSummary, AnalyticalSchema, SqlQueryResult } from '../types';
+import type { AnalyticalDatasetSummary, AnalyticalSchema } from '../types';
 import { quoteIdentifier, type DiscoveryQuery } from './dataDiscovery';
 import type { ServiceLead } from './serviceAccountability';
+import { numberOrNull as count, type QueryEntry as Entry, rowsOf, wholeNumber } from './leadRows';
 
 /** The City's half-year parking citation files, recognized by the publisher's column names. */
 const COLUMNS = ['citation_id', 'date_issue', 'vio_code', 'sector1', 'location'];
@@ -101,20 +102,9 @@ FROM blocks CROSS JOIN totals ORDER BY blocks.citations DESC, blocks.block LIMIT
   }];
 }
 
-const count = (value: unknown): number | null => {
-  if (value == null || value === '') return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
-const shown = (value: number | null) => Math.round(value ?? 0).toLocaleString('en-US');
+const shown = (value: number | null) => wholeNumber(value ?? 0);
 const dollars = (value: number) => `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const records = (result: SqlQueryResult) => result.rows.map((row) => Object.fromEntries(result.columns.map((name, i) => [name, row[i]])));
-type Entry = { query: DiscoveryQuery; result?: SqlQueryResult };
 /** A result cut short by the row limit would give short counts, so it gives none. */
-const rowsOf = (results: Entry[], id: string) => {
-  const entry = results.find((item) => item.query.id === id);
-  return entry?.result?.rows.length && !entry.result.truncated ? { query: entry.query, rows: records(entry.result) } : null;
-};
 const span = (row: Record<string, unknown>) => row.first_issue != null && row.last_issue != null ? { text: ` from ${String(row.first_issue)} to ${String(row.last_issue)}`, period: `${String(row.first_issue)} to ${String(row.last_issue)}` } : null;
 const CAVEAT = 'A parking citation records the vehicle and the place, not whether anyone lived in it. The fine is the amount written on the citation, not what was paid.';
 const QUESTION = 'Were any of these vehicles, or others on the same blocks and dates, cited for vehicle habitation under SDMC 86.0137(F), and how many safe-parking spaces were open then? The police department\'s habitation citations and the safe parking program\'s nightly capacity for the period would show it.';

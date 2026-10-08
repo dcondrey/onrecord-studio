@@ -1,6 +1,7 @@
-import type { AnalyticalDatasetSummary, AnalyticalSchema, CityDataset, SqlQueryResult } from '../types';
+import type { AnalyticalDatasetSummary, AnalyticalSchema, CityDataset } from '../types';
 import { quoteIdentifier, type DiscoveryQuery } from './dataDiscovery';
 import type { ServiceLead } from './serviceAccountability';
+import { numberOrNull as count, wholeNumber as shown, percent, type QueryEntry as Entry, rowsOf } from './leadRows';
 
 /** SDPD calls for service: one table per calendar year, and code lookups published beside them.
  * Tables are recognized by the publisher's column names. */
@@ -113,20 +114,7 @@ ORDER BY beat_calls.calls DESC, beat_calls.beat LIMIT 10`,
   return queries;
 }
 
-const count = (value: unknown): number | null => {
-  if (value == null || value === '') return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
-const shown = (value: number) => Math.round(value).toLocaleString('en-US');
-const percent = (part: number, whole: number) => `${(100 * part / whole).toFixed(1)}%`;
-const records = (result: SqlQueryResult) => result.rows.map((row) => Object.fromEntries(result.columns.map((name, i) => [name, row[i]])));
-type Entry = { query: DiscoveryQuery; result?: SqlQueryResult };
 /** A result cut short by the row limit would give short counts, so it gives none. */
-const rowsOf = (results: Entry[], id: string) => {
-  const entry = results.find((item) => item.query.id === id);
-  return entry?.result?.rows.length && !entry.result.truncated ? { query: entry.query, rows: records(entry.result) } : null;
-};
 
 interface TypeYear { year: number | null; type: string; calls: number; cancelled: number; blank: number; conflicting: number; arrest: number; report: number; noReport: number; unfounded: number; other: number; crisis: number; otherCodes: string | null }
 const typeYear = (row: Record<string, unknown>): TypeYear => ({ year: count(row.call_year), type: String(row.call_type), calls: count(row.calls) ?? 0, cancelled: count(row.cancelled_duplicate) ?? 0,

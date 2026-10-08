@@ -43,6 +43,25 @@ export function formatShortDate(value: string): string {
 }
 
 /**
+ * When a check ran is part of what the log attests, so the reading stays local and exact to the
+ * second with its zone; callers keep the raw ISO string on `dateTime`/the tooltip. A value that will
+ * not parse is shown as recorded rather than as "Invalid Date", which would hide a malformed timestamp.
+ */
+export function formatInstant(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    timeZoneName: 'short',
+  });
+}
+
+/**
  * What one provenance check established. A check that hashed nothing, or had no recorded digest
  * to compare against, says so; it is never reported as a mismatch.
  */

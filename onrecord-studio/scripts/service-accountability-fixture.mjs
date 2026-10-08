@@ -1,15 +1,5 @@
 import fs from 'node:fs';
-import ts from 'typescript';
-const modules = new Map();
-function compile(name) {
-  if (modules.has(name)) return modules.get(name);
-  const source = fs.readFileSync(new URL(`../src/utils/${name}.ts`, import.meta.url), 'utf8');
-  const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
-  const module = { exports: {} };
-  new Function('module', 'exports', 'require', compiled)(module, module.exports, (path) => compile(path.replace('./', '')));
-  modules.set(name, module.exports);
-  return module.exports;
-}
+import { compileUtil as compile } from './compile-util.mjs';
 const { serviceAccountabilityQueries } = compile('serviceAccountability');
 const header = ['service_request_id', 'date_requested', 'case_age_days', 'service_name', 'date_closed', 'status', 'street_address', 'council_district', 'comm_plan_name'];
 const rows = [];

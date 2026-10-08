@@ -12,6 +12,7 @@ import type {
   LegalAuthorityVersionSummary,
 } from '../../types';
 import { cn } from '../../utils/cn';
+import { formatShortDate } from '../objects/labels';
 
 const MAXIMUM_SOURCE_BYTES = 8 * 1024 * 1024;
 
@@ -455,7 +456,7 @@ function AuthorityVersionWorkspace({ versions, leftVersionId, rightVersionId, le
                 title={version.contentSha256}
               >
                 {version.effectiveFrom ?? 'start unknown'} → {version.effectiveTo ?? 'open ended'} ·{' '}
-                {formatVersionDate(version.importedAt)}
+                {formatShortDate(version.importedAt)}
               </span>
             ))}
           </div>
@@ -475,7 +476,7 @@ function AuthorityVersionWorkspace({ versions, leftVersionId, rightVersionId, le
                 >
                   {versions.map((version) => (
                     <option key={version.versionId} value={version.versionId}>
-                      {formatVersionDate(version.importedAt)} · {version.contentSha256.slice(0, 10)}
+                      {formatShortDate(version.importedAt)} · {version.contentSha256.slice(0, 10)}
                     </option>
                   ))}
                 </select>
@@ -501,11 +502,6 @@ function compareAuthorityText(left: string, right: string) {
   let changed = 0;
   for (let index = 0; index < shared; index += 1) if (leftLines[index] !== rightLines[index]) changed += 1;
   return { changed, added: Math.max(0, rightLines.length - leftLines.length), removed: Math.max(0, leftLines.length - rightLines.length) };
-}
-
-function formatVersionDate(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
 }
 
 function validateAuthorityEditor(
