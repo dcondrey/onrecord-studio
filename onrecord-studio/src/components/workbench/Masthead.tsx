@@ -38,17 +38,21 @@ export default function Masthead({ overline, title, aside, tabs, actions }: {
 }) {
   const scope = useScopeName();
   return (
+    // The actions share the dateline's row, so the title and its tabs keep one line at every width
+    // the app is laid out for and the masthead stays one height.
     <header className="border-b-2 border-fg/85 px-1 pb-3">
-      <p className="text-overline uppercase text-muted">
-        {overline}
-        <span aria-hidden="true"> · </span>
-        {scope}
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <p className="text-overline uppercase text-muted">
+          {overline}
+          <span aria-hidden="true"> · </span>
+          {scope}
+        </p>
+        {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      </div>
       <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-2">
         <h2 className="text-title text-fg">{title}</h2>
         {aside}
         {tabs}
-        {actions && <div className="ml-auto flex flex-wrap items-center gap-2 self-center">{actions}</div>}
       </div>
     </header>
   );

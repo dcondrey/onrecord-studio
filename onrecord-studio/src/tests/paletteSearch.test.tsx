@@ -6,26 +6,27 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const bridge = vi.hoisted(() => ({ holdRecords: false, records: [] as unknown[] }));
+const bridge = vi.hoisted(() => ({ holdRecords: false, findings: [] as unknown[] }));
 
 vi.mock('@tauri-apps/api/core', () => ({
   isTauri: () => false,
   invoke: (command: string) => {
     if (command === 'query_audit_records_page') {
-      return bridge.holdRecords ? new Promise(() => {}) : Promise.resolve({ records: bridge.records, nextCursor: null, total: bridge.records.length });
+      return bridge.holdRecords ? new Promise(() => {}) : Promise.resolve({ records: [], nextCursor: null, total: 0 });
     }
+    if (command === 'list_findings') return Promise.resolve(bridge.findings);
     return Promise.resolve([]);
   },
 }));
 
 import CommandPalette, { OPEN_COMMAND_PALETTE_EVENT } from '../components/dashboard/CommandPalette';
 
-const record = (requestId: number, title: string) => ({ requestId, portalKey: 'sd-city', agencyId: null, agencyName: 'Real Estate', title, descriptionPreview: '', status: 'Closed', createdAt: '', closedAt: null, documentCount: 0, integrityFlags: [] });
+const finding = (id: string, headline: string) => ({ id, headline, kind: 'CLAIM_CONTRADICTS_DATA', severity: 'NOTABLE', dismissedAt: null });
 
 afterEach(() => {
   cleanup();
   bridge.holdRecords = false;
-  bridge.records = [];
+  bridge.findings = [];
 });
 
 function open() {
@@ -45,7 +46,7 @@ describe('palette object search', () => {
   });
 
   it('matches a typed word at the start of a word, never inside one', async () => {
-    bridge.records = [record(1, 'Records release schedule'), record(2, 'Lease agreement for 1220 Harbor Drive')];
+    bridge.findings = [finding('f-release', 'Records release schedule missed'), finding('f-lease', 'Lease agreement for 1220 Harbor Drive')];
     const input = open();
     fireEvent.change(input, { target: { value: 'lease' } });
     expect(await screen.findByRole('option', { name: /Lease agreement for 1220 Harbor Drive/ })).toBeTruthy();

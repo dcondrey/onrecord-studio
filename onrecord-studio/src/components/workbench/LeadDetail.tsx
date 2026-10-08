@@ -61,7 +61,11 @@ export default function LeadDetail({ findingId, storyLead, position, compare, so
       if (!section) return;
       const container = scrollingAncestor(section);
       if (container) scrollWithin(container, section, 'start');
-      section.querySelector<HTMLElement>('button:not(:disabled), input, select, textarea, a[href]')?.focus({ preventScroll: true });
+      // The drafts may still be asking which kinds apply; until a control exists, the section's
+      // heading takes focus so the reader lands where the drafts will appear.
+      const target = section.querySelector<HTMLElement>('button:not(:disabled), input, select, textarea, a[href]') ?? section.querySelector<HTMLElement>('h3');
+      if (target && !target.matches('button, input, select, textarea, a[href]')) target.tabIndex = -1;
+      target?.focus({ preventScroll: true });
     });
   };
   const headline = storyLead?.headline ?? ready?.dossier.finding.headline;

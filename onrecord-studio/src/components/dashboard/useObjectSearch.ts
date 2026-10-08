@@ -29,8 +29,7 @@ const MIN_QUERY = 2;
 /**
  * Searches every kind of object at once for the palette. Findings, agencies and entities are
  * matched locally against one snapshot per palette session, word by word (every typed word begins a
- * word of the name); records are queried natively and held to the same rule; passages come from the
- * native hybrid search as they are. Results for an older query are dropped, so fast typing never
+ * word of the name); records and passages come from the native searches as they answer. Results for an older query are dropped, so fast typing never
  * shows matches for text no longer in the box, and `pending` stays true until this text's answer.
  */
 export function useObjectSearch(query: string): ObjectSearch {
@@ -77,9 +76,9 @@ export function useObjectSearch(query: string): ObjectSearch {
         for (const entity of entities.filter((row) => matchesTokens(needle, row.displayValue)).slice(0, PER_GROUP)) {
           next.push({ key: `entity:${entity.entityId}`, group: 'Entities', label: entity.displayValue, detail: `${enumLabel(entity.kind)} · ${entity.documentCount.toLocaleString()} documents`, target: { kind: 'entity', entityId: entity.entityId, label: entity.displayValue } });
         }
-        // The native search matches inside words ("lease" in "release"); a record is listed only
-        // when the typed words begin words of its title or description.
-        for (const record of recordRows.filter((row) => matchesTokens(needle, `${row.title} ${row.descriptionPreview}`))) {
+        // Records come from the native search, which already matches whole index tokens across the
+        // request and its documents' text; a preview-only filter here would drop real matches.
+        for (const record of recordRows) {
           next.push({ key: `request:${record.portalKey}:${record.requestId}`, group: 'Records', label: record.title || `Request ${record.requestId}`, detail: `${record.agencyName} · ${record.status}`, target: { kind: 'request', portalKey: record.portalKey, requestId: record.requestId, label: record.title || `Request ${record.requestId}` } });
         }
         for (const passage of passageRows) {

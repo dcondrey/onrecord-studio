@@ -293,6 +293,11 @@ const VIEWS = [
   // The passage search never answers, so every capture shows the palette while it searches.
   { view: 'command-palette-pending', scenario: { hang: ['hybrid_search'] }, steps: [nav('overview'), event('onrecord:open-command-palette', null), type('command palette search', (page) => page.getByRole('dialog').getByRole('combobox'), 'harborview')], primary: [], states: [] },
   { view: 'overview-ledger-stage', steps: [nav('overview'), openWatching, click('Watching "Deadline ledger"', (page) => page.getByRole('button', { name: /^Deadline ledger/ }))], primary: [], states: [] },
+  // Each of these scrolls one region to its target; the shell assertion after every step proves
+  // none of them scrolled the document.
+  { view: 'overview-ledger-in-analytics', steps: [nav('overview'), openWatching, click('Watching "Deadline ledger"', (page) => page.getByRole('button', { name: /^Deadline ledger/ })), click('"Open in response analytics"', (page) => page.getByRole('button', { name: 'Open in response analytics' }))], primary: [], states: [] },
+  { view: 'overview-stage-draft', steps: [nav('overview'), click('stage "Draft records request"', (page) => page.getByRole('main').getByRole('button', { name: 'Draft records request', exact: true }))], primary: [], states: [] },
+  { view: 'analysis-budget-from-palette', steps: [nav('overview'), event('onrecord:open-command-palette', null), type('command palette search', (page) => page.getByRole('dialog').getByRole('combobox'), 'budget versus'), click('option "Analysis: Budget versus actuals"', (page) => page.getByRole('option', { name: /Analysis: Budget versus actuals/ }))], primary: [], states: [] },
   { view: 'overview-lead-3', steps: [nav('overview'), press('j'), press('j')], primary: [], states: [] },
   { view: 'overview-watching-collapsed', steps: [nav('overview')], widths: [1024], primary: [], states: [] },
   { view: 'story-desk-workbench', steps: [nav('story')], primary: [], states: [] },

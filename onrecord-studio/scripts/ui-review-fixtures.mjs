@@ -997,7 +997,7 @@ const full = {
   draft_appeal_from_statutory_deadline: () => drafted(FINDINGS, 'f-policy-esd', 'APPEAL'),
   query_audit_records_page: ({ searchTerm, portalKey, agencyId, pageSize }) => {
     const term = searchTerm.trim().toLowerCase();
-    const records = REQUESTS.filter((r) => (!term || r.title.toLowerCase().includes(term) || r.descriptionPreview.toLowerCase().includes(term)) && (!portalKey || r.portalKey === portalKey) && (agencyId == null || r.agencyId === agencyId));
+    const records = REQUESTS.filter((r) => (!term || holdsWords(`${r.title} ${r.descriptionPreview}`, term)) && (!portalKey || r.portalKey === portalKey) && (agencyId == null || r.agencyId === agencyId));
     return { records: records.slice(0, pageSize), nextCursor: null, total: records.length };
   },
   count_audit_records: ({ searchTerm }) => ({ total: REQUESTS.filter((r) => !searchTerm || r.title.toLowerCase().includes(searchTerm.toLowerCase())).length }),
@@ -1109,6 +1109,19 @@ const full = {
   record_service_leads: () => ({ findingsRecorded: 0, staleCleared: 0 }),
   fetch_city_dataset: ({ dataset }) => ({ snapshotId: `snap-${dataset.toLowerCase()}`, datasetKind: 'REGIONAL_DATA', displayName: dataset, tableName: `analysis_${dataset.toLowerCase()}`, importedRows: 0, rejectedRows: 0, malformedRows: 0, duplicateKeyRows: 0, unconvertedCells: 0, schemaWarnings: [], sourceSha256: hex(dataset) }),
 };
+
+const wordSegmenter = new Intl.Segmenter('en', { granularity: 'word' });
+/** Lowercased words of `text`, as the native search index tokenises it. @param {string} text */
+const wordsOf = (text) => [...wordSegmenter.segment(text.toLowerCase())].filter((part) => part.isWordLike).map((part) => part.segment);
+/**
+ * Whether every word of `term` is a whole word of `text`: the native request search matches index
+ * tokens exactly (storage/fts.rs), so "lease" never finds "release".
+ * @param {string} text @param {string} term
+ */
+function holdsWords(text, term) {
+  const words = new Set(wordsOf(text));
+  return wordsOf(term).every((word) => words.has(word));
+}
 
 /**
  * The finding a command names, as the native side answers it: an id it does not hold is an error,
@@ -1255,7 +1268,7 @@ function realHandlers(real) {
   const storyLeads = [...STORY_LEADS.filter((lead) => !LEAD_KINDS.has(lead.kind)), ...real.LEAD_FINDINGS.map((f) => tableStoryLead(f, live))]
     .sort((a, b) => b.publicInterest.totalBasisPoints - a.publicInterest.totalBasisPoints || a.findingId.localeCompare(b.findingId));
   const requests = REQUESTS.map((r) => ({ ...r, descriptionPreview: REQUEST_TEXT[r.requestId] ?? r.descriptionPreview }));
-  const matches = (/** @type {string} */ term) => (/** @type {import('../src/types').RequestSearchResult} */ r) => !term || r.title.toLowerCase().includes(term) || r.descriptionPreview.toLowerCase().includes(term);
+  const matches = (/** @type {string} */ term) => (/** @type {import('../src/types').RequestSearchResult} */ r) => !term || holdsWords(`${r.title} ${r.descriptionPreview}`, term);
   const latestYear = real.FINANCE.fiscalYears.length ? real.FINANCE.fiscalYears[real.FINANCE.fiscalYears.length - 1] : null;
   const figureLead = real.LEAD_FINDINGS.find((f) => f.kind === 'POLICE_CALL_LEAD' && f.headline.includes('SLEEPER')) ?? real.LEAD_FINDINGS.find((f) => f.kind === 'POLICE_CALL_LEAD');
   return {
