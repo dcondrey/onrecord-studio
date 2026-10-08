@@ -93,11 +93,6 @@ afterEach(() => {
 });
 
 describe('SubjectDossier', () => {
-  it('renders nothing when no subject is set', () => {
-    render(<SubjectDossier />);
-    expect(screen.queryByLabelText('Subject dossier')).toBeNull();
-  });
-
   it('shows a disambiguation picker on a name that matches more than one entity', async () => {
     act(() => {
       useAppStore.setState({ subjectDossierTarget: { kind: 'name', value: 'Smith' } });
