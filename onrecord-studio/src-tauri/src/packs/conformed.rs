@@ -21,8 +21,8 @@ enum TimeColumn {
     /// A wall-clock reading. The City publishes Pacific local time with no offset, so it stays a
     /// zone-less TIMESTAMP: a value that carries an offset is not read rather than shifted.
     RecordedAt(&'static str),
-    /// A City fiscal year published as its last two digits (`23` is the year ending June 2023).
-    /// It names no day, so `occurred_at`, `occurred_on` and `calendar_year` stay NULL.
+    /// A fiscal year named by the June it ends in: the City's last two digits (`23`) or the State
+    /// Controller's four (`2024` is 2023-24, per its dataset description). It names no day, so `occurred_at`, `occurred_on` and `calendar_year` stay NULL.
     FiscalYear(&'static str),
     /// A four-digit calendar year. It names no day, so `occurred_at` and `occurred_on` stay NULL,
     /// and no fiscal year, since a calendar year spans two.
@@ -395,7 +395,8 @@ fn select_for(
             "CAST(NULL AS TIMESTAMP)",
             "CAST(NULL AS DATE)",
             year_of_day,
-            "CASE WHEN regexp_full_match(__time, '[0-9]{2}') THEN 2000 + CAST(__time AS INTEGER) END",
+            "CASE WHEN regexp_full_match(__time, '[0-9]{2}') THEN 2000 + CAST(__time AS INTEGER)
+                  WHEN regexp_full_match(__time, '[0-9]{4}') THEN CAST(__time AS INTEGER) END",
         ),
         TimeColumn::CalendarYear(header) => (
             Some(header),
@@ -678,13 +679,16 @@ mod tests {
         let (_, budget) = conformed(
             AnalyticalDatasetKind::OperatingBudget,
             "budget_adopted",
-            "amount,report_fy,budget_cycle\n1,23,adopted\n",
+            "amount,report_fy,budget_cycle\n1,23,adopted\n2,2024,adopted\n",
             "occurred_on, calendar_year, fiscal_year, time_basis",
         )
         .await;
         assert_eq!(
             budget,
-            [[json!(null), json!(null), json!(2023), json!("report_fy")]]
+            [
+                [json!(null), json!(null), json!(2023), json!("report_fy")],
+                [json!(null), json!(null), json!(2024), json!("report_fy")],
+            ]
         );
     }
 
