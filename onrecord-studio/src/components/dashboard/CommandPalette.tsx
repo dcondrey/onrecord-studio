@@ -58,7 +58,6 @@ export default function CommandPalette() {
   const contrast = useAppStore((state) => state.contrast);
   const audioAlertsEnabled = useAppStore((state) => state.audioAlertsEnabled);
   const workbenchQueue = useAppStore((state) => state.workbenchQueue);
-  const workbenchSelection = useAppStore((state) => state.workbenchSelection);
   const selectWorkbenchLead = useAppStore((state) => state.selectWorkbenchLead);
   const setAudioAlertsEnabled = useAppStore((state) => state.setAudioAlertsEnabled);
   // 'dossier' turns the input into the subject field for "Open subject dossier…".
@@ -124,7 +123,8 @@ export default function CommandPalette() {
   const leadActions = useMemo<CommandAction[]>(() => {
     if (!workbenchQueue || workbenchQueue.leads.length === 0) return [];
     const { surface, leads } = workbenchQueue;
-    const at = Math.max(0, leads.findIndex((lead) => lead.id === workbenchSelection[surface]));
+    // -1 when the stage shows something outside the queue (the deadline ledger): Next is lead 1.
+    const at = leads.findIndex((lead) => lead.id === workbenchQueue.current);
     const step = (delta: 1 | -1, label: string, key: string, icon: IconName): CommandAction | null => {
       const target = leads[at + delta];
       return target ? {
@@ -152,7 +152,7 @@ export default function CommandPalette() {
         setWorkspaceView(surface);
       },
     }))];
-  }, [selectWorkbenchLead, setWorkspaceView, workbenchQueue, workbenchSelection]);
+  }, [selectWorkbenchLead, setWorkspaceView, workbenchQueue]);
 
   const actions = useMemo<CommandAction[]>(() => [
     ...leadActions,
