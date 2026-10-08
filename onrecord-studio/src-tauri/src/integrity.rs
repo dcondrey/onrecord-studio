@@ -944,6 +944,17 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         load_or_create_signing_key(directory.path()).await.unwrap();
         assert!(
+            mark_key_compromised(
+                directory.path(),
+                directory.path(),
+                "never-recorded-key-id".to_string(),
+                "Reason.".to_string(),
+            )
+            .await
+            .is_err(),
+            "escalating a key this installation never recorded must fail, not invent an entry"
+        );
+        assert!(
             rotate_signing_key(directory.path(), directory.path(), "   ".to_string(), false)
                 .await
                 .is_err()
@@ -964,17 +975,6 @@ mod tests {
         )
         .await
         .is_err());
-        assert!(
-            mark_key_compromised(
-                directory.path(),
-                directory.path(),
-                "never-recorded-key-id".to_string(),
-                "Reason.".to_string(),
-            )
-            .await
-            .is_err(),
-            "escalating a key this installation never recorded must fail, not invent an entry"
-        );
     }
 
     #[tokio::test]

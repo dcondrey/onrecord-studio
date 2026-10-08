@@ -621,7 +621,11 @@ async fn verify_evidence_package_inner(
             .map(|values| {
                 values
                     .iter()
-                    .filter_map(|value| value.as_str().map(str::to_string))
+                    .map(|value| {
+                        value
+                            .as_str()
+                            .map_or_else(|| value.to_string(), str::to_string)
+                    })
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default()
