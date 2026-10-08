@@ -8,6 +8,7 @@
 
 use crate::error::AppError;
 use crate::integrity::{sha256_file, verify_package_detailed, SignedPackage};
+use crate::types::data_packs::DataPackChange;
 use ed25519_dalek::VerifyingKey;
 use serde::{Deserialize, Serialize};
 use std::path::{Component, Path};
@@ -149,6 +150,27 @@ pub(crate) struct ChangeSummary {
     /// More than half the records changed, so changed records are listed as removed and added
     /// rather than field by field.
     pub whole_records: bool,
+}
+
+impl ChangeSummary {
+    /// The record as the app shows it, with each side's retrieval time. A whole-records listing
+    /// has no separate changed count, so `changed` is absent rather than the manifest's 0.
+    pub(crate) fn exposed(
+        &self,
+        previous_retrieved_at: Option<String>,
+        current_retrieved_at: Option<String>,
+    ) -> DataPackChange {
+        DataPackChange {
+            previous: self.previous.clone(),
+            previous_retrieved_at,
+            current: self.current.clone(),
+            current_retrieved_at,
+            added: self.added,
+            removed: self.removed,
+            changed: (!self.whole_records).then_some(self.changed),
+            whole_records: self.whole_records,
+        }
+    }
 }
 
 /// A retrieval whose bytes equalled the latest snapshot of its file. It says the file had not
