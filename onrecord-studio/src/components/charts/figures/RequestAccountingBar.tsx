@@ -16,7 +16,7 @@ import { MUTED_LABEL_CLASS } from '../marks/shared';
  */
 
 const ROW_LABEL_CLASS = 'fill-fg-secondary text-[12px]';
-const HEIGHT = 128;
+const HEIGHT = 116;
 
 function count(n: number): string {
   return n.toLocaleString('en-US');

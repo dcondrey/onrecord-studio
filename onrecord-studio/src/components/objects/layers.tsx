@@ -301,15 +301,16 @@ function CaseLayer({ target }: { target: Target<'case'> }) {
               ['Revision', `${found.revision} · ${formatShortDate(found.updatedAt)}`],
             ]} />
             <MiniClocks found={found} onOpen={() => openCasework(found.reportId)} />
-            {found.evidence.length > 0 && (
-              <Meter
-                label="Cited sources by verification grade"
-                max={found.evidence.length}
-                segments={grades}
-                valueText={`${found.evidence.length} sources cited: ${grades.map((segment) => segment.text).join(', ')}`}
-              />
-            )}
-            <Section title="Cited sources">
+            <Section title={`Cited sources (${found.evidence.length.toLocaleString()})`}>
+              {found.evidence.length > 0 && (
+                <Meter
+                  className="mb-3"
+                  label="Cited sources by verification grade"
+                  max={found.evidence.length}
+                  segments={grades}
+                  valueText={`${found.evidence.length} sources cited: ${grades.map((segment) => segment.text).join(', ')}`}
+                />
+              )}
               {found.evidence.length === 0 ? <p className="text-muted">No source is cited in this case yet.</p> : (
                 <ul className="motion-stagger space-y-2">
                   {found.evidence.map((citation) => (

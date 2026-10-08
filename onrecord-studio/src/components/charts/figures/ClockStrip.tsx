@@ -165,6 +165,12 @@ function engineDetermination(analysis: DeadlineAnalysis): ClockData['determinati
 
 // ---- Adapters -------------------------------------------------------------------------------
 
+const NO_CLOCK_REASON: Partial<Record<RequestDeadline['countdown']['kind'], string>> = {
+  NO_SUBMISSION_DATE: 'no submission date is recorded',
+  NO_DEADLINE_MODEL: 'the app has no deadline model for this jurisdiction',
+  UNAVAILABLE: 'the recorded dates conflict, so they were not evaluated',
+};
+
 const TRACKER_DIRECT: ReadonlySet<TimelineEventKind> = new Set(['SUBMITTED', 'EXTENSION_NOTICE', 'DETERMINATION']);
 
 /** The tracker's clock: the engine's analysis over the dates the user confirmed. */
@@ -200,7 +206,7 @@ export function trackerClock(claim: ClaimedRequest, deadline: RequestDeadline, k
       determination: null,
       end: { at: claim.claimedAt, openLabel: null },
       counted: null,
-      noClock: noClockKinds ? `${chip}. No clock is drawn.` : 'The deadline engine returned no dated analysis, so no clock is drawn.',
+      noClock: `No clock is drawn: ${NO_CLOCK_REASON[deadline.countdown.kind] ?? 'the deadline engine returned no dated analysis'}.`,
       headline: chip,
       summary: `${chip}. No clock is drawn.`,
     };
@@ -268,8 +274,8 @@ export function portalClock({ record, extension, engine, findings, observedAt }:
   const sources: ChartSources = { tables, note: [engine ? `deadline from the statute engine (${engine.statuteCitation})` : 'recorded dates only; no deadline drawn', findingNote].filter(Boolean).join('; ') };
   const base = { model: engine ? 'portal-engine' as const : 'portal-recorded' as const, counted, anomalies: engine ? anomalySentences(engine.anomalyMarkers) : [], sources, uncountedWord: 'not counted' as const };
   if (!createdAt) {
-    const sentence = 'This request\'s dates are not loaded here. Open it in Evidence to see its clock.';
-    return { ...base, createdAt: observedAt, observedAt, deadline: null, determination: null, end: { at: observedAt, openLabel: null }, events: [], noClock: sentence, headline: sentence, summary: sentence };
+    const sentence = 'Open this request in Evidence to see its recorded dates and clock.';
+    return { ...base, createdAt: observedAt, observedAt, deadline: null, determination: null, end: { at: observedAt, openLabel: null }, events: [], noClock: sentence, headline: 'No clock: this request\'s dates are not loaded here.', summary: sentence };
   }
   const closedAt = record?.closedAt ?? null;
   const open = (record?.status ?? '').toLowerCase() !== 'closed';
@@ -410,6 +416,7 @@ interface Plotted {
   effectiveDay: number | null;
   /** Where the past-deadline span starts: the engine's deadline, or closure − stored variance. */
   splitDay: number | null;
+  showToday: boolean;
   domain: [number, number];
 }
 
@@ -424,8 +431,10 @@ function plot(data: ClockData): Plotted {
   const splitDay = effectiveDay ?? (variance !== null && variance > 0 ? endDay - variance : null);
   const eventDays = data.events.map((event) => dayOf(event.at, created));
   const lo = Math.min(0, ...eventDays);
-  const hi = Math.max(1, endDay, observedDay, effectiveDay ?? 0, ...eventDays);
-  return { created, endDay, observedDay, initialDay, effectiveDay, splitDay, domain: [lo, hi + (hi - lo) * 0.1] };
+  // Today matters only to a clock still running; a closed one is scaled to its own span.
+  const showToday = data.end.openLabel !== null;
+  const hi = Math.max(1, endDay, showToday ? observedDay : 0, effectiveDay ?? 0, ...eventDays);
+  return { created, endDay, observedDay, initialDay, effectiveDay, splitDay, showToday, domain: [lo, hi + (hi - lo) * 0.1] };
 }
 
 function ClockPlot({ data, width, highlightedEvent, onEventHover, onEventActivate }: {
@@ -483,8 +492,9 @@ function ClockPlot({ data, width, highlightedEvent, onEventHover, onEventActivat
   } else if (data.determination) {
     endWords = `determination day ${data.determination.elapsedDays ?? Math.round(p.endDay)} (${data.determination.basis === 'SOURCED' ? 'sourced' : 'proxy'})`;
   }
+  const flagged = past === 'counted' && endWords !== null && endWords.startsWith('Counted');
   const endWidth = endWords ? measureText(endWords) : 0;
-  const endX = Math.min(width - endWidth - 2, Math.max(2, x(p.endDay) - endWidth / 2));
+  const endX = Math.min(width - endWidth - 2, Math.max(flagged ? 16 : 2, x(p.endDay) - endWidth / 2));
   const rule = REFERENCE_PAINT.statute;
 
   return (
@@ -498,7 +508,7 @@ function ClockPlot({ data, width, highlightedEvent, onEventHover, onEventActivat
       {data.deadline && p.effectiveDay !== null && p.initialDay !== null && p.effectiveDay > p.initialDay && (
         <line x1={Math.round(x(p.effectiveDay)) + 0.5} x2={Math.round(x(p.effectiveDay)) + 0.5} y1={RULE_TOP} y2={RULE_BOTTOM} data-reference="statute" style={{ stroke: rule.stroke, strokeWidth: rule.strokeWidth, shapeRendering: 'crispEdges' }} />
       )}
-      <line x1={Math.round(x(p.observedDay)) + 0.5} x2={Math.round(x(p.observedDay)) + 0.5} y1={RULE_TOP} y2={AXIS_Y} data-reference="today" style={{ stroke: REFERENCE_PAINT.today.stroke, strokeWidth: 1, strokeDasharray: '2 2', shapeRendering: 'crispEdges' }} />
+      {p.showToday && <line x1={Math.round(x(p.observedDay)) + 0.5} x2={Math.round(x(p.observedDay)) + 0.5} y1={RULE_TOP} y2={AXIS_Y} data-reference="today" style={{ stroke: REFERENCE_PAINT.today.stroke, strokeWidth: 1, strokeDasharray: '2 2', shapeRendering: 'crispEdges' }} />}
       <ClockBar x={x} y={BAR_Y} thickness={BAR_H} endDay={p.endDay} deadlineDay={p.splitDay} past={past} open={data.end.openLabel !== null} />
       {data.determination && (
         <Dot
@@ -559,8 +569,11 @@ function ClockPlot({ data, width, highlightedEvent, onEventHover, onEventActivat
       {placedNotes.map((label, index) => (
         <text key={label.key} x={label.pos} y={NOTE_Y} dy="0.32em" className="fill-fg-secondary text-[11px]">{notes[index].text}</text>
       ))}
+      {endWords && flagged && (
+        <path data-flag="" d={`M${endX - 12},${END_Y + 5}V${END_Y - 5}h8l-2 2.5 2 2.5H${endX - 10.5}`} style={{ fill: VIZ.counted, stroke: VIZ.counted, strokeWidth: 1, strokeLinejoin: 'round' }} />
+      )}
       {endWords && (
-        <text x={endX} y={END_Y} dy="0.32em" className={past === 'counted' && endWords.startsWith('Counted') ? 'text-[11px] font-semibold' : 'fill-fg-secondary text-[11px]'} style={past === 'counted' && endWords.startsWith('Counted') ? { fill: VIZ.counted } : undefined}>
+        <text x={endX} y={END_Y} dy="0.32em" className={flagged ? 'fill-fg text-[11px] font-semibold' : 'fill-fg-secondary text-[11px]'}>
           {endWords}
         </text>
       )}

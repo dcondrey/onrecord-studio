@@ -79,9 +79,9 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
   const packGate = useLatestRequestGate();
   const originGate = useLatestRequestGate();
   const minimapGate = useLatestRequestGate();
-  // The minimap's stored marks for this document: finding citations and annotations. Keyed by the
-  // document, so a slow answer about one document is never drawn in another's gutter.
-  const [storedMarks, setStoredMarks] = useState<{ key: string; marks: MinimapMark[] } | null>(null);
+  // The minimap's stored marks for this document: finding citations and annotations. Cleared on
+  // every document switch and written only by the latest read (minimapGate).
+  const [storedMarks, setStoredMarks] = useState<MinimapMark[] | null>(null);
   const [activeMark, setActiveMark] = useState<string | null>(null);
   const [originReport, setOriginReport] = useState<DocumentOriginReport | null>(null);
   const [originFailed, setOriginFailed] = useState(false);
@@ -226,7 +226,6 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
 
   useEffect(() => {
     const request = minimapGate.begin();
-    const key = `${portalKey}:${documentId}`;
     setStoredMarks(null);
     void Promise.allSettled([
       invokeCommand('list_findings', { filter: { portalKey, documentId }, limit: MINIMAP_FINDING_LIMIT }),
@@ -247,7 +246,7 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
           marks.push({ key: `annotation:${annotation.id}`, kind: 'annotation', start: annotation.characterOffset, end: annotation.characterOffset === null ? null : annotation.characterOffset + Array.from(annotation.quote).length, label: `Annotation: ${annotation.note || annotation.quote.slice(0, 60)}`, quote: annotation.quote });
         }
       }
-      setStoredMarks({ key, marks });
+      setStoredMarks(marks);
     });
     return minimapGate.invalidate;
   }, [documentId, minimapGate, portalKey]);
@@ -275,8 +274,8 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
     ];
   }, [characterOffset, documentSearch, searchMatches, textContent]);
   const minimapMarks = useMemo(
-    () => [...(storedMarks?.key === `${portalKey}:${documentId}` ? storedMarks.marks : []), ...chunkMarks],
-    [chunkMarks, documentId, portalKey, storedMarks],
+    () => [...(storedMarks ?? []), ...chunkMarks],
+    [chunkMarks, storedMarks],
   );
   const loadedEnd = characterOffset + Array.from(textContent).length;
   const minimapTotal = Math.max(totalCharacterCount ?? 0, loadedEnd);

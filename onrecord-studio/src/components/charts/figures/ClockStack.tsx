@@ -10,7 +10,8 @@ import { parseDate, scaleLinear, scaleTime } from '../core/scale';
 import { useRovingFocus } from '../hooks/useRovingFocus';
 import { useTooltip } from '../hooks/useTooltip';
 import { Dot } from '../marks/Dot';
-import { MUTED_LABEL_CLASS, MarkGroup } from '../marks/shared';
+import { AbsentSlot, MUTED_LABEL_CLASS, MarkGroup } from '../marks/shared';
+import { absent } from '../core/nulls';
 import { ClockBar } from './ClockStrip';
 import { fitText } from './ScoreBreakdown';
 
@@ -161,7 +162,7 @@ function CaseworkPlot({ found, width, onOpenRequest }: { found: CaseworkCase; wi
           return (
             <MarkGroup key={row.key} box={{ x: 0, y: row.labelY - 8, width: width - 2, height: 30 }} interaction={{ name: `${row.label}: ${noClockWords(request)}.`, item: roving.getItemProps(focusIndex), onClick: () => onOpenRequest(request.id) }}>
               {label}
-              <text x={0} y={row.barY + 4} dy="0.32em" className={MUTED_LABEL_CLASS}>{noClockWords(request)}</text>
+              <AbsentSlot absence={absent('not-recorded', noClockWords(request))} box={{ x: 0, y: row.barY - 4, width: Math.min(width - 2, 260), height: 14 }} text={noClockWords(request)} />
             </MarkGroup>
           );
         }
@@ -332,12 +333,12 @@ function MiniPlot({ found, width, onOpen }: { found: CaseworkCase; width: number
                 </text>
               </>
             ) : (
-              <text x={labelColumn + 8} y={cy} dy="0.32em" className={MUTED_LABEL_CLASS}>{noClockWords(request).split(':')[0]}: no clock</text>
+              <AbsentSlot absence={absent('not-recorded', noClockWords(request))} box={{ x: labelColumn + 8, y: cy - 7, width: Math.max(40, width - labelColumn - 12), height: 14 }} text={request.submittedAt === null ? 'not filed: no clock' : 'no clock yet'} />
             )}
           </MarkGroup>
         );
       })}
-      <Axis scale={x} kind="days" orient="bottom" offset={axisY} />
+      {requests.some((request) => request.filingPlan) && <Axis scale={x} kind="days" orient="bottom" offset={axisY} />}
       {tooltip.node}
     </g>
   );
