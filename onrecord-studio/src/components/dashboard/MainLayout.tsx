@@ -569,7 +569,7 @@ export default function MainLayout() {
         </Dialog>
       )}
       {activeDocument && (
-        <Dialog size="xl" onClose={() => setActiveDocument(null)} className="h-[calc(100vh-4rem)] max-w-[min(1440px,96vw)]">
+        <Dialog size="xl" label={`Document ${activeDocument.summary.fileName}`} onClose={() => setActiveDocument(null)} className="h-[calc(100vh-4rem)] max-w-[min(1440px,96vw)]">
           <DialogHeader
             title={<span className="block truncate" title={activeDocument.summary.fileName}>{activeDocument.summary.fileName}</span>}
             actions={activeDocument.summary.originalSourceUri
