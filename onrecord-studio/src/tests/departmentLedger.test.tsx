@@ -59,7 +59,8 @@ function profile(overrides: Partial<AgencyPerformanceProfile> & { agencyId: numb
     anomalyCount: 0,
     statutoryViolationCount: 0,
     statutoryViolationRate: 0,
-    statutoryDeadlinePassedCount: 0,
+    statutoryMaturedCount: 0,
+    statutoryMaturedViolationCount: 0,
     suspiciousFastClosureCount: 0,
     totalDocumentsReleased: 0,
     keywordFrequencyMap: {},
@@ -154,7 +155,7 @@ describe('PeriodComparison', () => {
     expect(bridge.pending).toHaveLength(2);
     fireEvent.change(screen.getByRole('combobox', { name: 'Interval' }), { target: { value: '7' } });
     expect(bridge.pending).toHaveLength(4);
-    const window = (requests: number) => [profile({ agencyId: 1, agencyName: 'Police', totalRequestsProcessed: requests, statutoryDeadlinePassedCount: requests, statutoryViolationCount: 1 })];
+    const window = (requests: number) => [profile({ agencyId: 1, agencyName: 'Police', totalRequestsProcessed: requests, statutoryMaturedCount: requests, statutoryViolationCount: 1, statutoryMaturedViolationCount: 1 })];
     await act(async () => {
       bridge.pending[2](window(10));
       bridge.pending[3](window(10));
@@ -168,14 +169,14 @@ describe('PeriodComparison', () => {
     expect(headline.textContent).not.toContain('99');
   });
 
-  it('rates counted misses only over requests past their statutory deadline, and lags only closure measures', async () => {
+  it('rates counted misses only over requests older than any statutory deadline, and lags only closure measures', async () => {
     const now = Date.now();
     render(<PeriodComparison activePortalKey={null} />);
     // The miss rate's windows end today: requests still within their clock are left out, not lagged.
     expect(Date.parse(bridge.windows[0].created_to)).toBeGreaterThanOrEqual(now);
     await act(async () => {
-      bridge.pending[0]([profile({ agencyId: 1, agencyName: 'Police', totalRequestsProcessed: 12, statutoryDeadlinePassedCount: 4, statutoryViolationCount: 1 })]);
-      bridge.pending[1]([profile({ agencyId: 1, agencyName: 'Police', totalRequestsProcessed: 12, statutoryDeadlinePassedCount: 12, statutoryViolationCount: 3 })]);
+      bridge.pending[0]([profile({ agencyId: 1, agencyName: 'Police', totalRequestsProcessed: 12, statutoryMaturedCount: 4, statutoryViolationCount: 1, statutoryMaturedViolationCount: 1 })]);
+      bridge.pending[1]([profile({ agencyId: 1, agencyName: 'Police', totalRequestsProcessed: 12, statutoryMaturedCount: 12, statutoryViolationCount: 3, statutoryMaturedViolationCount: 3 })]);
     });
     const headline = screen.getByText(/Counted deadline-miss rate/).textContent ?? '';
     expect(headline).toContain('25.0% vs 25.0%');
@@ -189,7 +190,7 @@ describe('PeriodComparison', () => {
   it('reads a window with no requests as absent, never as a 0% rate', async () => {
     render(<PeriodComparison activePortalKey={null} />);
     await act(async () => {
-      bridge.pending[0]([profile({ agencyId: 1, agencyName: 'Police', totalRequestsProcessed: 12, statutoryDeadlinePassedCount: 12, statutoryViolationCount: 3 })]);
+      bridge.pending[0]([profile({ agencyId: 1, agencyName: 'Police', totalRequestsProcessed: 12, statutoryMaturedCount: 12, statutoryViolationCount: 3, statutoryMaturedViolationCount: 3 })]);
       bridge.pending[1]([]);
     });
     expect(screen.getByText(/Counted deadline-miss rate/).textContent).toContain('no comparable prior window');

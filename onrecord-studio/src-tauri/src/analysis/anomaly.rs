@@ -143,8 +143,11 @@ request_counts AS (
             WHERE {statutory_violation_predicate}
         ) AS statutory_violation_count,
         COUNT(*) FILTER (
-            WHERE {statutory_deadline_passed_predicate}
-        ) AS statutory_deadline_passed_count,
+            WHERE {statutory_clock_matured_predicate}
+        ) AS statutory_matured_count,
+        COUNT(*) FILTER (
+            WHERE ({statutory_violation_predicate}) AND ({statutory_clock_matured_predicate})
+        ) AS statutory_matured_violation_count,
         COUNT(*) FILTER (
             WHERE {suspicious_fast_closure_predicate}
         ) AS suspicious_fast_closure_count
@@ -217,7 +220,8 @@ SELECT
         / NULLIF(CAST(request_counts.total_requests AS DOUBLE), 0.0),
     request_counts.suspicious_fast_closure_count,
     COALESCE(released_documents.total_documents_released, 0),
-    request_counts.statutory_deadline_passed_count
+    request_counts.statutory_matured_count,
+    request_counts.statutory_matured_violation_count
 FROM request_counts
 CROSS JOIN global_latency
 LEFT JOIN agency_latency
@@ -290,7 +294,8 @@ struct RawAgencyPerformanceProfile {
     statutory_violation_rate: f64,
     suspicious_fast_closure_count: i64,
     total_documents_released: i64,
-    statutory_deadline_passed_count: i64,
+    statutory_matured_count: i64,
+    statutory_matured_violation_count: i64,
 }
 
 struct KeywordPattern {
@@ -446,7 +451,8 @@ fn query_agency_performance_profiles(
                     statutory_violation_rate: row.get(13)?,
                     suspicious_fast_closure_count: row.get(14)?,
                     total_documents_released: row.get(15)?,
-                    statutory_deadline_passed_count: row.get(16)?,
+                    statutory_matured_count: row.get(16)?,
+                    statutory_matured_violation_count: row.get(17)?,
                 })
             },
         )
@@ -656,9 +662,10 @@ fn convert_raw_profile(
         anomaly_count: count(raw.anomaly_count, "latency anomaly count")?,
         statutory_violation_count,
         statutory_violation_rate: raw.statutory_violation_rate,
-        statutory_deadline_passed_count: count(
-            raw.statutory_deadline_passed_count,
-            "deadline-passed request count",
+        statutory_matured_count: count(raw.statutory_matured_count, "matured request count")?,
+        statutory_matured_violation_count: count(
+            raw.statutory_matured_violation_count,
+            "matured violation count",
         )?,
         suspicious_fast_closure_count: count(
             raw.suspicious_fast_closure_count,
@@ -813,11 +820,12 @@ mod tests {
         );
     }
 
-    /// A request still inside its clock is neither a counted miss nor in the miss rate's
-    /// denominator, even when activity already stands in as its determination: later activity
-    /// can still move that proxy past the deadline. Every counted miss is past its deadline.
+    /// Maturity is decided by age alone. Two 18-day-old requests, one past its 10-day deadline
+    /// and one inside a valid extension, are both left out: keeping the unextended miss and
+    /// dropping the extended one would select on how requests ended and skew the rate. The
+    /// miss-rate numerator counts only matured misses, so it stays inside its denominator.
     #[test]
-    fn counts_only_requests_past_their_deadline_as_settled() {
+    fn matures_requests_by_age_alone_and_counts_misses_among_them() {
         let connection = connection();
         let day = |offset: i64| (chrono::Utc::now() + chrono::Duration::days(offset)).to_rfc3339();
         connection
@@ -825,11 +833,18 @@ mod tests {
                 "DELETE FROM db.requests;
                  INSERT INTO db.requests VALUES
                     (20, 'city', 1, 'Young, active', 'x', 'open', '{young}', '{young_update}', NULL, NULL, NULL),
-                    (21, 'city', 1, 'Young, quiet', 'x', 'open', '{young}', NULL, NULL, NULL, NULL),
+                    (21, 'city', 1, 'Mid, unextended', 'x', 'open', '{mid}', NULL, NULL, NULL, NULL),
+                    (24, 'city', 1, 'Mid, extended', 'x', 'open', '{mid}', NULL, NULL, NULL, NULL),
                     (22, 'city', 1, 'Answered in time', 'x', 'closed', '{old}', '{old_answer}', '{old_answer}', NULL, NULL),
-                    (23, 'city', 1, 'Never answered', 'x', 'open', '{old}', NULL, NULL, NULL, NULL);",
+                    (23, 'city', 1, 'Never answered', 'x', 'open', '{old}', NULL, NULL, NULL, NULL);
+                 INSERT INTO db.statutory_extensions VALUES
+                    (24, 'city', '{notice}', '{expected}', '{reason}', 'email');",
                 young = day(-3),
                 young_update = day(-1),
+                mid = day(-18),
+                notice = day(-16),
+                expected = day(2),
+                reason = StatutoryExtensionReason::VoluminousRecords.as_str(),
                 old = day(-60),
                 old_answer = day(-55),
             ))
@@ -846,9 +861,11 @@ mod tests {
             .iter()
             .find(|profile| profile.agency_id == 1)
             .unwrap();
-        assert_eq!(routine.total_requests_processed, 4);
-        assert_eq!(routine.statutory_deadline_passed_count, 2);
-        assert_eq!(routine.statutory_violation_count, 1);
+        assert_eq!(routine.total_requests_processed, 5);
+        assert_eq!(routine.statutory_matured_count, 2);
+        assert_eq!(routine.statutory_matured_violation_count, 1);
+        // The 18-day unextended miss is counted, just not in the matured rate.
+        assert_eq!(routine.statutory_violation_count, 2);
     }
 
     #[test]

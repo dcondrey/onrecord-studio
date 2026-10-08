@@ -272,15 +272,19 @@ pub mod sql {
         )
     }
 
-    /// A request whose effective deadline (extension included) has passed by the observation
-    /// date, so [`statutory_violation_predicate`] can no longer change its verdict: the
-    /// determination proxy moves with later activity until then. Every request that predicate
-    /// counts satisfies this one, because a determination is never dated after the observation.
-    pub fn statutory_deadline_passed_predicate() -> String {
+    /// A request old enough that no entitlement could still be running: the observation date is
+    /// past the longest deadline any request created that day could have (the initial period
+    /// plus the maximum extension, carried to a court day). Decided by age alone, never by the
+    /// request's own extension or determination, so a miss rate over matured requests does not
+    /// select on how they ended; until then the determination proxy can still move.
+    pub fn statutory_clock_matured_predicate() -> String {
         format!(
             "created_timestamp IS NOT NULL
           AND created_date IS NOT NULL
-          AND date_diff('day', created_date, {OBSERVATION_CALENDAR_DATE}) > allowed_calendar_days"
+          AND {OBSERVATION_CALENDAR_DATE} > {}",
+            court_day_on_or_after(&format!(
+                "initial_deadline_date + {CPRA_MAXIMUM_EXTENSION_DAYS}"
+            ))
         )
     }
 
@@ -325,8 +329,8 @@ pub mod sql {
                 &statutory_violation_predicate(),
             )
             .replace(
-                "{statutory_deadline_passed_predicate}",
-                &statutory_deadline_passed_predicate(),
+                "{statutory_clock_matured_predicate}",
+                &statutory_clock_matured_predicate(),
             )
             .replace(
                 "{suspicious_fast_closure_predicate}",

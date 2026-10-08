@@ -25,7 +25,9 @@ export interface AgencyPerformanceProfile {
   statutoryViolationCount: number;
   statutoryViolationRate: number;
   /** Requests whose effective statutory deadline has passed, so their counted verdict is final. */
-  statutoryDeadlinePassedCount: number;
+  statutoryMaturedCount: number;
+  /** Counted misses among the matured requests: the miss rate's numerator. */
+  statutoryMaturedViolationCount: number;
   suspiciousFastClosureCount: number;
   totalDocumentsReleased: number;
   keywordFrequencyMap: Record<string, number>;
