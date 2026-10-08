@@ -39,8 +39,13 @@ export interface BarTableColumn {
    * solid value bar.
    */
   hatched?: boolean;
-  /** A counted legal measure: the header carries the flag and the 'Counted' wording. */
+  /**
+   * A counted legal measure: the header carries the flag. The bars stay one slate ink, because
+   * position in a column already names what each bar measures.
+   */
   claim?: Claim;
+  /** The scale's top, overriding the column's own maximum: fixed so rows never rescale on filter. */
+  max?: number;
   sortable?: boolean;
   /** Bar length at full scale, px. Default 48. */
   barWidth?: number;
@@ -106,6 +111,7 @@ const BAR_HEIGHT = 8;
 const SVG_HEIGHT = 12;
 
 function columnMax(column: BarTableColumn, rows: readonly BarTableRow[], sharedMax: number | undefined): number {
+  if (column.max !== undefined) return column.max;
   if (column.scale === 'own-0-100') return 1;
   if (column.scale === 'shared' && sharedMax !== undefined) return sharedMax;
   let max = 0;
@@ -147,7 +153,7 @@ function CellBar({ column, cell, max, motionKey }: { column: BarTableColumn; cel
   } else if (column.hatched) {
     mark = <HatchedSpan x0={0} x1={x(value.value)} />;
   } else {
-    mark = <Bar band={band} value={value} scale={x} claim={column.claim ?? 'descriptive'} role={cell.approximate ? 'comparison' : 'default'} motionKey={motionKey} />;
+    mark = <Bar band={band} value={value} scale={x} claim="descriptive" role={cell.approximate ? 'comparison' : 'default'} motionKey={motionKey} />;
   }
   const end = isValue(value) ? x(Math.max(0, value.value)) : 0;
   return (
@@ -322,9 +328,10 @@ export default function BarTable(props: BarTableProps) {
                   </tr>
                   {drill && expansionKey && (
                     <tr>
-                      <td colSpan={columns.length + 1} className="border-b border-line p-0">
+                      <td colSpan={columns.length + 1} className={cn('p-0', drillDown.expanded === expansionKey && 'border-b border-line')}>
                         <div {...drillDown.regionProps(expansionKey)}>
-                          <div className="min-h-0 overflow-hidden">
+                          {/* A collapsed region stays mounted so it can animate open, but out of reach. */}
+                          <div className="min-h-0 overflow-hidden" {...(drillDown.expanded === expansionKey ? {} : { inert: '', 'aria-hidden': true })}>
                             <div className="bg-raised/40 px-3 py-3">{drill.render(row.key, openColumn?.key ?? null)}</div>
                           </div>
                         </div>
