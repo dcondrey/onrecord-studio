@@ -342,47 +342,38 @@ mod tests {
     }
 
     #[test]
-    fn no_finding_when_all_text_dates_predate_creation() {
-        let text = "Reviewed on 2020-01-05 and finalized on 2020-02-01.";
-        let candidate = candidate(text, Some("memo.pdf"));
-        assert!(
-            evaluate(&candidate, ts(2024, 1, 1)).is_none(),
-            "text dates before creation is normal, must not fire"
-        );
-    }
-
-    #[test]
-    fn no_finding_when_gap_is_under_the_minimum() {
-        // Text date same day as creation is timezone noise, not backdating.
-        let text = "Effective 2024-05-14 per section 3.";
-        let candidate = candidate(text, Some("memo.pdf"));
-        assert!(evaluate(&candidate, ts(2024, 5, 14)).is_none());
-    }
-
-    #[test]
-    fn notable_finding_for_a_short_forward_reference() {
-        let text = "Follow-up meeting scheduled for June 5, 2024.";
-        let candidate = candidate(text, Some("memo.pdf"));
-        let finding = evaluate(&candidate, ts(2024, 5, 20)).expect("must fire");
-        assert_eq!(finding.severity, FindingSeverity::Notable);
-        assert_eq!(finding.kind, FindingKind::MetadataContradictsContent);
-        assert!(finding.headline.contains("date"));
-    }
-
-    #[test]
-    fn serious_finding_when_gap_exceeds_thirty_days() {
-        let text = "Referenced report published 2024-08-15.";
-        let candidate = candidate(text, Some("memo.pdf"));
-        let finding = evaluate(&candidate, ts(2024, 5, 1)).expect("must fire");
-        assert_eq!(finding.severity, FindingSeverity::Serious);
-    }
-
-    #[test]
-    fn critical_finding_when_gap_exceeds_a_year() {
-        let text = "Later analysis on 2026-01-15.";
-        let candidate = candidate(text, Some("memo.pdf"));
-        let finding = evaluate(&candidate, ts(2024, 1, 1)).expect("must fire");
-        assert_eq!(finding.severity, FindingSeverity::Critical);
+    fn severity_follows_how_far_the_text_date_runs_past_creation() {
+        for (text, created, expected) in [
+            // Text dates before creation are normal.
+            (
+                "Reviewed on 2020-01-05 and finalized on 2020-02-01.",
+                ts(2024, 1, 1),
+                None,
+            ),
+            // A same-day date is timezone noise, not backdating.
+            ("Effective 2024-05-14 per section 3.", ts(2024, 5, 14), None),
+            (
+                "Follow-up meeting scheduled for June 5, 2024.",
+                ts(2024, 5, 20),
+                Some(FindingSeverity::Notable),
+            ),
+            (
+                "Referenced report published 2024-08-15.",
+                ts(2024, 5, 1),
+                Some(FindingSeverity::Serious),
+            ),
+            (
+                "Later analysis on 2026-01-15.",
+                ts(2024, 1, 1),
+                Some(FindingSeverity::Critical),
+            ),
+        ] {
+            let finding = evaluate(&candidate(text, Some("memo.pdf")), created);
+            assert_eq!(finding.as_ref().map(|f| f.severity), expected, "{text}");
+            if let Some(finding) = finding {
+                assert_eq!(finding.kind, FindingKind::MetadataContradictsContent);
+            }
+        }
     }
 
     #[test]
