@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { invokeCommand } from '../../ipc';
+import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type {
   AddTimelineEventInput,
@@ -29,11 +29,14 @@ export function useMyRequests(enabled: boolean) {
   const [claims, setClaims] = useState<ClaimedRequest[]>([]);
   const [deadlines, setDeadlines] = useState<Record<string, RequestDeadline>>({});
   const [error, setError] = useState<string | null>(null);
+  // Until the first list answers, there is no list: never "you track nothing".
+  const [status, setStatus] = useState<'loading' | 'ready' | 'failed'>('loading');
   const [isBusy, setIsBusy] = useState(false);
   const [importOutcome, setImportOutcome] = useState<ImportOutcome | null>(null);
 
   const refresh = useCallback(async () => {
     const token = refreshGate.begin();
+    setStatus((current) => (current === 'failed' ? 'loading' : current));
     try {
       const list = await invokeCommand('list_claimed_requests', {});
       const entries = await Promise.all(
@@ -43,9 +46,11 @@ export function useMyRequests(enabled: boolean) {
       setClaims(list);
       setDeadlines(Object.fromEntries(entries));
       setError(null);
+      setStatus('ready');
     } catch (reason) {
       if (!refreshGate.isCurrent(token)) return;
-      setError(String(reason instanceof Error ? reason.message : reason));
+      setError(formatNativeError(reason));
+      setStatus((current) => (current === 'ready' ? 'ready' : 'failed'));
     }
   }, [refreshGate]);
 
@@ -94,6 +99,7 @@ export function useMyRequests(enabled: boolean) {
   );
 
   return {
+    status,
     claims,
     deadlines,
     error,
