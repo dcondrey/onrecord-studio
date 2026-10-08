@@ -612,4 +612,46 @@ mod tests {
         assert!(plan(&manifest, &[choose(Some(2025)), choose(Some(2019))]).is_err());
         assert!(plan(&manifest, &[]).is_err());
     }
+
+    /// Fetches the published money pack's manifest and its smallest table from Hugging Face,
+    /// verifies them against the key this app pins, and imports the table.
+    #[tokio::test]
+    #[ignore = "downloads from Hugging Face"]
+    async fn a_published_pack_is_fetched_verified_and_imported() {
+        let root = tempfile::tempdir().unwrap();
+        let summary = fetch_manifest(
+            root.path().to_path_buf(),
+            "san-diego-money",
+            crate::packs::pinned_pack_keys(),
+        )
+        .await
+        .unwrap();
+        let directory = root
+            .path()
+            .join("san-diego-money")
+            .join(&summary.pack_version);
+        assert_ne!(kept_revision(&directory), BRANCH);
+        let repository = DuckDbRepository::new(&root.path().join("library.duckdb")).unwrap();
+        repository
+            .run_migrations(include_str!("../../migrations/0001_initial_schema.sql"))
+            .await
+            .unwrap();
+        let outcomes = fetch_files(
+            &repository,
+            root.path().to_path_buf(),
+            "san-diego-money",
+            &summary.pack_version,
+            &summary.manifest_sha256,
+            vec![PublishedPackSelection {
+                table: "budget_funds".into(),
+                year: None,
+            }],
+            crate::packs::pinned_pack_keys(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(outcomes.len(), 1);
+        assert!(outcomes[0].error.is_none(), "{:?}", outcomes[0].error);
+        assert!(outcomes[0].result.as_ref().unwrap().imported_rows > 500);
+    }
 }
