@@ -1,22 +1,29 @@
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["huggingface_hub>=0.25"]
+# dependencies = ["huggingface_hub==1.32.0"]
+#
+# [tool.uv]
+# exclude-newer = "2026-09-20T00:00:00Z"
 # ///
 """Publish an OnRecord data pack to Hugging Face as Writerslogic/onrecord-<pack>.
 
 Usage:
-  uv run scripts/publish_pack.py <pack-dir>                  a whole curated pack, as built
-  uv run scripts/publish_pack.py --incremental <work-dir>    one snapshot run: its manifest, card
-                                                             and the files in new-files.txt
-  uv run scripts/publish_pack.py --ensure-repo <pack>        create the public repository if absent
+  uv run --locked --script scripts/publish_pack.py <pack-dir>
+      a whole curated pack, as built
+  uv run --locked --script scripts/publish_pack.py --incremental <work-dir>
+      one snapshot run: its manifest, card and the files in new-files.txt
+  uv run --locked --script scripts/publish_pack.py --ensure-repo <pack>
+      create the public repository if absent
 
-The token is HF_TOKEN from the environment, else from ~/.env. Publish a curated pack only after the
-app's verifier has passed on it
+Every dependency is pinned with its hashes in publish_pack.py.lock (`uv lock --script
+scripts/publish_pack.py` after changing the metadata above). The token is HF_TOKEN from the
+environment, else from ~/.env. Publish a curated pack only after the app's verifier has passed on it
 (`ONRECORD_PACK_DIR=<pack-dir> cargo test --lib a_built_pack_verifies_against_the_pinned_key -- --ignored`);
 a snapshot run verifies its own manifest and new files before it exits. The dataset card is
 generated from the signed manifest; the manifest itself is uploaded unchanged. Nothing published is
 ever deleted or replaced: an incremental upload refuses a manifest that drops a published file or
-check, or that lists a new file at a published path.
+check, that changes any field of a published file's entry, or that lists a new file at a published
+path.
 """
 
 import json
@@ -29,12 +36,12 @@ from huggingface_hub import CommitOperationAdd, HfApi, hf_hub_download
 from huggingface_hub.utils import EntryNotFoundError, RepositoryNotFoundError
 
 ORG = "Writerslogic"
-# Must equal PACK_PUBLIC_KEYS in src-tauri/src/packs/mod.rs.
-PUBLIC_KEYS = {
-    "pack-2026-1": "b42202850cd9ecda4ab2b96548891d3a2a8275f74dde76bba2153826089ca8ff",
-    "pack-ci-2026-1": "3049662bc87c61409d8b8a515d60adf1420a32504bd4f6215ac0c121550a318f",
-}
 SNAPSHOT_PACK = "san-diego-snapshots"
+# Must equal PACK_PUBLIC_KEYS in src-tauri/src/packs/mod.rs: (public key, signs the snapshot pack).
+PUBLIC_KEYS = {
+    "pack-2026-1": ("b42202850cd9ecda4ab2b96548891d3a2a8275f74dde76bba2153826089ca8ff", False),
+    "pack-ci-2026-1": ("3049662bc87c61409d8b8a515d60adf1420a32504bd4f6215ac0c121550a318f", True),
+}
 TITLES = {
     "san-diego-money": "San Diego money: budgets, actuals, capital programme and City property",
     "san-diego-reports": "San Diego reports: Get It Done, police calls for service and Fire-Rescue incidents",
@@ -60,9 +67,15 @@ def repository(pack: str) -> str:
 
 
 def key_name(signed: dict) -> str:
+    """The pinned name of the manifest's key, refused unless the app accepts that key on its pack."""
     public = signed["signature"].get("publicKeyHex", "").lower()
-    for kid, hex_key in PUBLIC_KEYS.items():
+    pack = signed["manifest"]["pack"]
+    for kid, (hex_key, signs_snapshots) in PUBLIC_KEYS.items():
         if hex_key == public:
+            if signs_snapshots != (pack == SNAPSHOT_PACK):
+                sys.exit(f"the manifest of {pack} is signed by {kid}, a key that does not sign it")
+            if signed["manifest"].get("keyId", kid) != kid:
+                sys.exit(f"the manifest names {signed['manifest']['keyId']} but is signed by {kid}")
             return kid
     sys.exit("the manifest is not signed with a pinned publisher key")
 
@@ -87,11 +100,13 @@ The City's disclaimer, which the licence terms require: {licence['disclaimer']}
 ## Verifying
 
 `manifest.json` lists every file with its source URL, retrieval time, SHA-256, size and row count,
-and is signed with Ed25519 by key `{kid}` (public key `{PUBLIC_KEYS[kid]}`, key id
-`{signed['signature']['signerKeyId']}`, the SHA-256 of the public key). OnRecord Studio pins both
-publisher keys, `pack-2026-1` (curated releases, held offline by the owner) and `pack-ci-2026-1`
-(this repository's scheduled snapshot job, a separate key), and refuses a pack whose signature, key
-or any file hash does not verify. Any original can also be re-checked against its publisher URL.
+and is signed with Ed25519 by key `{kid}` (public key `{PUBLIC_KEYS[kid][0]}`, key id
+`{signed['signature']['signerKeyId']}`, the SHA-256 of the public key). OnRecord Studio pins two
+publisher keys and accepts each only on its own packs: `pack-2026-1`
+(`{PUBLIC_KEYS['pack-2026-1'][0]}`), held offline by the owner, signs the curated releases and
+never the snapshot pack; `pack-ci-2026-1` (`{PUBLIC_KEYS['pack-ci-2026-1'][0]}`), held by the
+scheduled snapshot job, signs only `{SNAPSHOT_PACK}`. The app refuses a pack whose signature, key,
+key-to-pack binding or any file hash does not verify. Any original can also be re-checked against its publisher URL.
 
 A parking citation, a call for service or a permit record states what the City recorded, not a
 finding about any person or a legal conclusion.
@@ -270,10 +285,8 @@ def checked_new_files(directory: Path, manifest: dict) -> list[str]:
 
 def replaces_published(published: dict, manifest: dict, new_files: list[str]) -> str | None:
     """Why `manifest` with `new_files` would drop or replace what `published` holds, if it would."""
-    current = {(file["path"], file["sha256"].lower()) for file in manifest["files"]}
-    dropped = [
-        file["path"] for file in published["files"] if (file["path"], file["sha256"].lower()) not in current
-    ]
+    current = {file["path"]: file for file in manifest["files"]}
+    dropped = [file["path"] for file in published["files"] if current.get(file["path"]) != file]
     if dropped:
         return f"the new manifest drops or changes published files: {dropped[:5]}"
     kept = published.get("checks", [])

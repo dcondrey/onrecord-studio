@@ -3,7 +3,9 @@ name: Pack snapshots
 # Extends the san-diego-snapshots data pack once a day (onrecord-studio/docs/data-packs.md,
 # Snapshots): every City file overwritten in place is retrieved, kept as a dated snapshot when its
 # bytes changed or recorded as checked when they did not, and the cumulative manifest is signed
-# with the CI key (pack-ci-2026-1) and published to Hugging Face in one commit.
+# with the CI key (pack-ci-2026-1) and published to Hugging Face in one commit. The dataset
+# repository is created once by hand (`uv run --locked --script scripts/publish_pack.py
+# --ensure-repo san-diego-snapshots`); until it exists the snapshot step refuses to start.
 
 on:
   schedule:
@@ -44,28 +46,53 @@ jobs:
         run: >-
           cargo build --release --manifest-path src-tauri/Cargo.toml
           --features pack-builder --bin onrecord-pack-builder
-      - uses: astral-sh/setup-uv@v7
-      - name: Make sure the dataset repository exists
-        # The builder reads a missing manifest (HTTP 404) as the first run; a missing repository
-        # answers 401, which it refuses rather than guesses at.
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: uv run scripts/publish_pack.py --ensure-repo san-diego-snapshots
       - name: Snapshot
+        # The seed reaches only this step, which runs nothing but the binary built above; no
+        # Python or uv code runs on this runner.
         env:
           ONRECORD_PACK_SEED: ${{ secrets.ONRECORD_PACK_SEED }}
           ONRECORD_PACK_KEY_ID: pack-ci-2026-1
         run: >-
           target/release/onrecord-pack-builder snapshot san-diego-snapshots
           "$RUNNER_TEMP/snapshot"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: snapshot
+          path: ${{ runner.temp }}/snapshot
+          retention-days: 1
+
+  publish:
+    name: Publish to Hugging Face
+    # A separate runner: the publisher's Python dependencies never share a machine with the seed,
+    # the pack builder binary or the Rust cache a later run builds from.
+    needs: snapshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: snapshot
+          path: ${{ runner.temp }}/snapshot
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: '0.12.10'
       - name: Publish
+        # Every dependency is installed from scripts/publish_pack.py.lock, hash-checked.
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: uv run scripts/publish_pack.py --incremental "$RUNNER_TEMP/snapshot"
-      - name: Report files not snapshotted
+        run: uv run --locked --script scripts/publish_pack.py --incremental "$RUNNER_TEMP/snapshot"
+      - name: Report files not snapshotted or snapshotted incompletely
         # Published first, so one unreachable file never costs the others a day of history.
         run: |
+          failed=0
           if [ -s "$RUNNER_TEMP/snapshot/not-snapshotted.txt" ]; then
             echo "::error::Not snapshotted: $(paste -sd ' ' "$RUNNER_TEMP/snapshot/not-snapshotted.txt")"
-            exit 1
+            failed=1
           fi
+          if [ -s "$RUNNER_TEMP/snapshot/incomplete.txt" ]; then
+            while IFS= read -r line; do echo "::error::Snapshotted without $line"; done \
+              < "$RUNNER_TEMP/snapshot/incomplete.txt"
+            failed=1
+          fi
+          exit "$failed"
