@@ -13,7 +13,3 @@ export function severityGlyph(severity: FindingSeverity): [GlyphShape, string] {
       return ['ring', 'text-muted'];
   }
 }
-
-export function severityLabel(severity: FindingSeverity): string {
-  return severity.charAt(0) + severity.slice(1).toLowerCase();
-}

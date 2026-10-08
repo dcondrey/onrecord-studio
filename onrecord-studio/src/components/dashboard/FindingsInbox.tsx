@@ -4,7 +4,8 @@ import { formatNativeError, invokeCommand } from '../../ipc';
 import { useCaseScope } from '../../hooks/useCaseScope';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { ShapeGlyph } from '../ui/shapeGlyph';
-import { severityGlyph, severityLabel } from './findingSeverity';
+import { severityGlyph } from './findingSeverity';
+import { severityLabel } from '../objects/labels';
 import { useAppStore } from '../../store/useAppStore';
 import { useInspectFinding } from '../../hooks/useInspectFinding';
 import type { Finding, FindingCitation, FindingSeverity } from '../../types';
@@ -487,12 +488,14 @@ function FindingRow({
           </button>
         </div>
       </div>
-      {expanded && (
-        <div id={`finding-drafts-${finding.id}`}>
-          <ArtifactDrafts findingId={finding.id} />
-          {isTauri() && <EvidencePacketExport findingIds={[finding.id]} />}
-        </div>
-      )}
+      <div id={`finding-drafts-${finding.id}`} hidden={!expanded}>
+        {expanded && (
+          <>
+            <ArtifactDrafts findingId={finding.id} />
+            {isTauri() && <EvidencePacketExport findingIds={[finding.id]} />}
+          </>
+        )}
+      </div>
     </li>
   );
 }

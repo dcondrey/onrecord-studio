@@ -3,6 +3,7 @@ import { useFindings } from '../../hooks/useFindings';
 import { useAppStore } from '../../store/useAppStore';
 import { ShapeGlyph } from '../ui/shapeGlyph';
 import { severityGlyph } from './findingSeverity';
+import { confidenceLabel } from '../objects/labels';
 import type { Finding } from '../../types';
 
 /**
@@ -192,9 +193,7 @@ function CrossCorpusRow({ finding, onInspect }: { finding: CrossCorpusFinding; o
             <p className="text-label font-semibold text-fg">{finding.headline}</p>
             <p className="mt-1 text-label leading-relaxed text-muted">{finding.explanation}</p>
             <p className="mt-1 text-caption uppercase tracking-wider text-muted">
-              {KIND_LABEL[finding.kind]}
-              {finding.confidence.kind === 'MEASURED' &&
-                ` · ${(finding.confidence.basisPoints / 100).toFixed(0)}% confidence`}
+              {KIND_LABEL[finding.kind]} · {confidenceLabel(finding.confidence)}
             </p>
           </div>
         </div>
