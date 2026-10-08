@@ -3196,6 +3196,14 @@ async fn validate_remote_url(dns: &PinnedDnsResolver, url: &Url) -> Result<(), A
     let host = url
         .host_str()
         .ok_or_else(|| AppError::PortalSecurity(format!("URL '{url}' has no host")))?;
+    // A URL host is bracketed only when it is an IPv6 literal. Refused explicitly because
+    // whether the resolver accepts the bracketed form is platform-specific (Windows does,
+    // getaddrinfo on Unix does not), and the connector bypasses the pinned resolver for literals.
+    if host.starts_with('[') {
+        return Err(AppError::PortalSecurity(format!(
+            "URL '{url}' uses an IPv6 address literal"
+        )));
+    }
     let normalized_host = host.trim_end_matches('.').to_ascii_lowercase();
     if normalized_host == "localhost"
         || normalized_host.ends_with(".localhost")
@@ -4434,11 +4442,9 @@ mod url_security_tests {
         }
     }
 
-    // LIMIT(security): a bracketed IPv6 literal is refused, but by DNS failure rather than by the
-    // address check: `Url::host_str` keeps the brackets, and `lookup_host("[::1]", _)` cannot
-    // parse that. The outcome is fail-closed, and it applies to PUBLIC IPv6 literals too, so this
-    // client cannot address any IPv6 literal URL at all. `is_public_ipv6` still guards names that
-    // resolve to AAAA records, which is where it actually does its work.
+    // LIMIT(security): every IPv6 literal URL is refused, PUBLIC ones too, before any lookup.
+    // `is_public_ipv6` still guards names that resolve to AAAA records, which is where it does its
+    // work.
     #[tokio::test]
     async fn ipv6_literal_urls_are_refused_before_the_address_check() {
         for value in [
@@ -4449,10 +4455,7 @@ mod url_security_tests {
         ] {
             let error = rejects(value).await;
             assert!(
-                matches!(
-                    error,
-                    AppError::PortalDiscovery(_) | AppError::PortalSecurity(_)
-                ),
+                matches!(&error, AppError::PortalSecurity(message) if message.contains("IPv6 address literal")),
                 "'{value}' rejected with an unexpected variant: {error:?}",
             );
         }
