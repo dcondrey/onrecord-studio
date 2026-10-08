@@ -5,11 +5,10 @@
 //! findings reads it.
 
 use super::validate_document;
-use crate::atomic_write::write_atomic;
+use crate::atomic_write::{read_bounded, write_atomic};
 use crate::error::AppError;
 use crate::types::tracker::{TrackerDocument, TRACKER_SCHEMA_VERSION};
-use std::fs::File;
-use std::io::{self, Read};
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -83,29 +82,21 @@ impl TrackerStore {
     }
 
     fn read(&self) -> Result<TrackerDocument, AppError> {
-        let file = match File::open(&self.path) {
-            Ok(file) => file,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                return Ok(TrackerDocument::default())
+        let bytes = match read_bounded(&self.path, self.maximum_bytes) {
+            Ok(Some(bytes)) => bytes,
+            Ok(None) => return Ok(TrackerDocument::default()),
+            Err(error) if error.kind() == io::ErrorKind::FileTooLarge => {
+                return Err(AppError::Storage(format!(
+                    "The tracker file is larger than {} bytes and was not read. It was not modified.",
+                    self.maximum_bytes
+                )))
             }
             Err(error) => {
                 return Err(AppError::Storage(format!(
-                    "Failed to open {TRACKER_LABEL}: {error}"
+                    "Failed to read {TRACKER_LABEL}: {error}"
                 )))
             }
         };
-        let mut bytes = Vec::new();
-        file.take(self.maximum_bytes + 1)
-            .read_to_end(&mut bytes)
-            .map_err(|error| {
-                AppError::Storage(format!("Failed to read {TRACKER_LABEL}: {error}"))
-            })?;
-        if bytes.len() as u64 > self.maximum_bytes {
-            return Err(AppError::Storage(format!(
-                "The tracker file is larger than {} bytes and was not read. It was not modified.",
-                self.maximum_bytes
-            )));
-        }
         let document: TrackerDocument = serde_json::from_slice(&bytes).map_err(|error| {
             AppError::Storage(format!(
                 "The tracker file is not valid ({error}). It was not modified."
