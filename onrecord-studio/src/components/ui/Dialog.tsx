@@ -50,6 +50,8 @@ interface DialogProps {
   size?: DialogSize;
   /** `sheet-right` is a full-height panel against the right edge, for long lists. */
   placement?: 'center' | 'sheet-right';
+  /** A reading surface (a document, a long form) is opaque: text showing through it would compete. */
+  opaque?: boolean;
   className?: string;
   children: ReactNode;
 }
@@ -60,7 +62,7 @@ interface DialogProps {
  * overlay. Focus enters on open, Tab stays inside, Escape and a press on the scrim close it, and
  * focus returns to the opener.
  */
-export default function Dialog({ onClose, label, size = 'md', placement = 'center', className, children }: DialogProps) {
+export default function Dialog({ onClose, label, size = 'md', placement = 'center', opaque = false, className, children }: DialogProps) {
   const titleId = useId();
   const { ref, onKeyDown, onOverlayMouseDown } = useDialogFocus(onClose);
   const sheet = placement === 'sheet-right';
@@ -80,7 +82,8 @@ export default function Dialog({ onClose, label, size = 'md', placement = 'cente
         aria-labelledby={label ? undefined : titleId}
         data-stacked={isTop ? undefined : ''}
         className={cn(
-          'glass flex w-full flex-col overflow-hidden text-fg shadow-dialog outline-none',
+          opaque ? 'border border-line-strong bg-panel' : 'glass',
+          'flex w-full flex-col overflow-hidden text-fg shadow-dialog outline-none',
           sheet
             ? 'motion-slide-in h-full max-w-[28rem] rounded-l-2xl border-r-0'
             : cn('motion-pop max-h-[calc(100vh-4rem)] rounded-2xl', WIDTH[size]),

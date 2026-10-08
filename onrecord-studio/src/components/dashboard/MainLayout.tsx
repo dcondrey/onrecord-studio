@@ -61,6 +61,7 @@ export default function MainLayout() {
   const resultsTotal = useAppStore((state) => state.filteredResultsTotal);
   const searchPaging = useAppStore((state) => state.searchPaging);
   const searchError = useAppStore((state) => state.searchError);
+  const requestEvidenceRefresh = useAppStore((state) => state.requestEvidenceRefresh);
   const selectedRequestId = useAppStore((state) => state.selectedRequestId);
   const selectedRequestPortalKey = useAppStore((state) => state.selectedRequestPortalKey);
   const setSelectedRequest = useAppStore((state) => state.setSelectedRequest);
@@ -94,6 +95,7 @@ export default function MainLayout() {
   // after B is selected must not write A's outcome, or its error, into B's panel.
   const documentOwnerRef = useRef<{ requestId: number; portalKey: string } | null>(null);
   const [isLegalLibraryOpen, setLegalLibraryOpen] = useState(false);
+  const [searchPending, setSearchPending] = useState(true);
   const closeLegalLibrary = useCallback(() => setLegalLibraryOpen(false), []);
   const selected = results.find(
     (result) => result.requestId === selectedRequestId && result.portalKey === selectedRequestPortalKey,
@@ -301,6 +303,9 @@ export default function MainLayout() {
   }
 
   const selectedKey = selected ? `${selected.portalKey}-${selected.requestId}` : null;
+  // An empty library has no request to detail, so the column would only say so a second time.
+  const showDetails = results.length > 0 || selected !== null;
+  const showSideColumn = showDetails || syncLogCount > 0;
   const savedToBriefing = selected ? briefingEvidence.some((item) => item.id === `request:${selected.portalKey}:${selected.requestId}`) : false;
   const portalName = (portalKey: string) => portals.find(({ registration }) => registration.portalKey === portalKey)?.registration.displayName ?? portalKey;
 
@@ -332,10 +337,13 @@ export default function MainLayout() {
       </div>
       {evidenceMode === 'timeline' ? <CaseTimeline /> : <>
       <CaseRequests />
-      <SearchFilter />
+      <SearchFilter onPendingChange={setSearchPending} />
       <AnnotationSearch onOpen={setPendingEvidenceLink} />
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto grid w-full max-w-content grid-cols-1 items-start gap-4 px-5 pb-6 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)] lg:px-6">
+        <div className={cn(
+          'mx-auto grid w-full max-w-content grid-cols-1 items-start gap-4 px-5 pb-6 pt-4 lg:px-6',
+          showSideColumn && 'xl:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]',
+        )}>
           <section aria-labelledby="evidence-requests-title" className="app-panel flex min-h-[520px] min-w-0 flex-col overflow-hidden">
             <div className="flex h-12 items-center border-b border-line px-4">
               <h3 id="evidence-requests-title" className="text-heading text-fg">Requests</h3>
@@ -350,8 +358,18 @@ export default function MainLayout() {
                 The records changed while the pages loaded, so the list holds {formatMatchCount(results.length)} and the count is {formatMatchCount(resultsTotal)}. Search again for a consistent view.
               </p>
             )}
+            {searchError && results.length > 0 && (
+              <InlineError
+                className="m-3"
+                summary={`Search unavailable. Showing ${formatMatchCount(results.length)} result${results.length === 1 ? '' : 's'} from the last search that completed.`}
+                detail={searchError}
+                onRetry={requestEvidenceRefresh}
+              />
+            )}
             <div className="flex min-h-0 flex-1 flex-col">
-              {results.length === 0 ? (
+              {results.length === 0 && searchPending ? (
+                <ResultSkeleton />
+              ) : results.length === 0 ? (
                 <EmptyResults error={searchError} sourceCount={portals.length} />
               ) : (
                 <VirtualList
@@ -415,135 +433,141 @@ export default function MainLayout() {
             </div>
           </section>
 
-          <div className="grid min-w-0 gap-4 lg:sticky lg:top-0 lg:max-h-[calc(100vh-4rem)] lg:overflow-y-auto">
-            <section ref={detailsRef} aria-labelledby="request-details-title" className="app-panel min-w-0 scroll-mt-4 p-4">
-              <h3 id="request-details-title" className="text-overline uppercase text-muted">Request details</h3>
-              {selected ? (
-                <div className="mt-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <StatusBadge status={selected.status} />
-                    <Button
-                      size="sm"
-                      disabled={savedToBriefing}
-                      onClick={() => addBriefingEvidence(requestBriefingEvidence(selected, selectedSourceUrl))}
-                    >
-                      {savedToBriefing ? 'Saved to briefing' : 'Save to briefing'}
-                    </Button>
+          {showSideColumn && (
+            <div className="grid min-w-0 gap-4 xl:sticky xl:top-0 xl:max-h-[calc(100vh-4rem)] xl:overflow-y-auto">
+              {showDetails && (
+                <section ref={detailsRef} aria-labelledby="request-details-title" className="app-panel min-w-0 scroll-mt-4">
+                  <div className="flex h-12 items-center border-b border-line px-4">
+                    <h3 id="request-details-title" className="text-heading text-fg">Request details</h3>
                   </div>
-                  <h4 className="mt-3 break-words text-heading text-fg">{selected.title || 'Untitled request'}</h4>
-                  <p className="mt-1 text-caption text-muted">
-                    {selected.agencyId === null
-                      ? selected.agencyName
-                      : <ObjectLink target={{ kind: 'agency', portalKey: selected.portalKey, agencyId: selected.agencyId, label: selected.agencyName }}>{selected.agencyName}</ObjectLink>}
-                    {' · '}<ObjectLink target={{ kind: 'request', portalKey: selected.portalKey, requestId: selected.requestId, label: selected.title || `Request ${selected.requestId}` }}>Open in inspector</ObjectLink>
-                  </p>
-                  <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line pt-3">
-                    <CaseField label="Request ID" value={String(selected.requestId)} code />
-                    <CaseField label="Documents" value={String(selected.documentCount)} />
-                    <CaseField label="Created" value={formatShortDate(selected.createdAt)} />
-                    <CaseField label="Closed" value={selected.closedAt ? formatShortDate(selected.closedAt) : 'Not recorded'} absent={!selected.closedAt} />
-                  </dl>
-                  <p className="mt-4 rounded-lg border border-line bg-canvas p-3 text-body text-fg-secondary">
-                    {selected.descriptionPreview || 'No public description supplied.'}
-                  </p>
-                  <LegalCompliancePanel record={selected} onOpenLibrary={() => setLegalLibraryOpen(true)} />
-                  <section aria-labelledby="request-documents-title" className="mt-4">
-                    <h4 id="request-documents-title" className="text-body font-medium text-fg">Public documents</h4>
-                    {documentsStatus === 'pending' && <Skeleton variant="lines" lines={3} label="Loading documents" className="mt-2" />}
-                    {documentsStatus === 'failed' && (
-                      <InlineError className="mt-2" summary="The document list couldn’t be read." detail={documentError ?? undefined} onRetry={() => setDocumentListRetries((count) => count + 1)} />
-                    )}
-                    {documentsStatus === 'ready' && documents.length === 0 && (
-                      <p className="mt-1 text-caption text-muted">No document is stored for this request.</p>
-                    )}
-                    {documents.length > 0 && (
-                      <ul className="mt-2 max-h-64 space-y-1.5 overflow-y-auto">
-                        {documents.map((document) => {
-                          const canOpen = document.extractionStatus === 'SEARCHABLE'
-                            || document.extractionStatus === 'SALVAGED';
-                          const stateLabel = formatExtractionState(document);
-                          const opening = openingDocumentId === document.documentId;
-                          return (
-                            <li key={document.documentId} className="flex items-stretch gap-1">
-                              <button
-                                type="button"
-                                disabled={!canOpen || (openingDocumentId !== null && !opening)}
-                                aria-busy={opening || undefined}
-                                title={document.extractionDeferredReason ?? stateLabel}
-                                onClick={() => void openDocument(document)}
-                                className="focus-ring flex min-w-0 flex-1 items-center justify-between gap-3 rounded-lg border border-line bg-canvas px-3 py-2 text-left transition-colors duration-fast hover:border-line-strong hover:bg-raised/60 disabled:cursor-default disabled:opacity-60 disabled:hover:border-line disabled:hover:bg-canvas"
-                              >
-                                <span className="min-w-0">
-                                  <span className="block truncate font-mono text-code text-fg">{document.fileName}</span>
-                                  <span className="mt-0.5 block truncate text-caption text-muted">{opening ? 'Opening…' : stateLabel}</span>
-                                </span>
-                                <span className="shrink-0 text-caption tabular-nums text-muted">{formatFileSize(document.fileSize)}</span>
-                              </button>
-                              {/* Its own control, never a modifier on the open action, and never a
-                                  swipe or a long press. Destroying a piece of evidence is not a
-                                  variation on reading it.
+                  {selected ? (
+                    <div className="p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <StatusBadge status={selected.status} />
+                        <Button
+                          size="sm"
+                          disabled={savedToBriefing}
+                          onClick={() => addBriefingEvidence(requestBriefingEvidence(selected, selectedSourceUrl))}
+                        >
+                          {savedToBriefing ? 'Saved to briefing' : 'Save to briefing'}
+                        </Button>
+                      </div>
+                      <h4 className="mt-3 break-words text-heading text-fg">{selected.title || 'Untitled request'}</h4>
+                      <p className="mt-1 text-caption text-muted">
+                        {selected.agencyId === null
+                          ? selected.agencyName
+                          : <ObjectLink target={{ kind: 'agency', portalKey: selected.portalKey, agencyId: selected.agencyId, label: selected.agencyName }}>{selected.agencyName}</ObjectLink>}
+                        {' · '}<ObjectLink target={{ kind: 'request', portalKey: selected.portalKey, requestId: selected.requestId, label: selected.title || `Request ${selected.requestId}` }}>Open in inspector</ObjectLink>
+                      </p>
+                      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line pt-3">
+                        <CaseField label="Request ID" value={String(selected.requestId)} />
+                        <CaseField label="Documents" value={String(selected.documentCount)} />
+                        <CaseField label="Created" value={formatShortDate(selected.createdAt)} />
+                        <CaseField label="Closed" value={selected.closedAt ? formatShortDate(selected.closedAt) : 'Not recorded'} absent={!selected.closedAt} />
+                      </dl>
+                      <p className="mt-4 rounded-lg border border-line bg-canvas p-3 text-body text-fg-secondary">
+                        {selected.descriptionPreview || 'No public description supplied.'}
+                      </p>
+                      <LegalCompliancePanel record={selected} onOpenLibrary={() => setLegalLibraryOpen(true)} />
+                      <section aria-labelledby="request-documents-title" className="mt-4">
+                        <h4 id="request-documents-title" className="text-body font-medium text-fg">Public documents</h4>
+                        {documentsStatus === 'pending' && <Skeleton variant="lines" lines={3} label="Loading documents" className="mt-2" />}
+                        {documentsStatus === 'failed' && (
+                          <InlineError className="mt-2" summary="The document list couldn’t be read." detail={documentError ?? undefined} onRetry={() => setDocumentListRetries((count) => count + 1)} />
+                        )}
+                        {documentsStatus === 'ready' && documents.length === 0 && (
+                          <p className="mt-1 text-caption text-muted">No document is stored for this request.</p>
+                        )}
+                        {documents.length > 0 && (
+                          <ul className="mt-2 max-h-64 space-y-1.5 overflow-y-auto">
+                            {documents.map((document) => {
+                              const canOpen = document.extractionStatus === 'SEARCHABLE'
+                                || document.extractionStatus === 'SALVAGED';
+                              const stateLabel = formatExtractionState(document);
+                              const opening = openingDocumentId === document.documentId;
+                              return (
+                                <li key={document.documentId} className="flex items-stretch gap-1">
+                                  <button
+                                    type="button"
+                                    disabled={!canOpen || (openingDocumentId !== null && !opening)}
+                                    aria-busy={opening || undefined}
+                                    title={document.extractionDeferredReason ?? stateLabel}
+                                    onClick={() => void openDocument(document)}
+                                    className="focus-ring flex min-w-0 flex-1 items-center justify-between gap-3 rounded-lg border border-line bg-canvas px-3 py-2 text-left transition-colors duration-fast hover:border-line-strong hover:bg-raised/60 disabled:cursor-default disabled:opacity-60 disabled:hover:border-line disabled:hover:bg-canvas"
+                                  >
+                                    <span className="min-w-0">
+                                      <span className="block truncate font-mono text-code text-fg">{document.fileName}</span>
+                                      <span className="mt-0.5 block truncate text-caption text-muted">{opening ? 'Opening…' : stateLabel}</span>
+                                    </span>
+                                    <span className="shrink-0 text-caption tabular-nums text-muted">{formatFileSize(document.fileSize)}</span>
+                                  </button>
+                                  {/* Its own control, never a modifier on the open action, and never a
+                                      swipe or a long press. Destroying a piece of evidence is not a
+                                      variation on reading it.
 
-                                  Refused while the source is synchronizing. Purging one document
-                                  stops nothing: the crawl that produced it is still running, holds
-                                  no record that the document was deleted, and would re-download it
-                                  within the same run. A delete that silently undoes itself is a
-                                  worse claim about evidence than one that declines. */}
+                                      Refused while the source is synchronizing. Purging one document
+                                      stops nothing: the crawl that produced it is still running, holds
+                                      no record that the document was deleted, and would re-download it
+                                      within the same run. A delete that silently undoes itself is a
+                                      worse claim about evidence than one that declines. */}
+                                  <Button
+                                    variant="ghost"
+                                    iconOnly
+                                    icon="trash"
+                                    disabled={syncingPortalKeys.includes(document.portalKey)}
+                                    title={syncingPortalKeys.includes(document.portalKey)
+                                      ? 'Pause this source before deleting a document; a running crawl would download it again'
+                                      : `Delete ${document.fileName} and everything derived from it`}
+                                    aria-label={`Delete document ${document.fileName}`}
+                                    onClick={() => setPendingDocumentPurge(document)}
+                                    className="h-auto self-stretch hover:text-danger"
+                                  />
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                        {documentError && documentsStatus !== 'failed' && (
+                          <InlineError className="mt-2" summary="The document couldn’t be opened." detail={documentError} />
+                        )}
+                      </section>
+                      {hasReportableFinding(selected) && (
+                        <div className="mt-4 border-t border-line pt-4">
+                          {isTauri() && selected.integrityFlags.includes('STATUTORY_LATENCY_VIOLATION') ? (
+                            <StatutoryDeadlineAppeal portalKey={selected.portalKey} requestId={selected.requestId} />
+                          ) : (
+                            <>
                               <Button
-                                variant="ghost"
-                                iconOnly
-                                icon="trash"
-                                disabled={syncingPortalKeys.includes(document.portalKey)}
-                                title={syncingPortalKeys.includes(document.portalKey)
-                                  ? 'Pause this source before deleting a document; a running crawl would download it again'
-                                  : `Delete ${document.fileName} and everything derived from it`}
-                                aria-label={`Delete document ${document.fileName}`}
-                                onClick={() => setPendingDocumentPurge(document)}
-                                className="h-auto self-stretch hover:text-danger"
-                              />
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                    {documentError && documentsStatus !== 'failed' && (
-                      <InlineError className="mt-2" summary="The document couldn’t be opened." detail={documentError} />
-                    )}
-                  </section>
-                  {hasReportableFinding(selected) && (
-                    <div className="mt-4 border-t border-line pt-4">
-                      {isTauri() && selected.integrityFlags.includes('STATUTORY_LATENCY_VIOLATION') ? (
-                        <StatutoryDeadlineAppeal portalKey={selected.portalKey} requestId={selected.requestId} />
-                      ) : (
-                        <>
-                          <Button
-                            variant="primary"
-                            disabled={exportState?.key === selectedKey && exportState.isExporting}
-                            onClick={() => void exportBrief(selected)}
-                          >
-                            {exportState?.key === selectedKey && exportState.isExporting ? 'Drafting…' : 'Draft appeal'}
-                          </Button>
-                          {exportState?.key === selectedKey && exportState.result && (
-                            <div className="mt-2 space-y-0.5 break-all text-caption text-success">
-                              <p>Saved report: <span className="font-mono">{exportState.result.outputPath}</span></p>
-                              <p>Signed evidence package: <span className="font-mono">{exportState.result.packagePath}</span></p>
-                              <p>Signer {exportState.result.signatureAlgorithm}: <span className="font-mono">{exportState.result.signerKeyId}</span></p>
-                            </div>
+                                variant="primary"
+                                disabled={exportState?.key === selectedKey && exportState.isExporting}
+                                onClick={() => void exportBrief(selected)}
+                              >
+                                {exportState?.key === selectedKey && exportState.isExporting ? 'Drafting…' : 'Draft appeal'}
+                              </Button>
+                              {exportState?.key === selectedKey && exportState.result && (
+                                <div className="mt-2 space-y-0.5 break-all text-caption text-success">
+                                  <p>Saved report: <span className="font-mono">{exportState.result.outputPath}</span></p>
+                                  <p>Signed evidence package: <span className="font-mono">{exportState.result.packagePath}</span></p>
+                                  <p>Signer {exportState.result.signatureAlgorithm}: <span className="font-mono">{exportState.result.signerKeyId}</span></p>
+                                </div>
+                              )}
+                              {exportState?.key === selectedKey && exportState.error && (
+                                <InlineError className="mt-2" summary="The appeal draft couldn’t be written." detail={exportState.error} />
+                              )}
+                            </>
                           )}
-                          {exportState?.key === selectedKey && exportState.error && (
-                            <InlineError className="mt-2" summary="The appeal draft couldn’t be written." detail={exportState.error} />
-                          )}
-                        </>
+                        </div>
                       )}
                     </div>
+                  ) : (
+                    <p className="px-4 py-8 text-center text-body text-muted">Select a request to see its documents, deadlines and findings.</p>
                   )}
-                </div>
-              ) : (
-                <p className="mt-3 rounded-lg border border-dashed border-line px-4 py-6 text-center text-body text-muted">Select a request to see its documents, deadlines and findings.</p>
+                </section>
               )}
-            </section>
 
-            {syncLogCount > 0 && <div className="min-h-[220px]"><ExtractionTerminal /></div>}
-          </div>
+              {syncLogCount > 0 && <div className="min-h-[220px]"><ExtractionTerminal /></div>}
+            </div>
+          )}
         </div>
       </div>
       </>}
@@ -568,14 +592,15 @@ export default function MainLayout() {
       {activeDocument && (
         <Dialog
           size="xl"
+          opaque
           onClose={() => setActiveDocument(null)}
           className={cn('h-[min(760px,88vh)]', isPdfDocument(activeDocument.summary) && 'max-w-[min(1440px,96vw)]')}
         >
           <DialogHeader
             title={<span className="block truncate" title={activeDocument.summary.fileName}>{activeDocument.summary.fileName}</span>}
-            description={<span className="font-mono text-code">{activeDocument.summary.portalKey} / document {activeDocument.summary.documentId}</span>}
+            description={<span className="tabular-nums">{portalName(activeDocument.summary.portalKey)} · Document {activeDocument.summary.documentId.toLocaleString()} · {formatFileSize(activeDocument.summary.fileSize)}</span>}
           />
-          <DialogBody className="grid grid-cols-[minmax(0,1fr)_360px] gap-4 overflow-hidden">
+          <DialogBody className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:overflow-hidden">
             <DocumentViewer
               documentId={activeDocument.summary.documentId}
               requestId={selectedRequestId ?? undefined}
@@ -605,7 +630,7 @@ export default function MainLayout() {
                 }));
               }}
             />
-            <aside className="h-full min-h-0 space-y-4 overflow-y-auto rounded-xl border border-line bg-panel p-3" aria-label="Document evidence details">
+            <aside className="min-h-0 space-y-4 rounded-xl border border-line bg-canvas p-4 xl:h-full xl:overflow-y-auto" aria-label="Document evidence details">
               {activeDocument.summary.originalSourceUri && (
                 <a className="focus-ring inline-flex items-center gap-1 rounded text-body text-accent underline-offset-2 hover:underline" href={activeDocument.summary.originalSourceUri} target="_blank" rel="noreferrer">
                   View the publisher’s original file
@@ -700,6 +725,10 @@ function EmptyResults({ error, sourceCount }: { error: string | null; sourceCoun
               The query didn’t complete, so there is no result set to interpret. Try again before drawing a conclusion from these filters.
             </p>
             <Button variant="primary" className="mt-4" onClick={requestEvidenceRefresh}>Try again</Button>
+            <details className="mt-4 text-left">
+              <summary className="text-caption text-muted">Technical details</summary>
+              <p className="mt-1 break-words font-mono text-code text-fg-secondary">{error}</p>
+            </details>
           </>
         ) : (
           <>
@@ -717,6 +746,28 @@ function EmptyResults({ error, sourceCount }: { error: string | null; sourceCoun
             )}
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** Rows shaped like the results list, at its row height, while the first answer is pending. */
+function ResultSkeleton() {
+  return (
+    <div role="status" aria-busy="true">
+      <span className="sr-only">Searching</span>
+      <div aria-hidden="true">
+        {Array.from({ length: 4 }, (_, index) => (
+          <div key={index} className="grid grid-cols-[minmax(0,1fr)_104px] gap-4 border-b border-line px-4 py-3" style={{ height: RESULT_ROW_HEIGHT }}>
+            <div className="min-w-0 space-y-2.5">
+              <div className="flex gap-1.5"><div className="skeleton h-5 w-14 rounded-full" /><div className="skeleton h-4 w-40 rounded" /></div>
+              <div className="skeleton h-4 w-3/4 rounded" />
+              <div className="skeleton h-3 w-full rounded" />
+              <div className="skeleton h-3 w-2/3 rounded" />
+            </div>
+            <div className="flex flex-col items-end gap-2"><div className="skeleton h-3 w-16 rounded" /><div className="skeleton h-3 w-20 rounded" /></div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -743,11 +794,11 @@ function PolicyBadge({ flag }: { flag: string }) {
   return <Badge tone={known?.tone ?? 'neutral'} dashed={known?.tone !== 'danger'}>{label}</Badge>;
 }
 
-function CaseField({ label, value, code = false, absent = false }: { label: string; value: string; code?: boolean; absent?: boolean }) {
+function CaseField({ label, value, absent = false }: { label: string; value: string; absent?: boolean }) {
   return (
     <div className="min-w-0">
       <dt className="text-caption text-muted">{label}</dt>
-      <dd className={cn('mt-0.5 truncate', code ? 'font-mono text-code text-fg' : 'text-body tabular-nums text-fg', absent && 'text-muted')}>{value}</dd>
+      <dd className={cn('mt-0.5 truncate text-body tabular-nums', absent ? 'text-muted' : 'text-fg')}>{value}</dd>
     </div>
   );
 }
