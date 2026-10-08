@@ -10,7 +10,11 @@ import { ANNOTATION_LIMITS } from '../../types';
 import UnredactorPanel from './UnredactorPanel';
 import ReconstructionPanel from './ReconstructionPanel';
 import { formatInstant } from '../objects/labels';
+import { buttonClass } from '../ui/Button';
+import { cn } from '../../utils/cn';
+import { SearchField } from '../ui/Field';
 import RedactionInferencePanel from './RedactionInferencePanel';
+import { displayError } from '../../utils/errorMessage';
 
 // pdf.js loads only when a reader opens the page view.
 const PdfPageView = lazy(() => import('./PdfPageView'));
@@ -29,11 +33,15 @@ interface DocumentViewerProps {
   onNextChunk?: () => void;
   onPreviousChunk?: () => void;
   onSaveEvidence?: (selection: { excerpt: string; characterOffset: number }) => void;
+  /** False when a surrounding dialog header already names the file. */
+  titled?: boolean;
 }
 
 const TEXT_PAGE_CHARACTERS = 12_000;
+const TOOL_CLASS = buttonClass({ size: 'sm', className: 'focus-ring' });
+const GHOST_CLASS = buttonClass({ variant: 'ghost', size: 'sm', className: 'focus-ring' });
 
-export default function DocumentViewer({ documentId, requestId, portalKey, fileName, originalAvailable = true, textContent, fileSizeFormatted, textPositionLabel, characterOffset = 0, knownMaskedFindingCount = 0, onNextChunk, onPreviousChunk, onSaveEvidence }: DocumentViewerProps) {
+export default function DocumentViewer({ documentId, requestId, portalKey, fileName, originalAvailable = true, textContent, fileSizeFormatted, textPositionLabel, characterOffset = 0, knownMaskedFindingCount = 0, onNextChunk, onPreviousChunk, onSaveEvidence, titled = true }: DocumentViewerProps) {
   const { verifyAssetProvenance, activeManifest, isValidating, error: provenanceError } = useC2PA();
   const [recoveryProfile, setRecoveryProfile] = useState<RecoveredVersionProfile | null>(null);
   const [isRecovering, setIsRecovering] = useState(false);
@@ -144,7 +152,7 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
       setPackState('idle');
     } catch (reason) {
       if (!packGate.isCurrent(request)) return;
-      setPackError(String(reason));
+      setPackError(displayError(reason).message);
       setPackState('failed');
     }
   };
@@ -162,7 +170,7 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
       setClaimChecksState('idle');
     } catch (reason) {
       if (!claimGate.isCurrent(request)) return;
-      setClaimChecksError(String(reason));
+      setClaimChecksError(displayError(reason).message);
       setClaimChecksState('failed');
     }
   };
@@ -320,7 +328,7 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
     } catch (reason) {
       if (!historyGate.isCurrent(request)) return;
       setVerificationHistory(null);
-      setHistoryError(String(reason));
+      setHistoryError(displayError(reason).message);
     } finally {
       if (historyGate.isCurrent(request)) setIsLoadingHistory(false);
     }
@@ -345,7 +353,7 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
     } catch (reason) {
       if (!recoveryGate.isCurrent(request)) return;
       setRecoveryProfile(null);
-      setRecoveryError(String(reason));
+      setRecoveryError(displayError(reason).message);
     } finally {
       if (recoveryGate.isCurrent(request)) setIsRecovering(false);
     }
@@ -365,70 +373,82 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
     } catch (reason) {
       if (!residualAuditGate.isCurrent(request)) return;
       setResidualAudit(null);
-      setResidualAuditError(String(reason));
+      setResidualAuditError(displayError(reason).message);
     } finally {
       if (residualAuditGate.isCurrent(request)) setIsAuditingResiduals(false);
     }
   };
 
   return (
-    <section className="flex h-full flex-col overflow-hidden rounded-xl border border-line bg-canvas shadow-md">
-      <div className="flex items-center justify-between gap-4 border-b border-line bg-surface/40 px-4 py-3">
+    <section className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-canvas">
+      <div className={cn('flex justify-between gap-4 border-b border-line px-4 py-3', titled ? 'items-start' : 'items-center')}>
         <div className="min-w-0">
-          <div className="truncate text-label leading-4 font-semibold text-fg">{fileName}</div>
-          <div className="mt-1 font-mono text-caption text-muted">{portalKey} / document {documentId} · {fileSizeFormatted}</div>
+          {titled && <h2 className="truncate text-heading text-fg" title={fileName}>{fileName}</h2>}
+          <div className={cn('flex flex-wrap items-center gap-x-1.5 text-caption text-muted', titled && 'mt-1')}>
+            <span className="font-mono text-code">{portalKey} / {documentId}</span>
+            <span aria-hidden="true">·</span>
+            <span className="whitespace-nowrap tabular-nums">{fileSizeFormatted}</span>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={() => void inspectResidualEvidence()} disabled={!originalAvailable || isAuditingResiduals} className="rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-caption font-medium text-accent transition hover:border-accent/30 disabled:cursor-wait disabled:opacity-60">
+        <div className="shrink-0">
+          {originalAvailable ? <ProvenanceShield isValidating={isValidating} result={manifestForActiveDocument} error={provenanceError} /> : <span className="text-caption text-warning">Original referenced · file verification unavailable</span>}
+        </div>
+      </div>
+      <div role="toolbar" aria-label="Inspect this document" className="flex flex-wrap items-center gap-1.5 border-b border-line px-4 py-2">
+        <span className="mr-1 text-overline uppercase text-muted">Inspect</span>
+          <button type="button" onClick={() => void inspectResidualEvidence()} disabled={!originalAvailable || isAuditingResiduals} className={TOOL_CLASS}>
             {isAuditingResiduals ? 'Auditing residuals…' : residualAudit ? 'Reaudit residuals' : 'Audit residual evidence'}
           </button>
-          <button type="button" onClick={() => setShowRedactionAudit((visible) => !visible)} aria-expanded={showRedactionAudit} className="rounded-full border border-highlight/30 bg-highlight/10 px-2.5 py-1 text-caption font-medium text-highlight transition hover:border-highlight/30">
+          <button type="button" onClick={() => setShowRedactionAudit((visible) => !visible)} aria-expanded={showRedactionAudit} className={TOOL_CLASS}>
             {showRedactionAudit ? 'Hide redaction audit' : 'Audit redactions'}
           </button>
           {fileName.toLocaleLowerCase().endsWith('.pdf') && (
-            <>
-
-              <button type="button" onClick={() => void inspectRevisionHistory()} disabled={!originalAvailable || isRecovering} className="rounded-full border border-highlight/30 bg-highlight/10 px-2.5 py-1 text-caption font-medium text-highlight transition hover:border-highlight/30 disabled:cursor-wait disabled:opacity-60">
-                {isRecovering ? 'Inspecting revisions…' : recoveryProfile ? 'Reinspect revisions' : 'Inspect revision history'}
-              </button>
-            </>
+            <button type="button" onClick={() => void inspectRevisionHistory()} disabled={!originalAvailable || isRecovering} className={TOOL_CLASS}>
+              {isRecovering ? 'Inspecting revisions…' : recoveryProfile ? 'Reinspect revisions' : 'Inspect revision history'}
+            </button>
           )}
-          <button type="button" onClick={() => void checkFigures()} disabled={claimChecksState === 'pending'} className="rounded-full border border-control px-2.5 py-1 text-caption font-medium text-muted transition hover:border-highlight/30 hover:text-highlight disabled:cursor-wait disabled:opacity-60">
+          <button type="button" onClick={() => void checkFigures()} disabled={claimChecksState === 'pending'} className={TOOL_CLASS}>
             {claimChecksState === 'pending' ? 'Checking figures…' : claimChecks ? 'Recheck figures' : 'Check figures'}
           </button>
           {claimChecks && claimChecks.checks.some((check) => check.result.outcome !== 'unreconciled') && (
-            <button type="button" onClick={() => void downloadQueryPack()} disabled={packState === 'pending'} className="rounded-full border border-control px-2.5 py-1 text-caption font-medium text-muted transition hover:border-highlight/30 hover:text-highlight disabled:cursor-wait disabled:opacity-60">
+            <button type="button" onClick={() => void downloadQueryPack()} disabled={packState === 'pending'} className={TOOL_CLASS}>
               {packState === 'pending' ? 'Building query pack…' : 'Download query pack'}
             </button>
           )}
           {packError && <span role="alert" className="text-caption text-danger">Query pack failed: {packError}</span>}
-          <button type="button" onClick={() => void toggleVerificationHistory()} aria-expanded={showVerificationHistory} className="rounded-full border border-control px-2.5 py-1 text-caption font-medium text-muted transition hover:border-highlight/30 hover:text-highlight">
+          <button type="button" onClick={() => void toggleVerificationHistory()} aria-expanded={showVerificationHistory} className={TOOL_CLASS}>
             {showVerificationHistory ? 'Hide verification log' : 'Verification log'}
           </button>
-          {originalAvailable ? <ProvenanceShield isValidating={isValidating} result={manifestForActiveDocument} error={provenanceError} /> : <span className="text-caption text-warning">Original referenced · file verification unavailable</span>}
-        </div>
       </div>
       <div className="flex items-center justify-between border-b border-line px-4 py-2 text-caption text-muted">
         <span>Local extracted-text view</span>
         <div className="flex items-center gap-3">
           {textPositionLabel && <span>{textPositionLabel}</span>}
           <span>{knownMaskedFindingCount > 0 ? `${knownMaskedFindingCount} sensitive value${knownMaskedFindingCount === 1 ? '' : 's'} masked` : 'No structured PII detected'}</span>
-          {onPreviousChunk && <button type="button" onClick={onPreviousChunk} className="rounded border border-control px-2 py-1 text-muted">Previous chunk</button>}
-          {onNextChunk && <button type="button" onClick={onNextChunk} className="rounded border border-control px-2 py-1 text-muted transition hover:border-highlight/30 hover:text-highlight">Next chunk</button>}
+          {onPreviousChunk && <button type="button" onClick={onPreviousChunk} className={GHOST_CLASS}>Previous chunk</button>}
+          {onNextChunk && <button type="button" onClick={onNextChunk} className={GHOST_CLASS}>Next chunk</button>}
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2 text-caption">
-        <label className="relative min-w-[220px] flex-1">
-          <span className="sr-only">Search within this extracted-text chunk</span>
-          <input value={documentSearch} onChange={(event) => setDocumentSearch(event.target.value)} placeholder="Find in extracted text" className="focus-ring h-8 w-full rounded-lg border border-control bg-canvas px-3 text-label text-fg placeholder:text-muted" />
-        </label>
-        <span className="min-w-16 text-center font-mono text-muted">{searchMatches.length === 0 ? '0 matches' : `${activeMatch + 1}/${searchMatches.length}`}</span>
-        <button type="button" onClick={() => moveToMatch(-1)} disabled={searchMatches.length === 0} className="rounded border border-control px-2 py-1 text-muted disabled:opacity-40">Previous</button>
-        <button type="button" onClick={() => moveToMatch(1)} disabled={searchMatches.length === 0} className="rounded border border-control px-2 py-1 text-muted disabled:opacity-40">Next</button>
-        <button type="button" onClick={() => void shareEvidenceLocation()} className="rounded border border-highlight/30 bg-highlight/10 px-2 py-1 text-highlight">Copy evidence link</button>
-        <button type="button" onClick={() => setShowAnnotations((visible) => !visible)} aria-expanded={showAnnotations} className="rounded border border-control px-2 py-1 text-fg-secondary">{showAnnotations ? 'Hide annotations' : 'Annotate'}</button>
-        {canViewPages && <button type="button" onClick={() => { setShowPageView((visible) => !visible); setShowAnnotations(true); }} aria-pressed={showPageView} className="rounded border border-control px-2 py-1 text-fg-secondary">Page view</button>}
-        {onSaveEvidence && <button type="button" onClick={saveEvidenceToBriefing} className="rounded border border-warning/30 bg-warning/10 px-2 py-1 text-warning">Save excerpt to briefing</button>}
+        <SearchField
+          size="sm"
+          aria-label="Search within this extracted-text chunk"
+          value={documentSearch}
+          onChange={(event) => setDocumentSearch(event.target.value)}
+          placeholder="Find in extracted text"
+          wrapperClassName="min-w-[12rem] flex-1"
+          trailing={documentSearch.trim() ? <span className="whitespace-nowrap text-caption tabular-nums text-muted">{searchMatches.length === 0 ? 'No matches' : `${activeMatch + 1} of ${searchMatches.length}`}</span> : null}
+        />
+        {documentSearch.trim() && (
+          <>
+            <button type="button" onClick={() => moveToMatch(-1)} disabled={searchMatches.length === 0} className={GHOST_CLASS}>Previous</button>
+            <button type="button" onClick={() => moveToMatch(1)} disabled={searchMatches.length === 0} className={GHOST_CLASS}>Next</button>
+          </>
+        )}
+        <button type="button" onClick={() => setShowAnnotations((visible) => !visible)} aria-expanded={showAnnotations} className={TOOL_CLASS}>{showAnnotations ? 'Hide annotations' : 'Annotate'}</button>
+        {canViewPages && <button type="button" onClick={() => { setShowPageView((visible) => !visible); setShowAnnotations(true); }} aria-pressed={showPageView} className={TOOL_CLASS}>Page view</button>}
+        <button type="button" onClick={() => void shareEvidenceLocation()} className={TOOL_CLASS}>Copy evidence link</button>
+        {onSaveEvidence && <button type="button" onClick={saveEvidenceToBriefing} className={buttonClass({ variant: 'primary', size: 'sm', className: 'focus-ring' })}>Save excerpt to briefing</button>}
         {shareStatus && <span role="status" className="text-success">{shareStatus}</span>}
         {briefingStatus && <span role="status" className="text-success">{briefingStatus}</span>}
       </div>
@@ -651,7 +671,7 @@ function HighlightedTextPage({ text, query, page, activeMatchIndex }: { text: st
   for (const localIndex of matches) {
     if (localIndex > copied) segments.push(visible.slice(copied, localIndex));
     const isActive = start + localIndex === activeMatchIndex;
-    segments.push(<mark key={localIndex} className={isActive ? 'rounded bg-warning px-0.5 text-muted ring-2 ring-warning/50' : 'rounded bg-highlight/40 px-0.5 text-fg'}>{visible.slice(localIndex, localIndex + needle.length)}</mark>);
+    segments.push(<mark key={localIndex} className={isActive ? 'rounded-sm bg-highlight px-0.5 text-on-accent ring-2 ring-highlight/40' : 'rounded-sm bg-highlight/20 px-0.5 text-fg'}>{visible.slice(localIndex, localIndex + needle.length)}</mark>);
     copied = localIndex + needle.length;
   }
   segments.push(visible.slice(copied));
@@ -831,7 +851,7 @@ function VerificationHistoryPanel({ records, isLoading, error }: { records: Prov
           return (
             <li key={record.verificationId} className="rounded-lg border border-line bg-canvas/70 px-3 py-2">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <time dateTime={record.verifiedAt} title={record.verifiedAt} className="font-mono text-caption text-muted">{formatInstant(record.verifiedAt)}</time>
+                <time dateTime={record.verifiedAt} title={record.verifiedAt} className="text-caption tabular-nums text-muted">{formatInstant(record.verifiedAt)}</time>
                 <span title={badge.detail} className={`rounded-full border px-2 py-0.5 text-caption ${badge.className}`}>{badge.label}</span>
                 {record.signatureVerification === 'INVALID' && <span className="rounded-full border border-danger/30 bg-danger/10 px-2 py-0.5 text-caption font-semibold text-danger">Signature invalid</span>}
                 {record.signatureVerification === 'VALID' && <span className="rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-caption font-medium text-success">Signature valid</span>}

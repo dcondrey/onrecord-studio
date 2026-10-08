@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { Select } from '../ui/Field';
 import { useAppStore } from '../../store/useAppStore';
 
 export default function AgencySelector() {
@@ -23,22 +24,20 @@ export default function AgencySelector() {
   const agencies = activePortalKey ? agencyIndex.filter((agency) => agency.portalKey === activePortalKey) : agencyIndex;
 
   return (
-    <label className="flex min-w-0 items-center gap-2">
-      <span className="sr-only">Department</span>
-      <select
+    <Select
+        aria-label="Department"
         value={selectedAgencyId !== null && activePortalKey ? JSON.stringify([activePortalKey, selectedAgencyId]) : ''}
         onChange={(event) => {
           const agency = agencyIndex.find((candidate) => candidate.value === event.target.value);
           if (agency && activePortalKey !== agency.portalKey) setActivePortal(agency.portalKey);
           setSearchFilters(searchTerm, agency?.agencyId ?? null, selectedStatus, selectedPolicyDeviation);
         }}
-        className="focus-ring h-10 max-w-52 rounded-xl border border-control bg-canvas/70 px-3 text-label text-fg-secondary transition focus:border-highlight/60"
+        className="focus-ring w-40 truncate xl:w-48"
       >
         <option value="">All departments</option>
         {agencies.map((agency) => (
           <option key={agency.value} value={agency.value}>{agency.name}{activePortalKey ? '' : ` · ${agency.portalKey}`}</option>
         ))}
-      </select>
-    </label>
+      </Select>
   );
 }

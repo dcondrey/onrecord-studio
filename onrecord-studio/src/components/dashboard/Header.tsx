@@ -12,9 +12,7 @@ import NavigationControls from './NavigationControls';
 
 export default function Header() {
   const workspaceView = useAppStore((state) => state.workspaceView);
-  const audioAlertsEnabled = useAppStore((state) => state.audioAlertsEnabled);
   const setSidebarOpen = useAppStore((state) => state.setSidebarOpen);
-  const setAudioAlertsEnabled = useAppStore((state) => state.setAudioAlertsEnabled);
 
   const connector = useSourceConnector();
   const { isConnectorOpen, setConnectorOpen, cancelSourceOperation, error, activePortal, syncingPortalKeys } = connector;
@@ -41,9 +39,10 @@ export default function Header() {
 
   return (
     <>
-      <header className="header-surface relative z-30 shrink-0 border-b backdrop-blur-xl">
+      <header className="header-surface relative z-30 shrink-0 border-b">
         <TrialBanner />
-        <div className="flex min-h-[68px] items-center gap-3 px-4 sm:px-5 lg:px-6">
+        {/* 64px, the sidebar brand row's height, so the two bottom borders meet on one line. */}
+        <div className="flex h-16 items-center gap-3 px-4 sm:px-5 lg:px-6">
           <button
             type="button"
             aria-label="Open navigation"
@@ -56,20 +55,19 @@ export default function Header() {
           <NavigationControls />
           <HeaderIdentity workspaceView={workspaceView} activePortal={activePortal} />
 
-          <div className="hidden min-w-[300px] max-w-[720px] flex-1 lg:flex">
+          {/* Inline only where the row has room for it; narrower windows open it below the row. */}
+          <div className="hidden min-w-0 max-w-[720px] flex-1 2xl:flex">
             <SourceConnectorForm connector={connector} inputId="portal-url-desktop" />
           </div>
 
           <HeaderControls
-            audioAlertsEnabled={audioAlertsEnabled}
-            setAudioAlertsEnabled={setAudioAlertsEnabled}
             syncingPortalKeys={syncingPortalKeys}
             isConnectorOpen={isConnectorOpen}
             onToggleConnector={toggleConnector}
           />
         </div>
         {isConnectorOpen && (
-          <div className="border-t border-line px-4 py-3 lg:hidden">
+          <div className="border-t border-line px-4 py-3 2xl:hidden">
             <SourceConnectorForm connector={connector} inputId="portal-url-mobile" />
           </div>
         )}

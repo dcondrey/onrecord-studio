@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
-import ModalDialog from '../licensing/ModalDialog';
+import Button from '../ui/Button';
+import Dialog, { DialogBody, DialogFooter, DialogHeader } from '../ui/Dialog';
+import { Input } from '../ui/Field';
+import Skeleton from '../ui/Skeleton';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { SeatEntry, SeatStatus } from '../../types';
@@ -47,19 +50,20 @@ export default function SeatsPanel({ onClose }: { onClose: () => void }) {
   const remaining = status ? Math.max(0, status.quantity - 1 - status.usedSeats) : 0;
 
   return (
-    <ModalDialog label="Seats" onClose={onClose}>
-      <h2 className="text-lg font-semibold">Seats</h2>
+    <Dialog onClose={onClose}>
+      <DialogHeader title="Seats" />
+      <DialogBody>
       {status && !status.subscriptionActive ? (
-        <p className="mt-3 text-sm text-fg-secondary">
+        <p className="text-body text-fg-secondary">
           Seats are managed by the purchaser of an active subscription. If a colleague bought the seats, ask them to assign yours; if your subscription lapsed, renew it under Manage subscription.
         </p>
       ) : null}
       {status?.subscriptionActive ? (
         <>
-          <p className="mt-3 text-sm text-fg-secondary">
+          <p className="text-body tabular-nums text-fg-secondary">
             {status.quantity} {status.quantity === 1 ? 'seat' : 'seats'} purchased: yours, plus {status.usedSeats} assigned and {remaining} free.
           </p>
-          <p className="mt-1 text-label leading-5 text-muted">
+          <p className="mt-1 text-caption text-muted">
             No email is sent. Tell your colleague to sign in to OnRecord Studio with the address you enter; the seat is theirs at their first license check, once their sign-in provider has confirmed the address. Revoking locks their workspace at their next check. Their local evidence is never deleted.
           </p>
           <form
@@ -70,7 +74,7 @@ export default function SeatsPanel({ onClose }: { onClose: () => void }) {
             }}
           >
             <label className="sr-only" htmlFor="seat-email">Colleague's email address</label>
-            <input
+            <Input
               id="seat-email"
               type="email"
               required
@@ -78,41 +82,32 @@ export default function SeatsPanel({ onClose }: { onClose: () => void }) {
               disabled={busy || remaining === 0}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="name@example.org"
-              className="focus-ring h-9 min-w-0 flex-1 rounded-lg border border-control bg-canvas/70 px-3 text-sm text-fg placeholder:text-muted"
+              className="min-w-0 flex-1"
             />
-            <button
-              type="submit"
-              disabled={busy || remaining === 0 || email.trim() === ''}
-              className="focus-ring rounded-lg border border-control px-3 py-1.5 text-label leading-4 font-semibold hover:bg-raised disabled:opacity-50"
-            >
+            <Button type="submit" variant="primary" disabled={busy || remaining === 0 || email.trim() === ''}>
               Assign seat
-            </button>
+            </Button>
           </form>
           {remaining === 0 ? (
-            <p className="mt-2 text-label leading-4 text-muted">Every purchased seat is assigned. Revoke one, or add seats under Manage subscription.</p>
+            <p className="mt-2 text-caption text-muted">Every purchased seat is assigned. Revoke one, or add seats under Manage subscription.</p>
           ) : null}
-          <ul className="mt-4 divide-y divide-line text-sm">
+          <ul className="mt-4 divide-y divide-line text-body">
             {active.length === 0 ? <li className="py-2 text-muted">No seats assigned yet.</li> : null}
             {active.map((seat) => (
               <li key={seat.email} className="flex items-center justify-between gap-3 py-2">
                 <div className="min-w-0">
                   <div className="truncate text-fg">{seat.email}</div>
-                  <div className="text-label leading-4 text-muted">{seatState(seat)}</div>
+                  <div className="text-caption text-muted">{seatState(seat)}</div>
                 </div>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void run('revoke_seat', { email: seat.email })}
-                  className="focus-ring shrink-0 rounded-lg border border-danger px-2.5 py-1 text-label leading-4 font-semibold text-danger hover:bg-danger/10 disabled:opacity-50"
-                >
+                <Button variant="danger" size="sm" disabled={busy} onClick={() => void run('revoke_seat', { email: seat.email })}>
                   Revoke
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
           {revoked.length > 0 ? (
-            <details className="mt-3 text-label leading-4 text-muted">
-              <summary className="">{revoked.length} revoked</summary>
+            <details className="mt-3 text-caption text-muted">
+              <summary>{revoked.length} revoked</summary>
               <ul className="mt-1 space-y-1">
                 {revoked.map((seat) => <li key={seat.email}>{seat.email}: {seatState(seat)}. Assign it again to restore access.</li>)}
               </ul>
@@ -120,11 +115,12 @@ export default function SeatsPanel({ onClose }: { onClose: () => void }) {
           ) : null}
         </>
       ) : null}
-      {!status && !error ? <p className="mt-3 text-sm text-muted">Loading seats...</p> : null}
-      {error ? <p role="alert" className="mt-3 text-sm text-warning">{error}</p> : null}
-      <div className="mt-4 flex justify-end">
-        <button type="button" onClick={onClose} className="focus-ring rounded-lg border border-control px-3 py-1.5 text-label leading-4 font-semibold hover:bg-raised">Close</button>
-      </div>
-    </ModalDialog>
+      {!status && !error ? <Skeleton variant="lines" lines={3} label="Loading seats" /> : null}
+      {error ? <p role="alert" className="mt-3 text-body text-danger">{error}</p> : null}
+      </DialogBody>
+      <DialogFooter>
+        <Button onClick={onClose}>Done</Button>
+      </DialogFooter>
+    </Dialog>
   );
 }

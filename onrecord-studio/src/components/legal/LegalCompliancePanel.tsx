@@ -11,6 +11,7 @@ import type {
   StatutoryExtensionRecord,
 } from '../../types';
 import { cn } from '../../utils/cn';
+import { enumLabel, formatInstant } from '../objects/labels';
 
 /// Every reason the CPRA evaluator recognizes. A reason outside this list is not a narrower
 /// extension, it is one the statute does not grant, so the select cannot offer a free-text option.
@@ -276,20 +277,20 @@ export default function LegalCompliancePanel({
 
   return (
     <section className="mt-3 overflow-hidden rounded-lg border border-line bg-canvas/70">
-      <div className="flex items-start justify-between gap-3 border-b border-line px-3 py-2.5">
+      <div className="flex flex-col gap-2 border-b border-line px-3 py-2.5">
         <div>
-          <div className="text-caption font-bold uppercase tracking-[0.16em] text-muted">
+          <h3 className="text-overline uppercase text-muted">
             Legal compliance
-          </div>
+          </h3>
           <p className="mt-1 text-caption leading-relaxed text-muted">
             Deterministic deadline checks and versioned policy evidence rules
           </p>
         </div>
-        <div className="flex shrink-0 gap-1.5">
+        <div className="flex flex-wrap gap-1.5">
           <button
             type="button"
             onClick={onOpenLibrary}
-            className="rounded-md border border-control px-2 py-1 text-caption font-semibold text-muted transition hover:border-control hover:text-fg"
+            className="focus-ring inline-flex h-7 items-center whitespace-nowrap rounded-md border border-line-strong bg-canvas/70 px-3 text-control text-fg transition-colors hover:bg-raised disabled:cursor-wait disabled:opacity-50"
           >
             Authority library
           </button>
@@ -297,9 +298,9 @@ export default function LegalCompliancePanel({
             type="button"
             onClick={() => void evaluate()}
             disabled={isEvaluating}
-            className="rounded-md border border-highlight/30 bg-highlight/10 px-2 py-1 text-caption font-semibold text-highlight transition hover:bg-highlight/20 disabled:cursor-wait disabled:opacity-60"
+            className="focus-ring inline-flex h-7 items-center whitespace-nowrap rounded-md border border-line-strong bg-canvas/70 px-3 text-control text-fg transition-colors hover:bg-raised disabled:cursor-wait disabled:opacity-50"
           >
-            {isEvaluating ? 'Evaluating…' : 'Evaluate case'}
+            {isEvaluating ? 'Evaluating…' : 'Evaluate request'}
           </button>
         </div>
       </div>
@@ -319,8 +320,8 @@ export default function LegalCompliancePanel({
               </p>
             ) : extension ? (
               <p className="mt-1 text-caption leading-relaxed text-muted">
-                {humanize(extension.reason)}, noticed {extension.noticeAt}, determination expected{' '}
-                {extension.expectedDeterminationAt}. Source: {extension.noticeSource}
+                {humanize(extension.reason)}, noticed {formatInstant(extension.noticeAt)}, determination expected{' '}
+                {extension.expectedDeterminationAt ? formatInstant(extension.expectedDeterminationAt) : 'not stated'}. Source: {extension.noticeSource}
               </p>
             ) : (
               <p className="mt-1 text-caption leading-relaxed text-muted">
@@ -336,7 +337,7 @@ export default function LegalCompliancePanel({
                 setExtensionError(null);
                 setIsExtensionFormOpen((open) => !open);
               }}
-              className="shrink-0 rounded-md border border-control px-2 py-1 text-caption font-semibold text-muted transition hover:border-control hover:text-fg"
+              className="focus-ring inline-flex h-7 items-center whitespace-nowrap rounded-md border border-line-strong bg-canvas/70 px-3 text-control text-fg transition-colors hover:bg-raised disabled:cursor-wait disabled:opacity-50"
             >
               {isExtensionFormOpen ? 'Cancel' : extension ? 'Replace notice' : 'Record notice'}
             </button>
@@ -360,7 +361,7 @@ export default function LegalCompliancePanel({
                   onChange={(event) =>
                     setExtensionDraft((draft) => ({ ...draft, noticeAt: event.target.value }))
                   }
-                  className="mt-1.5 w-full rounded border border-control bg-canvas px-2 py-1.5 text-caption normal-case tracking-normal text-fg-secondary outline-none focus:border-highlight/30"
+                  className="mt-1.5 w-full rounded-lg border border-control bg-canvas px-3 py-1.5 text-body normal-case tracking-normal text-fg focus-ring"
                 />
               </label>
               <label className="block text-caption font-semibold uppercase tracking-wider text-muted">
@@ -375,7 +376,7 @@ export default function LegalCompliancePanel({
                       expectedDeterminationAt: event.target.value,
                     }))
                   }
-                  className="mt-1.5 w-full rounded border border-control bg-canvas px-2 py-1.5 text-caption normal-case tracking-normal text-fg-secondary outline-none focus:border-highlight/30"
+                  className="mt-1.5 w-full rounded-lg border border-control bg-canvas px-3 py-1.5 text-body normal-case tracking-normal text-fg focus-ring"
                 />
               </label>
               <label className="block text-caption font-semibold uppercase tracking-wider text-muted">
@@ -388,7 +389,7 @@ export default function LegalCompliancePanel({
                       reason: event.target.value as StatutoryExtensionReason,
                     }))
                   }
-                  className="mt-1.5 w-full rounded border border-control bg-canvas px-2 py-1.5 text-caption normal-case tracking-normal text-fg-secondary outline-none focus:border-highlight/30"
+                  className="mt-1.5 w-full rounded-lg border border-control bg-canvas px-3 py-1.5 text-body normal-case tracking-normal text-fg focus-ring"
                 >
                   {EXTENSION_REASONS.map((reason) => (
                     <option key={reason} value={reason}>
@@ -407,7 +408,7 @@ export default function LegalCompliancePanel({
                   }
                   maxLength={4096}
                   placeholder="Letter, email, or portal message"
-                  className="mt-1.5 w-full rounded border border-control bg-canvas px-2 py-1.5 text-caption normal-case tracking-normal text-fg-secondary outline-none focus:border-highlight/30"
+                  className="mt-1.5 w-full rounded-lg border border-control bg-canvas px-3 py-1.5 text-body normal-case tracking-normal text-fg focus-ring"
                 />
               </label>
             </div>
@@ -420,7 +421,7 @@ export default function LegalCompliancePanel({
                 type="button"
                 onClick={() => setIsExtensionFormOpen(false)}
                 disabled={isSavingExtension}
-                className="rounded px-2 py-1 text-caption font-semibold text-muted hover:text-fg-secondary"
+                className="focus-ring rounded px-2 py-1 text-caption font-semibold text-muted hover:text-fg-secondary"
               >
                 Cancel
               </button>
@@ -428,7 +429,7 @@ export default function LegalCompliancePanel({
                 type="button"
                 onClick={() => void submitExtension()}
                 disabled={isSavingExtension}
-                className="rounded border border-highlight/30 bg-highlight/10 px-2 py-1 text-caption font-semibold text-highlight disabled:cursor-wait disabled:opacity-60"
+                className="focus-ring inline-flex h-7 items-center whitespace-nowrap rounded-md border border-line-strong bg-canvas/70 px-3 text-control text-fg transition-colors hover:bg-raised disabled:cursor-wait disabled:opacity-50"
               >
                 {isSavingExtension ? 'Saving…' : 'Save and re-evaluate'}
               </button>
@@ -482,7 +483,7 @@ export default function LegalCompliancePanel({
                       : 'border-warning/30 bg-warning/10 text-warning',
                   )}
                 >
-                  {finding.reviewStatus}
+                  {enumLabel(finding.reviewStatus)}
                 </span>
               </div>
               <div className="mt-1 text-caption text-muted">{finding.statuteCitation}</div>
@@ -490,10 +491,10 @@ export default function LegalCompliancePanel({
                 {finding.evidenceSummary}
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-caption text-muted">
-                <span>{(finding.confidenceBasisPoints / 100).toFixed(2)}% rule confidence</span>
-                {finding.varianceDays !== null && <span>{finding.varianceDays} days overdue</span>}
+                <span>{Math.round(finding.confidenceBasisPoints / 100)}% rule confidence</span>
+                {finding.varianceDays !== null && <span>{finding.varianceDays} {finding.varianceDays === 1 ? 'day' : 'days'} overdue</span>}
                 {finding.supportingDocumentIds.length > 0 && (
-                  <span>{finding.supportingDocumentIds.length} source documents</span>
+                  <span>{finding.supportingDocumentIds.length} source {finding.supportingDocumentIds.length === 1 ? 'document' : 'documents'}</span>
                 )}
               </div>
               {finding.missingEvidencePhrases.length > 0 && (
@@ -508,24 +509,24 @@ export default function LegalCompliancePanel({
                   ))}
                 </div>
               )}
-              <div className="mt-3 flex items-center gap-1.5">
-                <button type="button" onClick={() => setSelectedFindingId(finding.violationId)} className="rounded border border-highlight/30 bg-highlight/5 px-2 py-1 text-caption font-semibold text-highlight transition hover:bg-highlight/10">
+              <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                <button type="button" onClick={() => setSelectedFindingId(finding.violationId)} className="focus-ring inline-flex h-7 items-center whitespace-nowrap rounded-md border border-line-strong bg-canvas/70 px-3 text-control text-fg transition-colors hover:bg-raised disabled:cursor-wait disabled:opacity-50">
                   Compare authority & evidence
                 </button>
-                <button type="button" onClick={() => filterByFinding(finding)} className="rounded border border-control px-2 py-1 text-caption font-semibold text-muted transition hover:border-control hover:text-fg-secondary">
+                <button type="button" onClick={() => filterByFinding(finding)} className="focus-ring inline-flex h-7 items-center whitespace-nowrap rounded-md border border-line-strong bg-canvas/70 px-3 text-control text-fg transition-colors hover:bg-raised disabled:cursor-wait disabled:opacity-50">
                   Filter workbench
                 </button>
                 {finding.reviewStatus === 'OPEN' ? (
                   <>
-                    <button type="button" onClick={() => beginReview(finding, 'CONFIRMED')} className="rounded border border-success/30 bg-success/5 px-2 py-1 text-caption font-semibold text-success transition hover:bg-success/10">
+                    <button type="button" onClick={() => beginReview(finding, 'CONFIRMED')} className="focus-ring inline-flex h-7 items-center whitespace-nowrap rounded-md border border-line-strong bg-canvas/70 px-3 text-control text-fg transition-colors hover:bg-raised disabled:cursor-wait disabled:opacity-50">
                       Confirm finding
                     </button>
-                    <button type="button" onClick={() => beginReview(finding, 'DISMISSED')} className="rounded border border-control px-2 py-1 text-caption font-semibold text-muted transition hover:border-danger/30 hover:text-danger">
+                    <button type="button" onClick={() => beginReview(finding, 'DISMISSED')} className="focus-ring inline-flex h-7 items-center whitespace-nowrap rounded-md px-3 text-control text-fg-secondary transition-colors hover:bg-danger/10 hover:text-danger">
                       Dismiss
                     </button>
                   </>
                 ) : (
-                  <button type="button" onClick={() => beginReview(finding, 'OPEN')} className="rounded border border-control px-2 py-1 text-caption font-semibold text-muted transition hover:border-control hover:text-fg-secondary">
+                  <button type="button" onClick={() => beginReview(finding, 'OPEN')} className="focus-ring inline-flex h-7 items-center whitespace-nowrap rounded-md border border-line-strong bg-canvas/70 px-3 text-control text-fg transition-colors hover:bg-raised disabled:cursor-wait disabled:opacity-50">
                     Reopen review
                   </button>
                 )}
@@ -534,11 +535,11 @@ export default function LegalCompliancePanel({
                 <div className="mt-2 rounded-md border border-line bg-surface/70 p-2">
                   <label className="block text-caption font-semibold uppercase tracking-wider text-muted">
                     Reviewer note
-                    <textarea value={reviewerNotes} onChange={(event) => setReviewerNotes(event.target.value)} maxLength={8192} rows={2} className="mt-1.5 w-full resize-y rounded border border-control bg-canvas px-2 py-1.5 text-caption normal-case tracking-normal text-fg-secondary outline-none focus:border-highlight/30" />
+                    <textarea value={reviewerNotes} onChange={(event) => setReviewerNotes(event.target.value)} maxLength={8192} rows={2} className="mt-1.5 w-full resize-y rounded-lg border border-control bg-canvas px-3 py-1.5 text-body normal-case tracking-normal text-fg focus-ring" />
                   </label>
                   <div className="mt-2 flex justify-end gap-1.5">
-                    <button type="button" onClick={() => setPendingReview(null)} disabled={isReviewing} className="rounded px-2 py-1 text-caption font-semibold text-muted hover:text-fg-secondary">Cancel</button>
-                    <button type="button" onClick={() => void submitReview()} disabled={isReviewing} className="rounded border border-highlight/30 bg-highlight/10 px-2 py-1 text-caption font-semibold text-highlight disabled:cursor-wait disabled:opacity-60">
+                    <button type="button" onClick={() => setPendingReview(null)} disabled={isReviewing} className="focus-ring rounded px-2 py-1 text-caption font-semibold text-muted hover:text-fg-secondary">Cancel</button>
+                    <button type="button" onClick={() => void submitReview()} disabled={isReviewing} className="focus-ring inline-flex h-7 items-center whitespace-nowrap rounded-md border border-line-strong bg-canvas/70 px-3 text-control text-fg transition-colors hover:bg-raised disabled:cursor-wait disabled:opacity-50">
                       {isReviewing ? 'Saving…' : `Save as ${humanize(pendingReview.status)}`}
                     </button>
                   </div>
@@ -584,7 +585,7 @@ export default function LegalCompliancePanel({
               <button
                 type="button"
                 onClick={() => setSelectedFindingId(null)}
-                className="text-caption text-muted hover:text-fg-secondary"
+                className="focus-ring text-caption text-muted hover:text-fg-secondary"
               >
                 Close
               </button>
@@ -630,8 +631,8 @@ export default function LegalCompliancePanel({
   );
 }
 
+/** Sentence case: "STATUTORY_DEADLINE" reads "Statutory deadline". */
 function humanize(value: string) {
-  return value.split('_').filter(Boolean).map((word) =>
-    `${word.charAt(0)}${word.slice(1).toLocaleLowerCase()}`,
-  ).join(' ');
+  const words = value.split('_').filter(Boolean).join(' ').toLocaleLowerCase();
+  return words.charAt(0).toLocaleUpperCase() + words.slice(1);
 }

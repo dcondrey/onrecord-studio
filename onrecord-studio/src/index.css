@@ -20,6 +20,9 @@
   --raised: 238 242 247;
   --line: 220 227 236;
   --line-strong: 203 213 225;
+  /* Dividers and card borders on glass. --line is 1.29:1 on white and disappears through the glass;
+     this is 1.85:1, the same step dark glass gets from line-strong (1.90:1 on panel). */
+  --glass-line: 180 192 207;
   --control: 117 133 154;
   --fg: 15 23 42;
   --fg-secondary: 51 65 85;
@@ -112,11 +115,14 @@
   --raised: 30 41 59;
   --line: 39 52 72;
   --line-strong: 61 77 100;
+  --glass-line: 61 77 100;
   --control: 100 116 139;
   --fg: 232 238 247;
   --fg-secondary: 203 213 225;
   --muted: 167 180 199;
-  --accent: 103 232 249;
+  /* Cyan-500, not a lighter step: as a fill it must sit with the canvas, not glow over it. 6.03:1 as
+     text on raised, 5.85:1 under on-accent. */
+  --accent: 6 182 212;
   --on-accent: 4 47 61;
   --lead: 196 181 253;
   --lead-mark: 167 139 250;
@@ -362,6 +368,7 @@ a[href] {
      or a full-screen scrim, and at most one blurred layer on screen (a stacked lower dialog sets
      data-stacked and goes opaque). WebKit before 18 needs the prefixed property. */
   .glass {
+    --line: var(--glass-line);
     border: 1px solid rgb(var(--line-strong) / 0.6);
     background: rgb(var(--panel) / var(--glass-alpha));
     box-shadow: var(--shadow-popover);
@@ -666,6 +673,7 @@ a[href] {
   --fg-secondary: 30 41 59;
   --muted: 51 65 85;
   --line: 148 163 184;
+  --glass-line: 148 163 184;
   --line-strong: 71 85 105;
   --control: 51 65 85;
   --accent: 21 94 117;
@@ -687,6 +695,7 @@ a[href] {
   --fg-secondary: 226 232 240;
   --muted: 226 232 240;
   --line: 100 116 139;
+  --glass-line: 100 116 139;
   --line-strong: 148 163 184;
   --control: 203 213 225;
   --accent: 165 243 252;
@@ -727,7 +736,8 @@ a[href] {
 /* Motion vocabulary. Every entrance animates opacity and transform only, so it composites without
    layout, and `data-motion="reduce"` above collapses each to its final frame. Nothing here animates
    a value: a number appears when it is measured, never counts up to it. Exits use --ease-in at
-   0.75x the entrance duration; nothing delays input. */
+   0.75x the entrance duration; nothing delays input. Fill is `backwards`, never `both`: a fill that
+   holds after the end keeps the element a backdrop root, and glass inside it stops blurring. */
 @keyframes motion-reveal {
   from { opacity: 0; transform: translateY(8px); }
 }
@@ -744,12 +754,12 @@ a[href] {
   from { opacity: 0; }
 }
 
-.motion-reveal { animation: motion-reveal var(--dur-slow) var(--ease-out) both; }
-.motion-pop { animation: motion-pop var(--dur-base) var(--ease-out) both; transform-origin: top left; }
-.motion-slide-in { animation: motion-slide-in var(--dur-slow) var(--ease-out) both; }
-.motion-fade { animation: motion-fade var(--dur-base) var(--ease-out) both; }
+.motion-reveal { animation: motion-reveal var(--dur-slow) var(--ease-out) backwards; }
+.motion-pop { animation: motion-pop var(--dur-base) var(--ease-out) backwards; transform-origin: top left; }
+.motion-slide-in { animation: motion-slide-in var(--dur-slow) var(--ease-out) backwards; }
+.motion-fade { animation: motion-fade var(--dur-base) var(--ease-out) backwards; }
 
-.motion-stagger > * { animation: motion-reveal var(--dur-slow) var(--ease-out) both; }
+.motion-stagger > * { animation: motion-reveal var(--dur-slow) var(--ease-out) backwards; }
 .motion-stagger > :nth-child(2) { animation-delay: 25ms; }
 .motion-stagger > :nth-child(3) { animation-delay: 50ms; }
 .motion-stagger > :nth-child(4) { animation-delay: 75ms; }

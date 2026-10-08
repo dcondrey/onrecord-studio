@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { invokeCommand } from '../../ipc';
+import { buttonClass } from '../ui/Button';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { EvidenceBundle, EvidenceClass, RedactionIntegrityReport, RedactionPageFinding } from '../../types';
 import { cn } from '../../utils/cn';
+import { displayError } from '../../utils/errorMessage';
 
 export default function UnredactorPanel({ documentId, portalKey }: { documentId: number; portalKey: string }) {
   // NOTE(documents): Do not display speculative candidates beside preserved text.
@@ -52,25 +54,23 @@ export default function UnredactorPanel({ documentId, portalKey }: { documentId:
         setEvidenceClass(firstPopulatedEvidenceClass(bundle));
       }
     } catch (reason) {
-      if (gate.isCurrent(request)) setError(String(reason));
+      if (gate.isCurrent(request)) setError(displayError(reason).message);
     } finally {
       if (gate.isCurrent(request)) setIsScanning(false);
     }
   };
 
   return (
-    <section className="flex max-h-96 flex-col overflow-hidden rounded-xl border border-line bg-surface/40">
-      <div className="flex items-center justify-between border-b border-line px-4 py-3">
-        <div>
-          <div className="text-label font-bold uppercase tracking-[0.18em] text-muted">PDF overlay integrity</div>
-          <div className="mt-0.5 text-caption text-muted">Conservative vector, text-layer, and metadata inspection; permanently removed content cannot be recovered</div>
-        </div>
-        <button type="button" onClick={() => void scan()} disabled={isScanning} className="rounded-lg border border-highlight/30 bg-highlight/10 px-3 py-2 text-label font-semibold text-highlight transition hover:bg-highlight/20 disabled:opacity-50">
+    <section className="flex max-h-96 flex-col overflow-hidden rounded-xl border border-line bg-canvas">
+      <div className="border-b border-line px-4 py-3">
+        <h3 className="text-overline uppercase text-muted">PDF overlay integrity</h3>
+        <p className="mt-0.5 text-caption text-muted">Conservative vector, text-layer, and metadata inspection; permanently removed content cannot be recovered.</p>
+        <button type="button" onClick={() => void scan()} disabled={isScanning} className={buttonClass({ size: 'sm', className: 'focus-ring mt-2' })}>
           {isScanning ? `Inspecting… ${elapsedSeconds}s` : 'Run integrity scan'}
         </button>
       </div>
-      {isScanning && <div className="h-1 overflow-hidden bg-canvas" role="progressbar" aria-label="Redaction evidence collectors are running"><div className="h-full w-1/3 animate-pulse rounded-full bg-highlight" /></div>}
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      {isScanning && <div className="h-1 overflow-hidden bg-canvas" role="progressbar" aria-label="Redaction evidence collectors are running"><div className="skeleton h-full w-full" /></div>}
+      <div className={cn('min-h-0 flex-1 overflow-y-auto p-4', !report && !error && 'hidden')}>
         {error && <div role="alert" className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-label text-danger">{error}</div>}
         {report ? (
           <div className="space-y-3">
@@ -108,9 +108,7 @@ export default function UnredactorPanel({ documentId, portalKey }: { documentId:
             }} />}
             {report.isolatedStructuralAnomalies.length > 0 && <ForensicList title="Structural signals" values={report.isolatedStructuralAnomalies} />}
           </div>
-        ) : !error && (
-          <div className="grid min-h-40 place-items-center text-center text-label leading-relaxed text-muted">Run the bounded integrity scan to inspect potential visual-mask and live-text co-location.</div>
-        )}
+        ) : null}
       </div>
     </section>
   );

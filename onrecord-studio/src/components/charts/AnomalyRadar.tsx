@@ -3,8 +3,7 @@ import { useAppStore } from '../../store/useAppStore';
 import type { AgencyPerformanceProfile } from '../../types';
 import { ShapeGlyph } from '../ui/shapeGlyph';
 import AnalyticsUnavailable from './AnalyticsUnavailable';
-
-type SeverityBand = 'typical' | 'elevated' | 'critical';
+import { deviationTier, TIER_LABEL, type DeviationTier } from './deviationTier';
 
 interface ArcDatum {
   key: string;
@@ -16,15 +15,14 @@ interface ArcDatum {
   innerRadius: number;
   outerRadius: number;
   color: string;
-  severity: SeverityBand;
+  /** Null when the department has no measured deviation. */
+  severity: DeviationTier | null;
   profile: AgencyPerformanceProfile | null;
 }
 
-// Mirrors PerformanceScatter's severity vocabulary: triangle for elevated, diamond for critical.
-// Typical arcs get no glyph, since the wedge shape itself already reads as the unmarked case.
-function severityBand(severity: number): SeverityBand {
-  return severity >= 0.5 ? 'critical' : severity > 0.2 ? 'elevated' : 'typical';
-}
+// Arcs carry PerformanceScatter's tiers and glyphs (triangle elevated, diamond outlier), from the
+// same z-score predicate the headline counts. Typical arcs get no glyph, since the wedge shape
+// itself already reads as the unmarked case.
 
 const palette = ['var(--viz-indigo)', 'var(--viz-cyan)', 'var(--viz-purple)', 'var(--viz-amber)', 'var(--viz-emerald)'];
 
@@ -100,7 +98,7 @@ export default function AnomalyRadar() {
         innerRadius: 35,
         outerRadius: 65,
         color: palette[portalIndex % palette.length],
-        severity: 'typical',
+        severity: null,
         profile: null,
       });
       let agencyCursor = portalStart;
@@ -108,13 +106,8 @@ export default function AnomalyRadar() {
         .sort((left, right) => left.agencyName.localeCompare(right.agencyName))
         .forEach((profile) => {
           const sweep = (weight(profile) / globalTotal) * Math.PI * 2;
-          const severity = Math.min(
-            1,
-            profile.statutoryViolationRate
-              + profile.suspiciousFastClosureCount / Math.max(1, profile.totalRequestsProcessed),
-          );
           const base = palette[portalIndex % palette.length];
-          const band = severityBand(severity);
+          const band = profile.performanceZScore === null ? null : deviationTier(profile.performanceZScore);
           result.push({
             key: `${portalKey}-${profile.agencyId}`,
             label: profile.agencyName,
@@ -127,7 +120,7 @@ export default function AnomalyRadar() {
             // Alarm colour follows the severity, not the agency's position in the list: parity
             // gave two agencies with identical deviation different colours, which reads as a
             // difference in the evidence.
-            color: band === 'critical' ? 'var(--viz-red)' : band === 'elevated' ? 'var(--viz-amber)' : base,
+            color: band === 'outlier' ? 'var(--viz-red)' : band === 'elevated' ? 'var(--viz-amber)' : base,
             severity: band,
             profile,
           });
@@ -164,7 +157,7 @@ export default function AnomalyRadar() {
             <circle cx="120" cy="120" r="34" fill="var(--chart-center)" stroke="var(--chart-grid)" />
             <circle cx="120" cy="120" r="4" fill="var(--viz-cyan)" opacity="0.8" />
           </svg>
-          <div className="chart-ready-card absolute max-w-[230px] rounded-xl border px-4 py-3 text-center backdrop-blur-xl">
+          <div className="chart-ready-card absolute max-w-[230px] rounded-xl border px-4 py-3 text-center">
             <div className="text-label font-semibold text-fg-secondary">No departments profiled yet</div>
             <div className="mt-1 text-caption leading-relaxed text-muted">This panel draws one ring per source and one slice per department, from the agency performance profiles. None have been computed, so there is nothing here to read.</div>
           </div>
@@ -178,12 +171,13 @@ export default function AnomalyRadar() {
     <section className="app-panel flex min-h-[360px] flex-col overflow-hidden p-5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="app-eyebrow">Department deviation sunburst</div>
-          <div className="mt-1 text-label text-muted">Portal ring → department ring. Select a slice to inspect evidence.</div>
+          <div className="text-overline uppercase text-muted">Department deviation</div>
+          <h2 className="mt-1 text-headline text-fg">{radarHeadline(profiles)}</h2>
+          <div className="mt-1 text-caption text-muted">Portal ring → department ring. Select a slice to inspect evidence.</div>
         </div>
-        <div className="flex items-center gap-1.5">
-          <label className="rounded border border-line bg-surface/70 px-2 py-1 font-mono text-caption text-muted">Slice by <select value={weightMode} onChange={(event) => setWeightMode(event.target.value as 'volume' | 'severity')} className="bg-transparent text-fg-secondary"><option value="volume">request volume</option><option value="severity">anomaly rate</option></select></label>
-          <div className="rounded border border-line bg-surface/70 px-2 py-1 font-mono text-caption text-muted">{profiles.length} departments</div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <label className="field flex h-7 items-center gap-1 rounded-md border border-control bg-canvas px-2 text-caption text-muted">Slice by <select value={weightMode} onChange={(event) => setWeightMode(event.target.value as 'volume' | 'severity')} className="bg-transparent text-fg-secondary outline-none"><option value="volume">request volume</option><option value="severity">flagged-request share</option></select></label>
+          <span className="whitespace-nowrap text-caption tabular-nums text-muted">{profiles.length} departments</span>
         </div>
       </div>
       <div className="grid flex-1 grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_160px]">
@@ -198,10 +192,10 @@ export default function AnomalyRadar() {
                   fillOpacity={focused?.key === arc.key ? 1 : arc.profile ? 0.88 : 0.72}
                   stroke="var(--chart-background)"
                   strokeWidth="1.5"
-                  className="outline-none transition-opacity hover:opacity-100 focus:opacity-100"
+                  className="outline-none transition-opacity hover:opacity-100 focus:opacity-100 focus-visible:stroke-[rgb(var(--focus))] focus-visible:[stroke-width:2.5]"
                   role="button"
                   tabIndex={0}
-                  aria-label={`Filter ${arc.label}${arc.severity === 'typical' ? '' : `, ${arc.severity}`}`}
+                  aria-label={`Filter ${arc.label}${arc.severity === null || arc.severity === 'typical' ? '' : `, ${TIER_LABEL[arc.severity].toLowerCase()}`}`}
                   onMouseEnter={() => setFocused(arc)}
                   onFocus={() => setFocused(arc)}
                   onClick={() => activate(arc)}
@@ -209,9 +203,9 @@ export default function AnomalyRadar() {
                     if (event.key === 'Enter' || event.key === ' ') activate(arc);
                   }}
                 />
-                {arc.severity !== 'typical' && (
+                {(arc.severity === 'elevated' || arc.severity === 'outlier') && (
                   <ShapeGlyph
-                    shape={arc.severity === 'critical' ? 'diamond' : 'triangle'}
+                    shape={arc.severity === 'outlier' ? 'diamond' : 'triangle'}
                     cx={mid.x}
                     cy={mid.y}
                     radius={5}
@@ -225,14 +219,14 @@ export default function AnomalyRadar() {
           })}
           <circle cx="120" cy="120" r="29" fill="var(--chart-center)" stroke="var(--chart-grid)" />
           <text x="120" y="116" textAnchor="middle" fill="var(--text-muted)" fontSize="11" fontWeight="700">AUDIT</text>
-          <text x="120" y="130" textAnchor="middle" fill="var(--chart-axis)" fontSize="11">{weightMode === 'volume' ? 'VOLUME' : 'SEVERITY'}</text>
+          <text x="120" y="130" textAnchor="middle" fill="var(--chart-axis)" fontSize="11">{weightMode === 'volume' ? 'VOLUME' : 'FLAGGED'}</text>
         </svg>
-        <div className="space-y-2 rounded-lg border border-line bg-canvas/70 p-3 font-mono text-caption">
+        <div className="space-y-2 rounded-lg border border-line bg-canvas p-3 text-caption tabular-nums">
           <div className="truncate text-label font-bold text-fg-secondary">{focused?.label ?? 'Hover a slice'}</div>
           {focused?.profile ? (
             <>
               <Metric label="Requests" value={focused.profile.totalRequestsProcessed} />
-              <Metric label="Z-score" value={focused.profile.performanceZScore === null ? 'Not computed' : focused.profile.performanceZScore.toFixed(2)} alert={focused.profile.performanceZScore !== null && focused.profile.performanceZScore >= 2} />
+              <Metric label="Z-score" value={focused.profile.performanceZScore === null ? 'Not measured' : focused.profile.performanceZScore.toFixed(2)} alert={focused.profile.performanceZScore !== null && deviationTier(focused.profile.performanceZScore) === 'outlier'} />
               <Metric label="Statutory" value={focused.profile.statutoryViolationCount} alert={focused.profile.statutoryViolationCount > 0} />
               <Metric label="Fast close" value={focused.profile.suspiciousFastClosureCount} alert={focused.profile.suspiciousFastClosureCount > 0} />
             </>
@@ -250,7 +244,7 @@ function Metric({ label, value, alert = false }: { label: string; value: string 
     <div className="flex justify-between gap-2 border-b border-line pb-1">
       <span className="text-muted">{label}</span>
       <span className={alert ? 'flex items-center gap-1 text-warning' : 'text-muted'}>
-        {alert && <FlagMark label="Above threshold" />}
+        {alert && <FlagMark label="Flagged" />}
         {value}
       </span>
     </div>
@@ -264,4 +258,12 @@ function FlagMark({ label }: { label: string }) {
       <polygon points="0,-5 4.6,3.9 -4.6,3.9" fill="currentColor" />
     </svg>
   );
+}
+
+/** The radar's finding in one sentence; deviation wording, never a legal one. */
+function radarHeadline(profiles: AgencyPerformanceProfile[]): string {
+  const measured = profiles.filter((profile) => profile.performanceZScore !== null);
+  if (measured.length === 0) return 'No department has a measured deviation yet';
+  const deviating = measured.filter((profile) => profile.performanceZScore !== null && deviationTier(profile.performanceZScore) === 'outlier').length;
+  return `${deviating} ${deviating === 1 ? 'department deviates' : 'departments deviate'} ≥2σ from their portal's norm`;
 }

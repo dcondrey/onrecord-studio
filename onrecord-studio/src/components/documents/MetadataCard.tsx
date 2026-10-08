@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { invokeCommand } from '../../ipc';
+import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { ProvenanceVerificationRecord } from '../../types';
 import { isSha256Hex } from '../../utils/crypto';
-import { formatInstant } from '../objects/labels';
+import { enumLabel, formatInstant } from '../objects/labels';
+import { Select } from '../ui/Field';
+import { buttonClass } from '../ui/Button';
+import { displayError } from '../../utils/errorMessage';
 
 interface MetadataCardProps {
   documentId: number;
@@ -23,17 +27,18 @@ export default function MetadataCard({ documentId, portalKey, sha256, contentTyp
   const [latestVerification, setLatestVerification] = useState<ProvenanceVerificationRecord | null | undefined>(undefined);
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const shownDigest = useMemo(() => formatDigest(sha256, digestFormat), [digestFormat, sha256]);
+  const verificationGate = useLatestRequestGate();
 
   useEffect(() => {
-    let current = true;
+    const token = verificationGate.begin();
     setLatestVerification(undefined);
     setVerificationError(null);
     setCopyStatus(null);
     void invokeCommand('list_document_provenance_verifications', { documentId, portalKey, limit: 1 })
-      .then((records) => { if (current) setLatestVerification(records[0] ?? null); })
-      .catch((reason) => { if (current) setVerificationError(String(reason)); });
-    return () => { current = false; };
-  }, [documentId, portalKey]);
+      .then((records) => { if (verificationGate.isCurrent(token)) setLatestVerification(records[0] ?? null); })
+      .catch((reason) => { if (verificationGate.isCurrent(token)) setVerificationError(displayError(reason).message); });
+    return () => verificationGate.invalidate();
+  }, [documentId, portalKey, verificationGate]);
 
   const copyDigest = async () => {
     if (!digestIsValid || !shownDigest) return;
@@ -46,22 +51,22 @@ export default function MetadataCard({ documentId, portalKey, sha256, contentTyp
   };
 
   return (
-    <section className="space-y-2 rounded-xl border border-line bg-surface/40 p-4 font-mono text-label" aria-label="Document integrity metadata">
-      <div className="text-caption font-bold uppercase tracking-wider text-muted">Evidence integrity</div>
-      <MetadataRow label="MIME type" value={contentType ?? 'Not reported'} />
-      <MetadataRow label="Visibility" value={visibility} />
-      <MetadataRow label="Download" value={downloadStatus} />
+    <section className="space-y-2 rounded-xl border border-line bg-canvas p-4 text-body" aria-label="Document integrity metadata">
+      <h3 className="text-overline uppercase text-muted">Evidence integrity</h3>
+      <MetadataRow label="File type" value={contentType ? fileTypeLabel(contentType) : 'Not reported'} title={contentType ?? undefined} />
+      <MetadataRow label="Visibility" value={enumLabel(visibility)} />
+      <MetadataRow label="Download" value={enumLabel(downloadStatus)} />
       <MetadataRow label="File size" value={formatFileSize(fileSize)} />
-      <MetadataRow label="Latest verification" value={verificationLabel(latestVerification, verificationError)} />
+      <MetadataRow label="Latest verification" value={verificationLabel(latestVerification, verificationError)} title={latestVerification?.verifiedAt} />
       <div className="space-y-1 border-t border-line pt-2">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-muted">Recorded SHA-256</span>
+          <span className="whitespace-nowrap text-muted">Recorded SHA-256</span>
           <div className="flex items-center gap-1">
-            <select aria-label="Digest format" value={digestFormat} onChange={(event) => { setDigestFormat(event.target.value as DigestFormat); setCopyStatus(null); }} className="focus-ring rounded border border-control bg-canvas px-1.5 py-1 text-caption text-muted"><option value="hex">Hex</option><option value="colon">Colon hex</option><option value="base64">Base64</option></select>
-            <button type="button" aria-label="Copy SHA-256 digest" disabled={!digestIsValid} onClick={() => void copyDigest()} className="focus-ring rounded border border-control px-1.5 py-1 text-caption text-muted disabled:opacity-40">Copy</button>
+            <Select size="sm" aria-label="Digest format" value={digestFormat} onChange={(event) => { setDigestFormat(event.target.value as DigestFormat); setCopyStatus(null); }} className="focus-ring w-[6.5rem]"><option value="hex">Hex</option><option value="colon">Colon hex</option><option value="base64">Base64</option></Select>
+            <button type="button" aria-label="Copy SHA-256 digest" disabled={!digestIsValid} onClick={() => void copyDigest()} className={buttonClass({ size: 'sm', className: 'focus-ring' })}>Copy</button>
           </div>
         </div>
-        <span className={`block select-text break-all rounded border p-2 text-caption ${digestIsValid ? 'border-success/30 bg-success/5 text-success' : 'border-warning/30 bg-warning/5 text-warning'}`}>
+        <span className={`block select-text break-all rounded-md border p-2 font-mono text-code ${digestIsValid ? 'border-success/30 bg-success/5 text-success' : 'border-warning/30 bg-warning/5 text-warning'}`}>
           {shownDigest ?? 'No source-file digest has been recorded'}
         </span>
         {copyStatus && <span role="status" className="block text-right text-caption text-muted">{copyStatus}</span>}
@@ -87,11 +92,34 @@ function verificationLabel(record: ProvenanceVerificationRecord | null | undefin
   if (record === null) return 'No recorded check';
   const state = record.provenanceConfidence?.split('_').join(' ').toLocaleLowerCase()
     ?? (record.predatesClassification ? 'logged before classification' : 'no confidence recorded');
-  return `${state} · ${formatInstant(record.verifiedAt)}`;
+  return `${state.charAt(0).toLocaleUpperCase()}${state.slice(1)} · ${formatInstant(record.verifiedAt)}`;
 }
 
-function MetadataRow({ label, value }: { label: string; value: string }) {
-  return <div className="flex items-center justify-between gap-4 border-b border-line py-1"><span className="text-muted">{label}</span><span className="truncate text-right font-medium text-fg-secondary">{value}</span></div>;
+const FILE_TYPES: Record<string, string> = {
+  'application/pdf': 'PDF',
+  'text/plain': 'Plain text',
+  'text/csv': 'CSV',
+  'text/html': 'HTML',
+  'application/json': 'JSON',
+  'message/rfc822': 'Email',
+  'application/vnd.ms-outlook': 'Outlook message',
+  'application/zip': 'ZIP archive',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'Excel workbook',
+  'application/vnd.ms-excel': 'Excel workbook',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word document',
+  'application/msword': 'Word document',
+  'image/png': 'PNG image',
+  'image/jpeg': 'JPEG image',
+  'image/tiff': 'TIFF image',
+};
+
+/** The type a reader recognises; an unlisted MIME type is shown as recorded. */
+function fileTypeLabel(contentType: string): string {
+  return FILE_TYPES[contentType.split(';')[0].trim().toLowerCase()] ?? contentType;
+}
+
+function MetadataRow({ label, value, title }: { label: string; value: string; title?: string }) {
+  return <div className="flex items-start justify-between gap-4 border-b border-line py-1"><span className="shrink-0 text-muted">{label}</span><span title={title} className="min-w-0 break-words text-right font-medium text-fg-secondary">{value}</span></div>;
 }
 
 function formatFileSize(value: number | null) {

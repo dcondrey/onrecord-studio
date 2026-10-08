@@ -174,14 +174,14 @@ describe('license flow', () => {
 
     it('counts days with correct pluralization and emphasizes the last three', async () => {
       await mountBanner('TRIAL', 30);
-      expect(screen.getByRole('status').textContent).toMatch(/30 days left in your trial/);
+      expect(screen.getByRole('status').textContent).toMatch(/Free trial · 30 days left/);
       expect(screen.getByRole('status').textContent).not.toMatch(/ending soon/i);
       cleanup();
       await mountBanner('TRIAL', 1);
-      expect(screen.getByRole('status').textContent).toMatch(/Trial ending soon: 1 day left in your trial/);
+      expect(screen.getByRole('status').textContent).toMatch(/Trial ending soon · 1 day left/);
       cleanup();
       await mountBanner('TRIAL', 0);
-      expect(screen.getByRole('status').textContent).toMatch(/Trial ending soon: Your trial ends today/);
+      expect(screen.getByRole('status').textContent).toMatch(/Trial ending soon · Ends today/);
     });
 
     it('never appears for a licensed account and is dismissible without blocking', async () => {
@@ -210,7 +210,7 @@ describe('license flow', () => {
       render(<LicenseProvider><AccountMenu /></LicenseProvider>);
       await waitFor(() => screen.getByRole('button', { name: 'Account' }));
       fireEvent.click(screen.getByRole('button', { name: 'Account' }));
-      fireEvent.click(screen.getByRole('button', { name: 'Delete account' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Delete account…' }));
       const confirmation = screen.getByRole('group', { name: 'Confirm account deletion' });
       expect(confirmation.textContent).toMatch(/Local evidence on this Mac is not deleted/);
       expect(confirmation.textContent).toMatch(/trial already used on this device is not restored/);

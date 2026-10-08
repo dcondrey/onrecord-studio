@@ -244,8 +244,8 @@
   {
     "id": "whats-next",
     "channel": "direct",
-    "title": "What's next: planned enhancements",
-    "group": "Getting started",
+    "title": "Planned enhancements",
+    "group": "Accounts and updates",
     "summary": "The enhancements planned after this beta, in rough order, and the rule every one of them must obey.",
     "keywords": [
       "roadmap",

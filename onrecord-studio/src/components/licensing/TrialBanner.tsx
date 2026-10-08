@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { daysLeftLabel, trialDaysLeft } from '../../utils/licenseState';
-import ModalDialog from './ModalDialog';
+import { cn } from '../../utils/cn';
+import Button from '../ui/Button';
+import Dialog, { DialogBody, DialogHeader } from '../ui/Dialog';
+import Icon from '../ui/icons';
 import { useLicense } from './LicenseProvider';
 import UpgradePanel from './UpgradePanel';
 
@@ -42,37 +45,28 @@ export default function TrialBanner() {
     <>
       <div
         role="status"
-        className={
-          urgent
-            ? 'flex items-center gap-3 border-b border-warning bg-warning px-4 py-1.5 text-label leading-4 text-warning'
-            : 'flex items-center gap-3 border-b border-line-strong bg-surface px-4 py-1.5 text-label leading-4 text-fg'
-        }
+        className={cn(
+          'flex h-10 items-center gap-2 border-b px-4 text-body',
+          urgent ? 'border-warning/40 bg-warning/10 text-warning' : 'border-line bg-surface text-fg-secondary',
+        )}
       >
-        <span aria-hidden="true">{urgent ? '▲' : '●'}</span>
-        <p className={urgent ? 'font-semibold' : ''}>
-          {urgent ? 'Trial ending soon: ' : 'Free trial: '}
-          {days === null ? 'trial active' : daysLeftLabel(days)}
+        <Icon name="clock" size="sm" />
+        <p className={cn('tabular-nums', urgent && 'font-semibold')}>
+          {urgent ? 'Trial ending soon · ' : 'Free trial · '}
+          {days === null ? 'active' : daysLeftLabel(days)}
         </p>
-        <button
-          type="button"
-          onClick={() => setUpgradeOpen(true)}
-          className="focus-ring ml-auto rounded border border-current px-2 py-1 font-semibold hover:underline"
-        >
+        <Button variant="primary" size="sm" onClick={() => setUpgradeOpen(true)} className="ml-auto">
           Upgrade
-        </button>
-        <button
-          type="button"
-          aria-label="Dismiss trial notice for this session"
-          onClick={dismiss}
-          className="focus-ring rounded px-1.5 py-1 font-semibold hover:underline"
-        >
-          Dismiss
-        </button>
+        </Button>
+        <Button variant="ghost" size="sm" iconOnly icon="x" aria-label="Dismiss trial notice for this session" onClick={dismiss} />
       </div>
       {upgradeOpen ? (
-        <ModalDialog label="Upgrade OnRecord Studio" onClose={() => setUpgradeOpen(false)}>
-          <UpgradePanel checkout={controller.checkout} onStartCheckout={controller.startCheckout} />
-        </ModalDialog>
+        <Dialog onClose={() => setUpgradeOpen(false)}>
+          <DialogHeader title="Upgrade OnRecord Studio" />
+          <DialogBody className="[&>section]:mt-0">
+            <UpgradePanel checkout={controller.checkout} onStartCheckout={controller.startCheckout} />
+          </DialogBody>
+        </Dialog>
       ) : null}
     </>
   );

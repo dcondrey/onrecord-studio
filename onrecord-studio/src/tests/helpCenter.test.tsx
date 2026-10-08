@@ -26,7 +26,6 @@ import CommandPalette from '../components/dashboard/CommandPalette';
 import HelpButton from '../components/help/HelpButton';
 import HelpCenter, { HelpDialog } from '../components/help/HelpCenter';
 import { openHelp } from '../components/help/helpEvents';
-import { HELP_TOPICS } from '../content/help';
 import { useAppStore } from '../store/useAppStore';
 
 Element.prototype.scrollIntoView = vi.fn();
@@ -43,8 +42,8 @@ describe('HelpDialog', () => {
     expect(dialog.getAttribute('aria-modal')).toBe('true');
     expect(screen.getByLabelText('Search help topics')).toBeTruthy();
     expect(screen.getByRole('navigation', { name: 'Help topics' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Close help' })).toBeTruthy();
-    expect(screen.getByText(`${HELP_TOPICS.length} topics`)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toBe('');
   });
 
   it('opens on the requested topic and shows its content', () => {
@@ -83,7 +82,7 @@ describe('HelpDialog', () => {
     const onClose = vi.fn();
     render(<HelpDialog initialTopicId={null} onClose={onClose} />);
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
-    fireEvent.click(screen.getByRole('button', { name: 'Close help' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalledTimes(2);
   });
 

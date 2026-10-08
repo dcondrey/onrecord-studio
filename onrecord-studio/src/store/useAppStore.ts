@@ -40,6 +40,9 @@ export type AppTheme = ThemePreference;
 export type AppMotion = MotionPreference;
 export type AppContrast = ContrastPreference;
 export type WorkspaceInitializationStatus = 'loading' | 'ready' | 'error';
+/** Whether a read has answered yet. `pending` and `failed` are not an empty answer and never render as zero. */
+export type ReadStatus = 'pending' | 'ready' | 'failed';
+export type SearchStatus = 'idle' | 'pending' | 'ready' | 'failed';
 
 export interface SourceRepairNotice {
   portalKey: string;
@@ -162,8 +165,12 @@ interface AppState {
   portals: SavedSource[];
   workspaceInitializationStatus: WorkspaceInitializationStatus;
   workspaceInitializationError: string | null;
+  /** Bumped by "Try again" so the saved-source load re-runs. */
+  workspaceInitializationAttempt: number;
   ocrCapability: OcrCapability | null;
   portalRuntimes: PortalRuntimeSnapshot[];
+  portalRuntimesStatus: ReadStatus;
+  portalRuntimesError: string | null;
   activePortalKey: string | null;
   portalUrlDraft: string;
   syncingPortalKeys: string[];
@@ -177,6 +184,7 @@ interface AppState {
   analyticsUpdatedAt: string | null;
   /** Set when the last analytics refresh failed, so panels can say so instead of reporting an empty result as a finding. */
   analyticsError: string | null;
+  analyticsStatus: ReadStatus;
   /**
    * Incremented by any surface that writes data the analytics aggregates read, so the single
    * refresh that owns those queries re-runs. A panel left on a pre-write aggregate reports a
@@ -204,6 +212,8 @@ interface AppState {
   searchPaging: SearchPaging | null;
   /** Set when the latest evidence query failed; retained results then belong to the last successful query. */
   searchError: string | null;
+  /** Until a query settles, the evidence counts are unknown, not zero. */
+  searchStatus: SearchStatus;
   selectedRequestId: number | null;
   selectedRequestPortalKey: string | null;
   isExtractionTerminalOpen: boolean;
@@ -251,6 +261,8 @@ interface AppState {
   inspect: (target: InspectorTarget, from?: 'view' | 'layer') => void;
   inspectorBack: () => void;
   closeInspector: () => void;
+  /** Names a layer opened without a label once its object has loaded. */
+  updateInspectorLabel: (key: string, label: string) => void;
   /** A document to open in the evidence viewer, from any surface; the evidence view consumes it. */
   requestedEvidenceLink: EvidenceLinkRequest | null;
   openEvidenceLink: (link: EvidenceLinkRequest) => void;
@@ -275,10 +287,12 @@ interface AppState {
     status: WorkspaceInitializationStatus,
     error?: string | null,
   ) => void;
+  retryWorkspaceInitialization: () => void;
   setOcrCapability: (capability: OcrCapability | null) => void;
   setPortalLifecycleState: (portalKey: string, lifecycleState: SourceLifecycleState) => void;
   removePortal: (portalKey: string) => void;
   setPortalRuntimes: (runtimes: PortalRuntimeSnapshot[]) => void;
+  setPortalRuntimesFailed: (message: string) => void;
   setActivePortal: (portalKey: string | null) => void;
   setPortalSyncState: (portalKey: string, syncing: boolean, syncRunId?: string) => void;
   setAudioAlertsEnabled: (enabled: boolean) => void;
@@ -312,6 +326,7 @@ interface AppState {
   setSearchPageState: (generation: number, state: { loadingMore: boolean; moreError: string | null }) => void;
   setFilteredResultsTotal: (generation: number, total: number) => void;
   setSearchError: (message: string | null) => void;
+  setSearchStatus: (status: SearchStatus) => void;
   setSelectedRequest: (requestId: number | null, portalKey?: string | null) => void;
   setTerminalVisibility: (visible: boolean) => void;
   setPendingSourceRepair: (notice: SourceRepairNotice | null) => void;
@@ -350,8 +365,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   portals: [],
   workspaceInitializationStatus: 'loading',
   workspaceInitializationError: null,
+  workspaceInitializationAttempt: 0,
   ocrCapability: null,
   portalRuntimes: [],
+  portalRuntimesStatus: 'pending',
+  portalRuntimesError: null,
   activePortalKey: null,
   portalUrlDraft: '',
   syncingPortalKeys: [],
@@ -364,6 +382,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   crossAgencyCorrelations: [],
   analyticsUpdatedAt: null,
   analyticsError: null,
+  analyticsStatus: 'pending',
   analyticsRefreshRequests: 0,
   evidenceRefreshRequests: 0,
   findingsRefreshRequests: 0,
@@ -378,6 +397,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   filteredResultsTerm: '',
   filteredResultsTotal: 0,
   searchPaging: null,
+  searchStatus: 'idle',
   searchError: null,
   selectedRequestId: null,
   selectedRequestPortalKey: null,
@@ -435,6 +455,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   }),
   inspectorBack: () => set((state) => ({ inspectorStack: state.inspectorStack.slice(0, -1) })),
   closeInspector: () => set({ inspectorStack: [] }),
+  updateInspectorLabel: (key, label) =>
+    set((state) => {
+      const index = state.inspectorStack.findIndex((entry) => inspectorTargetKey(entry) === key);
+      if (index < 0 || state.inspectorStack[index].label) return state;
+      const inspectorStack = [...state.inspectorStack];
+      inspectorStack[index] = { ...inspectorStack[index], label };
+      return { inspectorStack };
+    }),
   requestedEvidenceLink: null,
   openEvidenceLink: (requestedEvidenceLink) => set({ requestedEvidenceLink }),
   consumeEvidenceLink: () => {
@@ -522,6 +550,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     workspaceInitializationStatus,
     workspaceInitializationError = null,
   ) => set({ workspaceInitializationStatus, workspaceInitializationError }),
+  retryWorkspaceInitialization: () =>
+    set((state) => ({ workspaceInitializationAttempt: state.workspaceInitializationAttempt + 1 })),
   setOcrCapability: (ocrCapability) => set({ ocrCapability }),
   setPortalLifecycleState: (portalKey, lifecycleState) =>
     set((state) => ({
@@ -549,6 +579,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       .sort((left, right) => left.localeCompare(right));
     return {
       portalRuntimes,
+      portalRuntimesStatus: 'ready',
+      portalRuntimesError: null,
       syncingPortalKeys,
       syncRunIdsByPortal: Object.fromEntries(
         running.map((runtime) => [runtime.portal.portalKey, runtime.syncRunId]),
@@ -556,6 +588,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       isSyncing: syncingPortalKeys.length > 0,
     };
   }),
+  setPortalRuntimesFailed: (portalRuntimesError) => set({ portalRuntimesStatus: 'failed', portalRuntimesError }),
   setActivePortal: (activePortalKey) =>
     set({
       activePortalKey,
@@ -565,6 +598,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       filteredResultsTotal: 0,
       searchPaging: null,
       searchError: null,
+      searchStatus: 'idle',
       searchTerm: '',
       selectedAgencyId: null,
       selectedStatus: null,
@@ -620,8 +654,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       crossAgencyCorrelations,
       analyticsUpdatedAt: new Date().toISOString(),
       analyticsError: null,
+      analyticsStatus: 'ready',
     }),
-  setAnalyticsError: (analyticsError) => set({ analyticsError }),
+  setAnalyticsError: (analyticsError) =>
+    set((state) => ({
+      analyticsError,
+      analyticsStatus: analyticsError === null ? state.analyticsStatus : 'failed',
+    })),
   requestAnalyticsRefresh: () =>
     set((state) => ({ analyticsRefreshRequests: state.analyticsRefreshRequests + 1 })),
   requestEvidenceRefresh: () =>
@@ -659,6 +698,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           }
         : null,
       searchError: null,
+      searchStatus: 'ready',
     })),
   appendFilteredResults: (generation, results, nextCursor) =>
     set((state) => {
@@ -678,7 +718,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     ),
   setFilteredResultsTotal: (generation, total) =>
     set((state) => (state.searchPaging?.generation === generation ? { filteredResultsTotal: total } : state)),
-  setSearchError: (searchError) => set({ searchError }),
+  setSearchError: (searchError) =>
+    set((state) => ({ searchError, searchStatus: searchError === null ? state.searchStatus : 'failed' })),
+  setSearchStatus: (searchStatus) => set({ searchStatus }),
   setSelectedRequest: (selectedRequestId, selectedRequestPortalKey = null) =>
     set({ selectedRequestId, selectedRequestPortalKey, activeLegalFindings: [] }),
   setTerminalVisibility: (isExtractionTerminalOpen) => set({ isExtractionTerminalOpen }),
@@ -780,5 +822,5 @@ function currentViewScrollTop() {
 
 function readAudioAlertsPreference() {
   return typeof window !== 'undefined'
-    && window.localStorage.getItem('onrecord-audio-alerts') === 'enabled';
+    && window.localStorage?.getItem('onrecord-audio-alerts') === 'enabled';
 }

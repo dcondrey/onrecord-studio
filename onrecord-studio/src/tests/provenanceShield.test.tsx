@@ -177,8 +177,8 @@ describe('document evidence navigation', () => {
     render(<DocumentViewer documentId={7} requestId={3} portalKey="example" fileName="release.pdf" textContent="😀 evidence appears here" characterOffset={10} fileSizeFormatted="1 KB" />);
     await waitFor(() => expect(screen.queryByText('Verifying…')).toBeNull());
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search within this extracted-text chunk' }), { target: { value: 'evidence' } });
-    expect(screen.getByText('1/1')).toBeTruthy();
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search within this extracted-text chunk' }), { target: { value: 'evidence' } });
+    expect(screen.getByText('1 of 1')).toBeTruthy();
     expect(document.querySelector('mark')?.textContent).toBe('evidence');
     fireEvent.click(screen.getByRole('button', { name: 'Copy evidence link' }));
 

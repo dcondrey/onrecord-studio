@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { formatNativeError, invokeCommand } from '../../ipc';
+import { invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useProfileLensStore } from '../../store/useProfileLensStore';
 import type { Finding, FindingKind } from '../../types';
-import { useDialogFocus } from '../licensing/useDialogFocus';
+import Button from '../ui/Button';
+import Dialog, { DialogBody, DialogHeader } from '../ui/Dialog';
+import Skeleton from '../ui/Skeleton';
 import { touchesOwnOrganization, useAffiliationDisclosure } from './useProfile';
+import { displayError } from '../../utils/errorMessage';
 
 export interface ReviewGroup {
   title: string;
@@ -25,7 +28,7 @@ export const REVIEW_GROUPS: ReviewGroup[] = [
     kinds: ['JUST_IN_TIME_COMPLIANCE', 'EXTENSION_ABUSE', 'EVASION_LATE_ARRIVING_RECORDS', 'POLICY_VIOLATION_DETECTED'],
   },
   {
-    title: 'PII-masking and redaction gaps',
+    title: 'Personal data and redaction gaps',
     kinds: ['EVASION_REDACTION_AT_LIMIT', 'REDACTION_CANDIDATE_INFERRED'],
   },
 ];
@@ -46,21 +49,22 @@ export default function SelfReview() {
 
 export function SelfReviewPanel({ onClose }: { onClose: () => void }) {
   const { disclosure } = useAffiliationDisclosure();
-  const dialogFocus = useDialogFocus(onClose);
   const gate = useLatestRequestGate();
   const [findings, setFindings] = useState<Finding[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     const token = gate.begin();
+    setError(null);
     invokeCommand('list_findings', { filter: null, limit: 500 })
       .then((rows) => {
         if (gate.isCurrent(token)) setFindings(rows);
       })
       .catch((reason) => {
-        if (gate.isCurrent(token)) setError(formatNativeError(reason));
+        if (gate.isCurrent(token)) setError(displayError(reason).message);
       });
-  }, [gate]);
+  }, [gate, reload]);
 
   const own = useMemo(
     () => (findings ?? []).filter((finding) => touchesOwnOrganization(finding, disclosure)),
@@ -72,20 +76,23 @@ export function SelfReviewPanel({ onClose }: { onClose: () => void }) {
       disclosure.ownEntityIds.length > 0);
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="Records self-review" className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onKeyDown={dialogFocus.onKeyDown} onMouseDown={dialogFocus.onOverlayMouseDown}>
-      <div ref={dialogFocus.ref} tabIndex={-1} className="app-panel max-h-[90vh] w-full max-w-2xl overflow-y-auto p-4 text-label text-fg-secondary outline-none">
-        <div className="flex items-center justify-between">
-          <h2 className="text-label font-semibold text-fg">What the public record shows about your organization</h2>
-          <button type="button" onClick={onClose} className="focus-ring rounded border border-control px-2 py-1">
-            Close
-          </button>
-        </div>
-        <p className="mt-2 text-label leading-relaxed text-muted">
+    <Dialog onClose={onClose} size="lg">
+      <DialogHeader title="Records self-review" description="What the public record shows about your organization." />
+      <DialogBody className="text-body text-fg-secondary">
+        <p className="text-caption text-muted">
           A records-hygiene view: gaps and inconsistencies a requester could find, so you can
           correct the record and respond completely. Your profile did not change any of these
           findings, their confidence or their severity.
         </p>
-        {error && <div role="alert" className="mt-2 text-danger">{error}</div>}
+        {error && (
+          <div role="alert" className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3">
+            <p className="text-danger" title={error}>Findings could not be loaded.</p>
+            <Button size="sm" onClick={() => setReload((value) => value + 1)}>Try again</Button>
+          </div>
+        )}
+        {hasConfirmedSubject && findings === null && !error && (
+          <Skeleton variant="lines" lines={3} label="Loading findings" className="mt-3" />
+        )}
         {disclosure && disclosure.status === 'UNSET' && (
           <p role="status" className="mt-3">No profile is set. Set one and confirm a match to see this view.</p>
         )}
@@ -99,20 +106,20 @@ export function SelfReviewPanel({ onClose }: { onClose: () => void }) {
           <div className="mt-3 flex flex-col gap-3">
             {groupOwnFindings(own).map((group) => (
               <section key={group.title} aria-label={group.title}>
-                <h3 className="font-semibold text-fg">
-                  {group.title} ({group.findings.length})
+                <h3 className="text-heading text-fg">
+                  {group.title} <span className="font-normal tabular-nums text-muted">({group.findings.length})</span>
                 </h3>
                 {group.findings.length === 0 ? (
                   <p className="text-muted">None among the findings currently listed.</p>
                 ) : (
                   <ul className="mt-1 flex flex-col gap-1">
                     {group.findings.map((finding) => (
-                      <li key={finding.id} className="rounded border border-line p-2">
-                        <div className="font-semibold text-fg">
+                      <li key={finding.id} className="rounded-lg border border-line p-3">
+                        <div className="font-medium text-fg">
                           {finding.headline}
                           {finding.kind === 'REDACTION_CANDIDATE_INFERRED' && ' (hypothesis, not established)'}
                         </div>
-                        <div className="text-muted">{finding.explanation}</div>
+                        <div className="mt-0.5 text-caption text-muted">{finding.explanation}</div>
                       </li>
                     ))}
                   </ul>
@@ -121,7 +128,7 @@ export function SelfReviewPanel({ onClose }: { onClose: () => void }) {
             ))}
           </div>
         )}
-      </div>
-    </div>
+      </DialogBody>
+    </Dialog>
   );
 }

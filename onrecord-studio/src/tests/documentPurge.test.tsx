@@ -28,6 +28,7 @@ const bridge = vi.hoisted(() => ({
   releasePurge: null as ((value: unknown) => void) | null,
   rejectPurge: null as ((reason: unknown) => void) | null,
   holdPurge: false,
+  releaseChunk: null as ((value: unknown) => void) | null,
 }));
 
 vi.mock('@tauri-apps/api/core', () => ({
@@ -49,6 +50,9 @@ vi.mock('@tauri-apps/api/core', () => ({
           documentSummary(2, 'inspection-notes.pdf'),
         ]
         : [documentSummary(9, 'other-record.pdf')]);
+    }
+    if (command === 'get_document_text_chunk') {
+      return new Promise((resolve) => { bridge.releaseChunk = resolve; });
     }
     if (command === 'purge_document') {
       if (bridge.holdPurge) {
@@ -131,6 +135,7 @@ describe('document purge', () => {
     bridge.holdPurge = false;
     bridge.releasePurge = null;
     bridge.rejectPurge = null;
+    bridge.releaseChunk = null;
   });
 
   afterEach(cleanup);
@@ -184,5 +189,32 @@ describe('document purge', () => {
     act(() => bridge.rejectPurge?.(new Error('evidence store is locked')));
     await waitFor(() => expect(screen.getByText('other-record.pdf')).toBeTruthy());
     expect(screen.queryByText(/evidence store is locked/)).toBeNull();
+  });
+
+  // Proven by deleting the `documentOpenGate.isCurrent(request)` check from the success arm of
+  // `openDocument` in MainLayout.tsx: record 42's text then opens in a viewer over record 99.
+  it('opens the viewer at once on a loading state, and drops a chunk that lands after the record changed', async () => {
+    mount(42);
+    fireEvent.click(await screen.findByRole('button', { name: /^permit-log\.pdf/ }));
+
+    const viewer = screen.getByRole('dialog');
+    expect(viewer.textContent).toContain('permit-log.pdf');
+    expect(screen.getByText('Reading the extracted text').closest('[aria-busy="true"]')).not.toBeNull();
+    await waitFor(() => expect(bridge.releaseChunk).not.toBeNull());
+
+    act(() => useAppStore.setState({ selectedRequestId: 99 }));
+    await screen.findByText('other-record.pdf');
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    await act(async () => bridge.releaseChunk?.({
+      maskedText: 'TEXT OF RECORD 42',
+      characterOffset: 0,
+      returnedCharacterCount: 17,
+      totalCharacterCount: 17,
+      nextCharacterOffset: null,
+      maskedFindingCount: 0,
+    }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByText('TEXT OF RECORD 42')).toBeNull();
   });
 });
