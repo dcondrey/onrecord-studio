@@ -3,15 +3,27 @@
 use crate::{
     analysis::{
         detectors,
-        finding::Finding,
+        finding::Finding as StoredFinding,
         gaps,
-        service_leads::{self, ServiceLeadInput, ServiceLeadsRecorded},
+        service_leads::{self, LeadFigure, ServiceLeadInput, ServiceLeadsRecorded},
     },
     error::AppError,
     storage::{findings::FindingsFilter, sqlite::DuckDbRepository, vector::VectorIndex},
 };
 use serde::{Deserialize, Serialize};
 use tauri::State;
+
+/// A finding as the inbox reads it: the stored finding, plus a lead's figure on a lookup of one
+/// finding by id. Named `Finding` because the IPC contract is typed from a command's result name,
+/// and `Finding` in `src/types/findings.ts` carries the optional figure.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Finding {
+    #[serde(flatten)]
+    pub finding: StoredFinding,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub figure: Option<LeadFigure>,
+}
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -58,7 +70,21 @@ pub async fn list_findings(
 ) -> Result<Vec<Finding>, AppError> {
     let filter = filter.unwrap_or_default();
     let limit = limit.unwrap_or(50);
-    repository.list_findings(filter, limit).await
+    // Figures go with a lookup of one finding only: a page of up to 500 findings with a figure
+    // each would be megabytes over IPC for slots that draw one at a time.
+    let lookup = filter.id.clone();
+    let findings = repository.list_findings(filter, limit).await?;
+    let figure = match (lookup, findings.as_slice()) {
+        (Some(id), [found]) if found.id == id => service_leads::figure(&repository, id).await?,
+        _ => None,
+    };
+    Ok(findings
+        .into_iter()
+        .map(|finding| Finding {
+            finding,
+            figure: figure.clone(),
+        })
+        .collect())
 }
 
 /// The number of findings a filter names, for strips that show a count and never the rows.

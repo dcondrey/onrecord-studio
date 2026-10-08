@@ -751,7 +751,10 @@ CREATE TABLE IF NOT EXISTS findings (
     discovered_at TEXT NOT NULL,
     last_seen_at TEXT NOT NULL,
     dismissed_at TEXT,
-    source_detector TEXT NOT NULL
+    source_detector TEXT NOT NULL,
+    -- A stored lead's figure, checked by analysis/service_leads.rs; NULL for every other finding
+    -- and for a lead whose result was cut short.
+    figure_json TEXT
 );
 -- Ranking sort: severity descending, then confidence descending (NULLs last), then freshness.
 CREATE INDEX IF NOT EXISTS idx_findings_ranking

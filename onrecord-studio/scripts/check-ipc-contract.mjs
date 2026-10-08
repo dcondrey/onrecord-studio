@@ -96,6 +96,34 @@ if (meetingDrift.length) {
   throw new Error(`Meeting calendar contracts differ.\n${meetingDrift.join('\n')}`);
 }
 
+// A lead's figure is built in TypeScript and checked in Rust (analysis/service_leads.rs) against
+// src/types/analysis.ts. A kind or unit on one side only is refused at the boundary or never
+// drawn, and a limit that differs refuses figures the builders consider in bounds.
+const leadsRust = readFileSync(join(root, 'src-tauri/src/analysis/service_leads.rs'), 'utf8');
+const analysisTs = readFileSync(join(root, 'src/types/analysis.ts'), 'utf8');
+const rustVariants = (name) => new Set(
+  [...(leadsRust.match(new RegExp(`pub enum ${name} \\{([^}]*)\\}`))?.[1] ?? '').matchAll(/^\s*([A-Z][A-Za-z]*)\b/gm)].map((match) => match[1].toLowerCase()),
+);
+const tsStrings = (source) => new Set([...(source ?? '').matchAll(/'([a-z-]+)'/g)].map((match) => match[1]));
+const figureKindsRust = rustVariants('LeadFigure');
+const figureKindsTs = tsStrings(analysisTs.match(/LEAD_FIGURE_KINDS[^=]*=\s*\[([^\]]*)\]/)?.[1]);
+const figureUnitsRust = rustVariants('LeadFigureUnit');
+const figureUnitsTs = tsStrings(analysisTs.match(/export type LeadFigureUnit =([^;]*);/)?.[1]);
+const camelLimit = (name) => `max${name.toLowerCase().replace(/(^|_)([a-z])/g, (_, __, letter) => letter.toUpperCase())}`;
+const limitsRust = new Map([...leadsRust.matchAll(/const MAX_FIGURE_([A-Z_]+): usize = ([\d_]+);/g)].map((match) => [camelLimit(match[1]), Number(match[2].replaceAll('_', ''))]));
+const limitsTs = new Map([...(analysisTs.match(/LEAD_FIGURE_LIMITS = \{([^}]*)\}/)?.[1] ?? '').matchAll(/(\w+): ([\d_]+)/g)].map((match) => [match[1], Number(match[2].replaceAll('_', ''))]));
+const figureDrift = [
+  ...difference(figureKindsRust, figureKindsTs).map((kind) => `LeadFigure kind ${kind} missing from TypeScript`),
+  ...difference(figureKindsTs, figureKindsRust).map((kind) => `LeadFigure kind ${kind} missing from Rust`),
+  ...difference(figureUnitsRust, figureUnitsTs).map((unit) => `LeadFigureUnit ${unit} missing from TypeScript`),
+  ...difference(figureUnitsTs, figureUnitsRust).map((unit) => `LeadFigureUnit ${unit} missing from Rust`),
+  ...[...new Set([...limitsRust.keys(), ...limitsTs.keys()])].filter((key) => limitsRust.get(key) !== limitsTs.get(key))
+    .map((key) => `Lead figure limit ${key}: Rust ${limitsRust.get(key) ?? 'none'}, TypeScript ${limitsTs.get(key) ?? 'none'}`),
+];
+if (figureKindsRust.size === 0 || figureUnitsRust.size === 0 || limitsRust.size === 0 || figureDrift.length) {
+  throw new Error(`Lead figure contracts differ.\n${figureDrift.join('\n') || 'No kinds, units or limits parsed.'}`);
+}
+
 const directInvocations = walk(join(root, 'src'))
   .filter((path) => /\.(?:ts|tsx)$/.test(path) && path !== join(root, 'src/ipc.ts'))
   .filter((path) => /\binvoke(?:<[^>]+>)?\s*\(/.test(readFileSync(path, 'utf8')))
