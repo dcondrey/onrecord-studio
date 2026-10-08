@@ -155,7 +155,7 @@ async function verifyOne(path, revocations) {
   }
   results.push([signatureValid, `Ed25519 signature over the canonical bytes verifies against the embedded public key, whose SHA-256 is the signer key id (${package_.signature.algorithm ?? 'unknown algorithm'})`]);
 
-  let manifestConsistent = false;
+  let manifestConsistent;
   try {
     manifestConsistent = deepEqual(JSON.parse(canonicalBytes.toString('utf8')), package_.manifest);
   } catch {
@@ -190,13 +190,12 @@ async function verifyOne(path, revocations) {
   console.log('This label is the actual claim: a self-managed local key proves only that whoever');
   console.log('held that key file signed these bytes, not a notarized or third-party-attested identity.');
 
-  let revoked = null;
   let signerCompromised = false;
   if (Array.isArray(revocations)) {
     // The worst entry wins: a key can carry both a RETIRED and a later COMPROMISED entry, and
     // taking the first match found would let that pair read as merely retired.
     const matching = revocations.filter((entry) => entry.keyId === package_.signature?.signerKeyId);
-    revoked = matching.find((entry) => entry.status !== 'RETIRED') ?? matching.find((entry) => entry.status === 'RETIRED') ?? null;
+    const revoked = matching.find((entry) => entry.status !== 'RETIRED') ?? matching.find((entry) => entry.status === 'RETIRED') ?? null;
     if (revoked) {
       // Fail closed: only an exact 'RETIRED' status is informational; anything else is treated
       // as compromised, never silently trusted.

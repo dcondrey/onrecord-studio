@@ -179,6 +179,7 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
     crate::research::start_service(app.handle().clone());
 
     // 5. Apply the native window material.
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     if let Some(main_window) = app.get_webview_window("main") {
         #[cfg(target_os = "macos")]
         let _ = apply_vibrancy(&main_window, NSVisualEffectMaterial::Sidebar, None, None);

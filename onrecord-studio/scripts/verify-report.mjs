@@ -106,7 +106,7 @@ export async function verifyReportHtml(html) {
     }
   }
 
-  let manifest = null;
+  let manifest;
   try {
     manifest = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(canonical));
   } catch {

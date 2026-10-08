@@ -22,7 +22,6 @@ const port = Number(process.env.HELP_CAPTURE_PORT ?? 5243);
 const origin = `http://127.0.0.1:${port}`;
 
 const now = Date.now();
-const iso = (offsetHours) => new Date(now - offsetHours * 3600_000).toISOString();
 
 const entry = `import { createRoot } from 'react-dom/client';
 import FindingsInbox from './src/components/dashboard/FindingsInbox';

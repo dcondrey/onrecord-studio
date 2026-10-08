@@ -16,7 +16,7 @@ const quoted = (value) => (value === '' ? '' : `"${value}"`);
 // and end lines with CRLF, and the call-type list has three blank trailing headers.
 const yearCsv = (rows) => `${[['INCIDENT_NUM', 'DATE_TIME', 'DAY_OF_WEEK', 'CALL_TYPE', 'DISPOSITION', 'BEAT', 'PRIORITY'].map(quoted).join(','),
   ...rows.map(([incident, at, type, dispo, beat]) => [quoted(incident), quoted(`${at}.000`), 1, quoted(type), quoted(dispo), quoted(beat), quoted('2')].join(','))].join('\n')}\n`;
-const lookupCsv = (lines) => `﻿${lines.join('\r\n')}\r\n`;
+const lookupCsv = (lines) => `\uFEFF${lines.join('\r\n')}\r\n`;
 const year = (number) => `https://seshat.datasd.org/police_calls_for_service/pd_calls_for_service_${number}_datasd.csv`;
 const tables = {
   // E25001 is repeated; its later entry (A) is kept. The lower-case sleeper is SLEEPER; 5150V and

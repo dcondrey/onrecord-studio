@@ -49,7 +49,7 @@ const wireName = Object.fromEntries(
   [...findingKindImpl.matchAll(/Self::(\w+) => "([A-Z_]+)",/g)].map((match) => [match[1], match[2]]),
 );
 const rustKinds = new Set(Object.values(wireName));
-const legalBody = findingRust.match(/fn is_legal_claim[\s\S]*?\n    }\n/)?.[0] ?? '';
+const legalBody = findingRust.match(/fn is_legal_claim[\s\S]*?\n {4}}\n/)?.[0] ?? '';
 const rustLegal = new Set(
   [...legalBody.matchAll(/Self::(\w+) => true/g)].map((match) => wireName[match[1]]),
 );

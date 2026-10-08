@@ -11,7 +11,6 @@ const root = resolve(import.meta.dirname, '..');
 const tauriRoot = join(root, 'src-tauri');
 const args = process.argv.slice(2);
 const mode = args.includes('--check') ? 'check' : args.includes('--dry-run') ? 'dry-run' : 'package';
-const identifier = 'com.onrecord.studio';
 const teamId = 'U3PZN7P3E5';
 const productName = 'OnRecord Studio';
 const feedTemplate = 'https://updates.writerslogic.com/onrecord/updates/{{target}}/{{arch}}/{{current_version}}';
