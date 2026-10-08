@@ -1,4 +1,4 @@
-import type { AnalyticalDatasetSummary, AnalyticalSchema, ServiceLeadInput, SqlQueryResult } from '../types';
+import type { AnalyticalDatasetSummary, AnalyticalSchema, LeadFigure, ServiceLeadInput, SqlQueryResult } from '../types';
 import { buildDiscoveryPlan, discoveryDefaults, quoteIdentifier, type DiscoveryQuery, type DiscoverySelection } from './dataDiscovery';
 import { abatementCompanion, abatementLeads, abatementQueries, reportsAroundAbatements } from './abatementLeads';
 import { belongingsLeads, belongingsQueries } from './belongingsLeads';
@@ -30,6 +30,8 @@ export interface DiscoveryObservation {
   reads?: string[];
   /** Set on a lead whose result names a period or places a follow-up record should cover. */
   scope?: LeadScope;
+  /** Set on a lead whose result was read in full: its figure, from the same rows as `detail`. */
+  figure?: LeadFigure;
 }
 export interface AutomaticProfile {
   fingerprint: string;
@@ -103,7 +105,7 @@ export function metadataObservations(dataset: AnalyticalDatasetSummary): Discove
 export function profileObservations(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary, profile: AutomaticProfile): DiscoveryObservation[] {
   const lead = (family: ServiceLeadInput['family']) => (item: ReturnType<typeof stopLeads>[number]): DiscoveryObservation => ({
     id: `${dataset.snapshotId}:${item.key}`, snapshotId: dataset.snapshotId, kind: 'lead', family, priority: item.priority,
-    title: item.title, detail: item.detail, question: item.question, query: item.query, scope: item.scope,
+    title: item.title, detail: item.detail, question: item.question, query: item.query, scope: item.scope, figure: item.figure,
   });
   const observations: DiscoveryObservation[] = [...serviceAccountabilityLeads(profile.results).map(lead('SERVICE_REPORTS')), ...stopLeads(profile.results).map(lead('POLICE_STOPS')),
     ...abatementLeads(profile.results).map(lead('ABATEMENT_LOGS')), ...belongingsLeads(profile.results).map(lead('ABATEMENT_LOGS')), ...chargeLeads(profile.results).map(lead('CHARGE_LOGS')), ...disclosureLeads(profile.results).map(lead('DISCLOSURE_FILINGS')),
@@ -155,7 +157,7 @@ export function recurringObservations(schema: AnalyticalSchema, profiles: Record
   const tables = schema.datasets.flatMap((dataset) => profiles[dataset.snapshotId] ? [{ snapshotId: dataset.snapshotId, displayName: dataset.displayName, sourceUri: dataset.sourceUri, retrievedAt: dataset.retrievedAt, results: profiles[dataset.snapshotId].results }] : []);
   return [...backlogChangeLeads(tables), ...recurringServiceLeads(tables)].map((lead) => ({
     id: `${lead.snapshotId}:${lead.key}`, snapshotId: lead.snapshotId, kind: 'lead', family: 'SERVICE_REPORTS', priority: lead.priority,
-    title: lead.title, detail: lead.detail, question: lead.question, query: lead.query, reads: lead.reads,
+    title: lead.title, detail: lead.detail, question: lead.question, query: lead.query, reads: lead.reads, figure: lead.figure,
   }));
 }
 
@@ -169,7 +171,7 @@ export function storedLeads(schema: AnalyticalSchema, profiles: Record<string, A
   const sources = (item: DiscoveryObservation) => [item.snapshotId, ...schema.datasets.filter((dataset) => dataset.snapshotId !== item.snapshotId
     && (item.reads?.includes(dataset.snapshotId) || item.query!.sql.includes(quoteIdentifier(dataset.tableName)))).map((dataset) => dataset.snapshotId)];
   return {
-    leads: observations.map((item) => ({ family: item.family!, key: item.id, snapshotId: item.snapshotId, snapshotIds: sources(item), title: item.title, detail: item.detail, question: item.question, method: item.query!.method, sql: item.query!.sql })),
+    leads: observations.map((item) => ({ family: item.family!, key: item.id, snapshotId: item.snapshotId, snapshotIds: sources(item), title: item.title, detail: item.detail, question: item.question, method: item.query!.method, sql: item.query!.sql, figure: item.figure ?? null })),
     complete: schema.datasets.every((dataset) => profiles[dataset.snapshotId]?.results.every((entry) => !entry.error)),
   };
 }
