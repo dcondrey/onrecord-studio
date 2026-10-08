@@ -31,13 +31,14 @@ interface CellBase {
 
 /**
  * - state: an observed state. `lead` is a violet fill (a lead the app surfaced), `positive` a teal
- *   glyph on a neutral cell (observed and healthy), `neutral` an outline.
+ *   glyph on a neutral cell (observed and healthy), `neutral` an outline, `quiet` bare words (a
+ *   measured zero in a count grid, left unshaded so it does not read as a small count).
  * - count: a measured count on the sequential slate ramp.
  * - gap: an absence, drawn as its kind of empty cell. With `lead` the empty cell is outlined in
  *   violet: a record the app found missing and worth asking for.
  */
 export type StateGridCell =
-  | (CellBase & { kind: 'state'; tone: 'lead' | 'positive' | 'neutral' })
+  | (CellBase & { kind: 'state'; tone: 'lead' | 'positive' | 'neutral' | 'quiet' })
   | (CellBase & { kind: 'count'; value: number; step: SeqStep })
   | (CellBase & { kind: 'gap'; absence: Absence; lead?: boolean });
 
@@ -156,8 +157,9 @@ function StateCellMark({ cell, x, y, width, height, interaction }: { cell: State
   const h = Math.max(0, height - 2 * inset);
   const lead = (cell.kind === 'state' && cell.tone === 'lead') || (cell.kind === 'gap' && cell.lead);
   const filled = cell.kind === 'state' && cell.tone === 'lead';
-  const textColour = filled ? 'var(--viz-on-color)' : 'rgb(var(--fg))';
-  const glyphColour = filled ? 'var(--viz-on-color)' : cell.kind === 'state' && cell.tone === 'positive' ? VIZ.positive : lead ? VIZ.lead : VIZ.ink;
+  const quiet = cell.kind === 'state' && cell.tone === 'quiet';
+  const textColour = filled ? 'var(--viz-on-color)' : quiet ? 'rgb(var(--muted))' : 'rgb(var(--fg))';
+  const glyphColour = filled ? 'var(--viz-on-color)' : cell.kind === 'state' && cell.tone === 'positive' ? VIZ.positive : lead ? VIZ.lead : quiet ? VIZ.context : VIZ.ink;
   const showText = fitsInside(cell.text, w - 20) && h >= 14;
   const rect = filled
     ? { fill: VIZ.lead }
@@ -165,7 +167,9 @@ function StateCellMark({ cell, x, y, width, height, interaction }: { cell: State
       ? { fill: 'none', stroke: VIZ.lead, strokeWidth: 1.5, strokeDasharray: cell.absence.state === 'not-covered' ? '1 2' : '3 2' }
       : cell.kind === 'state' && cell.tone === 'positive'
         ? { fill: VIZ.track }
-        : { fill: 'none', stroke: VIZ.mark, strokeWidth: 1 };
+        : cell.kind === 'state' && cell.tone === 'quiet'
+          ? { fill: 'none' }
+          : { fill: 'none', stroke: VIZ.mark, strokeWidth: 1 };
   return (
     <MarkGroup interaction={interaction} box={{ x: x + inset, y: y + inset, width: w, height: h }} ringRadius={4}>
       {!showText && <title>{cell.text}</title>}

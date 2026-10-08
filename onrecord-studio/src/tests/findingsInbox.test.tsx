@@ -178,6 +178,59 @@ describe('FindingsInbox', () => {
     expect(screen.queryByText('Finding 50')).toBeNull();
   });
 
+  it('withholds the agency matrix while findings remain unloaded, and loads all of them on request', async () => {
+    const rows = (count: number) =>
+      Array.from({ length: count }, (_, i) => sampleFinding({ id: `f${i}`, headline: `Finding ${i}`, subject: { ...sampleFinding().subject, agencyId: i % 2 } }));
+    bridge.override.list_findings = (args) => Promise.resolve(rows(Math.min(53, (args as { limit: number }).limit)));
+    bridge.override.count_findings = () => Promise.resolve(53);
+    await act(async () => {
+      render(<FindingsInbox />);
+    });
+    const loadAll = await screen.findByRole('button', { name: 'Load all 53 to compare by agency' });
+    expect(screen.queryByRole('grid')).toBeNull();
+    await act(async () => {
+      fireEvent.click(loadAll);
+    });
+    await waitFor(() => expect(screen.getByRole('grid', { name: 'Findings by agency and severity' })).toBeTruthy());
+    expect(bridge.invoked.filter((call) => call.command === 'list_findings').at(-1)?.args).toEqual({ filter: null, limit: 54 });
+  });
+
+  it('discards a finding count that resolves after a newer refresh', async () => {
+    bridge.listRows = Array.from({ length: 51 }, (_, i) => sampleFinding({ id: `f${i}`, headline: `Finding ${i}` }));
+    const stale = deferred<number>();
+    let calls = 0;
+    bridge.override.count_findings = () => (calls++ === 0 ? stale.promise : Promise.resolve(120));
+    await act(async () => {
+      render(<FindingsInbox />);
+    });
+    await waitFor(() => expect(calls).toBe(1));
+    await act(async () => {
+      useAppStore.getState().requestFindingsRefresh();
+    });
+    await screen.findByRole('button', { name: 'Load all 120 to compare by agency' });
+    await act(async () => stale.resolve(999));
+    expect(screen.queryByRole('button', { name: /Load all 999/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Load all 120 to compare by agency' })).toBeTruthy();
+  });
+
+  it('filters the list to the agency and severity of an activated matrix cell', async () => {
+    useAppStore.setState({ agencyProfiles: [{ agencyId: 3, portalSubdomain: 'test-portal', agencyName: 'Environmental Services' } as never] });
+    bridge.listRows = [
+      sampleFinding({ id: 'a', severity: 'CRITICAL', headline: 'Environmental critical', subject: { ...sampleFinding().subject, agencyId: 3 } }),
+      sampleFinding({ id: 'b', severity: 'SERIOUS', headline: 'Environmental serious', subject: { ...sampleFinding().subject, agencyId: 3 } }),
+      sampleFinding({ id: 'c', severity: 'CRITICAL', headline: 'Unattributed critical' }),
+    ];
+    await act(async () => {
+      render(<FindingsInbox />);
+    });
+    await screen.findByText('Environmental Services carries 2 of 3 findings, including 1 of 2 critical.');
+    fireEvent.keyDown(screen.getByRole('img', { name: /^Environmental Services, critical: 1 finding/ }), { key: 'Enter' });
+    expect(screen.getByText('Environmental critical')).toBeTruthy();
+    expect(screen.queryByText('Environmental serious')).toBeNull();
+    expect(screen.queryByText('Unattributed critical')).toBeNull();
+    useAppStore.setState({ agencyProfiles: [] });
+  });
+
   it('renders ranked findings from list_findings and shows their severity, headline, and explanation', async () => {
     bridge.listRows = [
       sampleFinding({
