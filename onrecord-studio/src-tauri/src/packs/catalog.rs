@@ -4,6 +4,7 @@
 use crate::error::AppError;
 use crate::ingestion::queue::dataset_source;
 use crate::types::{AnalyticalDatasetKind, CityDataset};
+use chrono::Datelike;
 
 /// One conformed table of a pack and the City dataset it is built from.
 pub(crate) struct PackTable {
@@ -151,22 +152,42 @@ const PACKS: &[(&str, &[PackTable])] = &[
     ("san-diego-capacity", CAPACITY),
 ];
 
+/// The pack a scheduled job extends every day with dated snapshots of the files publishers
+/// overwrite in place (`docs/data-packs.md`, Snapshots).
+pub(crate) const SNAPSHOT_PACK: &str = "san-diego-snapshots";
+
 /// Every pack's name, in the catalog's order.
 pub(crate) fn pack_names() -> impl Iterator<Item = &'static str> {
-    PACKS.iter().map(|(name, _)| *name)
+    PACKS.iter().map(|(name, _)| *name).chain([SNAPSHOT_PACK])
+}
+
+/// The snapshot pack's tables: every catalog table published as one file rather than by year,
+/// since that one file is what its publisher overwrites.
+pub(crate) fn snapshot_tables(current_year: i32) -> Vec<&'static PackTable> {
+    let mut tables: Vec<&'static PackTable> = Vec::new();
+    for entry in PACKS.iter().flat_map(|(_, tables)| tables.iter()) {
+        if dataset_source(entry.dataset, None, current_year).is_ok()
+            && !tables.iter().any(|kept| kept.dataset == entry.dataset)
+        {
+            tables.push(entry);
+        }
+    }
+    tables
 }
 
 /// The City open-data tables of `pack`.
-pub(crate) fn pack_tables(pack: &str) -> Result<&'static [PackTable], AppError> {
+pub(crate) fn pack_tables(pack: &str) -> Result<Vec<&'static PackTable>, AppError> {
+    if pack == SNAPSHOT_PACK {
+        return Ok(snapshot_tables(chrono::Utc::now().year()));
+    }
     PACKS
         .iter()
         .find(|(name, _)| *name == pack)
-        .map(|(_, tables)| *tables)
+        .map(|(_, tables)| tables.iter().collect())
         .ok_or_else(|| {
-            let names = PACKS.iter().map(|(name, _)| *name).collect::<Vec<_>>();
             AppError::DataParsing(format!(
                 "Unknown pack '{pack}'; packs are {}",
-                names.join(", ")
+                pack_names().collect::<Vec<_>>().join(", ")
             ))
         })
 }
@@ -219,6 +240,49 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Each snapshot table is one publisher file under its own name, so its dated snapshots and
+    /// change records never share a path with another file's.
+    #[test]
+    fn the_snapshot_tables_are_the_catalog_tables_published_as_one_file() {
+        let tables = snapshot_tables(2026)
+            .iter()
+            .map(|entry| entry.table)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            tables,
+            [
+                "budget_adopted",
+                "budget_actuals",
+                "capital_budget",
+                "capital_actuals",
+                "budget_accounts",
+                "budget_departments",
+                "budget_funds",
+                "city_properties",
+                "city_parcels",
+                "city_leases",
+                "service_reports",
+                "call_types",
+                "call_dispositions",
+                "police_beats",
+                "police_stops",
+                "police_stop_reasons",
+                "police_stop_results",
+                "police_stop_seizure_basis",
+                "traffic_collisions",
+                "traffic_collision_people",
+                "hate_crimes",
+            ]
+        );
+        assert_eq!(
+            snapshot_tables(2026)
+                .iter()
+                .find(|entry| entry.table == "service_reports")
+                .map(|entry| entry.dataset),
+            Some(CityDataset::GetItDoneOpen)
+        );
     }
 
     const ACTUALS: &str =

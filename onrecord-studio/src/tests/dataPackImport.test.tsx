@@ -56,7 +56,7 @@ describe('DataPackImport', () => {
     });
     vi.mocked(open).mockResolvedValueOnce('/packs/money');
     vi.mocked(invokeCommand).mockImplementation(((command: string, args: { manifestSha256?: string }) => Promise.resolve(command === 'inspect_data_pack'
-      ? { ...summary('money'), tables: [{ table: 'budget_actuals', files }] }
+      ? { ...summary('money'), tables: [{ table: 'budget_actuals', files, unchangedChecks: 0, lastCheckedAt: null, changeRecords: 0 }] }
       : args.manifestSha256 === 'cd'.repeat(32) ? [outcome('a.csv', 2, false), outcome('b.csv', 0, false), outcome('c.csv', 2, true)] : [])) as unknown as typeof invokeCommand);
     render(<DataPackImport />);
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Choose pack folder' })); });
@@ -78,7 +78,7 @@ describe('DataPackImport', () => {
     const file = (year: number, bytes: number) => ({
       path: `originals/police_calls/${year}.csv`, year, rows: 10, bytes, partial: false, sourceUrl: 'https://example.test/', retrievedAt: '2026-10-05T23:59:15Z', datasetKind: 'REGIONAL_DATA' as const,
     });
-    const manifest = { ...summary('san-diego-reports'), tables: [{ table: 'police_calls', files: [file(2024, 2_000_000), file(2025, 3_000_000)] }] };
+    const manifest = { ...summary('san-diego-reports'), tables: [{ table: 'police_calls', files: [file(2024, 2_000_000), file(2025, 3_000_000)], unchangedChecks: 0, lastCheckedAt: null, changeRecords: 0 }] };
     vi.mocked(invokeCommand).mockImplementation(((command: string) => Promise.resolve(
       command === 'list_published_packs' ? packs : command === 'fetch_published_pack_manifest' ? manifest : [],
     )) as unknown as typeof invokeCommand);

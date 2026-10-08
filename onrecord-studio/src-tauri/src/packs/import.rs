@@ -122,8 +122,26 @@ pub(crate) fn summarize(
             None => tables.push(DataPackTable {
                 table: file.table.clone(),
                 files: vec![summary],
+                unchanged_checks: 0,
+                last_checked_at: None,
+                change_records: 0,
             }),
         }
+    }
+    for table in &mut tables {
+        table.change_records = manifest
+            .files
+            .iter()
+            .filter(|file| file.format == PackFileFormat::Changes && file.table == table.table)
+            .count() as u64;
+        let checks = manifest
+            .checks
+            .iter()
+            .filter(|check| check.table == table.table);
+        table.unchanged_checks = checks.clone().count() as u64;
+        table.last_checked_at = checks
+            .max_by_key(|check| DateTime::parse_from_rfc3339(&check.checked_at).ok())
+            .map(|check| check.checked_at.clone());
     }
     Ok(DataPackSummary {
         pack: manifest.pack,
@@ -299,7 +317,10 @@ mod tests {
                 partial: true,
                 last_modified: None,
                 etag: None,
+                changes: None,
             }],
+            key_id: None,
+            checks: Vec::new(),
         }
     }
 

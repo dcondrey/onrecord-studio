@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { open as chooseFolder } from '@tauri-apps/plugin-dialog';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
-import type { DataPackFileSummary, DataPackImportOutcome, DataPackSummary, PublishedPack, PublishedPackSelection } from '../../types';
+import type { DataPackFileSummary, DataPackImportOutcome, DataPackSummary, DataPackTable, PublishedPack, PublishedPackSelection } from '../../types';
 import Icon from '../ui/icons';
 
 const IMPORTING = 'Importing files';
@@ -124,6 +124,24 @@ function choiceLabel(choice: Choice): string {
 
 const importable = (choice: Choice) => choice.files.every((file) => file.datasetKind !== null);
 
+/** A snapshot pack's record of a table between snapshots, or `null` when it records none. */
+function snapshotHistory(table: DataPackTable): string | null {
+  const parts: string[] = [];
+  if (table.unchangedChecks > 0) {
+    const times = table.unchangedChecks === 1 ? 'once' : `${table.unchangedChecks.toLocaleString()} times`;
+    parts.push(`checked unchanged ${times}, last ${table.lastCheckedAt?.slice(0, 10) ?? 'at an unrecorded time'}`);
+  }
+  if (table.changeRecords > 0) {
+    parts.push(`${table.changeRecords.toLocaleString()} change ${table.changeRecords === 1 ? 'record' : 'records'} between snapshots (listed, not imported)`);
+  }
+  return parts.length > 0 ? `Snapshots: ${parts.join(' · ')}.` : null;
+}
+
+function SnapshotHistory({ table }: { table: DataPackTable }) {
+  const history = snapshotHistory(table);
+  return history ? <p className="text-muted">{history}</p> : null;
+}
+
 function PublishedPacks({ onImported }: { onImported?: () => void }) {
   const listGate = useLatestRequestGate();
   const { busy, error, run, reset } = useGatedRun();
@@ -203,6 +221,7 @@ function PublishedPacks({ onImported }: { onImported?: () => void }) {
           {summary.tables.map((table) => (
             <fieldset key={table.table} className="space-y-1">
               <legend className="font-semibold text-fg">{table.table}</legend>
+              <SnapshotHistory table={table} />
               {choices.filter((choice) => choice.table === table.table).map((choice) => (
                 <label key={choice.key} className="flex items-center gap-2 text-fg-secondary">
                   <input type="checkbox" disabled={!importable(choice)} checked={selected.has(choice.key)} onChange={() => toggle(choice.key)} />
@@ -280,6 +299,7 @@ export default function DataPackImport({ onImported }: { onImported?: () => void
           {summary.tables.map((table) => (
             <fieldset key={table.table} className="space-y-1">
               <legend className="font-semibold text-fg">{table.table}</legend>
+              <SnapshotHistory table={table} />
               {table.files.map((file) => (
                 <label key={file.path} className="flex items-center gap-2 text-fg-secondary">
                   <input type="checkbox" disabled={file.datasetKind === null} checked={selected.has(file.path)} onChange={() => toggle(file.path)} />

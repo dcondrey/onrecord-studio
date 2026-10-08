@@ -10,7 +10,7 @@ use super::catalog::pack_names;
 use super::import::{file_kind, import_files, manifest_sha256, summarize};
 use super::{
     check_pack_file, pack_relative, refused, verify_manifest, verify_manifest_bytes, PackFile,
-    PackFileFormat, PackManifest, PACK_MANIFEST_FILE,
+    PackFileFormat, PackManifest, SignedManifest, PACK_MANIFEST_FILE,
 };
 use crate::error::AppError;
 use crate::ingestion::client::{ApiClient, HttpClientConfig};
@@ -23,8 +23,10 @@ use std::path::{Component, Path, PathBuf};
 
 const PUBLISHER: &str = "Writerslogic";
 const HUB: &str = "https://huggingface.co/";
-/// A manifest lists a pack's files; `san-diego-reports` 2026.10.7 (94 files) is 123,432 bytes.
-const MAX_MANIFEST_BYTES: usize = 4 * 1024 * 1024;
+/// A manifest lists a pack's files; `san-diego-reports` 2026.10.7 (94 files) is 123,432 bytes. The
+/// snapshot pack's grows by roughly 25 KB a day (`docs/data-packs.md`, Snapshots), which this
+/// bound holds for about three years.
+const MAX_MANIFEST_BYTES: usize = 32 * 1024 * 1024;
 /// Beside a kept manifest: the repository commit it was served from, so its files are fetched
 /// from that commit rather than from whatever `main` holds later.
 const REVISION_FILE: &str = "revision";
@@ -175,7 +177,7 @@ fn keep_manifest(
     staged: &Path,
     revision: Option<String>,
     pinned: &[VerifyingKey],
-) -> Result<DataPackSummary, AppError> {
+) -> Result<SignedManifest, AppError> {
     let bytes = std::fs::read(staged)
         .map_err(|error| AppError::Storage(format!("Downloaded pack manifest: {error}")))?;
     let signed = verify_manifest_bytes(&bytes, pinned)?;
@@ -204,7 +206,7 @@ fn keep_manifest(
         },
     }
     std::fs::rename(staged, directory.join(PACK_MANIFEST_FILE)).map_err(pack_error)?;
-    summarize(signed.manifest, &signed.signer_key_id)
+    Ok(signed)
 }
 
 /// Downloads `pack`'s signed manifest and describes what it lists. No listed file is fetched.
@@ -213,29 +215,64 @@ pub(crate) async fn fetch_manifest(
     pack: &str,
     pinned: Vec<VerifyingKey>,
 ) -> Result<DataPackSummary, AppError> {
+    let signed = fetch_signed_manifest(root, pack, pinned)
+        .await?
+        .ok_or_else(|| AppError::DataParsing(format!("{pack} has not been published yet")))?;
+    summarize(signed.manifest, &signed.signer_key_id)
+}
+
+/// Downloads `pack`'s signed manifest and keeps it once verified, as [`fetch_manifest`] does;
+/// `None` when the repository serves no manifest (HTTP 404 or 410).
+pub(crate) async fn fetch_signed_manifest(
+    root: PathBuf,
+    pack: &str,
+    pinned: Vec<VerifyingKey>,
+) -> Result<Option<SignedManifest>, AppError> {
     let pack = published_pack(pack)?;
     let pack_root = root.join(pack);
     tokio::fs::create_dir_all(&pack_root)
         .await
         .map_err(|error| AppError::Storage(format!("Pack directory: {error}")))?;
     let staged = staged_name(&pack_root);
-    let downloaded = client()?
-        .download_url_to_path_within(
+    let Some(downloaded) = client()?
+        .download_url_to_path_unless_gone(
             file_url(pack, BRANCH, Path::new(PACK_MANIFEST_FILE))?,
             &staged,
             MAX_MANIFEST_BYTES,
         )
-        .await?;
+        .await?
+    else {
+        return Ok(None);
+    };
     let revision = served_revision(pack, &downloaded.acquisition.resolved_url);
     let kept = staged.clone();
-    let summary = blocking("Verify data pack manifest", move || {
+    let signed = blocking("Verify data pack manifest", move || {
         keep_manifest(&root, pack, &kept, revision, &pinned)
     })
     .await;
-    if summary.is_err() {
+    if signed.is_err() {
         let _ = tokio::fs::remove_file(&staged).await;
     }
-    summary
+    signed.map(Some)
+}
+
+/// Fetches `file`, listed by the manifest of `pack` `pack_version` that [`fetch_signed_manifest`]
+/// kept under `root`, from the commit that manifest came from, and returns where it was kept once
+/// its size and SHA-256 matched.
+#[cfg_attr(not(feature = "pack-builder"), allow(dead_code))]
+pub(crate) async fn fetch_listed_file(
+    root: &Path,
+    pack: &str,
+    pack_version: &str,
+    file: &PackFile,
+) -> Result<PathBuf, AppError> {
+    let pack = published_pack(pack)?;
+    let directory = version_directory(root, pack, pack_version)?;
+    let revision = kept_revision(&directory);
+    fetch_file(&client()?, root, pack, &revision, &directory, file).await?;
+    let relative = pack_relative(&file.path)
+        .ok_or_else(|| refused(format!("it lists a path outside the pack: {}", file.path)))?;
+    Ok(directory.join(relative))
 }
 
 /// The original files `selection` names, each once, refused as a whole before anything is
@@ -466,6 +503,7 @@ mod tests {
             partial: false,
             last_modified: None,
             etag: None,
+            changes: None,
         }
     }
 
@@ -481,6 +519,8 @@ mod tests {
                 disclaimer: "Informational only.".into(),
             },
             files,
+            key_id: None,
+            checks: Vec::new(),
         }
     }
 
@@ -631,7 +671,7 @@ mod tests {
             .join("san-diego-money")
             .join(&summary.pack_version);
         assert_ne!(kept_revision(&directory), BRANCH);
-        let repository = DuckDbRepository::new(&root.path().join("library.duckdb")).unwrap();
+        let repository = DuckDbRepository::new(root.path().join("library.duckdb")).unwrap();
         repository
             .run_migrations(include_str!("../../migrations/0001_initial_schema.sql"))
             .await

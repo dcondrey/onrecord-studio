@@ -27,6 +27,12 @@ pub struct DataPackSummary {
 pub struct DataPackTable {
     pub table: String,
     pub files: Vec<DataPackFileSummary>,
+    /// Retrievals a snapshot pack recorded as unchanged from the table's latest snapshot.
+    pub unchanged_checks: u64,
+    /// The latest of those checks, RFC 3339; `None` when there is none.
+    pub last_checked_at: Option<String>,
+    /// Change records between the table's snapshots, which are listed but never imported.
+    pub change_records: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

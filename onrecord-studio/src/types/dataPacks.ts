@@ -23,6 +23,12 @@ export interface DataPackSummary {
 export interface DataPackTable {
   table: string;
   files: DataPackFileSummary[];
+  /** Retrievals a snapshot pack recorded as unchanged from the table's latest snapshot. */
+  unchangedChecks: number;
+  /** The latest of those checks; `null` when there is none. */
+  lastCheckedAt: string | null;
+  /** Change records between the table's snapshots; listed, never imported. */
+  changeRecords: number;
 }
 
 export interface DataPackFileSummary {

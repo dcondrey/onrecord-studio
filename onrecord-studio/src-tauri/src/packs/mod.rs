@@ -15,20 +15,32 @@ use std::path::{Component, Path};
 #[cfg(feature = "pack-builder")]
 pub mod builder;
 pub(crate) mod catalog;
+#[cfg(feature = "pack-builder")]
+mod changes;
 pub mod conformed;
 pub(crate) mod import;
 pub(crate) mod published;
+#[cfg(feature = "pack-builder")]
+pub mod snapshot;
 
 /// The manifest's file name inside a pack directory.
 pub(crate) const PACK_MANIFEST_FILE: &str = "manifest.json";
 
 /// Pinned pack publisher keys as `(kid, hex of the 32-byte Ed25519 key)`. Separate from the
 /// per-installation export key and the entitlement keys; rotation adds an entry. There is no
-/// runtime route to add a key: tests pass their own keys to [`verify_pack`].
-pub(crate) const PACK_PUBLIC_KEYS: &[(&str, &str)] = &[(
-    "pack-2026-1",
-    "b42202850cd9ecda4ab2b96548891d3a2a8275f74dde76bba2153826089ca8ff",
-)];
+/// runtime route to add a key: tests pass their own keys to [`verify_pack`]. `pack-2026-1` signs
+/// the curated releases from the owner's Keychain; `pack-ci-2026-1` signs the daily snapshot pack
+/// on the CI runner.
+pub(crate) const PACK_PUBLIC_KEYS: &[(&str, &str)] = &[
+    (
+        "pack-2026-1",
+        "b42202850cd9ecda4ab2b96548891d3a2a8275f74dde76bba2153826089ca8ff",
+    ),
+    (
+        "pack-ci-2026-1",
+        "3049662bc87c61409d8b8a515d60adf1420a32504bd4f6215ac0c121550a318f",
+    ),
+];
 
 /// The licence a pack's files are published under, with the publisher's required disclaimer.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -65,6 +77,9 @@ pub(crate) struct PackFile {
     /// The publisher's freshness markers as served, used to fetch only what changed later.
     pub last_modified: Option<String>,
     pub etag: Option<String>,
+    /// For a change record, what it compares and how many rows of each kind it holds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub changes: Option<ChangeSummary>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -72,6 +87,44 @@ pub(crate) struct PackFile {
 pub(crate) enum PackFileFormat {
     Original,
     Parquet,
+    /// A change record between two snapshots of one publisher file. Never imported.
+    Changes,
+}
+
+/// What a change record compares and how many of its rows are of each kind.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ChangeSummary {
+    /// The earlier snapshot's original, as the manifest lists it.
+    pub previous: String,
+    /// The later snapshot's original.
+    pub current: String,
+    pub added: u64,
+    pub removed: u64,
+    /// Rows naming one changed field of a record present in both snapshots.
+    pub changed: u64,
+    /// More than half the records changed, so changed records are listed as removed and added
+    /// rather than field by field.
+    pub whole_records: bool,
+}
+
+/// A retrieval whose bytes equalled the latest snapshot of its file. It says the file had not
+/// changed when checked, nothing about the file between checks.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PackCheck {
+    pub table: String,
+    pub source_url: String,
+    /// When the file was retrieved for the check, RFC 3339.
+    pub checked_at: String,
+    pub sha256: String,
+    pub bytes: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_modified: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub etag: Option<String>,
+    /// The snapshot original whose bytes the retrieval matched.
+    pub matches: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -86,6 +139,13 @@ pub(crate) struct PackManifest {
     pub built_at: String,
     pub licence: PackLicence,
     pub files: Vec<PackFile>,
+    /// The `PACK_PUBLIC_KEYS` name of the signing key, as the signer states it; the signature's
+    /// `signerKeyId` is the key's SHA-256, which verification binds to the key.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key_id: Option<String>,
+    /// A snapshot pack's checks that found a file unchanged, oldest first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub checks: Vec<PackCheck>,
 }
 
 /// A manifest whose signature and publisher key have been checked, and whose every listed path
@@ -165,6 +225,20 @@ pub(crate) fn verify_manifest_bytes(
         return Err(refused(format!(
             "it lists a path outside the pack: {}",
             file.path
+        )));
+    }
+    let manifest = &package.manifest;
+    if let Some(check) = manifest.checks.iter().find(|check| {
+        !manifest.files.iter().any(|file| {
+            file.format == PackFileFormat::Original
+                && file.path == check.matches
+                && file.bytes == check.bytes
+                && file.sha256.eq_ignore_ascii_case(&check.sha256)
+        })
+    }) {
+        return Err(refused(format!(
+            "it records a check matching no original it lists: {}",
+            check.matches
         )));
     }
     Ok(SignedManifest {
@@ -254,7 +328,10 @@ mod tests {
                 partial: false,
                 last_modified: None,
                 etag: None,
+                changes: None,
             }],
+            key_id: None,
+            checks: Vec::new(),
         }
     }
 
@@ -360,6 +437,65 @@ mod tests {
             refused.to_string().contains("outside the pack"),
             "{refused}"
         );
+    }
+
+    /// The published packs were signed before checks, key names and change records existed;
+    /// their manifests must still encode to the bytes that were signed.
+    #[test]
+    fn a_manifest_without_snapshot_fields_encodes_as_before_them() {
+        let encoded = serde_json::to_string(&manifest("ab".repeat(32), 7)).unwrap();
+        assert_eq!(
+            encoded,
+            format!(
+                r#"{{"pack":"san-diego-reports","packVersion":"2026.10.6","schemaVersion":"1.0","builtAt":"2026-10-06T00:00:00Z","licence":{{"id":"ODC-PDDL-1.0","url":"https://opendefinition.org/licenses/odc-pddl/","disclaimer":"Informational only."}},"files":[{{"path":"originals/police_calls/2025.csv","table":"police_calls","format":"ORIGINAL","sourceUrl":"https://seshat.datasd.org/police_calls_for_service/pd_calls_for_service_2025_datasd.csv","retrievedAt":"2026-10-06T00:00:00Z","sha256":"{}","bytes":7,"rows":1,"year":2025,"partial":false,"lastModified":null,"etag":null}}]}}"#,
+                "ab".repeat(32)
+            )
+        );
+    }
+
+    /// A check states that a retrieval's bytes equalled a snapshot the manifest lists; one naming
+    /// other bytes, or no listed original, is refused.
+    #[test]
+    fn a_check_verifies_only_against_the_original_it_matched() {
+        let key = SigningKey::from_bytes(&[5_u8; 32]);
+        let signed = |manifest: PackManifest| {
+            serde_json::to_vec(&sign_package(manifest, &key).unwrap()).unwrap()
+        };
+        let check = PackCheck {
+            table: "police_calls".into(),
+            source_url: "https://seshat.datasd.org/x.csv".into(),
+            checked_at: "2026-10-07T00:00:00Z".into(),
+            sha256: "ab".repeat(32),
+            bytes: 7,
+            last_modified: None,
+            etag: None,
+            matches: "originals/police_calls/2025.csv".into(),
+        };
+        let mut checked = manifest("ab".repeat(32), 7);
+        checked.checks.push(check.clone());
+        assert!(verify_manifest_bytes(&signed(checked.clone()), &[key.verifying_key()]).is_ok());
+        for tampered in [
+            PackCheck {
+                sha256: "cd".repeat(32),
+                ..check.clone()
+            },
+            PackCheck {
+                bytes: 8,
+                ..check.clone()
+            },
+            PackCheck {
+                matches: "originals/police_calls/2024.csv".into(),
+                ..check
+            },
+        ] {
+            checked.checks = vec![tampered];
+            let refused = verify_manifest_bytes(&signed(checked.clone()), &[key.verifying_key()])
+                .unwrap_err();
+            assert!(
+                refused.to_string().contains("matching no original"),
+                "{refused}"
+            );
+        }
     }
 
     #[test]
