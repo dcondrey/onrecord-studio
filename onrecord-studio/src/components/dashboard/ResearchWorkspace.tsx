@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import ResearchBriefing from "./ResearchBriefing";
 import { Citations, EvidenceLinks } from "./ResearchEvidence";
 import ResearchExport from "./ResearchExport";
+import { downloadText } from "./textDownload";
 import { requestFindingLinks } from "../../utils/researchExport";
 import { isTauri } from "@tauri-apps/api/core";
 import { formatNativeError, invokeCommand } from "../../ipc";
@@ -561,7 +562,7 @@ function Dossier({
                   type="button"
                   className="analysis-button mt-3"
                   onClick={() =>
-                    download(
+                    downloadText(
                       `${report.topic}-request-${index + 1}.txt`,
                       request.draft,
                     )
@@ -755,14 +756,4 @@ function ActionState({
       )}
     </div>
   );
-}
-function download(name: string, content: string) {
-  const url = URL.createObjectURL(
-    new Blob([content], { type: "text/plain;charset=utf-8" }),
-  );
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = name;
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

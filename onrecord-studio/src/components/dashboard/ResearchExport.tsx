@@ -4,15 +4,7 @@ import {
   buildResearchMarkdown,
   researchCaseSnapshot,
 } from "../../utils/researchExport";
-
-function download(name: string, content: string, type: string) {
-  const url = URL.createObjectURL(new Blob([content], { type }));
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = name;
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
+import { downloadText } from "./textDownload";
 
 export default function ResearchExport({
   report,
@@ -73,10 +65,10 @@ export default function ResearchExport({
             }}>
               Select text to copy
             </button>
-            <button type="button" className="analysis-button" onClick={() => download(`${filename}.md`, packet.markdown, "text/markdown;charset=utf-8")}>
+            <button type="button" className="analysis-button" onClick={() => downloadText(`${filename}.md`, packet.markdown, "text/markdown;charset=utf-8")}>
               Download Markdown packet
             </button>
-            <button type="button" className="analysis-button" onClick={() => download(`${filename}.json`, packet.json, "application/json;charset=utf-8")}>
+            <button type="button" className="analysis-button" onClick={() => downloadText(`${filename}.json`, packet.json, "application/json;charset=utf-8")}>
               Download evidence bundle (JSON)
             </button>
             <button type="button" className="analysis-button" onClick={() => setPacket(null)}>
