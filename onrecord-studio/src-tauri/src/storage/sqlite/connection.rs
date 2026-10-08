@@ -48,13 +48,9 @@ impl DuckDbRepository {
     }
 
     /// Flushes DuckDB's write-ahead log into the main database file. Called once at startup,
-    /// after every other `initialize_*` call, so a session that made heavy writes (casework
-    /// revisions, document ingestion, purges) does not leave the `.wal` file to grow unbounded
-    /// across the next launch — `legacy_import.rs`'s one-off post-copy `CHECKPOINT` is the proven
-    /// precedent this mirrors. Deliberately does *not* run `VACUUM`: this DuckDB version's actual
-    /// space-reclamation behavior for `VACUUM` was not verified against current documentation, and
-    /// CLAUDE.md requires verifying unfamiliar API behavior rather than assuming it, so an
-    /// unconfirmed call was left out rather than shipped as a guess.
+    /// after every other `initialize_*` call, so the `.wal` a heavy session left behind does not
+    /// keep growing across launches. No `VACUUM`: its space reclamation in this DuckDB version is
+    /// unverified.
     pub async fn checkpoint(&self) -> Result<(), AppError> {
         self.query_connection("Checkpoint the database file", |conn| {
             conn.execute_batch("CHECKPOINT;").map_err(|error| {

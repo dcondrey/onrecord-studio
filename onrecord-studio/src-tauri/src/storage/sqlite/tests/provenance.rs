@@ -27,9 +27,9 @@ async fn record_manifest_claim(
 /// Each provenance state must be reachable and distinguishable, and none of the states this
 /// build can produce may present recorded claims as verified chain-of-custody evidence.
 ///
-/// The fourth case is the one that matters: a manifest asserting a cryptographic signature,
-/// over a file whose digest matches, previously reported `chain_of_custody_confirmed = true`
-/// without any signature ever being checked.
+/// The fourth case is the one that matters: a manifest asserting a cryptographic signature over a
+/// file whose digest matches must not report `chain_of_custody_confirmed` when no signature was
+/// checked.
 #[tokio::test]
 async fn provenance_states_are_distinguished_and_never_claim_verified_custody() {
     use crate::types::{ProvenanceConfidence, RecordedDigestSource, SignatureVerificationState};

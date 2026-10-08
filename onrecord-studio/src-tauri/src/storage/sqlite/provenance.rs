@@ -52,15 +52,10 @@ impl DuckDbRepository {
                 let portal_key = portal_key_owned.as_str();
                 let context = conn
                     .query_row(
-                        // Only the ingestion digest and the projection digest are read here. Manifest
-                        // state used to come from `provenance_manifests` and is now validated live from
-                        // the asset, because a stored row describes what was true when it was written and
-                        // a verification has to describe the file in front of it.
-                        //
-                        // `expected_sha256` was `COALESCE(provenance_manifests.file_hash_sha256,
-                        // documents.raw_file_sha256)`. That was inert while nothing wrote manifests; once
-                        // they are written it would silently move every comparison off the digest recorded
-                        // at download onto one observed later, which is the wrong side of a substitution.
+                        // Manifest state is read live from the asset, never from
+                        // `provenance_manifests`: a verification describes the file in front of it.
+                        // The comparison digest is the one recorded at download; a manifest hash
+                        // observed later is the wrong side of a substitution.
                         "SELECT documents.raw_file_sha256,
                     documents.extracted_text_projection_sha256
                  FROM documents
@@ -96,10 +91,8 @@ impl DuckDbRepository {
                 Ok((context, current_projection))
             })
             .await?;
-        // A document whose evidence file cannot be read is still verified and still logged. The
-        // previous implementation returned an error here, so the one fact an investigator most
-        // needs on the record -- that the file was gone when they checked -- was the one fact the
-        // append-only log never captured.
+        // A document whose evidence file cannot be read is still verified and still logged: that
+        // the file was gone when checked is a fact the append-only log has to hold.
         let (computed_sha256, asset_provenance, evidence_file_present, mut verification_errors) =
             match evidence {
                 ProvenanceEvidenceFile::Readable(path) => {
