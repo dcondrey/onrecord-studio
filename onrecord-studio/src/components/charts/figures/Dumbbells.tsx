@@ -61,6 +61,8 @@ const MIN_PLOT = 220;
 const DOT_R = 4;
 /** A prior drawn closer than this to the current dot would hide under it, so it becomes a ring. */
 const COINCIDENT_PX = 2 * DOT_R + 2;
+/** A label above its row crosses the grid and baseline; a surface halo keeps it legible. */
+const LABEL_HALO = { paintOrder: 'stroke', stroke: VIZ.surface, strokeWidth: 3 } as const;
 
 function valueText(value: number, kind: DumbbellKind): string {
   return kind === 'rate' ? formatValue(value, { kind: 'percent' }) : formatValue(value, { kind: kind === 'days' ? 'days' : 'count' });
@@ -218,7 +220,7 @@ function DumbbellPlot({ width, rows, longest, kind, tooFew, priorLabel, currentL
               onBlurMark: tooltip.hide,
             }}
           >
-            <text x={0} y={labelY} dy="0.32em" className={row.total ? 'fill-fg text-[12px] font-semibold' : 'fill-fg-secondary text-[12px]'}>
+            <text x={0} y={labelY} dy="0.32em" className={row.total ? 'fill-fg text-[12px] font-semibold' : 'fill-fg-secondary text-[12px]'} style={inline ? undefined : LABEL_HALO}>
               <title>{row.label}</title>
               {row.label}
             </text>

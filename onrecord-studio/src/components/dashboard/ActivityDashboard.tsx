@@ -153,10 +153,10 @@ export default function ActivityDashboard() {
                 error={runtimesStatus === 'failed' ? `Not available until the runtimes can be read. ${runtimesError ?? ''}`.trim() : null}
                 rows={runtimes.map((runtime) => ({ key: runtime.portal.portalKey, label: runtime.portal.displayName, state: runtime.isRunning ? 'Running' : 'Idle', runtime }))}
                 onShowFailures={(portalKey) => {
-                  // Failure events are prefixed with their source's key, so the query narrows the
-                  // stream to that source's problems, visibly and clearably in the filter box.
+                  // Failure events start '<key>: ', so the key with its colon narrows the stream to that
+                  // source's problems (not a longer key it prefixes), visibly and clearably.
                   setFilter('errors');
-                  setQuery(portalKey);
+                  setQuery(`${portalKey}:`);
                 }}
               />
             </div>

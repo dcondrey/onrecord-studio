@@ -272,7 +272,7 @@ export default function DepartmentLedger({ variant, profiles, scaleProfiles, sta
         claim="mixed"
         sources={{
           tables: ['requests', 'statutory_extensions', 'agencies'],
-          note: 'misses counted under Cal. Gov. Code § 7922.535; rapid closures and closure time are statistical comparisons, not legal findings; peers are every closed request in the workspace, all portals, not only the departments shown',
+          note: 'misses counted under Cal. Gov. Code § 7922.535; rapid closures and closure time are statistical comparisons, not legal findings; peers are every measured closure in the workspace, all portals, not only the departments shown',
         }}
         summary={summary}
         status={empty ? 'empty' : status}

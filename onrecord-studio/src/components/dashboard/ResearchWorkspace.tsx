@@ -244,7 +244,7 @@ function RunSources({ sources }: { sources: ResearchSourceStatus[] }) {
 
 /**
  * The run's records-portal sources as task bars, matched to this session's queue by canonical URL.
- * A portal with no queue snapshot reads 'not run this session', never an empty bar.
+ * A portal with no queue snapshot says it has no queue this session, never an empty bar.
  */
 function CollectionRuntimes({ sources }: { sources: ResearchSourceStatus[] }) {
   const portals = useAppStore((app) => app.portals);

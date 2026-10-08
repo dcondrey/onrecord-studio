@@ -56,14 +56,14 @@ describe('ActivityDashboard', () => {
     useAppStore.setState({
       portalRuntimesStatus: 'ready',
       portalRuntimesError: null,
-      portalRuntimes: [runtimeFor('city', 'City', 2), runtimeFor('county', 'County', 1)],
-      syncLogs: ['county: doc-9 failed — HTTP 500', 'city: doc-1 failed — HTTP 503', 'city: page 2 committed 20 requests.'],
+      portalRuntimes: [runtimeFor('city', 'City', 2), runtimeFor('city-west', 'City West', 1)],
+      syncLogs: ['city-west: doc-9 failed — HTTP 500', 'city: doc-1 failed — HTTP 503', 'city: page 2 committed 20 requests.'],
     });
     render(<ActivityDashboard />);
     fireEvent.keyDown(screen.getByRole('img', { name: /^City:/ }), { key: 'Enter' });
     const stream = screen.getByRole('region', { name: 'Event stream' });
     expect(within(stream).getByText('city: doc-1 failed — HTTP 503')).toBeTruthy();
-    expect(within(stream).queryByText('county: doc-9 failed — HTTP 500')).toBeNull();
+    expect(within(stream).queryByText('city-west: doc-9 failed — HTTP 500')).toBeNull();
     expect(within(stream).queryByText('city: page 2 committed 20 requests.')).toBeNull();
   });
 

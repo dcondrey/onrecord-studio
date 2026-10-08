@@ -119,7 +119,14 @@ describe('TopicPacks reading depth', () => {
     expect(pack.textContent).not.toContain('1 counted');
   });
 
-  it('claims nothing legal for a chart of tagged-document counts, and never paints a zero crimson', async () => {
+  it('claims nothing legal for a chart of tagged-document counts, even when a loaded finding is counted', async () => {
+    render(<TopicPacks />);
+    await act(async () => bridge.pending[0](report([{ basis: 'COUNTED', anchorRequestId: 4, finding: finding('a', { kind: 'UNASSESSED' }) }])));
+    expect(screen.queryByText('Counted (legal claim)')).toBeNull();
+    expect(screen.getByRole('img', { name: /^Encampment abatement and sweeps:/ }).textContent).toContain('1 counted');
+  });
+
+  it('never paints a zero counted crimson', async () => {
     render(<TopicPacks />);
     await act(async () => bridge.pending[0](report([{ basis: 'STATED', anchorRequestId: 4, finding: finding('a', { kind: 'UNASSESSED' }) }])));
     expect(screen.queryByText('Counted (legal claim)')).toBeNull();
