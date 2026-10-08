@@ -115,79 +115,53 @@ mod tests {
     use super::*;
 
     #[test]
-    fn export_path_validation_rejects_a_symlinked_target() {
-        let directory = tempfile::tempdir().unwrap();
-        let real = directory.path().join("real.csv");
-        std::fs::write(&real, b"data").unwrap();
-        let link = directory.path().join("link.csv");
-        #[cfg(unix)]
-        std::os::unix::fs::symlink(&real, &link).unwrap();
-        #[cfg(unix)]
-        {
-            let error =
-                validate_filesystem_target_path(link.to_str().unwrap(), "Export path", 4096)
-                    .unwrap_err();
-            assert!(
-                error.to_string().contains("symbolic link"),
-                "unexpected error: {error}"
-            );
-        }
-    }
-
-    #[test]
-    fn export_path_validation_accepts_a_target_that_does_not_exist_yet() {
+    fn export_path_accepts_a_new_file_and_refuses_a_symlink() {
         let directory = tempfile::tempdir().unwrap();
         let target = directory.path().join("new-export.csv");
         assert!(
             validate_filesystem_target_path(target.to_str().unwrap(), "Export path", 4096).is_ok()
         );
+        #[cfg(unix)]
+        {
+            let real = directory.path().join("real.csv");
+            std::fs::write(&real, b"data").unwrap();
+            let link = directory.path().join("link.csv");
+            std::os::unix::fs::symlink(&real, &link).unwrap();
+            let error =
+                validate_filesystem_target_path(link.to_str().unwrap(), "Export path", 4096)
+                    .unwrap_err();
+            assert!(error.to_string().contains("symbolic link"), "{error}");
+        }
     }
 
     #[test]
-    fn import_path_validation_rejects_a_path_that_does_not_exist() {
-        let directory = tempfile::tempdir().unwrap();
-        let missing = directory.path().join("missing.csv");
-        let error =
-            validate_import_source_path(missing.to_str().unwrap(), "Dataset file path", 4096)
-                .unwrap_err();
-        assert!(
-            error.to_string().contains("IMPORT_INSPECTION_FAILED"),
-            "unexpected error: {error}"
-        );
-    }
-
-    #[test]
-    fn import_path_validation_rejects_a_directory() {
-        let directory = tempfile::tempdir().unwrap();
-        let error = validate_import_source_path(
-            directory.path().to_str().unwrap(),
-            "Dataset file path",
-            4096,
-        )
-        .unwrap_err();
-        assert!(
-            error.to_string().contains("regular, non-symlink file"),
-            "unexpected error: {error}"
-        );
-    }
-
-    #[test]
-    fn import_path_validation_rejects_a_symlinked_source() {
+    fn import_path_refuses_anything_but_an_existing_regular_file() {
         let directory = tempfile::tempdir().unwrap();
         let real = directory.path().join("real.csv");
         std::fs::write(&real, b"data").unwrap();
-        let link = directory.path().join("link.csv");
-        #[cfg(unix)]
-        std::os::unix::fs::symlink(&real, &link).unwrap();
+        for (path, expected) in [
+            (
+                directory.path().join("missing.csv"),
+                "IMPORT_INSPECTION_FAILED",
+            ),
+            (directory.path().to_path_buf(), "regular, non-symlink file"),
+        ] {
+            let error =
+                validate_import_source_path(path.to_str().unwrap(), "Dataset file path", 4096)
+                    .unwrap_err();
+            assert!(error.to_string().contains(expected), "{error}");
+        }
         #[cfg(unix)]
         {
+            let link = directory.path().join("link.csv");
+            std::os::unix::fs::symlink(&real, &link).unwrap();
             let error =
                 validate_import_source_path(link.to_str().unwrap(), "Dataset file path", 4096)
                     .unwrap_err();
-            assert!(
-                error.to_string().contains("non-symlink"),
-                "unexpected error: {error}"
-            );
+            assert!(error.to_string().contains("non-symlink"), "{error}");
         }
+        assert!(
+            validate_import_source_path(real.to_str().unwrap(), "Dataset file path", 4096).is_ok()
+        );
     }
 }

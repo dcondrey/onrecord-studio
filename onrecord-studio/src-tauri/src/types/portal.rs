@@ -79,9 +79,9 @@ pub struct PortalRegistration {
 
 /// Whether a saved source is still being synchronized, and if not, why not.
 ///
-/// This is durable on purpose. Stopping a source used to live only in the in-memory pool map, so
-/// the next launch found the source's frontier rows, read them as an interrupted crawl, and
-/// resumed a source the operator had deliberately halted.
+/// Durable on purpose: if a stop lived only in memory, the next launch would find the source's
+/// frontier rows, read them as an interrupted crawl, and resume a source the operator had
+/// deliberately halted.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum SourceLifecycleState {

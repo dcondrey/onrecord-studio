@@ -15,6 +15,9 @@ use crate::{
 use std::sync::Arc;
 use tauri::State;
 
+#[cfg(not(feature = "direct-license"))]
+use crate::commands::account::not_in_this_build;
+
 #[cfg(any(test, feature = "direct-license"))]
 mod guard {
     use std::sync::Mutex;
@@ -547,11 +550,6 @@ fn native_account() -> Arc<dyn crate::licensing::account::NativeAccount> {
     }
 }
 
-#[cfg(not(feature = "direct-license"))]
-fn not_in_this_build() -> AppError {
-    AppError::License("Accounts are not part of this build.".to_string())
-}
-
 #[tauri::command]
 pub async fn request_work_email_code(email: String) -> Result<WorkEmailCodeReport, AppError> {
     #[cfg(feature = "direct-license")]
@@ -581,11 +579,10 @@ pub async fn confirm_work_email_code(
             (report.status, report.domain.clone())
         {
             let is_free_mail = report.is_free_mail;
-            let store = Arc::clone(&store);
-            let saved = blocking::spawn("Record verified domain", move || {
+            let saved = blocking::on_shared(&store, "Record verified domain", move |store| {
                 store.update(|current| Ok(verified::record_domain(current, &domain, is_free_mail)))
             })
-            .await??;
+            .await?;
             report.verified_at = saved
                 .verified_domains
                 .iter()
@@ -608,8 +605,7 @@ pub async fn link_affiliation_verified_domain(
     input: AffiliationDomainLinkInput,
     store: State<'_, Arc<ProfileStore>>,
 ) -> Result<AffiliationLinkReport, AppError> {
-    let store = Arc::clone(&store);
-    blocking::spawn("Link verified domain", move || {
+    blocking::on_shared(&store, "Link verified domain", move |store| {
         let mut outcome = None;
         let saved = store.update(|current| {
             let current = current.ok_or_else(|| {
@@ -630,7 +626,7 @@ pub async fn link_affiliation_verified_domain(
             },
         })
     })
-    .await?
+    .await
 }
 
 #[cfg(test)]

@@ -69,7 +69,7 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
         }
         CoreDatabaseKind::Unrecognized => {
             return Err(AppError::Storage(format!(
-                "The file at '{}' is neither a DuckDB nor a SQLite database. Move it aside before                  starting OnRecord Studio; it will never be overwritten automatically.",
+                "The file at '{}' is neither a DuckDB nor a SQLite database. Move it aside before starting OnRecord Studio; it will never be overwritten automatically.",
                 core_db_file.display()
             )))
         }
@@ -94,8 +94,7 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
     tauri::async_runtime::block_on(repository.initialize_standing_queries())?;
     // Reclaims WAL growth from the previous session's writes before the queue runtime and
     // analytics nodes start making their own. Never fatal: a failed CHECKPOINT is a missed
-    // housekeeping opportunity, not a reason to leave the whole application unlaunchable the way
-    // an unguarded startup failure did for the corpus index before (see storage/corpus.rs).
+    // housekeeping opportunity, not a reason to leave the whole application unlaunchable.
     if let Err(error) = tauri::async_runtime::block_on(repository.checkpoint()) {
         eprintln!("Startup checkpoint failed (continuing without it): {error}");
     }
@@ -191,10 +190,6 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
     Ok(())
 }
 
-/// Drains the search token arrears counted during migration. This deliberately does not block
-/// startup: on a large corpus it is minutes of single-threaded DuckDB work, and running it inside
-/// the setup hook kept the event loop from ever presenting the window. Until it finishes,
-/// evidence search refuses rather than returning a partial answer.
 fn start_cpra_rule_recompute(repository: DuckDbRepository) {
     tauri::async_runtime::spawn(async move {
         match repository.recompute_cpra_findings_for_rule_change().await {
@@ -207,6 +202,10 @@ fn start_cpra_rule_recompute(repository: DuckDbRepository) {
     });
 }
 
+/// Drains the search token arrears counted during migration. This deliberately does not block
+/// startup: on a large corpus it is minutes of single-threaded DuckDB work, and running it inside
+/// the setup hook keeps the event loop from presenting the window. Until it finishes,
+/// evidence search refuses rather than returning a partial answer.
 fn start_search_token_backfill(repository: DuckDbRepository) {
     let pending = repository.pending_search_index_documents();
     if pending == 0 {

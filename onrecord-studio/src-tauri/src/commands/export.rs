@@ -4,8 +4,9 @@ use crate::commands::validation::{
 };
 use crate::error::AppError;
 use crate::integrity::{
-    check_revocation, load_or_create_signing_key, load_revocations, rotate_signing_key, sha256_hex,
-    sign_package, verify_package, verify_package_detailed, SignedPackage, SIGNATURE_ALGORITHM,
+    check_revocation, is_sha256_hex, load_or_create_signing_key, load_revocations,
+    rotate_signing_key, sha256_hex, sign_package, verify_package, verify_package_detailed,
+    SignedPackage, SIGNATURE_ALGORITHM,
 };
 use crate::storage::casework::{EXPORT_OUTCOME_FAILED, EXPORT_OUTCOME_WRITTEN};
 use crate::storage::pii::mask_pii;
@@ -620,7 +621,11 @@ async fn verify_evidence_package_inner(
             .map(|values| {
                 values
                     .iter()
-                    .filter_map(|value| value.as_str().map(str::to_string))
+                    .map(|value| {
+                        value
+                            .as_str()
+                            .map_or_else(|| value.to_string(), str::to_string)
+                    })
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default()
@@ -636,10 +641,13 @@ async fn verify_evidence_package_inner(
         .map(|values| {
             values
                 .iter()
-                .filter_map(|entry| {
-                    let label = entry.get("label")?.as_str()?;
-                    let reason = entry.get("reason")?.as_str()?;
-                    Some(format!("{label} ({reason})"))
+                .map(|entry| {
+                    // A malformed entry is still a withheld citation; dropping it would understate
+                    // what the package withholds.
+                    let text = |field: &str| entry.get(field).and_then(|value| value.as_str());
+                    let label = text("label").unwrap_or("[unlabeled citation]");
+                    let reason = text("reason").unwrap_or("no reason recorded");
+                    format!("{label} ({reason})")
                 })
                 .collect::<Vec<_>>()
         })
@@ -745,7 +753,7 @@ fn validate_evidence_manifest(
         .into_iter()
         .flatten()
         {
-            if !is_sha256(digest) {
+            if !is_sha256_hex(digest) {
                 return Err(AppError::Export(format!(
                     "Document {} contains an invalid recorded SHA-256",
                     document.document_id
@@ -754,10 +762,6 @@ fn validate_evidence_manifest(
         }
     }
     Ok(manifest)
-}
-
-fn is_sha256(value: &str) -> bool {
-    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 /// Writes the standalone verifier next to the report directory so a signed package's recipient
@@ -1155,15 +1159,11 @@ mod tests {
     use crate::types::casework::{CaseworkCase, CaseworkCitation};
     use ed25519_dalek::SigningKey;
 
-    /// Locks the bytes the browser verifier (`scripts/verify-evidence-package.html`, exercised by
-    /// `src/tests/staticPackageVerifier.test.ts`) is tested against for this schema. Regenerate the
-    /// committed fixture from this same construction if the package layout changes deliberately.
-    #[test]
-    fn evidence_package_bytes_match_the_committed_browser_verifier_fixture() {
+    fn evidence_manifest(generated_at: &str) -> EvidencePackageManifest {
         let report = "# Evidence report\n".to_string();
-        let manifest = validate_evidence_manifest(EvidencePackageManifest {
+        EvidencePackageManifest {
             schema_version: EVIDENCE_PACKAGE_SCHEMA.to_string(),
-            generated_at: "2026-10-02T12:00:00Z".to_string(),
+            generated_at: generated_at.to_string(),
             request_id: 7,
             portal_key: "records".to_string(),
             report: PackagedReport {
@@ -1182,8 +1182,31 @@ mod tests {
             legal_authorities: Vec::new(),
             legal_findings: Vec::new(),
             violation_markers: vec!["STATUTORY_LATENCY_VIOLATION".to_string()],
-        })
-        .unwrap();
+        }
+    }
+
+    fn case_manifest(
+        unverified_citation_labels: Vec<String>,
+    ) -> crate::types::casework::CaseEvidenceManifest {
+        crate::types::casework::CaseEvidenceManifest {
+            schema_version: CASE_EVIDENCE_PACKAGE_SCHEMA.to_string(),
+            generated_at: "2026-09-28T00:00:00Z".to_string(),
+            case: CaseworkCase::default(),
+            verified_citation_count: 0,
+            unverified_citation_labels,
+            withheld_citations: Vec::new(),
+            previous_export_sha256: None,
+            ledger_sequence: 1,
+        }
+    }
+
+    /// Locks the bytes the browser verifier (`scripts/verify-evidence-package.html`, exercised by
+    /// `src/tests/staticPackageVerifier.test.ts`) is tested against for this schema. Regenerate the
+    /// committed fixture from this same construction if the package layout changes deliberately.
+    #[test]
+    fn evidence_package_bytes_match_the_committed_browser_verifier_fixture() {
+        let manifest =
+            validate_evidence_manifest(evidence_manifest("2026-10-02T12:00:00Z")).unwrap();
         let key = SigningKey::from_bytes(&[11_u8; 32]);
         let package = sign_package(manifest, &key).unwrap();
         verify_package(&package).expect("the generated fixture must self-verify");
@@ -1198,30 +1221,8 @@ mod tests {
 
     #[test]
     fn signed_package_is_externally_verifiable_and_tamper_evident() {
-        let report = "# Evidence report\n".to_string();
-        let manifest = validate_evidence_manifest(EvidencePackageManifest {
-            schema_version: EVIDENCE_PACKAGE_SCHEMA.to_string(),
-            generated_at: "2026-08-28T12:00:00Z".to_string(),
-            request_id: 7,
-            portal_key: "records".to_string(),
-            report: PackagedReport {
-                file_name: "report.md".to_string(),
-                media_type: "text/markdown; charset=utf-8".to_string(),
-                sha256: sha256_hex(report.as_bytes()),
-                content: report,
-            },
-            source_documents: vec![PackagedSourceDocument {
-                document_id: 9,
-                file_size: Some(12),
-                visibility: "public".to_string(),
-                raw_file_sha256: Some(sha256_hex(b"source")),
-                extracted_text_sha256: Some(sha256_hex(b"text")),
-            }],
-            legal_authorities: Vec::new(),
-            legal_findings: Vec::new(),
-            violation_markers: vec!["STATUTORY_LATENCY_VIOLATION".to_string()],
-        })
-        .unwrap();
+        let manifest =
+            validate_evidence_manifest(evidence_manifest("2026-08-28T12:00:00Z")).unwrap();
         let key = SigningKey::from_bytes(&[7_u8; 32]);
         let mut package = sign_package(manifest, &key).unwrap();
         assert!(verify_package(&package).is_ok());
@@ -1245,23 +1246,12 @@ mod tests {
 
     #[tokio::test]
     async fn verify_evidence_package_reports_each_check_and_never_hides_an_unverified_citation() {
-        let manifest = crate::types::casework::CaseEvidenceManifest {
-            schema_version: CASE_EVIDENCE_PACKAGE_SCHEMA.to_string(),
-            generated_at: "2026-09-28T00:00:00Z".to_string(),
-            case: CaseworkCase {
-                evidence: vec![CaseworkCitation {
-                    label: "Imported claim".into(),
-                    verification: "UNVERIFIED_PORTABLE".into(),
-                    ..Default::default()
-                }],
-                ..Default::default()
-            },
-            verified_citation_count: 0,
-            unverified_citation_labels: vec!["Imported claim (UNVERIFIED_PORTABLE)".to_string()],
-            withheld_citations: Vec::new(),
-            previous_export_sha256: None,
-            ledger_sequence: 1,
-        };
+        let mut manifest = case_manifest(vec!["Imported claim (UNVERIFIED_PORTABLE)".to_string()]);
+        manifest.case.evidence = vec![CaseworkCitation {
+            label: "Imported claim".into(),
+            verification: "UNVERIFIED_PORTABLE".into(),
+            ..Default::default()
+        }];
         let key = SigningKey::from_bytes(&[5_u8; 32]);
         let package = sign_package(manifest, &key).unwrap();
         let payload = serde_json::to_string(&package).unwrap();
@@ -1298,104 +1288,73 @@ mod tests {
             .unwrap();
         assert!(!garbage.overall_passed);
         assert!(garbage.parse_error.is_some());
-    }
 
-    #[tokio::test]
-    async fn verify_evidence_package_flags_a_signer_this_installation_has_since_revoked() {
-        let directory = tempfile::tempdir().unwrap();
-        let manifest = crate::types::casework::CaseEvidenceManifest {
-            schema_version: CASE_EVIDENCE_PACKAGE_SCHEMA.to_string(),
-            generated_at: "2026-09-28T00:00:00Z".to_string(),
-            case: CaseworkCase::default(),
-            verified_citation_count: 0,
-            unverified_citation_labels: Vec::new(),
-            withheld_citations: Vec::new(),
-            previous_export_sha256: None,
-            ledger_sequence: 1,
-        };
-        let retired_key = SigningKey::from_bytes(&[6_u8; 32]);
-        let package = sign_package(manifest, &retired_key).unwrap();
-        let payload = serde_json::to_string(&package).unwrap();
-
-        // Simulate this installation having rotated away from `retired_key` for a real reason
-        // before the recipient ever gets around to verifying the package it signed. Seed the
-        // active key file with exactly `retired_key`'s bytes first, so rotation retires *that*
-        // key rather than some unrelated freshly generated one.
-        tokio::fs::write(
-            directory.path().join(crate::integrity::SIGNING_KEY_FILE),
-            retired_key.to_bytes(),
+        let foreign = sign_package(
+            serde_json::json!({
+                "withheldCitations": [{ "label": "Memo", "reason": "privileged" }, { "label": "Note" }]
+            }),
+            &key,
+        )
+        .unwrap();
+        let foreign = verify_evidence_package_inner(
+            serde_json::to_string(&foreign).unwrap(),
+            directory.path(),
         )
         .await
         .unwrap();
-        rotate_signing_key(
-            directory.path(),
-            directory.path(),
-            "Suspected compromise.".to_string(),
-            true,
-        )
-        .await
-        .unwrap();
-
-        let result = verify_evidence_package_inner(payload, directory.path())
-            .await
-            .unwrap();
-        assert!(result.canonical_bytes_hash_matches);
-        assert!(result.signature_valid);
-        assert!(
-            !result.overall_passed,
-            "a package signed by a revoked key must not read as passing overall"
-        );
         assert_eq!(
-            result.revoked_signer.map(|r| r.reason),
-            Some("Suspected compromise.".to_string())
+            foreign.withheld_citation_labels,
+            vec![
+                "Memo (privileged)".to_string(),
+                "Note (no reason recorded)".to_string()
+            ],
+            "a withheld entry missing its reason is still listed"
         );
     }
 
+    /// Only a compromise fails what a revoked key already signed; a routine rotation stays
+    /// visible but trusted.
     #[tokio::test]
-    async fn verify_evidence_package_still_trusts_a_package_after_a_routine_non_compromising_rotation(
-    ) {
-        let directory = tempfile::tempdir().unwrap();
-        let manifest = crate::types::casework::CaseEvidenceManifest {
-            schema_version: CASE_EVIDENCE_PACKAGE_SCHEMA.to_string(),
-            generated_at: "2026-09-28T00:00:00Z".to_string(),
-            case: CaseworkCase::default(),
-            verified_citation_count: 0,
-            unverified_citation_labels: Vec::new(),
-            withheld_citations: Vec::new(),
-            previous_export_sha256: None,
-            ledger_sequence: 1,
-        };
-        let retiring_key = SigningKey::from_bytes(&[8_u8; 32]);
-        let package = sign_package(manifest, &retiring_key).unwrap();
-        let payload = serde_json::to_string(&package).unwrap();
-        tokio::fs::write(
-            directory.path().join(crate::integrity::SIGNING_KEY_FILE),
-            retiring_key.to_bytes(),
-        )
-        .await
-        .unwrap();
-        rotate_signing_key(
-            directory.path(),
-            directory.path(),
-            "Routine hygiene rotation.".to_string(),
-            false,
-        )
-        .await
-        .unwrap();
-
-        let result = verify_evidence_package_inner(payload, directory.path())
+    async fn verify_evidence_package_fails_a_revoked_signer_only_when_compromised() {
+        for (reason, compromised, expected_status) in [
+            ("Suspected compromise.", true, None),
+            (
+                "Routine hygiene rotation.",
+                false,
+                Some(crate::integrity::REVOCATION_STATUS_RETIRED),
+            ),
+        ] {
+            let directory = tempfile::tempdir().unwrap();
+            let key = SigningKey::from_bytes(&[6_u8; 32]);
+            let package = sign_package(case_manifest(Vec::new()), &key).unwrap();
+            let payload = serde_json::to_string(&package).unwrap();
+            // Seed the active key file with exactly this key so rotation retires it.
+            tokio::fs::write(
+                directory.path().join(crate::integrity::SIGNING_KEY_FILE),
+                key.to_bytes(),
+            )
             .await
             .unwrap();
-        assert!(
-            result.overall_passed,
-            "a routine, non-compromising key rotation must not retroactively fail every package \
-             the retired key already signed"
-        );
-        assert_eq!(
-            result.revoked_signer.map(|r| r.status),
-            Some(crate::integrity::REVOCATION_STATUS_RETIRED.to_string()),
-            "the retirement must still be visible for information, just not fail the verdict"
-        );
+            rotate_signing_key(
+                directory.path(),
+                directory.path(),
+                reason.to_string(),
+                compromised,
+            )
+            .await
+            .unwrap();
+
+            let result = verify_evidence_package_inner(payload, directory.path())
+                .await
+                .unwrap();
+            assert!(result.canonical_bytes_hash_matches && result.signature_valid);
+            assert_eq!(result.overall_passed, !compromised, "{reason}");
+            let revoked = result.revoked_signer.expect("the revocation stays visible");
+            assert_eq!(revoked.reason, reason);
+            if let Some(status) = expected_status {
+                assert_eq!(revoked.status, status);
+            }
+        }
     }
 
     // REGRESSION(export): a legal brief copied `evaluated_at` and `imported_at` verbatim, so a row

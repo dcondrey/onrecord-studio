@@ -119,28 +119,17 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    #[test]
-    fn serializes_a_stable_structured_ipc_error() {
-        let value = serde_json::to_value(AppError::Storage("database unavailable".to_string()))
-            .expect("AppError should serialize for the Tauri IPC boundary");
-
-        assert_eq!(
-            value,
-            json!({
-                "errorType": "Storage",
-                "message": "database unavailable",
-            })
-        );
-    }
-
     // INVARIANT(ipc): the wire tag is the variant name, never `category()`. A frontend matching
     // on the SCREAMING_SNAKE form would silently never match.
     #[test]
     fn the_wire_tag_is_the_variant_name_not_the_category() {
-        let error = AppError::Storage("unavailable".to_string());
+        let error = AppError::Storage("database unavailable".to_string());
         let value = serde_json::to_value(&error).expect("serialize");
 
-        assert_eq!(value["errorType"], "Storage");
+        assert_eq!(
+            value,
+            json!({ "errorType": "Storage", "message": "database unavailable" })
+        );
         assert_eq!(error.category(), "STORAGE");
         assert_ne!(value["errorType"], error.category());
         // `category`, `is_retryable` and `is_source_repairable` are native-side policy and must

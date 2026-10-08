@@ -25,19 +25,6 @@ use tauri::State;
 /// larger than the marks themselves. Checked before an untrusted payload is parsed.
 const MAXIMUM_SIGNED_PACKET_BYTES: usize = 16 * 1024 * 1024;
 
-async fn on_store<T, F>(
-    store: &Arc<AnnotationStore>,
-    task: &'static str,
-    operation: F,
-) -> Result<T, AppError>
-where
-    T: Send + 'static,
-    F: FnOnce(&AnnotationStore) -> Result<T, AppError> + Send + 'static,
-{
-    let store = Arc::clone(store);
-    blocking::spawn(task, move || operation(&store)).await?
-}
-
 struct DocumentFacts {
     request_id: Option<u64>,
     file_name: Option<String>,
@@ -158,7 +145,7 @@ async fn list_annotations(
     let portal = self::portal_key(&portal_key)?;
     let matching: Vec<DocumentAnnotation> = {
         let portal = portal.clone();
-        on_store(store, "Annotation read", move |store| {
+        blocking::on_shared(store, "Annotation read", move |store| {
             Ok(store
                 .load()?
                 .annotations
@@ -208,9 +195,10 @@ async fn add_annotation(
     repository: &DuckDbRepository,
 ) -> Result<DocumentAnnotation, AppError> {
     let portal = self::portal_key(&input.portal_key)?;
-    let reviewer = on_store(store, "Annotation read", |store| Ok(store.load()?.reviewer))
-        .await?
-        .ok_or_else(|| invalid("enter your reviewer name before adding annotations"))?;
+    let reviewer =
+        blocking::on_shared(store, "Annotation read", |store| Ok(store.load()?.reviewer))
+            .await?
+            .ok_or_else(|| invalid("enter your reviewer name before adding annotations"))?;
     let quote = clean_text("quote", &input.quote, MAXIMUM_QUOTE_CHARACTERS, true)?;
     // Every kind, a bare note included, attaches to a public document in the corpus; a note keyed
     // to an id with no such document would surface in search and exports about nothing.
@@ -226,7 +214,7 @@ async fn add_annotation(
             .ok_or_else(|| invalid("this document's text is not available to anchor to"))?;
         Some(view.place_selection(&quote, &input.prefix, &input.suffix)?)
     };
-    on_store(store, "Annotation write", move |store| {
+    blocking::on_shared(store, "Annotation write", move |store| {
         store.update(|document| {
             annotations::add_annotation(
                 document,
@@ -248,7 +236,7 @@ pub async fn remove_document_annotation(
     id: String,
     store: State<'_, Arc<AnnotationStore>>,
 ) -> Result<(), AppError> {
-    on_store(&store, "Annotation removal", move |store| {
+    blocking::on_shared(&store, "Annotation removal", move |store| {
         store.update(|document| annotations::remove_annotation(document, &id))
     })
     .await
@@ -260,7 +248,7 @@ pub async fn set_annotation_status(
     status: AnnotationStatus,
     store: State<'_, Arc<AnnotationStore>>,
 ) -> Result<(), AppError> {
-    on_store(&store, "Annotation status", move |store| {
+    blocking::on_shared(&store, "Annotation status", move |store| {
         store.update(|document| annotations::set_status(document, &id, status))
     })
     .await
@@ -277,7 +265,7 @@ fn settings(document: AnnotationDocument) -> AnnotationSettings {
 pub async fn get_annotation_settings(
     store: State<'_, Arc<AnnotationStore>>,
 ) -> Result<AnnotationSettings, AppError> {
-    on_store(&store, "Annotation settings read", |store| {
+    blocking::on_shared(&store, "Annotation settings read", |store| {
         Ok(settings(store.load()?))
     })
     .await
@@ -288,7 +276,7 @@ pub async fn set_annotation_reviewer(
     reviewer: String,
     store: State<'_, Arc<AnnotationStore>>,
 ) -> Result<AnnotationSettings, AppError> {
-    on_store(&store, "Annotation reviewer", move |store| {
+    blocking::on_shared(&store, "Annotation reviewer", move |store| {
         store.update(|document| {
             annotations::set_reviewer(document, &reviewer)?;
             Ok(settings(document.clone()))
@@ -302,7 +290,7 @@ pub async fn save_codebook_entry(
     entry: CodebookEntry,
     store: State<'_, Arc<AnnotationStore>>,
 ) -> Result<AnnotationSettings, AppError> {
-    on_store(&store, "Codebook write", move |store| {
+    blocking::on_shared(&store, "Codebook write", move |store| {
         store.update(|document| {
             codebook::upsert(document, &entry)?;
             Ok(settings(document.clone()))
@@ -316,7 +304,7 @@ pub async fn delete_codebook_entry(
     code: String,
     store: State<'_, Arc<AnnotationStore>>,
 ) -> Result<AnnotationSettings, AppError> {
-    on_store(&store, "Codebook removal", move |store| {
+    blocking::on_shared(&store, "Codebook removal", move |store| {
         store.update(|document| {
             codebook::remove(document, &code)?;
             Ok(settings(document.clone()))
@@ -327,7 +315,7 @@ pub async fn delete_codebook_entry(
 
 #[tauri::command]
 pub async fn export_codebook(store: State<'_, Arc<AnnotationStore>>) -> Result<String, AppError> {
-    on_store(&store, "Codebook export", |store| {
+    blocking::on_shared(&store, "Codebook export", |store| {
         codebook::export(&store.load()?.codebook)
     })
     .await
@@ -338,7 +326,7 @@ pub async fn preview_codebook_import(
     payload: String,
     store: State<'_, Arc<AnnotationStore>>,
 ) -> Result<CodebookImportPreview, AppError> {
-    on_store(&store, "Codebook preview", move |store| {
+    blocking::on_shared(&store, "Codebook preview", move |store| {
         codebook::preview_import(&store.load()?.codebook, &payload)
     })
     .await
@@ -350,7 +338,7 @@ pub async fn apply_codebook_import(
     overwrite_codes: Vec<String>,
     store: State<'_, Arc<AnnotationStore>>,
 ) -> Result<AnnotationSettings, AppError> {
-    on_store(&store, "Codebook import", move |store| {
+    blocking::on_shared(&store, "Codebook import", move |store| {
         store.update(|document| {
             codebook::apply_import(document, &payload, &overwrite_codes)?;
             Ok(settings(document.clone()))
@@ -434,7 +422,7 @@ async fn search_annotations(
     let after = query.cursor.as_deref().map(parse_cursor).transpose()?;
     let candidates = {
         let query = query.clone();
-        on_store(store, "Annotation search", move |store| {
+        blocking::on_shared(store, "Annotation search", move |store| {
             let mut kept: Vec<DocumentAnnotation> = store
                 .load()?
                 .annotations
@@ -555,7 +543,7 @@ pub async fn export_document_annotations(
         .and_then(|facts| facts.text_sha256);
     let packet = {
         let portal = portal.clone();
-        on_store(&store, "Annotation export", move |store| {
+        blocking::on_shared(&store, "Annotation export", move |store| {
             Ok(annotation_packet::build_packet(
                 &store.load()?,
                 &portal,
@@ -643,7 +631,7 @@ pub async fn preview_annotation_import(
     let verified = verify_packet(&payload, &report_directory).await?;
     let packet = verified.packet.clone();
     let signer = verified.signer_key_id.clone();
-    let plan = on_store(&store, "Annotation import preview", move |store| {
+    let plan = blocking::on_shared(&store, "Annotation import preview", move |store| {
         annotation_packet::plan_import(&store.load()?, &packet, &signer)
     })
     .await?;
@@ -683,7 +671,7 @@ pub async fn import_annotation_packet(
             "this packet is not the one that was previewed; preview it again",
         ));
     }
-    on_store(&store, "Annotation import", move |store| {
+    blocking::on_shared(&store, "Annotation import", move |store| {
         store.update(|document| {
             annotation_packet::apply_import(document, &verified.packet, &verified.signer_key_id)
         })
@@ -741,7 +729,7 @@ pub async fn resolve_page_regions(
 ) -> Result<Vec<ResolvedPageRegion>, AppError> {
     let portal = self::portal_key(&portal_key)?;
     annotations::validate_original_digest(&original_sha256)?;
-    on_store(&store, "Page region read", move |store| {
+    blocking::on_shared(&store, "Page region read", move |store| {
         Ok(store
             .load()?
             .annotations

@@ -10,7 +10,7 @@ use crate::types::{
 use tauri::State;
 
 #[cfg(not(feature = "direct-license"))]
-fn not_in_this_build() -> AppError {
+pub(crate) fn not_in_this_build() -> AppError {
     AppError::License("Accounts are not part of this build.".to_string())
 }
 

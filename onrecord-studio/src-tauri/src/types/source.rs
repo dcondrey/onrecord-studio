@@ -25,9 +25,8 @@ impl Default for CrawlPolicy {
 /// Which slice of a portal's metadata API a synchronization starts from.
 ///
 /// Only the NextRequest API path reads this; a crawled website or catalog has no page window.
-/// `Default` is 1 and 50, the fixed values `start_data_source` used to pass, so an operator who
-/// never opens the control keeps exactly today's behaviour. The bounds are
-/// `validate_page_parameters` in src-tauri/src/ingestion/queue/guidance.rs, which stays the authority.
+/// `Default` is page 1 with 50 rows per page. The bounds are `validate_page_parameters` in
+/// src-tauri/src/ingestion/queue/guidance.rs, which stays the authority.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct MetadataPageWindow {
