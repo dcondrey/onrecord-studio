@@ -165,7 +165,11 @@ export interface TimeTick {
   major: boolean;
 }
 
-export interface TimeScale extends Omit<ContinuousScale, 'ticks'> {
+export interface TimeScale {
+  (ms: number): number;
+  domain: readonly [number, number];
+  range: readonly [number, number];
+  invert(px: number): number;
   ticks(target?: number): TimeTick[];
   /** First month of the fiscal year (1-12), when the axis is fiscal. */
   fiscalYearStartMonth?: number;
