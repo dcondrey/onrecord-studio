@@ -146,30 +146,35 @@ impl DirectGate {
         self.account.secure_set(TOKEN_KEY, "")
     }
 
-    /// Full evaluation: integrity, session, clock, device, then the stored token.
-    pub fn evaluate(&self, now: i64) -> LicenseStatus {
+    /// The application's integrity, then the signed-in session; anything else is the denial.
+    fn verified_session(&self) -> Result<AccountSession, LicenseStatus> {
         if let IntegrityResult::Tampered(detail) = self.account.integrity_check() {
-            return denied(
+            return Err(denied(
                 LicenseState::Unverified,
                 format!("The application failed its integrity check. {detail}"),
                 None,
-            );
+            ));
         }
-        let session = match self.account.session() {
-            Ok(SessionResult::SignedIn(session)) => session,
-            Ok(SessionResult::SignedOut) => {
-                return denied(
-                    LicenseState::SignInRequired,
-                    "Sign in to use OnRecord Studio.".to_string(),
-                    None,
-                )
-            }
+        match self.account.session() {
+            Ok(SessionResult::SignedIn(session)) => Ok(session),
+            Ok(SessionResult::SignedOut) => Err(denied(
+                LicenseState::SignInRequired,
+                "Sign in to use OnRecord Studio.".to_string(),
+                None,
+            )),
             Ok(SessionResult::Failed(message)) => {
-                return denied(LicenseState::Unavailable, message, None)
+                Err(denied(LicenseState::Unavailable, message, None))
             }
-            Err(error) => return denied(LicenseState::Unavailable, error.to_string(), None),
-        };
-        self.evaluate_token(now, Some(&session))
+            Err(error) => Err(denied(LicenseState::Unavailable, error.to_string(), None)),
+        }
+    }
+
+    /// Full evaluation: integrity, session, clock, device, then the stored token.
+    pub fn evaluate(&self, now: i64) -> LicenseStatus {
+        match self.verified_session() {
+            Ok(session) => self.evaluate_token(now, Some(&session)),
+            Err(status) => status,
+        }
     }
 
     fn evaluate_token(&self, now: i64, session: Option<&AccountSession>) -> LicenseStatus {
@@ -238,22 +243,26 @@ impl DirectGate {
         }
         // Best effort: a failed write still leaves the in-memory mark advanced.
         let _ = clock.note_now(now);
-        let now = clock.effective(now);
+        match self.verify_cached(clock.effective(now)) {
+            Some(Ok(_)) => Ok(()),
+            Some(Err(denial)) => deny(denial.to_string()),
+            None => deny("No verified entitlement is loaded.".to_string()),
+        }
+    }
+
+    /// The cached token verified as a stored one, or `None` when no token or thumbprint is
+    /// cached. Makes no native call.
+    fn verify_cached(&self, now: i64) -> Option<Result<entitlement::VerifiedEntitlement, Denial>> {
         let (token, thumbprint) = {
             let cache = self.cache();
-            (cache.token.clone(), cache.thumbprint.clone())
-        };
-        let (Some(token), Some(thumbprint)) = (token, thumbprint) else {
-            return deny("No verified entitlement is loaded.".to_string());
+            (cache.token.clone()?, cache.thumbprint.clone()?)
         };
         let context = VerifyContext {
             now,
             nonce: NonceCheck::Stored,
             device_thumbprint: &thumbprint,
         };
-        entitlement::verify(&token, &self.keys, &context)
-            .map(|_| ())
-            .or_else(|denial| deny(denial.to_string()))
+        Some(entitlement::verify(&token, &self.keys, &context))
     }
 
     /// Advances the persisted wall-clock high-water mark; called on the background tick.
@@ -265,21 +274,9 @@ impl DirectGate {
 
     /// True when the stored entitlement is missing, unverifiable, or has under 24 hours left.
     pub fn needs_refresh(&self, now: i64) -> bool {
-        let (token, thumbprint) = {
-            let cache = self.cache();
-            (cache.token.clone(), cache.thumbprint.clone())
-        };
-        let (Some(token), Some(thumbprint)) = (token, thumbprint) else {
-            return true;
-        };
-        let context = VerifyContext {
-            now,
-            nonce: NonceCheck::Stored,
-            device_thumbprint: &thumbprint,
-        };
-        match entitlement::verify(&token, &self.keys, &context) {
-            Ok(verified) => verified.expires_at - now < REFRESH_WINDOW_SECONDS,
-            Err(_) => true,
+        match self.verify_cached(now) {
+            Some(Ok(verified)) => verified.expires_at - now < REFRESH_WINDOW_SECONDS,
+            Some(Err(_)) | None => true,
         }
     }
 
@@ -306,13 +303,7 @@ impl DirectGate {
         } = match prepared {
             Ok(Ok(prepared)) => prepared,
             Ok(Err(status)) => return *status,
-            Err(error) => {
-                return denied(
-                    LicenseState::Unavailable,
-                    format!("The account worker failed: {error}"),
-                    None,
-                )
-            }
+            Err(error) => return worker_failure(&error.to_string()),
         };
         let request = EntitlementRequest {
             challenge: challenge.clone(),
@@ -344,33 +335,7 @@ impl DirectGate {
     }
 
     fn prepare_request(&self) -> Result<Prepared, Box<LicenseStatus>> {
-        if let IntegrityResult::Tampered(detail) = self.account.integrity_check() {
-            return Err(Box::new(denied(
-                LicenseState::Unverified,
-                format!("The application failed its integrity check. {detail}"),
-                None,
-            )));
-        }
-        let session = match self.account.session() {
-            Ok(SessionResult::SignedIn(session)) => session,
-            Ok(SessionResult::SignedOut) => {
-                return Err(Box::new(denied(
-                    LicenseState::SignInRequired,
-                    "Sign in to use OnRecord Studio.".to_string(),
-                    None,
-                )))
-            }
-            Ok(SessionResult::Failed(message)) => {
-                return Err(Box::new(denied(LicenseState::Unavailable, message, None)))
-            }
-            Err(error) => {
-                return Err(Box::new(denied(
-                    LicenseState::Unavailable,
-                    error.to_string(),
-                    None,
-                )))
-            }
-        };
+        let session = self.verified_session().map_err(Box::new)?;
         let fail = |error: AppError| {
             Box::new(denied(
                 LicenseState::Unavailable,
@@ -434,7 +399,6 @@ impl DirectGate {
         status
     }
 
-    /// Requires a live session; the server decides the price and the quantity is bounded.
     /// The access token of the signed-in session, or `License(not_signed_in)` when there is none.
     /// The Keychain read happens off the async runtime like every other account call.
     async fn signed_in_token(
@@ -451,6 +415,7 @@ impl DirectGate {
         .map_err(|error| AppError::Internal(format!("Account worker failed: {error}")))?
     }
 
+    /// Requires a live session; the server decides the price and the quantity is bounded.
     pub async fn start_checkout(
         self: &Arc<Self>,
         quantity: Option<u32>,
@@ -664,7 +629,11 @@ fn denial_status(now: i64, denial: &Denial, session: Option<&AccountSession>) ->
             status
         }
         Denial::IssuedInFuture => denied(LicenseState::ClockRolledBack, message, session),
-        _ => denied(LicenseState::Unverified, message, session),
+        Denial::Malformed(_)
+        | Denial::UnknownKey
+        | Denial::BadSignature
+        | Denial::WrongClaim(_)
+        | Denial::LifetimeTooLong => denied(LicenseState::Unverified, message, session),
     }
 }
 

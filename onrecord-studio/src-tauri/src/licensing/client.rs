@@ -128,40 +128,31 @@ pub fn seat_refusal(status: reqwest::StatusCode, body: &[u8]) -> FetchError {
     FetchError::Refused(message.to_string())
 }
 
-/// The only URL the app will hand to the system browser from a server reply.
-pub fn validate_checkout_url(url: &str) -> Result<String, FetchError> {
+/// A server-supplied URL is handed to the system browser only when it is plain https on exactly
+/// `host`, with no credentials and no port.
+fn stripe_url(url: &str, host: &str, what: &str) -> Result<String, FetchError> {
     let parsed = reqwest::Url::parse(url)
-        .map_err(|_| FetchError::Invalid("checkout URL is not a URL".to_string()))?;
+        .map_err(|_| FetchError::Invalid(format!("{what} URL is not a URL")))?;
     let acceptable = parsed.scheme() == "https"
-        && parsed.host_str() == Some(CHECKOUT_HOST)
+        && parsed.host_str() == Some(host)
         && parsed.username().is_empty()
         && parsed.password().is_none()
         && parsed.port().is_none();
     if acceptable {
         Ok(parsed.into())
     } else {
-        Err(FetchError::Invalid(
-            "checkout URL is not a Stripe Checkout address".to_string(),
-        ))
+        Err(FetchError::Invalid(format!(
+            "{what} URL is not a {host} address"
+        )))
     }
 }
 
-/// Same shape of check as the checkout URL, for the Customer Portal host.
+pub fn validate_checkout_url(url: &str) -> Result<String, FetchError> {
+    stripe_url(url, CHECKOUT_HOST, "checkout")
+}
+
 pub fn validate_billing_portal_url(url: &str) -> Result<String, FetchError> {
-    let parsed = reqwest::Url::parse(url)
-        .map_err(|_| FetchError::Invalid("billing portal URL is not a URL".to_string()))?;
-    let acceptable = parsed.scheme() == "https"
-        && parsed.host_str() == Some(BILLING_PORTAL_HOST)
-        && parsed.username().is_empty()
-        && parsed.password().is_none()
-        && parsed.port().is_none();
-    if acceptable {
-        Ok(parsed.into())
-    } else {
-        Err(FetchError::Invalid(
-            "billing portal URL is not a Stripe Customer Portal address".to_string(),
-        ))
-    }
+    stripe_url(url, BILLING_PORTAL_HOST, "billing portal")
 }
 
 #[derive(Deserialize)]
@@ -453,19 +444,6 @@ mod tests {
     }
 
     #[test]
-    fn only_the_stripe_portal_host_is_handed_to_the_browser() {
-        assert!(validate_billing_portal_url("https://billing.stripe.com/p/session/x").is_ok());
-        for bad in [
-            "http://billing.stripe.com/p/x",
-            "https://checkout.stripe.com/p/x",
-            "https://user@billing.stripe.com/p/x",
-            "https://billing.stripe.com:8443/p/x",
-        ] {
-            assert!(validate_billing_portal_url(bad).is_err(), "{bad}");
-        }
-    }
-
-    #[test]
     fn a_device_limit_conflict_is_typed_and_other_conflicts_are_refusals() {
         assert_eq!(
             conflict_error(br#"{"error":"device_limit"}"#),
@@ -490,19 +468,29 @@ mod tests {
     }
 
     #[test]
-    fn only_stripe_checkout_https_urls_are_returned() {
+    fn only_the_expected_stripe_https_host_is_handed_to_the_browser() {
         assert!(validate_checkout_url("https://checkout.stripe.com/c/pay/cs_test_1#frag").is_ok());
+        assert!(validate_billing_portal_url("https://billing.stripe.com/p/session/x").is_ok());
         for bad in [
             "http://checkout.stripe.com/c/pay/x",
             "https://checkout.stripe.com.evil.example/x",
             "https://evil.example/checkout.stripe.com",
             "https://user@checkout.stripe.com/x",
             "https://checkout.stripe.com:8443/x",
+            "https://billing.stripe.com/p/x",
             "https://stripe.com/x",
             "javascript:alert(1)",
             "",
         ] {
             assert!(validate_checkout_url(bad).is_err(), "{bad}");
+        }
+        for bad in [
+            "http://billing.stripe.com/p/x",
+            "https://checkout.stripe.com/p/x",
+            "https://user@billing.stripe.com/p/x",
+            "https://billing.stripe.com:8443/p/x",
+        ] {
+            assert!(validate_billing_portal_url(bad).is_err(), "{bad}");
         }
     }
 
