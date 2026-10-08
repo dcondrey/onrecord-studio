@@ -61,6 +61,10 @@ const kindOf = (unit: LeadFigureUnit): ValueKind => unit;
 const COMPACT_FROM = 10_000;
 const format = (value: number, unit: LeadFigureUnit, compact = false) => formatValue(value, { kind: kindOf(unit), compact: compact && (unit === 'currency' || unit === 'count') && Math.abs(value) >= COMPACT_FROM, digits: unit === 'percent' ? 1 : undefined });
 
+/** A reason's first clause ('no rows in the actuals table; not spending of zero' gives the part
+ * before the semicolon), for a slot too small for all of it. */
+const firstClause = (reason: string) => reason.split(/[;(]/)[0].trim() || reason;
+
 /** Words cut to fit `px` (with the slot's 4px padding each side), ending in an ellipsis; '' when
  * not even one letter fits. The full words stay in the mark's title. */
 function fitWords(text: string, px: number): string {
@@ -236,7 +240,7 @@ function PairedPlot({ figure, width, size, interaction }: { figure: LeadPairedFi
     return deltaText(s, c, figure.unit);
   });
   // Room after the plot for each row's words: its delta, or an absent bullet subject's reason.
-  const reasons = figure.display === 'bullet' ? figure.rows.map((row) => (row.subject.state === 'value' ? 0 : Math.min(width * 0.45, measureText(row.subject.reason) + 20))) : [];
+  const reasons = figure.display === 'bullet' ? figure.rows.map((row) => (row.subject.state === 'value' ? 0 : Math.min(width * 0.3, measureText(firstClause(row.subject.reason)) + 20))) : [];
   const reserve = Math.max(40, ...deltas.map((text) => measureText(text) + 16), ...reasons);
   const x = scaleLinear([0, Math.max(...values, bandMax, 0)], [layout.plotX + 6, Math.max(layout.plotX + 60, width - reserve)]);
   return (
@@ -286,7 +290,7 @@ function PairedPlot({ figure, width, size, interaction }: { figure: LeadPairedFi
                   <AbsentSlot
                     absence={row.subject}
                     box={{ x: Math.max(trackEnd, bandEnd) + 6, y: slot.barY, width: Math.max(0, width - Math.max(trackEnd, bandEnd) - 6), height: layout.band }}
-                    text={fitWords(row.subject.reason, width - Math.max(trackEnd, bandEnd) - 6)}
+                    text={fitWords(firstClause(row.subject.reason), width - Math.max(trackEnd, bandEnd) - 6)}
                   />
                 </MarkGroup>
               )}
@@ -453,6 +457,18 @@ function runsOf(values: readonly LeadFigureValue[]): number[][] {
   return runs;
 }
 
+/** Runs of consecutive absent values with the same state and reason. */
+function absentRuns(values: readonly LeadFigureValue[]): { from: number; to: number; absence: Absence }[] {
+  const runs: { from: number; to: number; absence: Absence }[] = [];
+  values.forEach((value, i) => {
+    if (value.state === 'value') return;
+    const last = runs[runs.length - 1];
+    if (last && last.to === i - 1 && last.absence.state === value.state && last.absence.reason === value.reason) last.to = i;
+    else runs.push({ from: i, to: i, absence: value });
+  });
+  return runs;
+}
+
 /** Change from the first recorded value to the latest: percentage points for a rate (a relative
  * change of a rate overstates it), a signed percent otherwise; '' when the first is zero. */
 function changeText(first: number, last: number, unit: LeadFigureUnit): string {
@@ -497,8 +513,9 @@ function SeriesPlot({ figure, width, size, interaction }: { figure: LeadSeriesFi
       onBlurMark: () => { setActive(null); base.onBlurMark?.(); },
     };
   };
-  // A slot's words: the reason cut to the slot, upright when the slot is tall and narrow.
-  const slotWords = (reason: string, box: { width: number; height: number }) => fitWords(reason, box.height > box.width * 2 && box.width >= 12 ? box.height : box.width);
+  // A slot's words: the reason's first clause cut to the slot, upright when the slot is tall and
+  // narrow. The whole reason is the slot's title.
+  const slotWords = (reason: string, box: { width: number; height: number }) => fitWords(firstClause(reason), box.height > box.width * 2 && box.width >= 12 ? box.height : box.width);
   return (
     <g>
       {figure.panels.map((panel, p) => {
@@ -515,11 +532,13 @@ function SeriesPlot({ figure, width, size, interaction }: { figure: LeadSeriesFi
             <text x={0} y={top - 4} className="fill-fg-secondary text-[12px]">{panel.label}</text>
             <Grid scale={y} extent={[left, right]} tickCount={2} />
             <Axis orient="left" offset={left} scale={y} kind={kindOf(panel.unit)} tickCount={2} />
+            {absentRuns(panel.values).map(({ from, to, absence }) => {
+              // Neighbouring years absent for the same reason share one slot, so the reason has room.
+              const box = { x: xOf(from) - column / 2, y: top + 2, width: xOf(to) - xOf(from) + column, height: panelHeight - 2 };
+              return <AbsentSlot key={`gap-${from}`} absence={absence} box={box} text={slotWords(absence.reason, box)} />;
+            })}
             {panel.values.map((value, i) => {
-              if (value.state !== 'value') {
-                const box = { x: xOf(i) - column / 2, y: top + 2, width: column, height: panelHeight - 2 };
-                return <AbsentSlot key={`gap-${i}`} absence={value} box={box} text={slotWords(value.reason, box)} />;
-              }
+              if (value.state !== 'value') return null;
               const context = panel.context?.values[i];
               if (!context || context.state === 'value') return null;
               // The comparison line's own absence: a low slot on the baseline, under the line.
