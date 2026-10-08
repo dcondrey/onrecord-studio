@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import TemporalMap from '../charts/TemporalMap';
 import DepartmentLedger, { ledgerOrder, SMALL_SAMPLE_CLOSURES } from '../charts/figures/DepartmentLedger';
 import Dumbbells, { changeText, type DumbbellKind, type DumbbellRow } from '../charts/figures/Dumbbells';
@@ -47,7 +47,23 @@ export default function OverviewDashboard() {
   const portals = useAppStore((state) => state.portals);
   // One module is expanded at a time; it spans the canvas row and the others reflow around it.
   const [expanded, setExpanded] = useState<CanvasModuleId | null>(null);
-  const toggle = (id: CanvasModuleId) => () => withViewTransition(() => setExpanded((current) => (current === id ? null : id)));
+  // While a module is expanded it takes the canvas's full width (the insight rail moves below it),
+  // and its top is brought into view so the detail opens where the reader is looking.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const toggle = (id: CanvasModuleId) => () => {
+    const opening = expanded !== id;
+    withViewTransition(() => setExpanded(opening ? id : null));
+    if (!opening) return;
+    requestAnimationFrame(() => {
+      const container = scrollRef.current;
+      const module = container?.querySelector<HTMLElement>(`[data-canvas-module="canvas-${id}"]`);
+      if (!container || !module) return;
+      const offset = module.getBoundingClientRect().top - container.getBoundingClientRect().top;
+      if (offset < 0 || offset > container.clientHeight / 2) {
+        container.scrollTo({ top: container.scrollTop + offset - 16, behavior: document.documentElement.dataset.motion === 'reduce' ? 'auto' : 'smooth' });
+      }
+    });
+  };
   const [workbench, setWorkbench] = useState<{ reportId: string; review: boolean } | null>(null);
   const requestedCasework = useAppStore((state) => state.requestedCasework);
   const consumeCasework = useAppStore((state) => state.consumeCasework);
@@ -81,7 +97,7 @@ export default function OverviewDashboard() {
   const openWorkbench = () => setWorkbench({ reportId: '', review: false });
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto">
+    <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto w-full max-w-content space-y-6 px-4 pb-10 pt-6 md:px-6">
         {workbench ? (
           <div>
@@ -113,7 +129,7 @@ export default function OverviewDashboard() {
           <ProfessionalWorkbench key={`${workbench.reportId}:${workbench.review}`} initialReportId={workbench.reportId} initialTab={workbench.review ? 'Evidence review' : 'Cases'} />
         ) : <>
           <SubjectDossier />
-          <div data-overview-canvas className={cn('grid items-start gap-5', (portals.length > 0 || workspaceInitializationStatus === 'loading') && 'xl:grid-cols-[minmax(0,1fr)_20rem] 2xl:grid-cols-[minmax(0,1fr)_23rem]')}>
+          <div data-overview-canvas className={cn('grid items-start gap-5', expanded === null && (portals.length > 0 || workspaceInitializationStatus === 'loading') && 'xl:grid-cols-[minmax(0,1fr)_20rem] 2xl:grid-cols-[minmax(0,1fr)_23rem]')}>
             <div className="grid min-w-0 grid-cols-1 gap-5">
               <CommandBar />
               {workspaceInitializationStatus === 'loading' ? (

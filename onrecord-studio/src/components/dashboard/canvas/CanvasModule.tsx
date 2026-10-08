@@ -34,6 +34,7 @@ export default function CanvasModule({ id, icon, title, badges, headline, expand
   const [everExpanded, setEverExpanded] = useState(expanded);
   if (expanded && !everExpanded) setEverExpanded(true);
   const toggleRef = useRef<HTMLButtonElement>(null);
+  const showingDetail = expanded && Boolean(detail);
   const titleId = `${id}-title`;
   const detailId = `${id}-detail`;
   const collapseOnEscape = (event: KeyboardEvent<HTMLElement>) => {
@@ -74,9 +75,11 @@ export default function CanvasModule({ id, icon, title, badges, headline, expand
         )}
       </header>
       {headline && <p className={cn('px-5 pt-2.5 text-fg', hero ? 'text-headline' : 'text-lede')}>{headline}</p>}
-      {children && <div className="flex min-w-0 flex-1 flex-col px-5 pb-5 pt-4">{children}</div>}
-      {!children && <div className="pb-5" />}
-      {footer && <div className="mt-auto border-t border-line px-5 py-3 text-caption text-muted">{footer}</div>}
+      {/* Expanded, the detail replaces the compact face, which restates part of it. The face stays
+          mounted, so collapsing returns to it without reloading. */}
+      {children && <div className={cn('min-w-0 flex-1 flex-col px-5 pb-5 pt-4', showingDetail ? 'hidden' : 'flex')}>{children}</div>}
+      {(!children || showingDetail) && <div className="pb-5" />}
+      {footer && <div className={cn('mt-auto border-t border-line px-5 py-3 text-caption text-muted', showingDetail && 'hidden')}>{footer}</div>}
       {detail && everExpanded && (
         <div id={detailId} hidden={!expanded} className="canvas-module-detail border-t border-line px-5 pb-6 pt-5">
           {detail}

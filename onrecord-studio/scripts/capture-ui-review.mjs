@@ -308,6 +308,8 @@ const VIEWS = [
   { view: 'compare-dispositions', steps: [nav('compare')], sections: ['section[aria-label="Dispositions by department"]'], primary: [], states: [] },
   { view: 'overview-following', steps: [nav('overview')], sections: ['section[aria-label="Following"]'], primary: [], states: [] },
   { view: 'overview-canvas', steps: [nav('overview')], sections: ['[data-overview-canvas]'], primary: [], states: [] },
+  { view: 'overview-canvas-leads', steps: [nav('overview'), click('"Show every lead in your tables"', (page) => page.getByRole('button', { name: 'Show every lead in your tables' }))], primary: [], states: [] },
+  { view: 'overview-canvas-coverage', steps: [nav('overview'), click('"Show every imported table"', (page) => page.getByRole('button', { name: 'Show every imported table' }))], primary: [], states: [] },
   { view: 'story-ranked-leads', steps: [nav('story')], sections: ['figure:has(h3:text-is("Ranked leads"))'], primary: [], states: [] },
   {
     view: 'organization-record',

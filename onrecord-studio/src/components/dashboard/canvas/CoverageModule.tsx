@@ -59,7 +59,16 @@ export function packGroups(datasets: readonly AnalyticalDatasetSummary[]): PackG
   })).sort((a, b) => b.rows - a.rows || a.label.localeCompare(b.label));
 }
 
-const rowsText = (n: number) => formatValue(n, { kind: 'count', compact: n >= 10_000 });
+/** The figure's own sentence: the largest table and its share, which the module's sentence does not state. */
+function largestHeadline(datasets: readonly AnalyticalDatasetSummary[]): string {
+  const total = datasets.reduce((sum, table) => sum + table.importedRows, 0);
+  const largest = [...datasets].sort((a, b) => b.importedRows - a.importedRows)[0];
+  if (!largest || total === 0) return 'No imported table holds a row yet.';
+  const share = formatValue(largest.importedRows / total, { kind: 'percent' });
+  return `${largest.displayName} is the largest table: ${largest.importedRows.toLocaleString('en-US')} rows, ${share} of the library.`;
+}
+
+const rowsText =(n: number) => formatValue(n, { kind: 'count', compact: n >= 10_000 });
 const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
 
 /**
@@ -126,7 +135,7 @@ export default function CoverageModule({ expanded, onToggle, span }: { expanded:
         <div className="grid grid-cols-1 gap-4">
           <BarTable
             title="Imported tables by pack"
-            headline={headline}
+            headline={largestHeadline(datasets)}
             sources={{ tables: ['analytical_snapshots'], note: 'row counts as imported; a pack is the published bundle the table was installed from' }}
             summary={`${plural(datasets.length, 'table')} in ${plural(groups.length, 'group')}. Rows share one scale across every table.`}
             status="ready"
