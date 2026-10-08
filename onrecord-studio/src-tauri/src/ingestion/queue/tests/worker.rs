@@ -5,7 +5,6 @@ use super::*;
 
 #[test]
 fn durable_retry_backoff_starts_at_one_second_and_saturates_at_thirty() {
-    // Attempts 0 and 1 share the base delay: attempt 0 is the first run, not a retry.
     let live: Vec<u64> = (0..MAXIMUM_DURABLE_TASK_ATTEMPTS)
         .map(durable_retry_delay_seconds)
         .collect();
