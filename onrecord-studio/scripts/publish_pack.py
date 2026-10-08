@@ -268,6 +268,23 @@ def checked_new_files(directory: Path, manifest: dict) -> list[str]:
     return paths
 
 
+def replaces_published(published: dict, manifest: dict, new_files: list[str]) -> str | None:
+    """Why `manifest` with `new_files` would drop or replace what `published` holds, if it would."""
+    current = {(file["path"], file["sha256"].lower()) for file in manifest["files"]}
+    dropped = [
+        file["path"] for file in published["files"] if (file["path"], file["sha256"].lower()) not in current
+    ]
+    if dropped:
+        return f"the new manifest drops or changes published files: {dropped[:5]}"
+    kept = published.get("checks", [])
+    if manifest.get("checks", [])[: len(kept)] != kept:
+        return "the new manifest does not keep every published check"
+    clashing = {file["path"] for file in published["files"]} & set(new_files)
+    if clashing:
+        return f"new files would replace published ones: {sorted(clashing)[:5]}"
+    return None
+
+
 def publish_incremental(directory: Path) -> None:
     signed, kid = read_signed(directory)
     manifest = signed["manifest"]
@@ -278,15 +295,9 @@ def publish_incremental(directory: Path) -> None:
     head = api.dataset_info(repo).sha
     published = remote_manifest(api, repo, head)
     if published is not None:
-        current = {(file["path"], file["sha256"].lower()) for file in manifest["files"]}
-        dropped = [file["path"] for file in published["files"] if (file["path"], file["sha256"].lower()) not in current]
-        if dropped:
-            sys.exit(f"the new manifest drops or changes published files: {dropped[:5]}")
-        if manifest.get("checks", [])[: len(published.get("checks", []))] != published.get("checks", []):
-            sys.exit("the new manifest does not keep every published check")
-        clashing = {file["path"] for file in published["files"]} & set(new_files)
-        if clashing:
-            sys.exit(f"new files would replace published ones: {sorted(clashing)[:5]}")
+        refusal = replaces_published(published, manifest, new_files)
+        if refusal:
+            sys.exit(refusal)
     (directory / "README.md").write_text(card(signed, kid))
     operations = [
         CommitOperationAdd(path_in_repo=path, path_or_fileobj=str(directory / path))

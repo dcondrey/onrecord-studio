@@ -653,6 +653,63 @@ mod tests {
         assert!(plan(&manifest, &[]).is_err());
     }
 
+    /// What a snapshot run's first steps rely on: only a 404 reads as an absent manifest (Hugging
+    /// Face answers 401 for a repository that does not exist, which must abort a run rather than
+    /// start an empty pack), and a listed file comes back checked from the manifest's commit.
+    #[tokio::test]
+    #[ignore = "downloads from Hugging Face"]
+    async fn only_a_404_is_absence_and_a_listed_file_comes_back_checked() {
+        let root = tempfile::tempdir().unwrap();
+        let client = client().unwrap();
+        let mut answers = Vec::new();
+        for (repository, file) in [
+            ("onrecord-san-diego-money", "manifest.json"),
+            ("onrecord-san-diego-money", "nope.json"),
+            ("onrecord-does-not-exist", "manifest.json"),
+        ] {
+            let url = Url::parse(&format!(
+                "{HUB}datasets/{PUBLISHER}/{repository}/resolve/{BRANCH}/{file}"
+            ))
+            .unwrap();
+            let destination = staged_name(root.path());
+            answers.push(
+                client
+                    .download_url_to_path_unless_gone(url, &destination, MAX_MANIFEST_BYTES)
+                    .await
+                    .map(|downloaded| downloaded.is_some()),
+            );
+        }
+        assert!(matches!(answers[0], Ok(true)), "{:?}", answers[0]);
+        assert!(matches!(answers[1], Ok(false)), "{:?}", answers[1]);
+        assert!(answers[2].is_err(), "{:?}", answers[2]);
+
+        let packs = root.path().join("packs");
+        let signed = fetch_signed_manifest(
+            packs.clone(),
+            "san-diego-money",
+            crate::packs::pinned_pack_keys(),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        let smallest = signed
+            .manifest
+            .files
+            .iter()
+            .filter(|file| file.format == PackFileFormat::Original)
+            .min_by_key(|file| file.bytes)
+            .unwrap();
+        let path = fetch_listed_file(
+            &packs,
+            "san-diego-money",
+            &signed.manifest.pack_version,
+            smallest,
+        )
+        .await
+        .unwrap();
+        check_pack_file(&path, smallest).unwrap();
+    }
+
     /// Fetches the published money pack's manifest and its smallest table from Hugging Face,
     /// verifies them against the key this app pins, and imports the table.
     #[tokio::test]

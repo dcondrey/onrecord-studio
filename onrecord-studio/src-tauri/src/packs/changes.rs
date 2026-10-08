@@ -178,12 +178,12 @@ fn compare(
     // gained or lost.
     sql.push_str(
         "INSERT INTO __changes (change, before, after)
-         SELECT change, CASE WHEN change = 'removed' THEN __json END,
-                CASE WHEN change = 'added' THEN __json END
+         SELECT change, CASE WHEN change = 'removed' THEN __removed END,
+                CASE WHEN change = 'added' THEN __added END
          FROM (
              SELECT CASE WHEN COALESCE(a.copies, 0) > COALESCE(b.copies, 0)
                          THEN 'added' ELSE 'removed' END AS change,
-                    COALESCE(a.__json, b.__json) AS __json,
+                    b.__json AS __removed, a.__json AS __added,
                     unnest(range(abs(COALESCE(a.copies, 0) - COALESCE(b.copies, 0)))) AS __copy
              FROM (SELECT __shared, count(*) AS copies, arg_min(__json, _row) AS __json
                    FROM __before WHERE __key IS NULL GROUP BY __shared) b
@@ -572,14 +572,14 @@ mod tests {
         );
     }
 
-    /// Without a key, rows compare by their bytes with multiplicity: a row present twice before
-    /// and once after is one removal.
+    /// Without a key, rows compare by their cells in the shared columns with multiplicity: a row
+    /// present twice before and once after is one removal, shown as the earlier file held it.
     #[tokio::test]
     async fn a_keyless_record_counts_each_copy_gained_or_lost() {
         let (summary, rows) = change_record(
             "budget_departments",
             "dept,name\nX,a\nX,a\nY,b\n",
-            "dept,name\nX,a\nZ,c\n",
+            "dept,name,extra\nX,a,1\nZ,c,2\n",
         )
         .await;
         let removed = of_kind(&rows, "removed")
@@ -592,8 +592,9 @@ mod tests {
         );
         assert_eq!(
             of_kind(&rows, "added")[0].5,
-            text(r#"{"dept":"Z","name":"c"}"#)
+            text(r#"{"dept":"Z","name":"c","extra":"2"}"#)
         );
+        assert_eq!(of_kind(&rows, "column_added")[0].3, text("extra"));
         assert_eq!((summary.added, summary.removed, summary.changed), (1, 2, 0));
     }
 
