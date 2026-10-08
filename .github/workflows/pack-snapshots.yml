@@ -1,0 +1,71 @@
+name: Pack snapshots
+
+# Extends the san-diego-snapshots data pack once a day (onrecord-studio/docs/data-packs.md,
+# Snapshots): every City file overwritten in place is retrieved, kept as a dated snapshot when its
+# bytes changed or recorded as checked when they did not, and the cumulative manifest is signed
+# with the CI key (pack-ci-2026-1) and published to Hugging Face in one commit.
+
+on:
+  schedule:
+    - cron: '23 13 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pack-snapshots
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    working-directory: onrecord-studio
+
+jobs:
+  snapshot:
+    name: Snapshot San Diego files
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: onrecord-studio
+      - name: Install Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf libglib2.0-dev
+      - name: Build the pack builder
+        run: >-
+          cargo build --release --manifest-path src-tauri/Cargo.toml
+          --features pack-builder --bin onrecord-pack-builder
+      - uses: astral-sh/setup-uv@v7
+      - name: Make sure the dataset repository exists
+        # The builder reads a missing manifest (HTTP 404) as the first run; a missing repository
+        # answers 401, which it refuses rather than guesses at.
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: uv run scripts/publish_pack.py --ensure-repo san-diego-snapshots
+      - name: Snapshot
+        env:
+          ONRECORD_PACK_SEED: ${{ secrets.ONRECORD_PACK_SEED }}
+          ONRECORD_PACK_KEY_ID: pack-ci-2026-1
+        run: >-
+          target/release/onrecord-pack-builder snapshot san-diego-snapshots
+          "$RUNNER_TEMP/snapshot"
+      - name: Publish
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: uv run scripts/publish_pack.py --incremental "$RUNNER_TEMP/snapshot"
+      - name: Report files not snapshotted
+        # Published first, so one unreachable file never costs the others a day of history.
+        run: |
+          if [ -s "$RUNNER_TEMP/snapshot/not-snapshotted.txt" ]; then
+            echo "::error::Not snapshotted: $(paste -sd ' ' "$RUNNER_TEMP/snapshot/not-snapshotted.txt")"
+            exit 1
+          fi
