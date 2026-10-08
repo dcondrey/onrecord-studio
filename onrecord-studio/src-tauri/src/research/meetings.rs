@@ -1104,7 +1104,9 @@ fn basis_sentence(basis: SuggestionBasis) -> &'static str {
 }
 
 fn quoted(citation: &FindingCitation) -> String {
-    let quote = citation.quote.as_deref().unwrap_or_default();
+    let Some(quote) = citation.quote.as_deref() else {
+        return "(no excerpt recorded)".to_string();
+    };
     let capped = quote.chars().take(QUOTE_CHARACTERS).collect::<String>();
     if capped.chars().count() < quote.chars().count() {
         format!("\"{capped}…\"")
@@ -1187,7 +1189,7 @@ pub(crate) fn draft_comment(
                             quoted(&reason.citation)
                         )
                     }
-                    _ => {
+                    Some(ClaimCheckOutcome::Unreconciled { .. }) | None => {
                         questions.insert(
                             "Which published records support the stated amount?".to_string(),
                         );
