@@ -276,7 +276,7 @@ export default function BarTable(props: BarTableProps) {
                     scope="col"
                     title={column.title}
                     aria-sort={column.sortable ? (sorted ? sort?.direction : 'none') : undefined}
-                    className={cn('border-b border-line px-2 pb-2 align-bottom text-caption font-medium leading-4 text-fg-secondary', props.layout === 'stacked' ? 'min-w-[3rem]' : 'min-w-[4.5rem]')}
+                    className={cn('border-b border-line pb-2 align-bottom text-caption font-medium leading-4 text-fg-secondary', props.layout === 'stacked' ? 'min-w-[3rem] px-1.5' : 'min-w-[4.5rem] px-2')}
                   >
                     {column.sortable && props.onSort ? (
                       <button type="button" className="focus-ring rounded text-left hover:text-fg" onClick={() => props.onSort?.(column.key)}>{label}</button>
@@ -347,7 +347,7 @@ export default function BarTable(props: BarTableProps) {
                           onPointerLeave={tooltip.hide}
                           onClick={() => activate(i, j)}
                           className={cn(
-                            'px-2 py-2 align-middle outline-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
+                            props.layout === 'stacked' ? 'px-1.5' : 'px-2', 'py-2 align-middle outline-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
                             cell?.active && drill?.mode === 'cell' && 'cursor-pointer',
                             (drill?.mode === 'row' || (!drill && props.onRowActivate)) && 'cursor-pointer',
                             cellOpen && 'bg-raised/60',

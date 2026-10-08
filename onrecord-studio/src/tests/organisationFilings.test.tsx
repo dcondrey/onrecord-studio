@@ -150,4 +150,32 @@ describe('organisation filings', () => {
     expect(await screen.findByRole('button', { name: 'Alpha Project For The Homeless' })).toBeTruthy();
     expect(bridge.invoke).toHaveBeenCalledWith('search_organisations', { query: 'ALPHA PROJECT FOR THE HOMELESS INC' });
   });
+
+  it('plots grants only from a read return of the same tax period, and sums only payment rows, in cents', async () => {
+    const year = (taxYear: number, taxPeriod: string, totalRevenue: number | null) => ({ taxYear, taxPeriod, formType: '990', totalRevenue, totalExpenses: 800, totalAssetsEndOfYear: 5000, totalLiabilitiesEndOfYear: 100, officerCompensation: null });
+    const record = filings('111111111', 'First Organisation', {
+      indexYears: [{ year: 2023, checkedAt: '2026-10-05T00:00:00Z', returnsListed: 1 }],
+      returns: [{ objectId: '1', indexYear: 2023, returnType: '990', taxPeriod: '202206', taxpayerName: 'FIRST', archiveUrl: null, memberName: null, xmlSha256: null, retrievedAt: null, unreadReason: null,
+        statement: statement({ governmentGrants: 400 }) }],
+      summary: { name: 'FIRST', city: null, state: null, sourceUrl: 'https://example.test', retrievedAt: '2026-10-05T00:00:00Z',
+        // The 2022 extract's period is 202206; 2021's (202106) has no read return.
+        years: [year(2021, '202106', null), year(2022, '202206', 1000)] },
+      publicMoney: [
+        { role: 'payment', datasetName: 'Payments', sourceUrl: null, vendorValue: 'FIRST', fiscalYear: '2024', rows: 2, amount: '0.10' },
+        { role: 'payment', datasetName: 'Payments', sourceUrl: null, vendorValue: 'FIRST INC', fiscalYear: '2024', rows: 1, amount: '0.20' },
+        { role: 'contract', datasetName: 'Contracts', sourceUrl: null, vendorValue: 'FIRST', fiscalYear: '2024', rows: 1, amount: '999.00' },
+      ],
+    });
+    bridge.invoke.mockImplementation((name: string) => Promise.resolve(
+      name === 'list_organisation_checks' || name === 'list_organisation_payment_mappings' ? [] : name === 'get_analytical_schema' ? { datasets: [], columns: [], templates: [] } : record));
+    render(<OrganisationFilingsPanel />);
+    await open('111111111');
+    expect((await screen.findByRole('img', { name: /^Government grants from returns read here/ })).getAttribute('aria-label'))
+      .toBe('Government grants from returns read here: 2021 not read; 2022 $400.');
+    // A revenue the extract does not state is a gap, never $0.
+    expect(screen.getByRole('img', { name: /^Revenue and expenses/ }).getAttribute('aria-label')).toContain('2021 not stated and $800');
+    expect(screen.getByText(/government grants were 40% of revenue in 2022/)).toBeTruthy();
+    // 0.10 + 0.20 is 0.30 exactly, and the contract row is not a payment.
+    expect(screen.getByRole('row', { name: /^2024: \$0\.30 over 3 rows$/ })).toBeTruthy();
+  });
 });

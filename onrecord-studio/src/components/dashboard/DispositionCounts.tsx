@@ -170,7 +170,7 @@ function DispositionBarTable({ rows, portalName, method }: {
   const unclassified = rows.reduce((sum, row) => sum + countOf(row, 'NOT_CLASSIFIED') + countOf(row, 'NOT_RECORDED'), 0);
 
   const columns: BarTableColumn[] = [
-    ...SHARE_COLUMNS.map((disposition): BarTableColumn => ({ key: disposition, label: DISPOSITION_LABELS[disposition], scale: 'own-0-100', sortable: true, barWidth: 40 })),
+    ...SHARE_COLUMNS.map((disposition): BarTableColumn => ({ key: disposition, label: DISPOSITION_LABELS[disposition], scale: 'own-0-100', sortable: true, barWidth: 36 })),
     ...ABSENCE_COLUMNS.map((disposition): BarTableColumn => ({
       key: disposition,
       label: DISPOSITION_LABELS[disposition],
@@ -179,7 +179,7 @@ function DispositionBarTable({ rows, portalName, method }: {
       scale: 'own-0-100',
       hatched: true,
       sortable: true,
-      barWidth: 32,
+      barWidth: 28,
     })),
   ];
 

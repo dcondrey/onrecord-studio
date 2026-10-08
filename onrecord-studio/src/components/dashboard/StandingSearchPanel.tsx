@@ -244,13 +244,15 @@ function YearColumns({ run }: { run: Run }) {
   const basis = run.result.countBasis;
   const estimated = basis.basis !== 'EXACT';
   const facet = run.result.facets.find((candidate) => candidate.dimension === 'year');
-  const counts = new Map((facet?.values ?? []).flatMap((value) => (/^\d{4}$/.test(value.value) ? [[Number(value.value), value.count] as const] : [])));
-  const unplaced = (facet?.values ?? []).filter((value) => !/^\d{4}$/.test(value.value));
+  // A run that did not break matches down by year has no year figure to draw.
+  if (!facet) return null;
+  const counts = new Map(facet.values.flatMap((value) => (/^\d{4}$/.test(value.value) ? [[Number(value.value), value.count] as const] : [])));
+  const unplaced = facet.values.filter((value) => !/^\d{4}$/.test(value.value));
   const listed = [...counts.keys()];
   const [first, last] = listed.length ? [Math.min(...listed), Math.max(...listed)] : [0, -1];
   const years = last - first + 1 <= MAX_YEAR_COLUMNS ? Array.from({ length: Math.max(0, last - first + 1) }, (_, i) => first + i) : listed.sort((a, b) => a - b);
   const none = years.filter((year) => !counts.has(year));
-  const reason = facet?.truncated ? 'No count listed for this year; the facet lists only its largest values' : 'No matching request lists this year';
+  const reason = facet.truncated ? 'No count listed for this year; the facet lists only its largest values' : 'No matching request lists this year';
   return (
     <ChartFrame
       title="Year filed"
