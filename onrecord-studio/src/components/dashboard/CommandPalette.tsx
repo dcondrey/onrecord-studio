@@ -11,6 +11,7 @@ import Skeleton from '../ui/Skeleton';
 import { openHelp } from '../help/helpEvents';
 import { openSourceConnector } from './sourceEvents';
 import { OBJECT_ICONS } from '../objects/ObjectLink';
+import { familyIcon } from '../ui/FamilyBadge';
 import { useObjectSearch, type ObjectGroup } from './useObjectSearch';
 import { contrastCommandRegistry, motionCommandRegistry, scoreCommand, themeCommandRegistry, workspaceCommandRegistry } from '../../commands/registry';
 
@@ -143,7 +144,7 @@ export default function CommandPalette() {
       label: lead.headline,
       detail: lead.kind,
       group: 'Leads' as const,
-      icon: 'flag' as const,
+      icon: familyIcon(lead.kind),
       keywords: `lead ${lead.kind} ${index + 1}`,
       current: index === at,
       perform: () => {

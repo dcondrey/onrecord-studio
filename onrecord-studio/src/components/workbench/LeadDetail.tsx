@@ -383,7 +383,7 @@ function DraftSection({ findingId }: { findingId: string }) {
   );
 }
 
-function StageSkeleton() {
+export function StageSkeleton() {
   return (
     <div role="status" aria-label="Assembling the lead" className="px-6 py-5">
       <div className="flex gap-2"><div className="skeleton h-5 w-24 rounded-full" /><div className="skeleton h-5 w-28 rounded-full" /></div>
@@ -396,7 +396,7 @@ function StageSkeleton() {
   );
 }
 
-function ContextSkeleton() {
+export function ContextSkeleton() {
   return (
     <div aria-hidden="true" className="space-y-5 px-4 py-4">
       {[0, 1, 2].map((block) => (

@@ -18,7 +18,9 @@ export default function Workbench({ navigator, children, wide = false, className
     <div className={cn('workbench min-h-0 flex-1', className)}>
       <div className="workbench-grid" data-wide={wide ? '' : undefined}>
         {navigator}
-        <div className="workbench-main">{children}</div>
+        {/* Below 960px the stage and context share this one scrolling column; a tab stop lets the
+            keyboard scroll it while it holds only placeholders. */}
+        <div className="workbench-main focus-ring" role="region" aria-label="Selected lead and the records around it" tabIndex={0}>{children}</div>
       </div>
     </div>
   );
