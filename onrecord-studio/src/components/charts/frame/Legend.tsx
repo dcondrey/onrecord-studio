@@ -3,7 +3,7 @@ import { COMPARISON_DASH, VIZ } from '../core/claim';
 import type { LegendFocus } from '../hooks/useLegendFocus';
 import { useSvgId } from './VizDefs';
 
-export type SwatchKind = 'line' | 'dashed-line' | 'rect' | 'dot' | 'hollow' | 'ring' | 'hatch' | 'flag' | 'slot-dashed' | 'slot-dotted';
+export type SwatchKind = 'line' | 'dashed-line' | 'rect' | 'dot' | 'hollow' | 'ring' | 'hatch' | 'flag' | 'slot-dashed' | 'slot-dotted' | 'diamond' | 'ring-dotted' | 'ramp';
 export type SwatchTone = Exclude<keyof typeof VIZ, 'surface' | 'grid' | 'focus'>;
 
 export interface LegendItem {
@@ -18,6 +18,13 @@ export interface LegendItem {
 export function LegendSwatch({ kind, tone = 'ink' }: { kind: SwatchKind; tone?: SwatchTone }) {
   const hatchId = useSvgId('viz-legend-hatch');
   const colour = VIZ[tone];
+  if (kind === 'ramp') {
+    return (
+      <svg width={30} height={12} viewBox="0 0 30 12" aria-hidden="true" className="shrink-0 overflow-visible">
+        {[1, 2, 3, 4, 5].map((step) => <rect key={step} x={(step - 1) * 6} y={2} width={6} height={8} style={{ fill: `var(--viz-seq-${step})` }} />)}
+      </svg>
+    );
+  }
   return (
     <svg width={16} height={12} viewBox="0 0 16 12" aria-hidden="true" className="shrink-0 overflow-visible">
       {kind === 'line' && <line x1={1} y1={6} x2={15} y2={6} style={{ stroke: colour, strokeWidth: 2, strokeLinecap: 'round' }} />}
@@ -26,6 +33,13 @@ export function LegendSwatch({ kind, tone = 'ink' }: { kind: SwatchKind; tone?: 
       {kind === 'dot' && <circle cx={8} cy={6} r={4} style={{ fill: colour }} />}
       {kind === 'hollow' && <circle cx={8} cy={6} r={3.5} style={{ fill: VIZ.surface, stroke: colour, strokeWidth: 1.5 }} />}
       {kind === 'ring' && <circle cx={8} cy={6} r={5} style={{ fill: 'none', stroke: colour, strokeWidth: 1.5 }} />}
+      {kind === 'diamond' && <path d="M8 1.5 12.5 6 8 10.5 3.5 6Z" style={{ fill: VIZ.surface, stroke: colour, strokeWidth: 1.5, strokeLinejoin: 'round' }} />}
+      {kind === 'ring-dotted' && (
+        <>
+          <circle cx={8} cy={5} r={3.5} style={{ fill: 'none', stroke: colour, strokeWidth: 1.5 }} />
+          <line x1={1} y1={11} x2={15} y2={11} style={{ stroke: VIZ.baseline, strokeWidth: 1, strokeDasharray: '1 2' }} />
+        </>
+      )}
       {kind === 'flag' && <path d="M4 11V1.5h8l-2 2.5 2 2.5H5.5" style={{ fill: colour, stroke: colour, strokeWidth: 1, strokeLinejoin: 'round' }} />}
       {kind === 'hatch' && (
         <>

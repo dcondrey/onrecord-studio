@@ -83,6 +83,8 @@ export default function CaseTimeline() {
   const [lane, setLane] = useState<string | null>(null);
   const [highlight, setHighlight] = useState<string | null>(null);
   const [opened, setOpened] = useState<string | null>(null);
+  const [pendingOpen, setPendingOpen] = useState<string | null>(null);
+  const [widened, setWidened] = useState<string | null>(null);
   const [today] = useState(() => Date.now());
 
   const loadRequests = useCallback(async (): Promise<Loaded<null>> => {
@@ -130,8 +132,8 @@ export default function CaseTimeline() {
   const pending = SOURCES.filter((source) => !sources[source].loaded);
   const failed = SOURCES.filter((source) => sources[source].error);
 
-  /** A mark opens its list row: page far enough to render it, then move there. */
-  const openItem = (id: string) => {
+  /** Scrolls the list to a row the current filters show: page far enough to render it, then move there. */
+  const reveal = useCallback((id: string) => {
     const index = view.items.findIndex((item) => item.id === id);
     if (index < 0) return;
     if (index >= limit) setLimit(index + 1);
@@ -141,7 +143,32 @@ export default function CaseTimeline() {
       row?.scrollIntoView?.({ block: 'center', behavior: document.documentElement.dataset.motion === 'full' ? 'smooth' : 'auto' });
       row?.focus({ preventScroll: true });
     });
+  }, [view, limit]);
+
+  /**
+   * A mark opens its list row. The overview also draws items outside the date range and the lane
+   * filter, so one of those first widens the filter that hides it, says so, and opens once the list
+   * has it.
+   */
+  const openItem = (id: string) => {
+    if (view.items.some((item) => item.id === id)) {
+      setWidened(null);
+      reveal(id);
+      return;
+    }
+    const item = all.find((candidate) => candidate.id === id);
+    if (!item) return;
+    const rangeOnly = buildTimeline([item], { sources: shown, from: '', to: '', text, lane }).items.length > 0;
+    if (from || to) { setFrom(''); setTo(''); }
+    if (!rangeOnly) setLane(null);
+    setWidened(rangeOnly ? 'Cleared the date range to open an item outside it.' : `Cleared the ${from || to ? 'date range and the ' : ''}lane filter to open an item outside ${from || to ? 'them' : 'it'}.`);
+    setPendingOpen(id);
   };
+  useEffect(() => {
+    if (pendingOpen === null || !view.items.some((item) => item.id === pendingOpen)) return;
+    setPendingOpen(null);
+    reveal(pendingOpen);
+  }, [pendingOpen, view, reveal]);
 
   const groups: { month: string; rows: TimelineItem[] }[] = [];
   for (const row of visible) {
@@ -194,10 +221,10 @@ export default function CaseTimeline() {
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <label className="flex items-center gap-2 text-caption text-muted">From
-              <Input type="date" value={from} max={to || undefined} onChange={(event) => { setFrom(event.target.value); setLimit(PAGE); }} className="w-40 tabular-nums" />
+              <Input type="date" value={from} max={to || undefined} onChange={(event) => { setFrom(event.target.value); setWidened(null); setLimit(PAGE); }} className="w-40 tabular-nums" />
             </label>
             <label className="flex items-center gap-2 text-caption text-muted">To
-              <Input type="date" value={to} min={from || undefined} onChange={(event) => { setTo(event.target.value); setLimit(PAGE); }} className="w-40 tabular-nums" />
+              <Input type="date" value={to} min={from || undefined} onChange={(event) => { setTo(event.target.value); setWidened(null); setLimit(PAGE); }} className="w-40 tabular-nums" />
             </label>
             {laneLabel !== null && (
               <span role="status" className="inline-flex items-center gap-2 rounded-lg border border-line-strong px-2.5 py-1 text-caption text-fg-secondary">
@@ -221,9 +248,9 @@ export default function CaseTimeline() {
             listed={{ items: view.items, unreadable: view.unreadableDates }}
             from={from}
             to={to}
-            onRange={(nextFrom, nextTo) => { setFrom(nextFrom); setTo(nextTo); setLimit(PAGE); }}
+            onRange={(nextFrom, nextTo) => { setFrom(nextFrom); setTo(nextTo); setWidened(null); setLimit(PAGE); }}
             activeLane={lane}
-            onLane={(id) => { setLane(id); setLimit(PAGE); }}
+            onLane={(id) => { setLane(id); setWidened(null); setLimit(PAGE); }}
             onOpen={openItem}
             highlight={highlight}
             today={today}
@@ -236,6 +263,23 @@ export default function CaseTimeline() {
             detail={failed.map((source) => `${SOURCE_LABELS[source]}: ${sources[source].error?.message} ${sources[source].error?.detail}`).join(' · ')}
             onRetry={() => failed.forEach((source) => sources[source].retry())}
           />
+        )}
+        {widened && <p role="status" className="text-caption text-muted">{widened}</p>}
+        {shown.has('CASE') && contradictions.length > 0 && (
+          <section aria-label="Date contradictions" className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-body text-warning">
+            <h3 className="text-heading">Two sources give different dates</h3>
+            <ul className="mt-1 space-y-1">
+              {contradictions.map((entry) => (
+                <li key={entry.id}>
+                  <span className="font-medium">{entry.subject}</span>
+                  <ul className="ml-4 list-disc">
+                    {entry.readings.map((reading) => <li key={reading.date}><Time value={reading.date} />: {reading.basis}</li>)}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-1">Both readings are shown as recorded. Resolving which is right needs a sourced record, not a choice here.</p>
+          </section>
         )}
         {pending.length > 0 && all.length > 0 && (
           <p role="status" className="text-caption text-muted">Still loading {listOf(pending.map((source) => SOURCE_LABELS[source].toLowerCase()))}…</p>

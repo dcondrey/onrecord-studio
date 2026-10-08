@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import CaseTimeline from '../components/dashboard/CaseTimeline';
 import { useAppStore } from '../store/useAppStore';
 import type { Finding } from '../types';
-import EvidenceTimeline, { DENSE_LANE } from '../components/charts/figures/EvidenceTimeline';
+import EvidenceTimeline, { DENSE_LANE, placeRow } from '../components/charts/figures/EvidenceTimeline';
 import type { TimelineItem } from '../utils/timeline';
 
 // Node 26's flag-gated `localStorage` shadows jsdom's, so replace it before the store is imported.
@@ -100,6 +100,25 @@ describe('CaseTimeline', () => {
     expect(toInput.value).toMatch(/^2026-\d{2}-\d{2}$/);
     expect(toInput.value > fromInput.value).toBe(true);
   });
+
+  it('opens a mark outside the date range by clearing the range, then moving to its row', async () => {
+    const change = (id: string, at: string) => ({ id, watchId: 'x', dimension: 'DOCUMENTS', changeKind: 'NEW_DOCUMENT', subject: `memo ${id}`, oldValue: null, newValue: 'added', oldAsOf: null, newAsOf: at, basis: 'OBSERVED', detectedAt: at, portalKey: null });
+    invoke.mockImplementation((command: string) => {
+      if (command === 'list_watch_changes') return Promise.resolve([change('early', '2026-01-10T00:00:00Z'), change('late', '2026-09-10T00:00:00Z')]);
+      if (command === 'get_casework_state') return Promise.resolve({ cases: [], events: [], leads: [], availableEvidence: [] });
+      return Promise.resolve([]);
+    });
+    const frames = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => { callback(0); return 0; });
+    render(<CaseTimeline />);
+    await waitFor(() => expect(screen.getAllByRole('img', { name: /memo early/ }).length).toBe(1));
+    const [fromInput] = document.querySelectorAll<HTMLInputElement>('input[type="date"]');
+    fireEvent.change(fromInput, { target: { value: '2026-06-01' } });
+    fireEvent.keyDown(screen.getByRole('img', { name: /memo early/ }), { key: 'Enter' });
+    await waitFor(() => expect(document.activeElement?.textContent).toMatch(/memo early/));
+    expect(fromInput.value).toBe('');
+    expect(screen.getByText('Cleared the date range to open an item outside it.')).toBeTruthy();
+    frames.mockRestore();
+  });
 });
 
 describe('CaseTimeline lane filter', () => {
@@ -137,12 +156,56 @@ describe('EvidenceTimeline', () => {
       />,
     );
     expect(document.querySelector('[data-absence="not-recorded"]')?.textContent).toMatch(/could not load$/);
-    expect(screen.getByText('first 200 shown')).toBeTruthy();
+    expect(screen.getByText('most recent 200 loaded; older not shown')).toBeTruthy();
     // No week is a zero-shaded cell: only weeks that hold items get one, and no item is drawn as its own mark.
-    expect(document.querySelectorAll('rect[style*="--viz-seq-"]').length).toBe(6);
+    expect(document.querySelectorAll('svg[role="group"] rect[style*="--viz-seq-"]').length).toBe(6);
     expect(screen.queryByRole('img', { name: /item w0/ })).toBeNull();
     expect(screen.getByRole('img', { name: 'Request 26-114 filed: Feb 1, 2026 (portal record) ≠ Feb 9, 2026 (your entry). Both are shown as recorded.' })).toBeTruthy();
     expect(screen.getByText('2 undated, not placed')).toBeTruthy();
     expect(document.body.innerHTML).not.toContain('--viz-counted');
+  });
+
+  it('keeps every same-day stack on its own side of its line, and chains close marks into one group', () => {
+    const x = (ms: number) => ms / 86_400_000;
+    const day = (n: number, i: number) => item(`d${n}-${i}`, new Date(Date.UTC(2026, 0, n)).toISOString());
+    for (const [count, direction] of [[1, -1], [2, -1], [3, 1], [5, 1], [6, -1], [9, 1]] as const) {
+      const placed = placeRow(Array.from({ length: count }, (_, i) => day(1, i)), x, 100, direction);
+      const ys = placed.map((p) => p.cy);
+      // A stack grows away from the other line and never past one step.
+      expect(ys.every((y) => (direction === 1 ? y >= 100 && y <= 110 : y <= 100 && y >= 90))).toBe(true);
+      const members = placed.reduce((sum, p) => sum + (p.kind === 'mark' ? 1 : 0), 0) + placed.filter((p) => p.kind === 'group').reduce((sum, p) => sum + (p.kind === 'group' ? p.items.length : 0), 0);
+      expect(placed.filter((p) => p.kind === 'mark').length).toBeLessThanOrEqual(2);
+      expect(members).toBeGreaterThanOrEqual(count);
+    }
+    // Neighbours 3px apart chain into one group however far its ends are apart.
+    const chain = placeRow(Array.from({ length: 8 }, (_, i) => item(`c${i}`, new Date(i * 3 * 86_400_000).toISOString())), x, 0, -1);
+    expect(chain).toHaveLength(1);
+    expect(chain[0].kind === 'group' && chain[0].pill && chain[0].items.length).toBe(8);
+  });
+
+  it('reaches a lane whose first marks are clustered, steps past the cluster, and lists its items on Enter', () => {
+    const at = (offset: number) => new Date(Date.UTC(2026, 0, 1) + offset * 3_600_000).toISOString();
+    const items = [...Array.from({ length: 6 }, (_, i) => item(`near${i}`, at(i))), item('far', '2026-09-01T00:00:00Z')];
+    const opened: string[] = [];
+    render(<EvidenceTimeline {...base} items={items} lanes={[{ source: 'WATCH', state: 'ready', cappedAt: null }]} contradictions={[]} listed={{ items, unreadable: 0 }} onOpen={(id) => opened.push(id)} />);
+    const pill = screen.getByRole('img', { name: /6 items in Watch changes.*Press Enter to list them/ });
+    expect(pill.getAttribute('tabindex')).toBe('0');
+    fireEvent.keyDown(pill, { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(screen.getByRole('img', { name: /item far/ }));
+    fireEvent.keyDown(document.activeElement as Element, { key: 'ArrowLeft' });
+    fireEvent.keyDown(document.activeElement as Element, { key: 'Enter' });
+    const list = screen.getByRole('region', { name: /6 items in Watch changes/ });
+    fireEvent.click(within(list).getByRole('button', { name: /item near3/ }));
+    expect(opened).toEqual(['near3']);
+  });
+
+  it('makes each contradiction a focusable mark on its own row', () => {
+    const items = [item('a', '2026-02-01T00:00:00Z')];
+    const contradictions = [0, 1, 2].map((c) => ({ id: `c${c}`, subject: `Subject ${c}`, readings: [{ date: '2026-02-01', basis: 'portal record' }, { date: '2026-02-09', basis: 'your entry' }] }));
+    render(<EvidenceTimeline {...base} items={items} lanes={[{ source: 'WATCH', state: 'ready', cappedAt: null }]} contradictions={contradictions} listed={{ items, unreadable: 0 }} />);
+    const marks = contradictions.map((entry) => screen.getByRole('img', { name: new RegExp(`^${entry.subject}:`) }));
+    expect(marks.map((mark) => mark.getAttribute('tabindex'))).toEqual(['0', '-1', '-1']);
+    const rows = new Set(marks.map((mark) => mark.querySelector('line[style*="4 3"]')?.getAttribute('y1')));
+    expect(rows.size).toBe(3);
   });
 });
