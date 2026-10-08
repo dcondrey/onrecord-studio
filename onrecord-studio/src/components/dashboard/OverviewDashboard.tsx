@@ -24,7 +24,9 @@ import AutomaticDiscovery from './AutomaticDiscovery';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { AgencyPerformanceProfile } from '../../types';
-import AttentionFeed, { AttentionFeedSkeleton } from './AttentionFeed';
+import { AttentionFeedSkeleton } from './AttentionFeed';
+import OverviewWorkbench from '../workbench/OverviewWorkbench';
+import EmptyState from '../ui/EmptyState';
 import SinceControl from './SinceControl';
 import WatchlistPanel from './WatchlistPanel';
 import StandingSearchPanel from './StandingSearchPanel';
@@ -36,9 +38,18 @@ import StarterSets from './StarterSets';
 import FirstRunData from './FirstRunData';
 import { useStarterRunStore } from '../../store/useStarterRunStore';
 
+type Perspective = 'leads' | 'following' | 'analytics' | 'tools';
+
+const PERSPECTIVES: { value: Perspective; label: string }[] = [
+  { value: 'leads', label: 'Leads' },
+  { value: 'following', label: 'Following' },
+  { value: 'analytics', label: 'Analytics' },
+  { value: 'tools', label: 'Tools' },
+];
+
 export default function OverviewDashboard() {
   const portals = useAppStore((state) => state.portals);
-  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [perspective, setPerspective] = useState<Perspective>('leads');
   const [workbench, setWorkbench] = useState<{ reportId: string; review: boolean } | null>(null);
   const requestedCasework = useAppStore((state) => state.requestedCasework);
   const consumeCasework = useAppStore((state) => state.consumeCasework);
@@ -70,30 +81,56 @@ export default function OverviewDashboard() {
   const inspectDepartment = useInspectDepartment();
   const portalName = usePortalName();
   const openLedger = useCallback(() => {
-    setShowAnalytics(true);
+    setPerspective('analytics');
     requestAnimationFrame(() => document.getElementById('deadline-ledger')?.scrollIntoView({ block: 'start' }));
   }, []);
   const openWorkbench = () => setWorkbench({ reportId: '', review: false });
+  const hasSources = portals.length > 0;
+  const ledger = (
+    <DepartmentLedger
+      variant="overview"
+      profiles={ledgerOrder(scopedProfiles)}
+      scaleProfiles={scopedProfiles}
+      status={caseScoped ? 'scoped-out' : profiles.length === 0 && analyticsStatus === 'pending' ? 'loading' : 'ready'}
+      scopedOutText="Hidden while a case scope is active: these are all-time totals for every request, not the case's."
+      portalName={portalName}
+      onInspect={(profile) => inspectDepartment(profile.portalSubdomain, profile.agencyId)}
+    />
+  );
+  const showStarter = workspaceInitializationStatus === 'ready' && (portals.length === 0 || starterRunShown);
+  const leadsWorkbench = perspective === 'leads' && !workbench && hasSources && workspaceInitializationStatus === 'ready';
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto w-full max-w-content space-y-6 px-4 pb-10 pt-6 md:px-6">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <div className={cn('mx-auto flex w-full max-w-content flex-1 flex-col gap-3 px-3 pt-4 md:px-4', leadsWorkbench ? 'min-h-[36rem] pb-3' : 'pb-10')}>
         {workbench ? (
-          <div>
+          <div className="px-1">
             <button type="button" onClick={() => setWorkbench(null)} className="focus-ring mb-2 inline-flex items-center gap-1 rounded text-body text-accent hover:underline">
               <Icon name="back" size="sm" /> Overview
             </button>
             <PageHeader title="Casework" summary="Track requests and commitments, reconcile spending, and challenge the evidence." />
           </div>
         ) : (
-          <PageHeader
-            title="Overview"
-            summary="New leads, what you follow, and the state of your sources."
-            actions={<>
-              {portals.length > 0 && <SinceControl />}
+          <header className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            {/* The breadcrumb names the view; the perspective tabs title the page. */}
+            <h2 className="sr-only">Overview</h2>
+            <div className="mr-auto flex flex-wrap items-center gap-2">
+              <SegmentedControl<Perspective>
+                label="Overview perspective"
+                mode="tabs"
+                size="sm"
+                value={perspective}
+                onChange={setPerspective}
+                panelId={() => 'overview-perspective'}
+                options={PERSPECTIVES}
+              />
+              <p className="hidden text-caption text-muted 2xl:block">Leads, what you follow, and the state of your sources.</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {hasSources && <SinceControl />}
               <Button onClick={() => setWorkspaceView('evidence')}>Review evidence</Button>
-            </>}
-          />
+            </div>
+          </header>
         )}
 
         <FirstRunData />
@@ -101,78 +138,67 @@ export default function OverviewDashboard() {
           <section aria-label="Needs attention" className="app-panel overflow-hidden"><AttentionFeedSkeleton /></section>
         ) : workspaceInitializationStatus === 'error' ? (
           <WorkspaceSourcesUnavailable detail={workspaceInitializationError} />
-        ) : portals.length === 0 || starterRunShown ? (
+        ) : showStarter && (perspective === 'leads' || workbench) ? (
           <section className="app-panel p-5"><StarterSets /></section>
         ) : null}
 
         <PostIngestBrief />
         {workbench ? (
           <ProfessionalWorkbench key={`${workbench.reportId}:${workbench.review}`} initialReportId={workbench.reportId} initialTab={workbench.review ? 'Evidence review' : 'Cases'} />
-        ) : <>
-          <SubjectDossier />
-          {portals.length > 0 && <AttentionFeed onOpenLedger={openLedger} />}
-          <section aria-label="Following" className="grid grid-cols-1 items-start gap-4 2xl:grid-cols-2">
-            <WatchlistPanel />
-            <StandingSearchPanel />
-          </section>
-          <ResearchWorkspace onReview={(reportId) => setWorkbench({ reportId, review: true })} />
-
-          {portals.length > 0 && (
-            <Panel aria-labelledby="response-analytics-title" className={cn(!showAnalytics && '[&>div:first-child]:border-b-0')}>
-              <PanelHeader
-                titleId="response-analytics-title"
-                title="Response analytics"
-                description={analyticsError && !analyticsUnavailable
-                  ? (analyticsUpdatedAt ? `Stale: the last refresh failed. Last updated ${formatRelativeTime(analyticsUpdatedAt)}.` : 'Analytics couldn’t be calculated.')
-                  : analyticsUpdatedAt ? `Updated ${formatRelativeTime(analyticsUpdatedAt)}` : 'How quickly and completely agencies answer requests.'}
-                actions={(
-                  <Button aria-expanded={showAnalytics} aria-controls="response-analytics-body" aria-label={showAnalytics ? 'Hide response analytics' : 'Show response analytics'} onClick={() => setShowAnalytics((visible) => !visible)}>
-                    {showAnalytics ? 'Hide' : 'Show'}
-                  </Button>
-                )}
-              />
-              {showAnalytics && (
-                <div id="response-analytics-body" className="motion-reveal space-y-4 p-5">
+        ) : (
+          <div id="overview-perspective" role="tabpanel" aria-label={PERSPECTIVES.find((option) => option.value === perspective)?.label} className={cn('flex min-h-0 flex-1 flex-col gap-3', perspective !== 'leads' && 'motion-fade')}>
+            <SubjectDossier />
+            {perspective === 'leads' && leadsWorkbench && <OverviewWorkbench ledgerFigure={ledger} onOpenLedger={openLedger} onOpenFollowing={() => setPerspective('following')} />}
+            {perspective === 'following' && (
+              <section aria-label="Following" className="grid grid-cols-1 items-start gap-4 2xl:grid-cols-2">
+                <WatchlistPanel />
+                <StandingSearchPanel />
+              </section>
+            )}
+            {perspective === 'analytics' && (hasSources ? (
+              <Panel aria-labelledby="response-analytics-title">
+                <PanelHeader
+                  titleId="response-analytics-title"
+                  title="Response analytics"
+                  description={analyticsError && !analyticsUnavailable
+                    ? (analyticsUpdatedAt ? `Stale: the last refresh failed. Last updated ${formatRelativeTime(analyticsUpdatedAt)}.` : 'Analytics couldn’t be calculated.')
+                    : analyticsUpdatedAt ? `Updated ${formatRelativeTime(analyticsUpdatedAt)}` : 'How quickly and completely agencies answer requests.'}
+                />
+                <div id="response-analytics-body" className="space-y-4 p-5">
                   {analyticsUnavailable ? <MetricsGrid /> : <>
                     <MetricsGrid />
-                    <div id="deadline-ledger" className="scroll-mt-4 rounded-lg border border-line p-4">
-                      <DepartmentLedger
-                        variant="overview"
-                        profiles={ledgerOrder(scopedProfiles)}
-                        scaleProfiles={scopedProfiles}
-                        status={caseScoped ? 'scoped-out' : profiles.length === 0 && analyticsStatus === 'pending' ? 'loading' : 'ready'}
-                        scopedOutText="Hidden while a case scope is active: these are all-time totals for every request, not the case's."
-                        portalName={portalName}
-                        onInspect={(profile) => inspectDepartment(profile.portalSubdomain, profile.agencyId)}
-                      />
-                    </div>
+                    <div id="deadline-ledger" className="scroll-mt-4 rounded-lg border border-line p-4">{ledger}</div>
                     <PeriodComparison activePortalKey={activePortalKey} />
                     <TemporalMap />
                   </>}
                 </div>
-              )}
-            </Panel>
-          )}
-
-          <Panel aria-labelledby="more-tools-title">
-            <PanelHeader titleId="more-tools-title" title="More tools" />
-            <div className="divide-y divide-line px-5">
-              <div className="flex items-center justify-between gap-4 py-3">
-                <div className="min-w-0">
-                  <p className="text-body font-medium text-fg">Develop a lead into a durable case</p>
-                  <p className="text-caption text-muted">Track requests, productions and commitments; reconcile spending; challenge the evidence.</p>
+              </Panel>
+            ) : (
+              <EmptyState icon="bars" title="No requests to measure yet" body="Response analytics measure how quickly and completely agencies answer the requests in your saved sources. Add a records portal to start." />
+            ))}
+            {perspective === 'tools' && <>
+              <ResearchWorkspace onReview={(reportId) => setWorkbench({ reportId, review: true })} />
+              <Panel aria-labelledby="more-tools-title">
+                <PanelHeader titleId="more-tools-title" title="More tools" />
+                <div className="divide-y divide-line px-5">
+                  <div className="flex items-center justify-between gap-4 py-3">
+                    <div className="min-w-0">
+                      <p className="text-body font-medium text-fg">Develop a lead into a durable case</p>
+                      <p className="text-caption text-muted">Track requests, productions and commitments; reconcile spending; challenge the evidence.</p>
+                    </div>
+                    <Button onClick={openWorkbench}>Open casework and research tools</Button>
+                  </div>
+                  <ToolDrawer label="Discoveries across your library"><AutomaticDiscovery /></ToolDrawer>
+                  <ToolDrawer label="Topic packs"><TopicPacks /></ToolDrawer>
+                  <ToolDrawer label="Shared language across sources"><CrossCorpusExplorer /></ToolDrawer>
+                  <ToolDrawer label="Plan an investigation or draft a request"><InvestigationDesk /></ToolDrawer>
+                  <ToolDrawer label="Browse sources and add records"><SanDiegoWorkspace /></ToolDrawer>
+                  <ToolDrawer label="Data upkeep and storage"><div className="space-y-6"><DataMaintenance /><ResearchSnapshotExport /><RegistrySnapshots /></div></ToolDrawer>
                 </div>
-                <Button onClick={openWorkbench}>Open casework and research tools</Button>
-              </div>
-              <ToolDrawer label="Discoveries across your library"><AutomaticDiscovery /></ToolDrawer>
-              <ToolDrawer label="Topic packs"><TopicPacks /></ToolDrawer>
-              <ToolDrawer label="Shared language across sources"><CrossCorpusExplorer /></ToolDrawer>
-              <ToolDrawer label="Plan an investigation or draft a request"><InvestigationDesk /></ToolDrawer>
-              <ToolDrawer label="Browse sources and add records"><SanDiegoWorkspace /></ToolDrawer>
-              <ToolDrawer label="Data upkeep and storage"><div className="space-y-6"><DataMaintenance /><ResearchSnapshotExport /><RegistrySnapshots /></div></ToolDrawer>
-            </div>
-          </Panel>
-        </>}
+              </Panel>
+            </>}
+          </div>
+        )}
       </div>
     </div>
   );

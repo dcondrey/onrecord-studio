@@ -34,6 +34,18 @@ export interface IngestionMetrics {
   bytesTransferred: number;
 }
 
+export type WorkbenchSurface = 'overview' | 'story';
+/** One lead as the command bar lists it. */
+export interface WorkbenchQueueLead {
+  id: string;
+  headline: string;
+  /** The family or kind the lead is filed under, as its badge reads. */
+  kind: string;
+}
+export interface WorkbenchQueue {
+  surface: WorkbenchSurface;
+  leads: WorkbenchQueueLead[];
+}
 export type WorkspaceView = 'overview' | 'story' | 'patterns' | 'analysis' | 'evidence' | 'activity' | 'briefing' | 'meetings' | 'compare';
 export type EvidenceMode = 'records' | 'timeline';
 export type AppTheme = ThemePreference;
@@ -256,6 +268,17 @@ interface AppState {
   /** Casework to open in the overview workbench, from any surface. */
   requestedCasework: { reportId: string } | null;
   openCasework: (reportId: string) => void;
+  /**
+   * The lead queue the visible workbench (overview or Story desk) shows, published so the command
+   * bar can list and step through it; null when no workbench is mounted.
+   */
+  workbenchQueue: WorkbenchQueue | null;
+  setWorkbenchQueue: (queue: WorkbenchQueue | null) => void;
+  /** The selected lead per workbench surface, by lead id. */
+  workbenchSelection: Partial<Record<WorkbenchSurface, string>>;
+  selectWorkbenchLead: (surface: WorkbenchSurface, id: string) => void;
+  /** Moves the visible workbench's selection by `delta` along its queue, stopping at either end. */
+  stepWorkbenchLead: (delta: 1 | -1) => void;
   consumeCasework: () => { reportId: string } | null;
   sincePreset: SincePreset;
   previousOpenAt: string | null;
@@ -438,6 +461,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   }),
   scopeToCase: true,
   setScopeToCase: (scopeToCase) => set({ scopeToCase }),
+  workbenchQueue: null,
+  setWorkbenchQueue: (workbenchQueue) => set({ workbenchQueue }),
+  workbenchSelection: {},
+  selectWorkbenchLead: (surface, id) => set((state) => ({ workbenchSelection: { ...state.workbenchSelection, [surface]: id } })),
+  stepWorkbenchLead: (delta) => {
+    const queue = get().workbenchQueue;
+    if (!queue || queue.leads.length === 0) return;
+    const current = queue.leads.findIndex((lead) => lead.id === get().workbenchSelection[queue.surface]);
+    const next = Math.max(0, Math.min(queue.leads.length - 1, (current < 0 ? 0 : current + delta)));
+    get().selectWorkbenchLead(queue.surface, queue.leads[next].id);
+  },
   requestedCasework: null,
   openCasework: (reportId) => {
     get().setWorkspaceView('overview');

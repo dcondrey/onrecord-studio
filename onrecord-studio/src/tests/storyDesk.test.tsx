@@ -87,6 +87,11 @@ afterEach(() => {
 const CORE_DATA = 'Get San Diego’s core public data';
 const NO_SOURCE_COPY = /Leads come from findings on the records you collect/;
 
+/** These cases read the factor table: the bar-table figure, its rows and their in-place details. */
+function showFactorTable() {
+  fireEvent.click(screen.getByRole('tab', { name: 'Factor table' }));
+}
+
 async function renderWithNoLeads(schema: { datasets: unknown[] } | null) {
   bridge.discovery = { controller: null, state: { schema } };
   render(<StoryDesk />);
@@ -98,6 +103,7 @@ async function renderWithNoLeads(schema: { datasets: unknown[] } | null) {
 describe('StoryDesk', () => {
   it('renders leads with their score and every factor and its evidence', async () => {
     render(<StoryDesk />);
+    showFactorTable();
     expect(screen.getByRole('status').textContent).toContain('Ranking leads');
     await waitFor(() => expect(bridge.pending).toHaveLength(1));
     act(() => bridge.pending[0]([lead('a', 'Stated total does not match the table')]));
@@ -119,6 +125,7 @@ describe('StoryDesk', () => {
     measuredZero.publicInterest.factors.push({ name: 'evidence strength', basisPoints: 0, evidence: 'confidence 0.03%' });
     measuredZero.publicInterest.factors.push({ name: 'counted statutory or policy violation', basisPoints: 1800, evidence: 'counted' });
     render(<StoryDesk />);
+    showFactorTable();
     await waitFor(() => expect(bridge.pending).toHaveLength(1));
     act(() => bridge.pending[0]([unassessed, measuredZero]));
     await screen.findByText('Unassessed lead');
@@ -140,6 +147,7 @@ describe('StoryDesk', () => {
     const unknown = lead('a', 'Lead with a new factor');
     unknown.publicInterest.factors = [{ name: 'novel factor', basisPoints: 300, evidence: 'new' }];
     render(<StoryDesk />);
+    showFactorTable();
     await waitFor(() => expect(bridge.pending).toHaveLength(1));
     act(() => bridge.pending[0]([unknown]));
     await screen.findByText('Lead with a new factor');
@@ -149,6 +157,7 @@ describe('StoryDesk', () => {
 
   it('opens the dossier for the lead whose button was pressed', async () => {
     render(<StoryDesk />);
+    showFactorTable();
     await waitFor(() => expect(bridge.pending).toHaveLength(1));
     act(() => bridge.pending[0]([lead('a', 'First lead'), lead('b', 'Second lead')]));
     await screen.findByText('Second lead');
@@ -162,6 +171,7 @@ describe('StoryDesk', () => {
 
   it('asks which drafts apply to a lead only once its draft toggle is opened', async () => {
     render(<StoryDesk />);
+    showFactorTable();
     await waitFor(() => expect(bridge.pending).toHaveLength(1));
     act(() => bridge.pending[0]([lead('a', 'First lead'), lead('b', 'Second lead')]));
     await screen.findByText('Second lead');
@@ -222,6 +232,7 @@ describe('StoryDesk', () => {
 
   it('discards a lead list that resolves after a findings refresh superseded it', async () => {
     render(<StoryDesk />);
+    showFactorTable();
     await waitFor(() => expect(bridge.pending).toHaveLength(1));
     act(() => useAppStore.getState().requestFindingsRefresh());
     await waitFor(() => expect(bridge.pending).toHaveLength(2));
@@ -238,6 +249,7 @@ describe('StoryDesk', () => {
 
   it('finishes a briefing add that was in flight when the leads were refreshed', async () => {
     render(<StoryDesk />);
+    showFactorTable();
     await waitFor(() => expect(bridge.pending).toHaveLength(1));
     act(() => bridge.pending[0]([lead('kept', 'Kept lead')]));
     fireEvent.click(await screen.findByRole('button', { name: 'Details' }));
