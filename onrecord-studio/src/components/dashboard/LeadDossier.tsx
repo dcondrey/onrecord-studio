@@ -16,28 +16,30 @@ import Button from '../ui/Button';
 import InlineError from '../ui/InlineError';
 
 /** A stored lead's figure, none (not a lead, cut short, or stored before figures), or why it could not be read. */
-type FigureState = { figure: LeadFigureData | null } | { error: string };
+export type FigureState = { figure: LeadFigureData | null } | { error: string };
 
-type DossierState =
+export type DossierState =
   | { status: 'pending' }
   | { status: 'ready'; dossier: LeadDossierData; figure: FigureState }
   | { status: 'failed'; message: string };
 
 const TABLES_READ = '\n\nTables read:\n';
 
+const PENDING: DossierState = { status: 'pending' };
+
 /**
- * Assembles one finding into a dossier: the records it cites, the findings that touch the same
- * request or documents, what would disconfirm it, and which figures in the cited documents could
- * not be checked. Every fetch is gated on the finding it was requested for.
+ * The dossier and stored figure of one finding, read together under one request gate: a read for
+ * a finding the caller has since left is discarded, never shown as this one's. The answer is held
+ * with the id it answers, so the render that first sees a new id shows pending, not the last one.
  */
-export default function LeadDossier({ findingId }: { findingId: string }) {
-  const addBriefingEvidence = useAppStore((state) => state.addBriefingEvidence);
-  const [state, setState] = useState<DossierState>({ status: 'pending' });
+export function useLeadDossier(findingId: string): DossierState {
+  const [held, setHeld] = useState<{ findingId: string; state: DossierState } | null>(null);
   const gate = useLatestRequestGate();
 
   useEffect(() => {
     const request = gate.begin();
-    setState({ status: 'pending' });
+    const setState = (state: DossierState) => setHeld({ findingId, state });
+    setHeld(null);
     // The figure is read under the same request as the dossier, so both describe the same finding.
     const figure: Promise<FigureState> = invokeCommand('list_findings', { filter: { id: findingId, includeDismissed: true }, limit: 1 })
       .then((found) => ({ figure: found[0]?.figure ?? null }), (reason: unknown) => ({ error: formatNativeError(reason) }));
@@ -52,6 +54,18 @@ export default function LeadDossier({ findingId }: { findingId: string }) {
       });
     return gate.invalidate;
   }, [findingId, gate]);
+
+  return held !== null && held.findingId === findingId ? held.state : PENDING;
+}
+
+/**
+ * Assembles one finding into a dossier: the records it cites, the findings that touch the same
+ * request or documents, what would disconfirm it, and which figures in the cited documents could
+ * not be checked. Every fetch is gated on the finding it was requested for.
+ */
+export default function LeadDossier({ findingId }: { findingId: string }) {
+  const addBriefingEvidence = useAppStore((state) => state.addBriefingEvidence);
+  const state = useLeadDossier(findingId);
 
   const addToBriefing = (dossier: LeadDossierData) => {
     const item = findingToBriefingEvidence(dossier.finding);
@@ -120,7 +134,7 @@ export default function LeadDossier({ findingId }: { findingId: string }) {
  * A lead with a stored figure leads with it; its prose moves into 'Figures as text' so the wording
  * stays citable. A finding with no figure keeps its explanation in the evidence chain as before.
  */
-function LeadFigureSection({ dossier, figure }: { dossier: LeadDossierData; figure: FigureState }) {
+export function LeadFigureSection({ dossier, figure }: { dossier: LeadDossierData; figure: FigureState }) {
   const controller = useDiscoveryController();
   const sources = tableLeadSources(dossier.finding.explanation);
   const drawn = 'figure' in figure ? figure.figure : null;
@@ -161,7 +175,7 @@ function LeadFigureSection({ dossier, figure }: { dossier: LeadDossierData; figu
 
 // Shown only for a lead whose stored explanation names the tables it read; a document finding has
 // none and gets no section rather than an empty one.
-function TablesRead({ sources }: { sources: TableLeadSources | null }) {
+export function TablesRead({ sources }: { sources: TableLeadSources | null }) {
   if (sources === null) return null;
   return (
     <Section title={`Tables read (${sources.tables.length}) and query`}>
@@ -184,7 +198,7 @@ function TablesRead({ sources }: { sources: TableLeadSources | null }) {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+export function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
       <h3 className="text-body font-medium text-fg">{title}</h3>
@@ -220,7 +234,7 @@ type CopyState = { kind: 'idle' } | { kind: 'copied' } | { kind: 'fallback'; tex
  * confirm or refute the figure; it never states that the claim is wrong. Composed locally from the
  * gap's own fields, so nothing in it goes beyond what the dossier recorded.
  */
-function GapRequest({ gap }: { gap: DossierGap }) {
+export function GapRequest({ gap }: { gap: DossierGap }) {
   const [copy, setCopy] = useState<CopyState>({ kind: 'idle' });
 
   const copyRequest = async () => {
@@ -274,12 +288,12 @@ function gapRequestText(gap: DossierGap): string {
   );
 }
 
-function gapLine(gap: DossierGap): string {
+export function gapLine(gap: DossierGap): string {
   if (gap.gap === 'notComputed') return `${gap.portalKey} / document ${gap.documentId}: figures not examined — ${gap.reason}`;
   return `${gap.portalKey} / document ${gap.documentId}: “${gap.claimText}” — ${gap.reason}: ${gap.detail}`;
 }
 
-function dossierMarkdown(dossier: LeadDossierData): string {
+export function dossierMarkdown(dossier: LeadDossierData): string {
   const lines = [
     `# Lead dossier: ${dossier.finding.headline}`,
     '',

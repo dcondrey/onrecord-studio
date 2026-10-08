@@ -1022,3 +1022,112 @@ a[href] {
 .viz-drill:not([data-open]) > * {
   visibility: hidden;
 }
+
+/* Investigation workbench (src/components/workbench). The panes are laid out on the width the view
+   has, not the window's (a container query), so a collapsed sidebar gives the room back. Under
+   720px the panes stack and the page scrolls; up to 960px the context pane folds under the stage
+   in one scrolling column; above that the three panes sit side by side and each scrolls on its own.
+   Stacked panes never shrink below their content: a fixed-height column would otherwise squeeze
+   them and let one paint over the next. */
+.workbench {
+  container-type: inline-size;
+  container-name: workbench;
+}
+
+.workbench-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+.workbench-pane,
+.workbench-main {
+  min-width: 0;
+}
+
+.workbench-main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.workbench-main > * {
+  flex-shrink: 0;
+}
+
+/* The navigator is two stacked panes (the queue, then watch status) that scroll inside themselves. */
+.workbench-nav {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+
+@container workbench (min-width: 720px) {
+  .workbench-grid {
+    height: 100%;
+    grid-template-columns: 256px minmax(0, 1fr);
+  }
+  .workbench-main {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+@container workbench (min-width: 960px) {
+  .workbench-grid {
+    grid-template-columns: 256px minmax(0, 1fr) 264px;
+  }
+  .workbench-grid[data-wide] {
+    grid-template-columns: 256px minmax(0, 1fr);
+  }
+  .workbench-main {
+    display: contents;
+  }
+  .workbench-main > .workbench-pane {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+@container workbench (min-width: 1200px) {
+  .workbench-grid {
+    grid-template-columns: 288px minmax(0, 1fr) 312px;
+  }
+  .workbench-grid[data-wide] {
+    grid-template-columns: 288px minmax(0, 1fr);
+  }
+}
+
+@container workbench (min-width: 1380px) {
+  .workbench-grid {
+    grid-template-columns: 304px minmax(0, 1fr) 340px;
+  }
+  .workbench-grid[data-wide] {
+    grid-template-columns: 304px minmax(0, 1fr);
+  }
+}
+
+/* A queued lead. Selection is an interaction state, so it takes the accent tint and rail the
+   sidebar gives the current view; violet stays on the family badge, which says the app surfaced it. */
+.lead-card {
+  position: relative;
+  transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+
+.lead-card[aria-current="true"] {
+  border-color: rgb(var(--accent) / 0.4);
+  background: rgb(var(--accent) / 0.07);
+}
+
+.lead-card[aria-current="true"]::before {
+  content: '';
+  position: absolute;
+  inset: 12px auto 12px -1px;
+  width: 3px;
+  border-radius: 0 999px 999px 0;
+  background: rgb(var(--accent));
+}

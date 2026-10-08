@@ -118,15 +118,18 @@ interface IntentAnswerViewProps {
   onChooseOption: (option: IntentOption) => void;
   /** Called before a stored finding opens in the inspector, so the palette can close first. */
   onOpenFinding: () => void;
+  /** Puts a finding on the visible workbench's stage instead; false when no workbench queues it. */
+  onStageFinding?: (id: string) => boolean;
 }
 
-export default function IntentAnswerView({ answer, onChooseOption, onOpenFinding }: IntentAnswerViewProps) {
+export default function IntentAnswerView({ answer, onChooseOption, onOpenFinding, onStageFinding }: IntentAnswerViewProps) {
   const portals = useAppStore((state) => state.portals);
   const inspect = useAppStore((state) => state.inspect);
   const sourceName = (portalKey: string) =>
     portals.find((saved) => saved.registration.portalKey === portalKey)?.registration.displayName ?? portalKey;
   const openFinding = (id: string) => {
     onOpenFinding();
+    if (onStageFinding?.(id)) return;
     // The palette returns focus to its opener on the next frame; the inspector takes it after that.
     window.requestAnimationFrame(() => inspect({ kind: 'finding', id }, 'view'));
   };

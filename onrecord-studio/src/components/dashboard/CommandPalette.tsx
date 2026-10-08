@@ -17,12 +17,14 @@ import { contrastCommandRegistry, motionCommandRegistry, scoreCommand, themeComm
 export const OPEN_COMMAND_PALETTE_EVENT = 'onrecord:open-command-palette';
 
 const INTENT_ROW_LIMIT = 10;
+/** Queued leads listed with an empty query; a query searches the whole queue. */
+const QUEUE_ROWS_SHOWN = 4;
 
 interface CommandAction {
   id: string;
   label: string;
   detail: string;
-  group: 'Ask' | 'Navigate' | 'Create' | 'Help' | 'Appearance' | 'Accessibility' | ObjectGroup;
+  group: 'Ask' | 'Leads' | 'Navigate' | 'Create' | 'Help' | 'Appearance' | 'Accessibility' | ObjectGroup;
   icon: IconName;
   keywords: string;
   shortcut?: string;
@@ -54,6 +56,9 @@ export default function CommandPalette() {
   const motion = useAppStore((state) => state.motion);
   const contrast = useAppStore((state) => state.contrast);
   const audioAlertsEnabled = useAppStore((state) => state.audioAlertsEnabled);
+  const workbenchQueue = useAppStore((state) => state.workbenchQueue);
+  const workbenchSelection = useAppStore((state) => state.workbenchSelection);
+  const selectWorkbenchLead = useAppStore((state) => state.selectWorkbenchLead);
   const setAudioAlertsEnabled = useAppStore((state) => state.setAudioAlertsEnabled);
   // 'dossier' turns the input into the subject field for "Open subject dossier…".
   const [mode, setMode] = useState<'commands' | 'dossier'>('commands');
@@ -113,7 +118,43 @@ export default function CommandPalette() {
     window.requestAnimationFrame(() => previousFocus.current?.focus());
   };
 
+  // The visible workbench's queue: step through it, or jump to any lead in it. Each row selects
+  // the lead in the workbench that listed it, so the stage, not a popover, shows it.
+  const leadActions = useMemo<CommandAction[]>(() => {
+    if (!workbenchQueue || workbenchQueue.leads.length === 0) return [];
+    const { surface, leads } = workbenchQueue;
+    const at = Math.max(0, leads.findIndex((lead) => lead.id === workbenchSelection[surface]));
+    const step = (delta: 1 | -1, label: string, key: string, icon: IconName): CommandAction | null => {
+      const target = leads[at + delta];
+      return target ? {
+        id: `lead-step-${key}`,
+        label,
+        detail: target.headline,
+        group: 'Leads',
+        icon,
+        keywords: `${label} lead queue step`,
+        shortcut: key.toUpperCase(),
+        perform: () => useAppStore.getState().stepWorkbenchLead(delta),
+      } : null;
+    };
+    const steps = [step(1, 'Next lead', 'j', 'forward'), step(-1, 'Previous lead', 'k', 'back')].filter((action): action is CommandAction => action !== null);
+    return [...steps, ...leads.map((lead, index) => ({
+      id: `lead-${lead.id}`,
+      label: lead.headline,
+      detail: lead.kind,
+      group: 'Leads' as const,
+      icon: 'flag' as const,
+      keywords: `lead ${lead.kind} ${index + 1}`,
+      current: index === at,
+      perform: () => {
+        selectWorkbenchLead(surface, lead.id);
+        setWorkspaceView(surface);
+      },
+    }))];
+  }, [selectWorkbenchLead, setWorkspaceView, workbenchQueue, workbenchSelection]);
+
   const actions = useMemo<CommandAction[]>(() => [
+    ...leadActions,
     ...workspaceCommandRegistry.map((command) => ({
       id: command.id,
       label: `Go to ${command.navigationLabel}`,
@@ -240,7 +281,15 @@ export default function CommandPalette() {
       current: contrast === command.contrast,
       perform: () => setContrast(command.contrast),
     })),
-  ], [audioAlertsEnabled, contrast, modifier, motion, setAudioAlertsEnabled, setContrast, setEvidenceMode, setMotion, setTheme, setWorkspaceView, theme, toggleSidebarCollapsed]);
+  ], [audioAlertsEnabled, contrast, leadActions, modifier, motion, setAudioAlertsEnabled, setContrast, setEvidenceMode, setMotion, setTheme, setWorkspaceView, theme, toggleSidebarCollapsed]);
+
+  // A stored finding the visible workbench queues opens on its stage, where J and K continue from it.
+  const stageFinding = (id: string) => {
+    if (!workbenchQueue?.leads.some((lead) => lead.id === id)) return false;
+    selectWorkbenchLead(workbenchQueue.surface, id);
+    setWorkspaceView(workbenchQueue.surface);
+    return true;
+  };
 
   const openDossier = (value: string) => {
     const trimmed = value.trim();
@@ -265,7 +314,17 @@ export default function CommandPalette() {
   const filteredActions = useMemo(() => {
     if (mode === 'dossier') return [];
     const normalized = query.trim().toLocaleLowerCase();
-    if (!normalized) return actions.filter((action) => !SETTING_GROUPS.has(action.group));
+    if (!normalized) {
+      let queued = 0;
+      return actions.filter((action) => {
+        if (SETTING_GROUPS.has(action.group)) return false;
+        if (action.group !== 'Leads' || action.id.startsWith('lead-step-')) return true;
+        // The selected lead is already on the stage; list the next few after it.
+        if (action.current) return false;
+        queued += 1;
+        return queued <= QUEUE_ROWS_SHOWN;
+      });
+    }
     const matches = groupContiguously(actions
       .map((action) => ({ action, score: scoreCommand(normalized, action.label, `${action.detail} ${action.group}`, action.keywords) }))
       .filter((entry): entry is { action: CommandAction; score: number } => entry.score !== null)
@@ -455,7 +514,7 @@ export default function CommandPalette() {
                   />
                 </div>
               )}
-              {answer !== null && <IntentAnswerView answer={answer} onChooseOption={chooseOption} onOpenFinding={closePalette} />}
+              {answer !== null && <IntentAnswerView answer={answer} onChooseOption={chooseOption} onOpenFinding={closePalette} onStageFinding={stageFinding} />}
             </div>
           )}
         </div>
@@ -498,10 +557,10 @@ export default function CommandPalette() {
                     >
                       <Icon name={action.icon} size="md" className="shrink-0 text-muted" />
                       <span className="flex min-w-0 flex-1 items-baseline gap-2">
-                        <span className="shrink-0 text-control text-fg">{action.label}</span>
-                        <span className="min-w-0 truncate text-caption text-muted">{action.detail}</span>
+                        <span className={cn('text-control text-fg', action.group === 'Leads' && !action.shortcut ? 'min-w-0 truncate' : 'shrink-0')}>{action.label}</span>
+                        <span className={cn('text-caption text-muted', action.group === 'Leads' && !action.shortcut ? 'shrink-0' : 'min-w-0 truncate')}>{action.detail}</span>
                       </span>
-                      {action.current && <span className="shrink-0 text-caption text-muted">Current</span>}
+                      {action.current && <span className="shrink-0 text-caption text-muted">{action.group === 'Leads' ? 'On stage' : 'Current'}</span>}
                       {action.shortcut && <Keycap>{action.shortcut}</Keycap>}
                     </button>
                   );
