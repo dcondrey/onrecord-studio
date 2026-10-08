@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { invokeCommand } from '../../ipc';
 import { useCaseScope } from '../../hooks/useCaseScope';
 import { useGatedLoad } from '../../hooks/useGatedLoad';
@@ -325,12 +325,9 @@ function WatchStatus({ ledger, ledgerSelected, onSelectLedger, onOpenFollowing }
   const since = useSinceInstant();
   const width = useWorkbenchWidth();
   const [chosen, setChosen] = useState<boolean | null>(readWatchingOpen);
-  const [fallback, setFallback] = useState<boolean | null>(null);
-  // The default is decided once, from the first measured width: open only where there is room.
-  useEffect(() => {
-    if (fallback === null && width > 0) setFallback(width >= THREE_COLUMNS_FROM && window.innerHeight >= WATCHING_OPEN_MIN_HEIGHT);
-  }, [fallback, width]);
-  const open = chosen ?? fallback ?? false;
+  // Until the reader chooses, Watching is open only where the navigator has room for it and four
+  // queued leads beside it.
+  const open = chosen ?? (width >= THREE_COLUMNS_FROM && window.innerHeight >= WATCHING_OPEN_MIN_HEIGHT);
   const toggle = () => {
     setChosen(!open);
     storeWatchingOpen(!open);
