@@ -3,6 +3,7 @@
 // no native application, network, or model is involved.
 //
 //   node scripts/capture-ui-review.mjs [outputDirectory] [--only=view,view] [--concurrency=3]
+//   node scripts/capture-ui-review.mjs <dir> --only=chart-gallery   (every chart primitive, harness-only)
 //
 // Output: <view>__<state>__<theme>__<width>.png plus index.json (steps, console errors, failed
 // requests, stub gaps, and a keyboard-focus-order accessibility record per view). Exits non-zero
@@ -45,6 +46,8 @@ const QUIET_MS = 350;
 const stem = `__ui_review_${process.pid}_${Date.now()}`;
 const entryFile = path.join(root, `${stem}.tsx`);
 const htmlFile = path.join(root, `${stem}.html`);
+const galleryEntryFile = path.join(root, `${stem}-gallery.tsx`);
+const galleryHtmlFile = path.join(root, `${stem}-gallery.html`);
 
 // The entry installs the IPC stub before the app's modules evaluate, then boots src/main.tsx
 // unchanged so the capture is of the production component tree.
@@ -106,7 +109,28 @@ review.store = useAppStore;
 review.lens = useProfileLensStore;
 await import('./src/main');
 `;
+// The chart gallery (src/components/charts/ChartGallery.tsx) is harness-only: it renders without
+// the app shell, so it never appears in the app's navigation or bundle. The stub keeps settle(),
+// drain() and applyTheme() working without a store or IPC.
+const galleryEntry = `const scenario = JSON.parse(new URLSearchParams(location.search).get('scenario') || '{}');
+const review = { calls: [], gaps: [], handlerErrors: [], injected: [], hung: [], plugins: [], inflight: 0, lastActivity: performance.now() };
+review.store = { getState: () => ({ setTheme: (theme) => { document.documentElement.dataset.theme = theme; } }) };
+window.__uiReview = review;
+document.documentElement.dataset.theme = scenario.theme || 'light';
+document.documentElement.dataset.motion = 'reduce';
+document.documentElement.dataset.contrast = 'standard';
+await import('./src/index.css');
+const { createElement } = await import('react');
+const { createRoot } = await import('react-dom/client');
+const { default: ChartGallery } = await import('./src/components/charts/ChartGallery');
+for (const element of [document.documentElement, document.body, document.getElementById('root')]) {
+  element.style.height = 'auto';
+  element.style.overflow = 'visible';
+}
+createRoot(document.getElementById('root')).render(createElement(ChartGallery));
+`;
 const html = `<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>OnRecord Studio</title><link rel="icon" href="data:,"></head><body><div id="root"></div><script type="module" src="/${stem}.tsx"></script></body></html>`;
+const galleryHtml = html.replace(`/${stem}.tsx`, `/${stem}-gallery.tsx`);
 
 /** Runs before any page script on every navigation: storage the store reads at module evaluation. */
 function initScript(fixtureNow) {
@@ -208,6 +232,8 @@ const VIEWS = [
   { view: 'license-trial-expired', scenario: { license: 'trialExpired' }, steps: [], gate: true, primary: [], states: [] },
   { view: 'license-sign-in-required', scenario: { license: 'signInRequired' }, steps: [], gate: true, primary: [], states: [] },
   { view: 'license-device-limit', scenario: { license: 'deviceLimit' }, steps: [], gate: true, primary: [], states: [] },
+
+  { view: 'chart-gallery', gallery: true, steps: [], primary: [], states: [] },
 ];
 
 // ---- Page helpers ----------------------------------------------------------------------------
@@ -241,7 +267,11 @@ async function drain(page) {
   });
 }
 
-async function shellReady(page, gate) {
+async function shellReady(page, gate, gallery) {
+  if (gallery) {
+    await page.locator('[data-gallery-section]').first().waitFor({ timeout: 30_000 });
+    return;
+  }
   if (gate) {
     await page.locator('#root *').first().waitFor({ timeout: 30_000 });
     return;
@@ -365,6 +395,8 @@ try {
   await mkdir(outputDirectory, { recursive: true });
   await writeFile(entryFile, entry);
   await writeFile(htmlFile, html);
+  await writeFile(galleryEntryFile, galleryEntry);
+  await writeFile(galleryHtmlFile, galleryHtml);
   // A private dependency cache: node_modules may be shared with other checkouts' dev servers.
   cacheDirectory = await mkdtemp(path.join(os.tmpdir(), 'onrecord-ui-review-vite-'));
   const port = await freePort();
@@ -375,13 +407,13 @@ try {
     logLevel: 'warn',
     clearScreen: false,
     server: { host: '127.0.0.1', port, strictPort: true, hmr: false, watch: null },
-    optimizeDeps: { entries: [path.basename(htmlFile)] },
+    optimizeDeps: { entries: [path.basename(htmlFile), path.basename(galleryHtmlFile)] },
   });
   await vite.listen();
   const origin = `http://127.0.0.1:${port}`;
   browser = await chromium.launch({ executablePath: chromeBin, headless: true });
 
-  const urlFor = (scenario) => `${origin}/${stem}.html?scenario=${encodeURIComponent(JSON.stringify(scenario))}`;
+  const urlFor = (scenario, gallery) => `${origin}/${stem}${gallery ? '-gallery' : ''}.html?scenario=${encodeURIComponent(JSON.stringify(scenario))}`;
 
   /** One page load: run the steps, then capture both themes at every size. */
   async function captureState(context, definition, state) {
@@ -414,8 +446,8 @@ try {
       await page.setViewportSize({ width: 1280, height: 800 });
       await page.clock.setFixedTime(new Date(FIXTURE_NOW));
       await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
-      await page.goto(urlFor({ ...scenario, theme: 'light' }), { timeout: 120_000 });
-      await shellReady(page, definition.gate);
+      await page.goto(urlFor({ ...scenario, theme: 'light' }, definition.gallery), { timeout: 120_000 });
+      await shellReady(page, definition.gate, definition.gallery);
       await settle(page);
       for (const step of definition.steps) {
         await step(page, steps);
@@ -439,6 +471,16 @@ try {
         const settled = await settle(page);
         const file = `${definition.view}__${state}__${theme}__${width}.png`;
         await page.screenshot({ path: path.join(outputDirectory, file) });
+        if (definition.gallery) {
+          // One capture per gallery section at full resolution: a whole-page capture is downscaled
+          // when viewed and hides tick-level defects.
+          const sections = page.locator('[data-gallery-section]');
+          for (let index = 0; index < await sections.count(); index++) {
+            const section = sections.nth(index);
+            const name = slug((await section.getAttribute('data-gallery-section')) ?? String(index));
+            await section.screenshot({ path: path.join(outputDirectory, `${definition.view}__${state}__${theme}__${width}__${String(index + 1).padStart(2, '0')}-${name}.png`) });
+          }
+        }
         const observed = { ...take(), ...(await drain(page)) };
         records.push({
           file, view: definition.view, state, theme, width, height, steps,
@@ -510,7 +552,7 @@ try {
 } finally {
   await browser?.close().catch(() => {});
   await vite?.close().catch(() => {});
-  await Promise.all([entryFile, htmlFile].map((file) => rm(file, { force: true })));
+  await Promise.all([entryFile, htmlFile, galleryEntryFile, galleryHtmlFile].map((file) => rm(file, { force: true })));
   if (cacheDirectory) await rm(cacheDirectory, { recursive: true, force: true });
 }
 
