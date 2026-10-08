@@ -206,7 +206,7 @@ export default function Sidebar() {
                 <button
                   key={portal.portalKey}
                   type="button"
-                  aria-label={`${portal.displayName}, ${status}${failedTasks > 0 ? `, ${failedTasks.toLocaleString()} failed` : ''}`}
+                  aria-label={isCollapsed ? `${portal.displayName}, ${status}${failedTasks > 0 ? `, ${failedTasks.toLocaleString()} failed` : ''}` : undefined}
                   aria-current={selected ? 'true' : undefined}
                   title={degraded && lastError ? `${portal.displayName} needs attention: ${lastError}` : portal.displayName}
                   onClick={() => setActivePortal(portal.portalKey)}
@@ -232,8 +232,9 @@ export default function Sidebar() {
                         ) : paused ? (
                           <Badge tone="warning">Paused</Badge>
                         ) : syncing ? (
-                          <StatusDot state="active" pulse label="" className="mr-1" />
+                          <StatusDot state="active" pulse label="syncing" className="mr-1" />
                         ) : null}
+                        {!degraded && !paused && !syncing && <span className="sr-only">idle</span>}
                       </>
                     )}
                   </span>

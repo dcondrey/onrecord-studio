@@ -216,6 +216,10 @@ const VIEWS = [
   { view: 'evidence-authority-library', steps: [nav('evidence'), selectRequest, click('"Authority library"', (page) => page.getByRole('button', { name: 'Authority library' }))], primary: ['list_legal_authorities'], states: ['error'] },
   { view: 'overview-response-analytics', steps: [nav('overview'), click('"Show response analytics"', (page) => page.getByRole('button', { name: 'Show response analytics' }))], primary: ['get_agency_performance_profiles', 'get_cross_agency_correlations'], states: ['error'] },
   { view: 'overview-casework-tools', steps: [nav('overview'), click('"Open casework and research tools"', (page) => page.getByRole('button', { name: 'Open casework and research tools' }))], primary: ['get_casework_state', 'get_research_status'], states: ['empty', 'error'], discover: true },
+  // Discovery does not look inside a drawer or a tab, so surfaces nested there are named here.
+  { view: 'overview-casework-tools-drawer-assess-usefulness', steps: [nav('overview'), click('"Open casework and research tools"', (page) => page.getByRole('button', { name: 'Open casework and research tools' })), click('tab "Evidence review"', (page) => page.getByRole('main').getByRole('tab', { name: 'Evidence review', exact: true })), click('drawer "Assess usefulness"', (page) => page.getByRole('main').locator('details > summary', { hasText: 'Assess usefulness' }))], primary: [], states: [] },
+  { view: 'patterns-tab-ledger-history', steps: [nav('patterns'), click('drawer "Resolve entities"', (page) => page.getByRole('main').locator('details.app-panel > summary', { hasText: 'Resolve entities' })), click('tab "Ledger history"', (page) => page.getByRole('main').getByRole('tab', { name: 'Ledger history', exact: true }))], primary: [], states: [] },
+  { view: 'patterns-tab-import-and-export', steps: [nav('patterns'), click('drawer "Resolve entities"', (page) => page.getByRole('main').locator('details.app-panel > summary', { hasText: 'Resolve entities' })), click('tab "Import and export"', (page) => page.getByRole('main').getByRole('tab', { name: 'Import and export', exact: true }))], primary: [], states: [] },
   { view: 'overview-subject-dossier', steps: [nav('overview'), store("store.openSubjectDossier({ kind: 'entity', value: 'e-org-harborview' })", () => window.__uiReview.store.getState().openSubjectDossier({ kind: 'entity', value: 'e-org-harborview' }))], primary: ['get_corpus_entity_neighborhood'], states: ['error'] },
   { view: 'overview-post-ingest-brief', steps: [nav('overview'), store('store.setPostIngestBriefOpen(true)', () => window.__uiReview.store.getState().setPostIngestBriefOpen(true))], primary: [], states: [] },
   { view: 'overview-sidebar-collapsed', steps: [nav('overview'), store('store.toggleSidebarCollapsed()', () => window.__uiReview.store.getState().toggleSidebarCollapsed())], primary: [], states: [] },
@@ -369,7 +373,7 @@ async function discoverSubviews(page) {
     const scope = document.querySelector('main') ?? document.body;
     const tabs = [...scope.querySelectorAll('[role=tab]')].filter((tab) => tab.getAttribute('aria-selected') !== 'true' && tab.getClientRects().length > 0)
       .map((tab) => ({ kind: 'tab', name: (tab.textContent ?? '').replace(/\s+/g, ' ').trim() })).filter((tab) => tab.name);
-    const drawers = [...scope.querySelectorAll('details.app-panel > summary')].map((summary) => ({ kind: 'drawer', name: (summary.textContent ?? '').replace(/\s+/g, ' ').trim() }));
+    const drawers = [...scope.querySelectorAll('details.app-panel > summary, details[data-ui-drawer] > summary')].map((summary) => ({ kind: 'drawer', name: (summary.textContent ?? '').replace(/\s+/g, ' ').trim() }));
     return [...tabs, ...drawers];
   });
 }
@@ -578,7 +582,7 @@ try {
             if (only && !only.some((filter) => name.startsWith(filter))) continue;
             const locator = subview.kind === 'tab'
               ? (p) => p.getByRole('main').getByRole('tab', { name: subview.name, exact: true })
-              : (p) => p.getByRole('main').locator('details.app-panel > summary', { hasText: subview.name });
+              : (p) => p.getByRole('main').locator('details.app-panel > summary, details[data-ui-drawer] > summary', { hasText: subview.name });
             queue.push({ view: name, scenario: definition.scenario, steps: [...definition.steps, click(`${subview.kind} "${subview.name}"`, locator)], primary: [], states: [], discovered: true });
           }
         }

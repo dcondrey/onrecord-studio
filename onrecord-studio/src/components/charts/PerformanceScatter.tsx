@@ -101,7 +101,7 @@ export default function PerformanceScatter() {
       <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
         <div>
           <div className="text-overline uppercase text-muted">Response time vs. statistical deviation</div>
-          <h2 className="mt-1 text-headline text-fg">{scatterHeadline(data)}</h2>
+          <h4 className="mt-1 text-headline text-fg">{scatterHeadline(data)}</h4>
           <p className="mt-1 text-caption text-muted">Bubble size is audited request volume. Select a department to inspect its evidence.</p>
         </div>
         <div className="hidden flex-wrap items-center justify-end gap-2 sm:flex">
@@ -149,7 +149,7 @@ export default function PerformanceScatter() {
             )}
             {visiblePoints.length > renderedPoints.length && <p className="mb-1 text-caption text-warning">Showing the 800 highest-volume departments in this viewport; narrow the day range to inspect the remainder.</p>}
             <p className="mb-1 text-caption text-muted">Drag horizontally across the plot to zoom the closure-time axis.</p>
-            <svg ref={svgRef} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="h-full min-h-[280px] w-full" role="img" aria-label="Scatter plot of agency average closure time and performance z-score">
+            <svg ref={svgRef} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="h-full min-h-[280px] w-full" role="group" aria-label="Scatter plot of agency average closure time and performance z-score">
               <defs>
                 <filter id="pointGlow" x="-100%" y="-100%" width="300%" height="300%">
                   <feGaussianBlur stdDeviation="3" result="blur" />

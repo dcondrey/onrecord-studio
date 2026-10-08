@@ -172,7 +172,7 @@ export default function AnomalyRadar() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="text-overline uppercase text-muted">Department deviation</div>
-          <h2 className="mt-1 text-headline text-fg">{radarHeadline(profiles)}</h2>
+          <h4 className="mt-1 text-headline text-fg">{radarHeadline(profiles)}</h4>
           <div className="mt-1 text-caption text-muted">Portal ring → department ring. Select a slice to inspect evidence.</div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">

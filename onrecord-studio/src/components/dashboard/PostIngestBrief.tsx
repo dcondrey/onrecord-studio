@@ -151,7 +151,6 @@ export default function PostIngestBrief() {
               <button
                 type="button"
                 onClick={() => inspect(finding)}
-                aria-label={`Open finding: ${finding.headline}`}
                 className="focus-ring group flex w-full items-start gap-3 rounded-md text-left"
               >
                 <SeverityGlyph severity={finding.severity} className="h-6 w-6 rounded-md bg-raised" />

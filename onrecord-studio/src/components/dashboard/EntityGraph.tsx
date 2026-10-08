@@ -145,8 +145,13 @@ function nodeRadius(node: CorpusEntityNode) {
   return Math.min(26, 8 + Math.sqrt(node.documentCount) * 2.4);
 }
 
+/** Cuts at a word boundary so every visible word is a whole word of the node's accessible name
+ * (WCAG 2.5.3); a lone word longer than the limit is still cut inside it. */
 function truncateLabel(value: string) {
-  return value.length > 28 ? `${value.slice(0, 27)}…` : value;
+  if (value.length <= 28) return value;
+  const cut = value.slice(0, 27);
+  const space = cut.lastIndexOf(' ');
+  return `${(space > 0 ? cut.slice(0, space) : cut).trimEnd()}…`;
 }
 
 interface PathRequest {
@@ -532,7 +537,7 @@ export default function EntityGraph() {
           <svg
             viewBox={`${-LABEL_ROOM} 0 ${VIEWPORT + LABEL_ROOM * 2} ${VIEWPORT}`}
             className="h-[430px] w-full min-w-[640px]"
-            role="img"
+            role="group"
             aria-label={`Entities co-occurring with ${centre.displayValue}`}
           >
             {placed.map(({ edge, x, y }) => {
@@ -771,7 +776,6 @@ export default function EntityGraph() {
             <Input
               id="entity-path-target"
               type="text"
-              role="combobox"
               list="entity-path-options"
               autoComplete="off"
               value={pathTargetId}

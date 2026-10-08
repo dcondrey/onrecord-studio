@@ -135,7 +135,7 @@ function TablesRead({ sources }: { sources: TableLeadSources | null }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h4 className="text-body font-medium text-fg">{title}</h4>
+      <h3 className="text-body font-medium text-fg">{title}</h3>
       <div className="mt-1.5">{children}</div>
     </div>
   );

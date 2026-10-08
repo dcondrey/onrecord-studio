@@ -150,14 +150,12 @@ export default function DispositionCounts({ portalSubdomain }: { portalSubdomain
                             <button
                               type="button"
                               aria-expanded={isOpen}
-                              aria-label={`${DISPOSITION_LABELS[disposition]}: ${count} of ${row.totalRequests} requests, ${name}`}
                               onClick={() => setExpanded((current) => (current === bucketKey ? null : bucketKey))}
-                              className={cn(
-                                'focus-ring inline-flex flex-col items-end rounded text-right',
-                                isOpen && '[&>span:first-child]:decoration-solid',
-                              )}
+                              className="focus-ring inline-flex flex-col items-end rounded text-right"
                             >
-                              <span className="text-fg underline decoration-dotted decoration-fg/40 underline-offset-4 hover:decoration-solid">{count.toLocaleString()}</span>
+                              <span className="sr-only">{`${DISPOSITION_LABELS[disposition]}, ${name}: `}</span>
+                              <span className={cn('text-fg underline decoration-fg/40 underline-offset-4 hover:decoration-solid', isOpen ? 'decoration-solid' : 'decoration-dotted')}>{count.toLocaleString()}</span>
+                              <span className="sr-only">{` of ${row.totalRequests.toLocaleString()} requests, `}</span>
                               <span className="text-caption text-muted">{share(count, row.totalRequests)}</span>
                             </button>
                           )}

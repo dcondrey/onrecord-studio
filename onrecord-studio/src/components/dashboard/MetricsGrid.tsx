@@ -93,7 +93,6 @@ export default function MetricsGrid() {
         <button
           key={card.label}
           type="button"
-          aria-label={`${card.label}: ${card.value}. Show matching requests`}
           onClick={() => {
             setSearchFilters(searchTerm, selectedAgencyId, card.status, card.policy);
             setWorkspaceView('evidence');
@@ -109,6 +108,7 @@ export default function MetricsGrid() {
             </span>
             <span className="w-12 text-right text-caption tabular-nums text-muted">{card.ratio === null ? '' : formatPercent(card.ratio)}</span>
           </span>
+          <span className="sr-only">Show matching requests</span>
         </button>
       ))}
     </section>
