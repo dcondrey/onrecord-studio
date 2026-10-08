@@ -5,6 +5,7 @@ import type { CalendarMeeting, FindingCitation, MeetingCalendar, MeetingDocument
 const bridge = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock('../ipc', async (importOriginal) => ({ ...(await importOriginal<typeof import('../ipc')>()), invokeCommand: bridge.invoke }));
 import MeetingsView from '../components/dashboard/MeetingsView';
+import PostingLeadTime, { postingLeadTimeData } from '../components/charts/figures/PostingLeadTime';
 
 const cite = (quote: string, start: number | null = 0): FindingCitation => ({
   portalKey: 'city', documentId: 2, characterStart: start, characterEnd: start === null ? null : start + quote.length, quote, label: 'agenda.pdf',
@@ -142,4 +143,13 @@ describe('meetings view', () => {
     const row = screen.getByText('brc.pdf').closest('tr');
     expect(row?.textContent).toContain('2026-09-29 17:30 UTC');
   });
+
+  it('orders rows latest first through the today rule, and states a late header as hours after the start', () => {
+    const posted = (id: string, date: string, timing: CalendarMeeting['timing'], minutes: number) => meeting(id, `Body ${id}`, { date, timing, startTime: '14:00', documents: [agendaFile({ documentId: Number(id.slice(1)), posting: { state: 'RECORDED', lastModified: '2026-09-28T21:00:00Z' }, minutesBeforeMeeting: minutes })] });
+    const { upcoming, past } = postingLeadTimeData([posted('m1', '2026-10-05', 'UPCOMING', 6000), posted('m2', '2026-10-20', 'UPCOMING', 6000), posted('m3', '2026-09-01', 'PAST', 6000), posted('m4', '2026-09-20', 'PAST', -180)]);
+    expect([...upcoming, ...past].map((row) => row.meeting.date)).toEqual(['2026-10-20', '2026-10-05', '2026-09-20', '2026-09-01']);
+    render(<PostingLeadTime meetings={[posted('m4', '2026-09-20', 'PAST', -180)]} counts={{ agendaFilesWithBothTimes: 1, under72HoursBeforeStart: 1, afterMeetingStart: 1 }} onOpen={() => {}} />);
+    expect(document.querySelector('g[aria-label^="Body m4"]')?.getAttribute('aria-label')).toBe('Body m4 · Sep 20, 2026: agenda posted 3 hours after stated start.');
+  });
 });
+
