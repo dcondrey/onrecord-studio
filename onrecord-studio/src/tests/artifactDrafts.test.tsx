@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
+  act,
   render,
   screen,
   waitFor,
@@ -132,6 +133,22 @@ describe("<ArtifactDrafts />", () => {
     expect(screen.getByText("Agency name")).toBeTruthy();
     expect(screen.getByText(/character range not recorded/i)).toBeTruthy();
     expect(screen.getByText(/not sent/i)).toBeTruthy();
+  });
+
+  test("does not confirm a copy whose text was edited before the clipboard write settled", async () => {
+    mockIpc({});
+    let settle: () => void = () => {};
+    const writeText = vi.fn(() => new Promise<void>((resolve) => { settle = resolve; }));
+    Object.assign(navigator, { clipboard: { writeText } });
+    render(<ArtifactDrafts findingId="finding-xyz" />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: /draft records request/i }),
+    );
+    const textarea = await screen.findByLabelText(/drafted artifact text/i);
+    fireEvent.click(screen.getByRole("button", { name: /^copy$/i }));
+    fireEvent.change(textarea, { target: { value: "CHANGED AFTER COPY" } });
+    await act(async () => settle());
+    expect(screen.getByRole("button", { name: /^copy$/i })).toBeTruthy();
   });
 
   test("Copy hands over the edited body, and editing cannot remove the disclosure", async () => {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { DraftedArtifact, DraftEvidenceBasis } from "../../types";
 import { confidenceLabel } from "../objects/labels";
 import { downloadFile } from "./downloadFile";
+import { useLatestRequestGate } from "../../hooks/useLatestRequestGate";
 
 const BASIS_LABEL: Record<DraftEvidenceBasis, string> = {
   PATTERN_OBSERVATION: "Pattern observation (not a finding of violation)",
@@ -32,25 +33,30 @@ export default function DraftedArtifactView({
   const [editedText, setEditedText] = useState(draft.generatedText);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  // "Copied" describes one exact text; a write that settles after the text changed says nothing.
+  const copyGate = useLatestRequestGate();
 
   useEffect(() => {
+    copyGate.invalidate();
     setEditedText(draft.generatedText);
     setError(null);
     setCopied(false);
-  }, [draft]);
+  }, [copyGate, draft]);
 
   const copyToClipboard = useCallback(async () => {
+    const token = copyGate.begin();
     setCopied(false);
     try {
       await navigator.clipboard.writeText(
         outgoingText(editedText, draft.disclosure),
       );
+      if (!copyGate.isCurrent(token)) return;
       setError(null);
       setCopied(true);
     } catch (reason) {
-      setError(`Copy to clipboard failed: ${String(reason)}`);
+      if (copyGate.isCurrent(token)) setError(`Copy to clipboard failed: ${String(reason)}`);
     }
-  }, [draft.disclosure, editedText]);
+  }, [copyGate, draft.disclosure, editedText]);
 
   const download = useCallback(() => {
     downloadFile(
@@ -115,6 +121,7 @@ export default function DraftedArtifactView({
       <textarea
         value={editedText}
         onChange={(event) => {
+          copyGate.invalidate();
           setEditedText(event.target.value);
           setCopied(false);
         }}
