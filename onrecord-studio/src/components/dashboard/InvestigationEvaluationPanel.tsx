@@ -6,7 +6,7 @@ import type { InvestigationEvaluation, PilotAssessment } from '../../types';
 export default function InvestigationEvaluationPanel() {
   const [evaluations, setEvaluations] = useState<InvestigationEvaluation[]>([]);
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(true);
   const gate = useLatestRequestGate();
   useEffect(() => {
     const request = gate.begin(); setBusy(true);
