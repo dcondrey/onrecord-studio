@@ -110,7 +110,7 @@ describe('StoryDesk', () => {
     await screen.findByText('Stated total does not match the table');
     const row = screen.getByRole('row', { name: /^#1, Stated total does not match the table, score 52:/ });
     expect(row.querySelectorAll('td')[0].textContent).toBe('52');
-    expect(screen.getAllByText('pattern signal').length).toBeGreaterThan(0);
+    expect(screen.getByText(/Every factor but a counted violation is a pattern signal/)).toBeTruthy();
     fireEvent.click(within(row).getByRole('button', { name: 'Details: Stated total does not match the table' }));
     expect(screen.getByText(/largest figure named/)).toBeTruthy();
     expect(screen.getByText(/1 related finding/)).toBeTruthy();
@@ -183,10 +183,10 @@ describe('StoryDesk', () => {
     });
     expect(bridge.availabilityRequests).toEqual([]);
     expect(screen.queryByRole('region', { name: 'Drafted artifacts' })).toBeNull();
-    expect(screen.getAllByRole('button', { name: /^Draft records request: /, hidden: true })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: /^Draft a request or appeal: /, hidden: true })).toHaveLength(2);
     fireEvent.click(within(screen.getByRole('row', { name: /^#2, Second lead/ })).getByRole('button', { name: 'Details: Second lead' }));
     act(() => {
-      screen.getByRole('button', { name: 'Draft records request: Second lead' }).click();
+      screen.getByRole('button', { name: 'Draft a request or appeal: Second lead' }).click();
     });
     await screen.findByRole('region', { name: 'Drafted artifacts' });
     expect(bridge.availabilityRequests).toEqual(['b']);

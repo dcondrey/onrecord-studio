@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
@@ -201,7 +201,7 @@ export default function StoryDesk() {
             onRetry={requestFindingsRefresh}
           />
         )}
-        {mode === 'table' && hasLeads && visibleLeads.length < ranked.total && (
+        {isRanked && visibleLeads.length > 0 && visibleLeads.length < ranked.total && (
           <p role="status" className="text-body text-muted">
             Showing <span className="tabular-nums">{visibleLeads.length.toLocaleString()}</span> of <span className="tabular-nums">{ranked.total.toLocaleString()}</span> leads{since ? ' first seen in this window' : ''}{caseScope.status === 'ready' ? ' in the active case' : ''}.{' '}
             {since && <Button variant="link" onClick={() => setSincePreset('all')}>Any time</Button>}
@@ -380,8 +380,6 @@ function RankedLeads({ leads, allLeads, busy, renderDetail }: { leads: StoryLead
       key: name,
       label: name === COUNTED_FACTOR ? 'Counted violation (legal claim)' : factorLabel(name),
       short: FACTOR_SHORT[name],
-      // A name outside the closed set has an unknown claim type: no note asserts one for it.
-      note: name === COUNTED_FACTOR || !isKnownFactor(name) ? undefined : 'pattern signal',
       title: isKnownFactor(name) ? name : `${name} (factor not recognised by this version)`,
       scale: 'shared',
       claim: name === COUNTED_FACTOR ? 'counted' : undefined,
@@ -438,10 +436,10 @@ function RankedLeads({ leads, allLeads, busy, renderDetail }: { leads: StoryLead
   return (
     <div aria-busy={busy || undefined} className="rounded-xl border border-line bg-panel p-4 shadow-panel">
       <BarTable
-        title="Ranked leads"
+        title="Factor table"
         headline={leads[0] ? comparisonHeadline(leads[0], 1, comparisonOf(leads, 0)) : ''}
         claim="descriptive"
-        sources={{ tables: ['findings'], note: 'Attention score ranks reading order; it is not newsworthiness and not a claim about any record' }}
+        sources={{ tables: ['findings'], note: 'attention score ranks reading order; it is not newsworthiness and not a claim about any record. Every factor but a counted violation is a pattern signal' }}
         summary={`${leads.length} leads. Factor columns share one scale of 0 to ${points(factorMax)} points. An empty cell means the factor is not in that finding's record; not assessed means the finding's confidence was never measured.`}
         status="ready"
         layout="stacked"
@@ -496,17 +494,20 @@ function AgencyReference({ lead }: { lead: StoryLead }) {
 }
 
 /**
- * Draft records request: mounts the drafts panel only once pressed, so loading the desk does not
- * ask which drafts apply to every lead.
+ * Mounts the drafts panel only once pressed, so loading the desk does not ask which drafts apply to
+ * every lead. The panel replaces the button: its own buttons name the drafts that apply.
  */
 function LeadDraftButton({ findingId, headline }: { findingId: string; headline: string }) {
   const [open, setOpen] = useState(false);
+  const panel = useRef<HTMLDivElement>(null);
+  // The pressed button unmounts; focus moves to the first draft the panel offers, or the panel.
+  const focusPanel = useCallback(() => (panel.current?.querySelector('button') ?? panel.current)?.focus(), []);
+  if (open) return <div ref={panel} tabIndex={-1} className="outline-none"><ArtifactDrafts findingId={findingId} onSettled={focusPanel} /></div>;
   return (
     <div>
-      <Button size="sm" icon="filePlus" aria-expanded={open} aria-label={`Draft records request: ${headline}`} onClick={() => setOpen((current) => !current)}>
-        Draft records request
+      <Button size="sm" icon="filePlus" aria-label={`Draft a request or appeal: ${headline}`} onClick={() => setOpen(true)}>
+        Draft a request or appeal
       </Button>
-      {open && <div className="mt-3"><ArtifactDrafts findingId={findingId} /></div>}
     </div>
   );
 }

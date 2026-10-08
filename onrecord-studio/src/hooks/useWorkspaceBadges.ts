@@ -15,7 +15,9 @@ export interface WorkspaceBadge {
  * calendar with no recorded upcoming date, shows no badge: absence is never drawn as zero.
  */
 export function useWorkspaceBadges(): Partial<Record<WorkspaceView, WorkspaceBadge>> {
-  const lastFindingsSeenAt = useAppStore((state) => state.lastFindingsSeenAt);
+  // Until the findings list is opened this session, "new" means first seen since the app was last
+  // opened: the window the Story desk ranks by default, so the badge and its queue count agree.
+  const newSince = useAppStore((state) => state.lastFindingsSeenAt ?? state.previousOpenAt);
   const findingsRefreshRequests = useAppStore((state) => state.findingsRefreshRequests);
   const portalCount = useAppStore((state) => state.portals.length);
   const failedTasks = useAppStore((state) => state.portalRuntimes.reduce((sum, runtime) => sum + runtime.failedTasks, 0));
@@ -27,11 +29,11 @@ export function useWorkspaceBadges(): Partial<Record<WorkspaceView, WorkspaceBad
   useEffect(() => {
     const token = findingsGate.begin();
     setNewFindings(null);
-    invokeCommand('count_findings', { filter: { discoveredAfter: lastFindingsSeenAt } })
+    invokeCommand('count_findings', { filter: { discoveredAfter: newSince } })
       .then((count) => { if (findingsGate.isCurrent(token)) setNewFindings(count); })
       .catch(() => { if (findingsGate.isCurrent(token)) setNewFindings(null); });
     return findingsGate.invalidate;
-  }, [findingsGate, findingsRefreshRequests, lastFindingsSeenAt, portalCount]);
+  }, [findingsGate, findingsRefreshRequests, newSince, portalCount]);
 
   useEffect(() => {
     const token = meetingsGate.begin();
