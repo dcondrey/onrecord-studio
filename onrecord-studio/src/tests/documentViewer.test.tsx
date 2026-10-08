@@ -86,6 +86,21 @@ describe('document minimap', () => {
   });
 });
 
+describe('document minimap navigation', () => {
+  it('loads the chunk around a citation outside the loaded text and keeps one tab stop', async () => {
+    const height = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(400);
+    const openAt = vi.fn();
+    render(<DocumentViewer documentId={7} portalKey="example" fileName="memo.pdf" textContent="later text" characterOffset={5_000} totalCharacterCount={20_000} fileSizeFormatted="1 KB" onOpenAtOffset={openAt} />);
+    const mark = await screen.findByRole('img', { name: /finding about document 7, at character 10/ });
+    // The gutter is one tab stop: only the active mark is in the tab order.
+    expect(mark.getAttribute('tabindex')).toBe('0');
+    fireEvent.click(mark);
+    expect(openAt).toHaveBeenCalledWith(0);
+    expect(screen.getByTestId('minimap-key').textContent).toContain('finding citation');
+    height.mockRestore();
+  });
+});
+
 describe('document residual-evidence audit', () => {
   it('discards a residual-evidence audit that resolves after the viewer moved to another document', async () => {
     bridge.bundles.set(7, bundleWithFinding(7));

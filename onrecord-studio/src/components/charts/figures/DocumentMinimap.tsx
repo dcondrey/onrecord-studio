@@ -6,6 +6,8 @@ import { TooltipContent } from '../frame/Tooltip';
 import { VIZ } from '../core/claim';
 import { scaleLinear } from '../core/scale';
 import { useChartSize } from '../hooks/useChartSize';
+import { useRovingFocus } from '../hooks/useRovingFocus';
+import { LegendSwatch, type SwatchKind, type SwatchTone } from '../frame/Legend';
 import { useTooltip } from '../hooks/useTooltip';
 import { MarkGroup } from '../marks/shared';
 
@@ -70,10 +72,34 @@ function tip(mark: MinimapMark) {
   return <TooltipContent title={mark.label} rows={[{ key: 'at', value: (mark.start as number).toLocaleString('en-US'), label: 'characters in' }]} note={mark.quote ? `“${mark.quote.slice(0, 80)}${mark.quote.length > 80 ? '…' : ''}”` : undefined} />;
 }
 
+const KIND_SWATCH: Record<MinimapKind, { swatch: SwatchKind; tone: SwatchTone; label: string }> = {
+  finding: { swatch: 'rect', tone: 'lead', label: 'finding citation' },
+  annotation: { swatch: 'rect', tone: 'ink', label: 'annotation or case citation' },
+  match: { swatch: 'outline-rect', tone: 'ink', label: 'find match' },
+  redaction: { swatch: 'hatch', tone: 'mark', label: 'redaction marker' },
+};
+
+/** The gutter's key: one swatch per kind present, in sub-column order left to right. */
+export function MinimapKey({ marks }: { marks: readonly MinimapMark[] }) {
+  const present = KIND_ORDER.filter((kind) => marks.some((mark) => mark.kind === kind && mark.start !== null));
+  if (present.length === 0) return null;
+  return (
+    <ul aria-label="Marks beside the text, by column" className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-caption text-muted" data-testid="minimap-key">
+      <li>Marks beside the text, left to right:</li>
+      {present.map((kind) => (
+        <li key={kind} className="flex items-center gap-1">
+          <LegendSwatch kind={KIND_SWATCH[kind].swatch} tone={KIND_SWATCH[kind].tone} />
+          {KIND_SWATCH[kind].label}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /**
  * The viewer's vertical gutter: height is the whole document, a translucent band is the loaded
- * text, and each mark is a tick in its kind's sub-column. A navigation landmark whose keyboard
- * path is the ordered list of links it carries.
+ * text, and each mark is a tick in its kind's sub-column. A navigation landmark with one tab stop;
+ * the arrow keys move through the marks in document order and Enter opens one.
  */
 export function MinimapGutter({ marks, total, loaded, activeKey, onActivate }: {
   marks: readonly MinimapMark[];
@@ -88,6 +114,7 @@ export function MinimapGutter({ marks, total, loaded, activeKey, onActivate }: {
   const hatchId = useSvgId('viz-minimap-hatch');
   const tooltip = useTooltip();
   const placed = placedMarks(marks);
+  const roving = useRovingFocus({ shape: { rows: Math.max(1, placed.length) }, onActivate: (i) => placed[i] && onActivate(placed[i]), onEscape: tooltip.hide });
   const width = 16;
   const column = 3;
   const y = scaleLinear([0, Math.max(1, total)], [2, Math.max(4, height - 2)], { nice: false });
@@ -95,11 +122,11 @@ export function MinimapGutter({ marks, total, loaded, activeKey, onActivate }: {
     <nav aria-label="Marks in this document" className="relative w-4 shrink-0 border-l border-line" style={{ background: 'var(--viz-surface)' }}>
       <div ref={box} className="absolute inset-0">
         {height > 0 && (
-          <svg width={width} height={height} aria-hidden="true" className="block">
+          <svg width={width} height={height} role="group" aria-label={`${placed.length.toLocaleString('en-US')} marks in document order`} className="block overflow-visible">
             <VizDefs hatchId={hatchId} />
             <HatchProvider value={hatchId}>
               <rect x={0} y={y(loaded.start)} width={width} height={Math.max(2, y(loaded.end) - y(loaded.start))} style={{ fill: VIZ.ink, opacity: 0.08 }} />
-              {placed.map((mark) => {
+              {placed.map((mark, index) => {
                 const top = y(mark.start as number);
                 const bottom = y(Math.max(mark.start as number, mark.end ?? (mark.start as number)));
                 const left = 1 + KIND_ORDER.indexOf(mark.kind) * (column + 0.5);
@@ -109,9 +136,12 @@ export function MinimapGutter({ marks, total, loaded, activeKey, onActivate }: {
                     key={mark.key}
                     box={{ x: left, y: top, width: column, height: tickHeight }}
                     interaction={{
-                      name: mark.label,
+                      name: `${mark.label}, at character ${(mark.start as number).toLocaleString('en-US')}`,
+                      item: roving.getItemProps(index),
                       onPointerMove: (event) => tooltip.show(tip(mark), { clientX: event.clientX, clientY: event.clientY }),
                       onPointerLeave: tooltip.hide,
+                      onFocusMark: (focusBox) => tooltip.show(tip(mark), focusBox),
+                      onBlurMark: tooltip.hide,
                       onClick: () => onActivate(mark),
                     }}
                   >
@@ -124,13 +154,6 @@ export function MinimapGutter({ marks, total, loaded, activeKey, onActivate }: {
           </svg>
         )}
       </div>
-      <ol className="sr-only">
-        {placed.map((mark) => (
-          <li key={mark.key}>
-            <button type="button" onClick={() => onActivate(mark)}>{`${mark.label}, at character ${(mark.start as number).toLocaleString('en-US')}`}</button>
-          </li>
-        ))}
-      </ol>
       {tooltip.node}
     </nav>
   );
@@ -161,6 +184,7 @@ function StripPlot({ marks, total, loaded, width, focus }: { marks: readonly Min
         </g>
       )}
       <Axis scale={x} kind="count" orient="bottom" offset={58} tickCount={3} />
+      <text x={width - 8} y={84} dy="0.32em" textAnchor="end" className="fill-muted text-[11px]">characters</text>
       {tooltip.node}
     </g>
   );
@@ -199,9 +223,10 @@ export default function DocumentMinimap({ marks, total, loaded, focus, storageKe
       legend={[
         ...(focus ? [{ key: 'focus', label: 'This citation', swatch: 'ring' as const, tone: 'ink' as const }] : []),
         ...(placed.some((mark) => mark.kind === 'finding') ? [{ key: 'finding', label: 'Finding citations', swatch: 'rect' as const, tone: 'lead' as const }] : []),
-        { key: 'loaded', label: 'Text shown above', swatch: 'rect', tone: 'track' },
+        { key: 'document', label: 'Whole document', swatch: 'rect', tone: 'track' },
+        ...(loaded ? [{ key: 'loaded', label: 'Text shown in context below', swatch: 'tint' as const, tone: 'ink' as const }] : []),
       ]}
-      minHeight={78}
+      minHeight={92}
       storageKey={storageKey}
     >
       {({ width }) => <StripPlot marks={marks} total={total} loaded={loaded} width={width} focus={focus} />}

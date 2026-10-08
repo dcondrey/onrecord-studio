@@ -693,6 +693,7 @@ export default function MainLayout() {
                   totalCharacterCount={activeDocument.chunk.totalCharacterCount}
                   onPreviousChunk={activeDocument.chunk.characterOffset > 0 ? () => void openDocument(activeDocument.summary, Math.max(0, (activeDocument.chunk?.characterOffset ?? 0) - 100000)) : undefined}
                   onNextChunk={activeDocument.chunk.nextCharacterOffset === null ? undefined : () => void openDocument(activeDocument.summary, activeDocument.chunk?.nextCharacterOffset ?? 0)}
+                  onOpenAtOffset={(offset) => void openDocument(activeDocument.summary, offset)}
                   onSaveEvidence={({ excerpt, characterOffset }) => {
                     if (!selected) return;
                     addBriefingEvidence(documentBriefingEvidence({

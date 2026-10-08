@@ -3,7 +3,7 @@ import { COMPARISON_DASH, VIZ } from '../core/claim';
 import type { LegendFocus } from '../hooks/useLegendFocus';
 import { useSvgId } from './VizDefs';
 
-export type SwatchKind = 'line' | 'dashed-line' | 'rect' | 'dot' | 'hollow' | 'ring' | 'hatch' | 'flag' | 'slot-dashed' | 'slot-dotted' | 'diamond' | 'hollow-diamond' | 'triangle' | 'outline-rect';
+export type SwatchKind = 'line' | 'dashed-line' | 'rect' | 'dot' | 'hollow' | 'ring' | 'hatch' | 'flag' | 'slot-dashed' | 'slot-dotted' | 'diamond' | 'hollow-diamond' | 'triangle' | 'outline-rect' | 'tint';
 /** A mark colour, or a step of the ordinal ramp (a stacked bar's segments). */
 export type SwatchTone = Exclude<keyof typeof VIZ, 'surface' | 'grid' | 'focus'> | 'ord-1' | 'ord-2' | 'ord-3' | 'ord-4';
 
@@ -41,6 +41,12 @@ export function LegendSwatch({ kind, tone = 'ink' }: { kind: SwatchKind; tone?: 
       {kind === 'diamond' && <polygon points="8,1.5 12.5,6 8,10.5 3.5,6" style={{ fill: colour }} />}
       {kind === 'hollow-diamond' && <polygon points="8,1.75 12.25,6 8,10.25 3.75,6" style={{ fill: VIZ.surface, stroke: colour, strokeWidth: 1.5 }} />}
       {kind === 'triangle' && <polygon points="8,1.5 12.5,10 3.5,10" style={{ fill: colour }} />}
+      {kind === 'tint' && (
+        <>
+          <rect x={2} y={2} width={12} height={8} rx={1.5} style={{ fill: VIZ.track, opacity: 0.6 }} />
+          <rect x={2} y={2} width={12} height={8} rx={1.5} style={{ fill: colour, opacity: 0.12 }} />
+        </>
+      )}
       {kind === 'outline-rect' && <rect x={2.75} y={2.75} width={10.5} height={6.5} rx={1.5} style={{ fill: 'none', stroke: colour, strokeWidth: 1.5 }} />}
       {(kind === 'slot-dashed' || kind === 'slot-dotted') && (
         <rect x={2.5} y={2.5} width={11} height={7} rx={1.5} style={{ fill: 'none', stroke: VIZ.baseline, strokeWidth: 1, strokeDasharray: kind === 'slot-dashed' ? '3 2' : '1 2' }} />
