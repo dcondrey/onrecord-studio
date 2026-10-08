@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useAppStore } from '../../store/useAppStore';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
+import NeighbourBars from '../charts/figures/NeighbourBars';
 import { cn } from '../../utils/cn';
 import type { CorpusEntityNeighborhood, CorpusEntityNode } from '../../types/corpus';
 import type { Finding } from '../../types';
@@ -29,6 +30,8 @@ export default function SubjectDossier() {
   const clear = useAppStore((state) => state.clearSubjectDossier);
   const open = useAppStore((state) => state.openSubjectDossier);
   const inspect = useAppStore((state) => state.inspect);
+  const setSearchFilters = useAppStore((state) => state.setSearchFilters);
+  const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
 
   const [resolution, setResolution] = useState<Resolution>({ status: 'RESOLVING' });
   // `unknown` is a count that was asked for and failed, which is not the same as one not yet read.
@@ -272,28 +275,27 @@ export default function SubjectDossier() {
               state={neighborhood}
               render={(value) => {
                 if (!value) return <p className="text-caption text-muted">No neighborhood is recorded for this subject.</p>;
-                const edges = value.edges.slice(0, 8);
+                const total = typeof neighborTotal === 'number' ? neighborTotal : null;
                 return (
                   <div className="space-y-2">
-                    {edges.length === 0 ? (
-                      <p className="text-caption text-muted">No name appears in the same documents yet.</p>
-                    ) : (
-                      <ul className="flex flex-wrap gap-1.5">
-                        {edges.map((edge) => (
-                          <li key={edge.neighbor.entityId}>
-                            <Button size="sm" onClick={() => open({ kind: 'entity', value: edge.neighbor.entityId })}>
-                              {edge.neighbor.displayValue}
-                              <span className="text-caption tabular-nums text-muted">· {documentCount(edge.sharedDocumentCount)}</span>
-                            </Button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    {(value.edges.length > 8 || neighborTotal === 'unknown' || (neighborTotal !== null && neighborTotal > 8)) && (
+                    <NeighbourBars
+                      neighborhood={value}
+                      total={total}
+                      storageKey="subject-dossier-neighbours"
+                      onOpen={(edge, { shift }) => {
+                        if (shift) {
+                          setSearchFilters(edge.neighbor.displayValue, null, null);
+                          setWorkspaceView('evidence');
+                          return;
+                        }
+                        open({ kind: 'entity', value: edge.neighbor.entityId });
+                      }}
+                    />
+                    {(neighborTotal === 'unknown' || (total !== null && total > value.edges.length)) && (
                       <p className="text-caption tabular-nums text-muted">
                         {neighborTotal === 'unknown'
-                          ? `Showing ${edges.length}; total not available.`
-                          : `Showing ${edges.length}${neighborTotal !== null ? ` of ${neighborTotal.toLocaleString()}` : ''}. Open the entity graph to see every one.`}
+                          ? `Showing ${value.edges.length}; total not available.`
+                          : `Showing ${value.edges.length} of ${(total ?? 0).toLocaleString()}. Open the entity graph to see every one.`}
                       </p>
                     )}
                   </div>

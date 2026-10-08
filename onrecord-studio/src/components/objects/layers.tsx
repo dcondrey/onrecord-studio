@@ -3,7 +3,15 @@ import { invokeCommand, formatNativeError } from '../../ipc';
 import { useGatedLoad, type LoadState } from '../../hooks/useGatedLoad';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore, type InspectorTarget } from '../../store/useAppStore';
-import type { DocumentProvenanceVerification, Finding } from '../../types';
+import type { DeadlineAnalysis, DocumentProvenanceVerification, Finding, LegalComplianceFinding, StatutoryExtensionRecord } from '../../types';
+import type { CaseworkCitation } from '../../types/casework';
+import ClockStrip, { portalClock } from '../charts/figures/ClockStrip';
+import { MiniClocks } from '../charts/figures/ClockStack';
+import DocumentMinimap, { type MinimapMark } from '../charts/figures/DocumentMinimap';
+import NeighbourBars from '../charts/figures/NeighbourBars';
+import PeerStrip, { peerStripModel } from '../charts/figures/PeerStrip';
+import RequestAccountingBar from '../charts/figures/RequestAccountingBar';
+import { Meter } from '../charts/marks/Meter';
 import { cn } from '../../utils/cn';
 import LeadDossier from '../dashboard/LeadDossier';
 import Icon from '../ui/icons';
@@ -42,6 +50,7 @@ function EntityLayer({ target }: { target: Target<'entity'> }) {
   const openSubjectDossier = useAppStore((state) => state.openSubjectDossier);
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
   const closeInspector = useAppStore((state) => state.closeInspector);
+  const inspect = useAppStore((state) => state.inspect);
   const state = useGatedLoad(target.entityId, () => invokeCommand('get_corpus_entity_neighborhood', { entityId: target.entityId, limit: 12 }));
   return (
     <Loaded state={state}>
@@ -51,21 +60,15 @@ function EntityLayer({ target }: { target: Target<'entity'> }) {
         <div className="space-y-4">
           <Facts items={[
             ['Kind', enumLabel(neighborhood.center.kind)],
-            ['Documents', neighborhood.center.documentCount.toLocaleString()],
             ['Weakest validation', enumLabel(neighborhood.center.validationGrade)],
           ]} />
-          <Section title={`Appears with${neighborhood.truncated ? ' (first 12)' : ''}`}>
-            {neighborhood.edges.length === 0 ? <p className="text-muted">No co-occurring entity is recorded.</p> : (
-              <ul className="motion-stagger space-y-1.5">
-                {neighborhood.edges.map((edge) => (
-                  <li key={edge.neighbor.entityId} className="flex items-baseline justify-between gap-3">
-                    <ObjectLink target={{ kind: 'entity', entityId: edge.neighbor.entityId, label: edge.neighbor.displayValue }}>{edge.neighbor.displayValue}</ObjectLink>
-                    <span className="shrink-0 text-caption text-muted">{enumLabel(edge.kind)} · {edge.sharedDocumentCount.toLocaleString()} shared</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Section>
+          <NeighbourBars
+            neighborhood={neighborhood}
+            total={null}
+            compact
+            storageKey="inspector-entity-neighbours"
+            onOpen={(edge) => inspect({ kind: 'entity', entityId: edge.neighbor.entityId, label: edge.neighbor.displayValue }, 'layer')}
+          />
           <Actions>
             <ActionButton icon="tag" onClick={() => { openSubjectDossier({ kind: 'entity', value: target.entityId }); setWorkspaceView('overview'); closeInspector(); }}>Open full subject dossier</ActionButton>
           </Actions>
@@ -103,8 +106,24 @@ function DocumentLayer({ target }: { target: Target<'document'> }) {
     closeInspector();
   };
 
+  const total = chunk.status === 'ready' ? chunk.data.totalCharacterCount : null;
+  const marks: MinimapMark[] = citing.status === 'ready'
+    ? citing.data.flatMap((finding) => finding.citations
+      .filter((citation) => citation.documentId === target.documentId && citation.portalKey === target.portalKey)
+      .map((citation, index) => ({ key: `${finding.id}:${index}`, kind: 'finding' as const, start: citation.characterStart, end: citation.characterEnd, label: `Finding: ${finding.headline}`, quote: citation.quote })))
+    : [];
+
   return (
     <div className="space-y-4">
+      {total !== null && chunk.status === 'ready' && (
+        <DocumentMinimap
+          marks={marks}
+          total={total}
+          loaded={{ start: chunk.data.characterOffset, end: chunk.data.characterOffset + chunk.data.returnedCharacterCount }}
+          focus={target.characterStart === null ? null : { start: target.characterStart, end: Math.max(target.characterStart, target.characterEnd ?? target.characterStart) }}
+          storageKey="inspector-document-minimap"
+        />
+      )}
       <Section title={target.characterStart === null ? 'Opening text' : 'Cited passage in context'}>
         <Loaded state={chunk}>
           {(data) => {
@@ -162,7 +181,9 @@ function verdictClass(tone: 'success' | 'danger' | 'muted') {
 }
 
 function AgencyLayer({ target }: { target: Target<'agency'> }) {
-  const profile = useAppStore((state) => state.agencyProfiles.find((entry) => entry.agencyId === target.agencyId && entry.portalSubdomain === target.portalKey) ?? null);
+  const profiles = useAppStore((state) => state.agencyProfiles);
+  const profile = profiles.find((entry) => entry.agencyId === target.agencyId && entry.portalSubdomain === target.portalKey) ?? null;
+  const inspect = useAppStore((state) => state.inspect);
   const setActivePortal = useAppStore((state) => state.setActivePortal);
   const setSearchFilters = useAppStore((state) => state.setSearchFilters);
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
@@ -179,22 +200,23 @@ function AgencyLayer({ target }: { target: Target<'agency'> }) {
   return (
     <div className="space-y-4">
       {profile ? (
-        <Facts items={[
-          ['Requests', profile.totalRequestsProcessed.toLocaleString()],
-          ['Closed', profile.totalClosed.toLocaleString()],
-          ['Average closure', profile.averageClosureDays === null ? 'No measurable closure' : `${profile.averageClosureDays.toFixed(1)} days`],
-          ['Measured closures', profile.validLatencySampleSize.toLocaleString()],
-          ['Counted violations', profile.statutoryViolationCount.toLocaleString()],
-          ['Documents released', profile.totalDocumentsReleased.toLocaleString()],
-        ]} />
+        <>
+          <RequestAccountingBar profile={profile} onSearchRecords={searchRecords} />
+          <PeerStrip
+            model={peerStripModel(profile, profiles)}
+            onOpenPeer={(peer) => inspect({ kind: 'agency', portalKey: peer.portalSubdomain, agencyId: peer.agencyId, label: peer.agencyName }, 'layer')}
+          />
+        </>
       ) : (
         <p className="text-muted">No analytics profile has been computed for this agency.</p>
       )}
-      {profile?.complianceIndicator === 'LatencyOutlier' && (
-        <p className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-warning">Slower than peers by a wide statistical margin. This is a comparison, not a statutory finding.</p>
-      )}
       <Section title="Findings about this agency">
-        <Loaded state={findings}>{(items) => <FindingList findings={items} empty="No stored finding names this agency." />}</Loaded>
+        <Loaded state={findings}>{(items) => (
+          <>
+            {items.length > 0 && <p className="mb-1.5 text-caption tabular-nums text-muted">{severityCounts(items)}</p>}
+            <FindingList findings={items} empty="No stored finding names this agency." />
+          </>
+        )}</Loaded>
       </Section>
       <Actions>
         <ActionButton icon="search" onClick={searchRecords}>Search its records</ActionButton>
@@ -212,6 +234,8 @@ function RequestLayer({ target }: { target: Target<'request'> }) {
   const key = `${target.portalKey}:${target.requestId}`;
   const documents = useGatedLoad(key, () => invokeCommand('list_request_documents', { requestId: target.requestId, portalKey: target.portalKey }));
   const findings = useGatedLoad(key, () => invokeCommand('list_findings', { filter: { portalKey: target.portalKey, requestId: target.requestId }, limit: RELATED_FINDINGS_LIMIT }));
+  const record = useAppStore((state) => state.filteredResults.find((result) => result.requestId === target.requestId && result.portalKey === target.portalKey) ?? null);
+  const clock = useGatedLoad(key, () => loadClockInputs(target.portalKey, target.requestId));
 
   const openInEvidence = () => {
     setActivePortal(target.portalKey);
@@ -222,6 +246,17 @@ function RequestLayer({ target }: { target: Target<'request'> }) {
 
   return (
     <div className="space-y-4">
+      <ClockStrip
+        data={portalClock({
+          record,
+          extension: clock.status === 'ready' ? clock.data.extension : null,
+          engine: clock.status === 'ready' ? clock.data.engine : null,
+          findings: clock.status === 'ready' ? clock.data.findings : [],
+          observedAt: new Date().toISOString(),
+        })}
+        status={clock.status === 'pending' ? 'loading' : 'ready'}
+        storageKey="inspector-request-clock"
+      />
       <Section title="Documents">
         <Loaded state={documents}>
           {(items) => items.length === 0 ? <p className="text-muted">No document is stored for this request.</p> : (
@@ -256,31 +291,24 @@ function CaseLayer({ target }: { target: Target<'case'> }) {
       {(casework) => {
         const found = casework.cases.find((entry) => entry.id === target.caseId);
         if (!found) return <p className="text-muted">This case is no longer stored. It may have been removed or replaced by an import.</p>;
-        const openRequests = found.requests.filter((request) => request.state.toUpperCase() !== 'CLOSED');
+        const grades = gradeSegments(found.evidence);
         return (
           <div className="space-y-4">
             <Facts items={[
               ['Topic', found.topic || 'Not set'],
               ['Disposition', enumLabel(found.disposition)],
-              ['Sources cited', found.evidence.length.toLocaleString()],
-              ['Requests', `${openRequests.length.toLocaleString()} open of ${found.requests.length.toLocaleString()}`],
               ['Questions', found.questions.length.toLocaleString()],
               ['Revision', `${found.revision} · ${formatShortDate(found.updatedAt)}`],
             ]} />
-            <Section title="Requests">
-              {found.requests.length === 0 ? <p className="text-muted">No request is tracked in this case.</p> : (
-                <ul className="motion-stagger space-y-1.5">
-                  {found.requests.map((request) => (
-                    <li key={request.id} className="flex items-baseline justify-between gap-3">
-                      <span className="text-fg-secondary">{request.title || request.custodian || 'Untitled request'}</span>
-                      <span className="shrink-0 text-caption text-muted">
-                        {enumLabel(request.state)}{request.responseDue ? ` · due ${formatShortDate(request.responseDue)}` : ''}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Section>
+            <MiniClocks found={found} onOpen={() => openCasework(found.reportId)} />
+            {found.evidence.length > 0 && (
+              <Meter
+                label="Cited sources by verification grade"
+                max={found.evidence.length}
+                segments={grades}
+                valueText={`${found.evidence.length} sources cited: ${grades.map((segment) => segment.text).join(', ')}`}
+              />
+            )}
             <Section title="Cited sources">
               {found.evidence.length === 0 ? <p className="text-muted">No source is cited in this case yet.</p> : (
                 <ul className="motion-stagger space-y-2">
@@ -306,6 +334,49 @@ function CaseLayer({ target }: { target: Target<'case'> }) {
       }}
     </Loaded>
   );
+}
+
+interface ClockInputs {
+  extension: StatutoryExtensionRecord | null;
+  findings: LegalComplianceFinding[] | null;
+  engine: DeadlineAnalysis | null;
+}
+
+/** A portal request's clock inputs. A failed or missing engine read leaves the recorded dates only. */
+async function loadClockInputs(portalKey: string, requestId: number): Promise<ClockInputs> {
+  const args = { portalKey, requestId };
+  const [extension, findings, engine] = await Promise.allSettled([
+    invokeCommand('get_request_statutory_extension', args),
+    invokeCommand('list_request_legal_findings', args),
+    invokeCommand('get_portal_request_deadline', args),
+  ]);
+  const analysis = engine.status === 'fulfilled' ? engine.value : null;
+  return {
+    extension: extension.status === 'fulfilled' ? extension.value : null,
+    findings: findings.status === 'fulfilled' && Array.isArray(findings.value) ? findings.value : null,
+    engine: analysis && typeof analysis === 'object' && typeof analysis.effectiveDeadlineAt === 'string' ? analysis : null,
+  };
+}
+
+/** Sources by verification grade, strongest first, on the ordinal ramp. */
+function gradeSegments(evidence: readonly CaseworkCitation[]) {
+  const current = evidence.filter((cite) => cite.verification === 'SAVED_REPORT' || cite.verification === 'VERIFIED').length;
+  const historical = evidence.filter((cite) => cite.verification === 'HISTORICAL_REPORT').length;
+  const unverified = evidence.length - current - historical;
+  return [
+    { key: 'current', value: current, step: 4 as const, text: `${current} current source matches` },
+    { key: 'historical', value: historical, step: 2 as const, text: `${historical} source has a newer version` },
+    { key: 'unverified', value: unverified, step: 1 as const, text: `${unverified} unverified` },
+  ].filter((segment) => segment.value > 0);
+}
+
+function severityCounts(findings: readonly Finding[]): string {
+  const order: Finding['severity'][] = ['CRITICAL', 'SERIOUS', 'NOTABLE', 'INFO'];
+  return order
+    .map((severity) => [severity, findings.filter((finding) => finding.severity === severity).length] as const)
+    .filter(([, n]) => n > 0)
+    .map(([severity, n]) => `${n} ${severityLabel(severity).toLowerCase()}`)
+    .join(' · ');
 }
 
 function FindingList({ findings, empty }: { findings: Finding[]; empty: string }) {
