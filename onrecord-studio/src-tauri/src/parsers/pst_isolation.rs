@@ -259,6 +259,10 @@ fn describe_exit(status: ExitStatus) -> String {
         }
     }
     match status.code() {
+        // A Windows crash exits with an NTSTATUS (high bit set), which is only legible in hex:
+        // `abort()` is a fail-fast, 0xC0000409.
+        #[cfg(windows)]
+        Some(code) if code < 0 => format!("exit code 0x{:08X}", code as u32),
         Some(code) => format!("exit code {code}"),
         None => "unknown exit status".to_string(),
     }
@@ -390,7 +394,13 @@ pub(crate) mod tests {
 
     #[test]
     fn a_child_that_aborts_or_panics_is_a_recorded_failure_of_that_file() {
-        for (fault, how) in [("abort", "signal 6"), ("panic", "exit code 101")] {
+        // Rust's `abort()` raises SIGABRT on Unix and is a fail-fast on Windows.
+        let aborted = if cfg!(windows) {
+            "exit code 0xC0000409"
+        } else {
+            "signal 6"
+        };
+        for (fault, how) in [("abort", aborted), ("panic", "exit code 101")] {
             let error = run_with(fault, Duration::from_secs(60))
                 .result
                 .expect_err("a crashed reader is never an empty mailbox");
