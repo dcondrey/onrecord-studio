@@ -82,11 +82,8 @@ const DIMENSIONS = Object.keys(DIMENSION_LABELS) as WatchDimension[];
  * Every check reports every dimension, so a cell with no result is either a watch never checked or
  * a check recorded before the dimension existed; neither says the dimension does not apply.
  */
-function outcomeCell(label: string, dimension: WatchDimension, lastCheckedAt: string | null, result: DimensionResult | undefined): StateGridCell {
+function outcomeCell(label: string, dimension: WatchDimension, result: DimensionResult | undefined): StateGridCell {
   const where = `${label}, ${DIMENSION_LABELS[dimension].toLowerCase()}`;
-  if (lastCheckedAt === null) {
-    return { kind: 'gap', absence: absent('not-covered', 'this watch has not been checked yet'), glyph: 'bar', text: 'not checked yet', short: 'new', legend: 'Not checked yet (new)', name: `${where}: not checked yet.` };
-  }
   if (!result) {
     return { kind: 'gap', absence: absent('not-recorded', 'the last check recorded no result for this dimension'), glyph: 'bar', text: 'not in last check', short: 'n/r', legend: 'Not in the last check (n/r)', name: `${where}: the last check recorded no result for this dimension.` };
   }
@@ -109,7 +106,7 @@ function outcomeCell(label: string, dimension: WatchDimension, lastCheckedAt: st
     case 'NOT_MEASURED':
       return {
         kind: 'gap', absence: absent('not-recorded', result.reason ?? 'the dimension could not be observed'), glyph: 'ring', text: 'not observed', short: 'n/o', legend: 'Not observed this check (n/o)',
-        tableText: `not observed (${result.reason ?? 'the dimension could not be observed'})`, name: `${where}: not observed. ${text}.`,
+        name: `${where}: not observed. ${text}.`,
         tip: { rows: span, note: `Not observed: ${result.reason ?? 'the dimension could not be observed'}. This is not “unchanged”.` },
       };
   }
@@ -235,7 +232,13 @@ export default function WatchlistPanel() {
     label: watch.label,
     sublabel: KIND_LABELS[watch.kind],
     trailing: { text: relativeAge(lastCheckedAt) },
-    cells: DIMENSIONS.map((dimension) => outcomeCell(watch.label, dimension, lastCheckedAt, lastDimensions.find((result) => result.dimension === dimension))),
+    // Never checked: one cell across every dimension, so nothing reads as a per-dimension result.
+    cells: lastCheckedAt === null
+      ? DIMENSIONS.map((_, j): StateGridCell | null => (j > 0 ? null : {
+        kind: 'gap', absence: absent('not-covered', 'this watch has not been checked yet'), glyph: 'bar', span: DIMENSIONS.length,
+        text: 'not checked yet', short: 'not checked', legend: 'Not checked yet', name: `${watch.label}: not checked yet.`,
+      }))
+      : DIMENSIONS.map((dimension) => outcomeCell(watch.label, dimension, lastDimensions.find((result) => result.dimension === dimension))),
   }));
   const selectedRow = summaries.findIndex((summary) => summary.watch.id === selectedId);
 

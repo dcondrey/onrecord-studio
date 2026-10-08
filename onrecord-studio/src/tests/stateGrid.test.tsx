@@ -66,6 +66,7 @@ describe('StateGrid', () => {
 
   it('keeps a changed count as visible text at a 600px half column, stepping down to its short form', () => {
     const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(600);
+    try {
     const dimensions = ['Documents', 'Findings', 'Figures', 'Redaction', 'Source', 'Source copies'];
     const changed = (n: number): StateGridCell => ({ kind: 'state', tone: 'lead', glyph: 'diamond', text: `${n} changed`, short: String(n), name: `changed ${n}`, actionable: true });
     const same: StateGridCell = { kind: 'state', tone: 'positive', glyph: 'check', text: 'same', name: 'same' };
@@ -87,6 +88,8 @@ describe('StateGrid', () => {
       const cell = screen.getByRole('gridcell', { name: `changed ${n}` });
       expect([...cell.querySelectorAll('text')].some((node) => node.textContent === `${n} changed` || node.textContent === String(n))).toBe(true);
     }
-    width.mockRestore();
+    } finally {
+      width.mockRestore();
+    }
   });
 });

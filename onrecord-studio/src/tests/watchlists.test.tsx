@@ -79,13 +79,12 @@ describe('watchlist change detection', () => {
     expect(screen.queryByText('b-record')).toBeNull();
   });
 
-  it('states a watch never checked as not checked yet in every cell, never as not applicable', async () => {
+  it('states a watch never checked as one not-checked-yet cell, never as dimensions not applicable', async () => {
     bridge.invoke.mockImplementation((command: string) => Promise.resolve(command === 'list_watches' ? [summary('a', 'Alpha')] : []));
     render(<WatchlistPanel />);
-    const cells = await screen.findAllByRole('gridcell', { name: /^Alpha, / });
-    const dimensionCells = cells.filter((cell) => cell.getAttribute('aria-label')?.includes(':'));
-    expect(dimensionCells).toHaveLength(6);
-    for (const cell of dimensionCells) expect(cell.getAttribute('aria-label')).toMatch(/: not checked yet\.$/);
+    const cell = await screen.findByRole('gridcell', { name: 'Alpha: not checked yet.' });
+    expect(cell.textContent).toContain('not checked yet');
+    expect(screen.queryAllByRole('gridcell', { name: /^Alpha, / })).toHaveLength(0);
     expect(document.body.textContent).not.toMatch(/not applicable|n\/a/);
   });
 

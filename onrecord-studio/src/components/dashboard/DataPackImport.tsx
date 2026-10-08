@@ -317,7 +317,7 @@ export function coverageMatrix(summary: DataPackSummary, choices: readonly Cover
     const cells: (StateGridCell | null)[] = columns.map((column, j) => {
       if (span > 0 && j === firstInside) {
         return {
-          kind: 'gap', lead: true, absence: absent('not-recorded', `not in this pack or the library; needed by the lead “${gap.leadTitle}”`), glyph: 'diamond', text: 'needed', short: 'need', legend: 'Needed by a lead: press Enter to track a request', actionable: true, span,
+          kind: 'gap', lead: true, absence: absent('not-recorded', `needed by the lead “${gap.leadTitle}”; not yet answered by an imported record`), glyph: 'diamond', text: 'needed', short: 'need', legend: 'Needed by a lead: press Enter to track a request', actionable: true, span,
           name: `${gap.definition.record}${gap.period ? `, ${gap.period}` : ''}: needed by the lead “${gap.leadTitle}”. ${gap.definition.missing} Press Enter to track a request for it.`,
           tip: { rows: [{ key: 'lead', value: gap.leadTitle, label: 'lead' }, ...(gap.period ? [{ key: 'period', value: gap.period, label: 'period' }] : [])], note: gap.definition.resolves },
         };

@@ -113,12 +113,12 @@ const SIN = Math.sin((HEADER_ANGLE * Math.PI) / 180);
 /** Below this width a row's label moves onto its own line above its cells. */
 const STACK_BELOW = 420;
 const TRAILING_MAX = 110;
-const TRAILING_MIN = 48;
+const TRAILING_MIN = 44;
 const CELL_MAX = 132;
 const CELL_CAP_FOR_WORDS = 72;
 /** Glyph centre and text start inside a cell, from its left edge. */
-const GLYPH_X = 9;
-const TEXT_X = 17;
+const GLYPH_X = 8;
+const TEXT_X = 15;
 const ROW_LABEL_CLASS = 'fill-fg-secondary text-[12px]';
 const ROW_FONT = '12px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif';
 
@@ -196,7 +196,7 @@ function layoutFor(width: number, props: StateGridProps): Layout {
     gridLeft = lean;
     sized = size(gridLeft);
   }
-  const headerHeight = sized.rotated ? Math.ceil(longest * SIN) + 20 : HEADER_FLAT;
+  const headerHeight = sized.rotated ? Math.ceil(longest * SIN) + 23 : HEADER_FLAT;
   const rowY: number[] = [];
   const groupY: { label: string; y: number }[] = [];
   let y = headerHeight;
@@ -255,9 +255,20 @@ function CellGlyph({ glyph, cx, cy, colour }: { glyph: StateGlyph; cx: number; c
   return <ShapeGlyph shape={glyph} cx={cx} cy={cy} radius={3.5} style={glyph === 'ring' ? { fill: 'none', stroke: colour, strokeWidth: 1.5 } : { fill: colour }} />;
 }
 
+/**
+ * A gap's words with its reason. A gap with its own legend label says what it is in its own words
+ * ('not expected: …'); only an unlabelled gap falls back to the generic absence label.
+ */
+function gapText(cell: StateGridCell & { kind: 'gap' }, reason = cell.absence.reason): string {
+  return `${cell.legend ? cell.text : ABSENCE_LABEL[cell.absence.state]}: ${reason}`;
+}
+
 function cellTitle(cell: StateGridCell, words: string | null): string | null {
-  const parts = [words === cell.text ? null : cell.text, cell.kind === 'gap' ? `${ABSENCE_LABEL[cell.absence.state]}: ${cell.absence.reason}` : null].filter(Boolean);
-  return parts.length ? parts.join('. ') : null;
+  const parts = cell.kind === 'gap' ? [gapText(cell)] : [words === cell.text ? null : cell.text];
+  if (cell.kind === 'gap' && !cell.legend && words !== cell.text) parts.unshift(cell.text);
+  const shown = parts.filter(Boolean);
+  if (shown.length === 0) return null;
+  return shown.join('. ');
 }
 
 /** One cell's drawing: its fill or empty outline, its glyph, and its words (full, short, or title). */
@@ -316,7 +327,10 @@ function cellLegend(rows: readonly StateGridRow[]): LegendItem[] {
 
 /** The table twin's text for a cell: an absence prints its state and reason, never a blank. */
 function twinCell(cell: StateGridCell): TwinCell {
-  if (cell.kind === 'gap') return { ...cell.absence, reason: cell.tableText ?? cell.absence.reason };
+  if (cell.kind === 'gap') {
+    const reason = cell.tableText ?? cell.absence.reason;
+    return cell.legend ? gapText(cell, reason) : { ...cell.absence, reason };
+  }
   return cell.tableText ?? cell.text;
 }
 
@@ -473,12 +487,12 @@ export default function StateGrid(props: StateGridProps) {
                   const cx = gridLeft + j * cellWidth;
                   const label = clip(column.label, layout.rotated ? HEADER_MAX_LABEL : cellWidth - (column.glyph ? 18 : 6));
                   const textX = layout.rotated ? cx + cellWidth / 2 : cx + (column.glyph ? 16 : 4);
-                  const textY = headerHeight - (layout.rotated ? 12 : 8);
+                  const textY = headerHeight - (layout.rotated ? 15 : 8);
                   const pressed = props.pressedColumn === j;
                   const content = (
                     <>
                       <title>{column.label}</title>
-                      {column.glyph && <ShapeGlyph shape={column.glyph} cx={layout.rotated ? cx + cellWidth / 2 : cx + 8} cy={headerHeight - (layout.rotated ? 4 : 12)} radius={3.5} style={column.glyph === 'ring' ? { fill: 'none', stroke: VIZ.ink, strokeWidth: 1.5 } : { fill: VIZ.ink }} />}
+                      {column.glyph && <ShapeGlyph shape={column.glyph} cx={layout.rotated ? cx + cellWidth / 2 : cx + 8} cy={headerHeight - (layout.rotated ? 7 : 12)} radius={3.5} style={column.glyph === 'ring' ? { fill: 'none', stroke: VIZ.ink, strokeWidth: 1.5 } : { fill: VIZ.ink }} />}
                       {/* Rotated labels end at the column's centre and lean up-left, over the grid and the label column, never past the right edge. */}
                       <text
                         x={textX}
@@ -489,7 +503,7 @@ export default function StateGrid(props: StateGridProps) {
                       >
                         {label}
                       </text>
-                      {pressed && <rect x={cx + 2} y={headerHeight - 2} width={cellWidth - 4} height={2} rx={1} style={{ fill: VIZ.ink }} />}
+                      {pressed && <rect x={cx + 2} y={headerHeight - 1.5} width={cellWidth - 4} height={2} rx={1} style={{ fill: VIZ.ink }} />}
                     </>
                   );
                   if (!onColumnActivate) return <g key={column.key} role="columnheader" aria-label={column.label}>{content}</g>;
