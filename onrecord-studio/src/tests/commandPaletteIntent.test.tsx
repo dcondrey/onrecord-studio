@@ -139,7 +139,7 @@ describe('CommandPalette intent router', () => {
     });
     expect(screen.getByText('One typed SIGNED_BY relationship recorded.')).toBeTruthy();
     expect(screen.getByText('Typed relationship')).toBeTruthy();
-    expect(screen.getByText('sd-city · document 7 · characters 12-60')).toBeTruthy();
+    expect(screen.getByTitle('Document 7, characters 12–60').textContent).toBe('sd-city');
     expect(screen.getByText('Sincerely, Jane Q. Doe City Attorney')).toBeTruthy();
     expect(screen.getByRole('dialog')).toBeTruthy();
   });
@@ -275,5 +275,25 @@ describe('CommandPalette intent router', () => {
       bridge.pending[0].reject(new Error('index offline'));
     });
     expect(screen.getByRole('alert').textContent).toContain('index offline');
+  });
+
+  it('keeps options out of the Tab order so the input owns focus', () => {
+    render(<CommandPalette />);
+    openPalette();
+    expect(screen.getAllByRole('option').every((option) => option.tabIndex === -1)).toBe(true);
+  });
+
+  it('asks for the dossier subject inside the palette, not through a browser prompt', () => {
+    const prompt = vi.spyOn(window, 'prompt');
+    render(<CommandPalette />);
+    const input = openPalette();
+    type(input, 'dossier');
+    pressEnter();
+    expect(prompt).not.toHaveBeenCalled();
+    expect(input.getAttribute('placeholder')).toBe('Name, email, organization or entity ID');
+    type(input, 'Harborview Shelter Partners');
+    pressEnter();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    prompt.mockRestore();
   });
 });

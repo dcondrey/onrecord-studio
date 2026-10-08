@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { invokeCommand, formatNativeError } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
@@ -6,6 +6,8 @@ import type { IntentAnswer, IntentOption } from '../../types';
 import IntentAnswerView from './IntentAnswerView';
 import { cn } from '../../utils/cn';
 import Icon, { type IconName } from '../ui/icons';
+import InlineError from '../ui/InlineError';
+import Skeleton from '../ui/Skeleton';
 import { openHelp } from '../help/helpEvents';
 import { openSourceConnector } from './sourceEvents';
 import { OBJECT_ICONS } from '../objects/ObjectLink';
@@ -26,8 +28,13 @@ interface CommandAction {
   shortcut?: string;
   /** The row starts work whose result the palette shows, so choosing it must not close the palette. */
   keepOpen?: boolean;
+  /** A setting row whose value is the one in force. */
+  current?: boolean;
   perform: () => void;
 }
+
+/** Settings rows are listed only when the query asks for them; they would otherwise bury the rest. */
+const SETTING_GROUPS = new Set<CommandAction['group']>(['Appearance', 'Accessibility']);
 
 export default function CommandPalette() {
   const [isOpen, setOpen] = useState(false);
@@ -43,6 +50,14 @@ export default function CommandPalette() {
   const setContrast = useAppStore((state) => state.setContrast);
   const toggleSidebarCollapsed = useAppStore((state) => state.toggleSidebarCollapsed);
   const openSubjectDossier = useAppStore((state) => state.openSubjectDossier);
+  const theme = useAppStore((state) => state.theme);
+  const motion = useAppStore((state) => state.motion);
+  const contrast = useAppStore((state) => state.contrast);
+  const audioAlertsEnabled = useAppStore((state) => state.audioAlertsEnabled);
+  const setAudioAlertsEnabled = useAppStore((state) => state.setAudioAlertsEnabled);
+  // 'dossier' turns the input into the subject field for "Open subject dossier…".
+  const [mode, setMode] = useState<'commands' | 'dossier'>('commands');
+  const dialogRef = useRef<HTMLElement>(null);
   const [answer, setAnswer] = useState<IntentAnswer | null>(null);
   const [asking, setAsking] = useState(false);
   const [askError, setAskError] = useState<string | null>(null);
@@ -85,6 +100,7 @@ export default function CommandPalette() {
   const openPalette = () => {
     previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     clearAnswer();
+    setMode('commands');
     setQuery('');
     setSelectedIndex(0);
     setOpen(true);
@@ -92,6 +108,7 @@ export default function CommandPalette() {
 
   const closePalette = () => {
     clearAnswer();
+    setMode('commands');
     setOpen(false);
     window.requestAnimationFrame(() => previousFocus.current?.focus());
   };
@@ -99,7 +116,7 @@ export default function CommandPalette() {
   const actions = useMemo<CommandAction[]>(() => [
     ...workspaceCommandRegistry.map((command) => ({
       id: command.id,
-      label: command.label,
+      label: `Go to ${command.navigationLabel}`,
       detail: command.detail,
       group: 'Navigate' as const,
       icon: command.icon,
@@ -117,6 +134,20 @@ export default function CommandPalette() {
       perform: () => {
         setEvidenceMode('timeline');
         setWorkspaceView('evidence');
+      },
+    },
+    {
+      id: 'open-subject-dossier',
+      label: 'Open subject dossier…',
+      detail: 'Findings, connections and provenance for one person, agency or record',
+      group: 'Navigate',
+      icon: 'evidence',
+      keywords: 'dossier subject entity person agency who look up investigate',
+      keepOpen: true,
+      perform: () => {
+        setMode('dossier');
+        setQuery('');
+        window.requestAnimationFrame(() => inputRef.current?.focus());
       },
     },
     {
@@ -160,7 +191,7 @@ export default function CommandPalette() {
     },
     {
       id: 'open-help',
-      label: 'Open Help',
+      label: 'Open help',
       detail: 'Search the documentation for views, findings, and data handling',
       group: 'Help',
       icon: 'search',
@@ -170,24 +201,6 @@ export default function CommandPalette() {
       // lets the dialog keep the focus it takes on mount.
       perform: () => window.requestAnimationFrame(() => openHelp()),
     },
-    {
-      id: 'open-subject-dossier',
-      label: 'Open subject dossier…',
-      detail: 'Stitch findings, entity graph, and provenance for one person, agency or record',
-      group: 'Navigate',
-      icon: 'evidence',
-      keywords: 'dossier subject entity person agency who look up investigate',
-      perform: () => {
-        if (typeof window === 'undefined') return;
-        const value = window.prompt(
-          'Subject to open dossier for (name, email, organization, or entity id):',
-        );
-        const trimmed = value?.trim();
-        if (!trimmed) return;
-        openSubjectDossier({ kind: 'name', value: trimmed });
-        setWorkspaceView('overview');
-      },
-    },
     ...themeCommandRegistry.map((command) => ({
       id: command.id,
       label: command.label,
@@ -195,8 +208,18 @@ export default function CommandPalette() {
       group: 'Appearance' as const,
       icon: command.icon,
       keywords: command.keywords,
+      current: theme === command.theme,
       perform: () => setTheme(command.theme),
     })),
+    {
+      id: 'toggle-audio-alerts',
+      label: audioAlertsEnabled ? 'Turn off audio alerts' : 'Turn on audio alerts',
+      detail: 'A sound when a collection finishes or fails',
+      group: 'Appearance',
+      icon: 'volume',
+      keywords: 'audio sound alerts notifications chime mute',
+      perform: () => setAudioAlertsEnabled(!audioAlertsEnabled),
+    },
     ...motionCommandRegistry.map((command) => ({
       id: command.id,
       label: command.label,
@@ -204,6 +227,7 @@ export default function CommandPalette() {
       group: 'Accessibility' as const,
       icon: command.icon,
       keywords: command.keywords,
+      current: motion === command.motion,
       perform: () => setMotion(command.motion),
     })),
     ...contrastCommandRegistry.map((command) => ({
@@ -213,11 +237,20 @@ export default function CommandPalette() {
       group: 'Accessibility' as const,
       icon: command.icon,
       keywords: command.keywords,
+      current: contrast === command.contrast,
       perform: () => setContrast(command.contrast),
     })),
-  ], [modifier, openSubjectDossier, setContrast, setEvidenceMode, setMotion, setTheme, setWorkspaceView, toggleSidebarCollapsed]);
+  ], [audioAlertsEnabled, contrast, modifier, motion, setAudioAlertsEnabled, setContrast, setEvidenceMode, setMotion, setTheme, setWorkspaceView, theme, toggleSidebarCollapsed]);
 
-  const objectResults = useObjectSearch(isOpen ? query : '');
+  const openDossier = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    closePalette();
+    openSubjectDossier({ kind: 'name', value: trimmed });
+    setWorkspaceView('overview');
+  };
+
+  const objectResults = useObjectSearch(isOpen && mode === 'commands' ? query : '');
   const inspect = useAppStore((state) => state.inspect);
   const objectActions = useMemo<CommandAction[]>(() => objectResults.map((result) => ({
     id: `object-${result.key}`,
@@ -230,13 +263,14 @@ export default function CommandPalette() {
   })), [inspect, objectResults]);
 
   const filteredActions = useMemo(() => {
+    if (mode === 'dossier') return [];
     const normalized = query.trim().toLocaleLowerCase();
-    if (!normalized) return actions;
-    const matches = actions
+    if (!normalized) return actions.filter((action) => !SETTING_GROUPS.has(action.group));
+    const matches = groupContiguously(actions
       .map((action) => ({ action, score: scoreCommand(normalized, action.label, `${action.detail} ${action.group}`, action.keywords) }))
       .filter((entry): entry is { action: CommandAction; score: number } => entry.score !== null)
       .sort((left, right) => right.score - left.score || left.action.label.localeCompare(right.action.label))
-      .map(({ action }) => action);
+      .map(({ action }) => action));
     if (!isQuestionLike(normalized)) return [...matches, ...objectActions];
     const ask: CommandAction = {
       id: 'ask-intent',
@@ -251,7 +285,7 @@ export default function CommandPalette() {
     // A sentence is a question first; a word or two that also names a view stays a view jump.
     return normalized.split(/\s+/).length >= 3 || normalized.endsWith('?') ? [ask, ...matches, ...objectActions] : [...matches, ...objectActions, ask];
     // runIntent closes over the gate and setters only, all stable.
-  }, [actions, objectActions, query]);
+  }, [actions, mode, objectActions, query]);
 
   useEffect(() => {
     const openFromEvent = () => openPalette();
@@ -315,7 +349,15 @@ export default function CommandPalette() {
       if (event.key === 'Escape') {
         event.preventDefault();
         if (showingAnswer) clearAnswer();
-        else closePalette();
+        else if (mode === 'dossier') {
+          setMode('commands');
+          setQuery('');
+        } else closePalette();
+      } else if (mode === 'dossier') {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          openDossier(query);
+        }
       } else if (showingAnswer) {
         return;
       } else if (event.key === 'ArrowDown') {
@@ -334,7 +376,7 @@ export default function CommandPalette() {
     window.addEventListener('keydown', handleKeyboard);
     return () => window.removeEventListener('keydown', handleKeyboard);
     // closePalette and clearAnswer close over the gate and setters only, all stable.
-  }, [answer, askError, asking, filteredActions, isOpen, selectedIndex, setWorkspaceView]);
+  }, [answer, askError, asking, filteredActions, isOpen, mode, query, selectedIndex, setWorkspaceView]);
 
   useEffect(() => {
     document.getElementById(`command-${filteredActions[selectedIndex]?.id}`)?.scrollIntoView({ block: 'nearest' });
@@ -343,94 +385,146 @@ export default function CommandPalette() {
   if (!isOpen) return null;
 
   const answering = asking || askError !== null || answer !== null;
+  const groups = groupRuns(filteredActions);
+
+  // The input owns focus and drives the options through aria-activedescendant, so options are not
+  // Tab stops. Tab cycles only between the input and any buttons an answer shows.
+  const trapTab = (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (event.key !== 'Tab') return;
+    event.preventDefault();
+    const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('input, button:not([tabindex="-1"]):not(:disabled)') ?? []);
+    if (focusable.length === 0) return;
+    const index = focusable.indexOf(document.activeElement as HTMLElement);
+    const next = index < 0 ? 0 : (index + (event.shiftKey ? -1 : 1) + focusable.length) % focusable.length;
+    focusable[next].focus();
+  };
 
   return (
     <div
-      className="app-backdrop fixed inset-0 z-[120] flex justify-center px-4 pt-[12vh] backdrop-blur-md"
+      className="motion-fade fixed inset-0 z-palette flex justify-center bg-scrim px-4 pt-[14vh]"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) closePalette();
       }}
     >
-      <section className="command-dialog app-panel h-fit w-full max-w-[620px] overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="command-palette-title">
+      <section
+        ref={dialogRef}
+        className="glass motion-pop h-fit w-[min(640px,92vw)] overflow-hidden rounded-2xl shadow-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="command-palette-title"
+        onKeyDown={trapTab}
+      >
         <h2 id="command-palette-title" className="sr-only">Command palette</h2>
-        <div className="command-search flex items-center gap-3 border-b border-line px-4">
-          <Icon name="search" className="h-[18px] w-[18px] shrink-0 text-muted" />
+        <div className="flex h-14 items-center gap-3 border-b border-line px-4">
+          {mode === 'dossier' ? (
+            <span className="shrink-0 text-control text-fg-secondary">Dossier</span>
+          ) : (
+            <Icon name="search" size="md" className="shrink-0 text-muted" />
+          )}
           <input
             ref={inputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search findings, records, agencies and commands, or ask a question"
-            aria-label="Search findings, records, agencies, entities, passages and commands, or ask a question"
-            className="h-14 min-w-0 flex-1 border-0 bg-transparent text-[14px] text-fg outline-none placeholder:text-muted"
+            placeholder={mode === 'dossier' ? 'Name, email, organization or entity ID' : 'Search findings, records, agencies and commands, or ask a question'}
+            aria-label={mode === 'dossier' ? 'Subject for the dossier: name, email, organization or entity ID' : 'Search findings, records, agencies, entities, passages and commands, or ask a question'}
+            className="h-full min-w-0 flex-1 border-0 bg-transparent text-heading font-normal text-fg outline-none placeholder:text-muted"
             role="combobox"
-            aria-expanded="true"
+            aria-expanded={mode === 'commands' && !answering}
             aria-controls="command-results"
-            aria-activedescendant={filteredActions[selectedIndex] ? `command-${filteredActions[selectedIndex].id}` : undefined}
+            aria-activedescendant={mode === 'commands' && !answering && filteredActions[selectedIndex] ? `command-${filteredActions[selectedIndex].id}` : undefined}
             autoComplete="off"
             spellCheck={false}
           />
-          <Keycap>Esc</Keycap>
         </div>
 
         {/* The live region stays mounted while the palette is open: an answer that mounts its own
             live region already populated is not announced, so only its contents may change. */}
         <div aria-live="polite">
           {answering && (
-            <div id="command-results" className="max-h-[min(480px,62vh)] overflow-y-auto">
-              {asking && <p className="px-6 py-8 text-center text-label text-fg-secondary" role="status">Searching findings, the entity graph and document text…</p>}
-              {askError !== null && (
-                <p className="px-6 py-8 text-center text-label text-fg-secondary" role="alert">The question could not be answered: {askError}</p>
+            <div id="command-results" className="max-h-[min(60vh,480px)] overflow-y-auto">
+              {asking && (
+                <Skeleton
+                  variant="lines"
+                  lines={3}
+                  label="Searching findings, the entity graph and document text…"
+                  className="px-5 py-4"
+                />
               )}
-              {answer !== null && <IntentAnswerView answer={answer} onChooseOption={chooseOption} />}
+              {askError !== null && (
+                <div className="p-3">
+                  <InlineError
+                    summary="This question couldn't be answered right now."
+                    detail={askError}
+                    onRetry={() => runIntent(query.trim())}
+                  />
+                </div>
+              )}
+              {answer !== null && <IntentAnswerView answer={answer} onChooseOption={chooseOption} onOpenFinding={closePalette} />}
             </div>
           )}
         </div>
-        {!answering && (
-        <div id="command-results" className="max-h-[min(480px,62vh)] overflow-y-auto p-2" role="listbox">
-          {filteredActions.length === 0 ? (
-            <div className="px-4 py-10 text-center">
-              <Icon name="search" className="mx-auto h-5 w-5 text-muted" />
-              <p className="mt-3 text-label font-medium text-fg-secondary">No matching commands</p>
-              <p className="mt-1 text-label text-muted">Try an agency, a finding, a phrase from a document, or a view name.</p>
-            </div>
-          ) : filteredActions.map((action, index) => {
-            const showGroup = index === 0 || filteredActions[index - 1].group !== action.group;
-            return (
-              <div key={action.id}>
-                {showGroup && <div className="sidebar-section-label px-3 pb-1 pt-2">{action.group}</div>}
-                <button
-                  id={`command-${action.id}`}
-                  type="button"
-                  role="option"
-                  aria-selected={selectedIndex === index}
-                  onMouseEnter={() => setSelectedIndex(index)}
-                  onClick={() => {
-                    if (!action.keepOpen) closePalette();
-                    action.perform();
-                  }}
-                  className={cn(
-                    'command-row focus-ring flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition',
-                    selectedIndex === index ? 'command-row-selected text-fg' : 'text-muted',
-                  )}
-                >
-                  <span className="command-icon grid h-8 w-8 shrink-0 place-items-center rounded-lg border">
-                    <Icon name={action.icon} className="h-4 w-4" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-label font-medium">{action.label}</span>
-                    <span className="mt-0.5 block truncate text-label text-muted">{action.detail}</span>
-                  </span>
-                  {action.shortcut && <Keycap>{action.shortcut}</Keycap>}
-                </button>
-              </div>
-            );
-          })}
-        </div>
+        {!answering && mode === 'dossier' && (
+          <p id="command-results" className="px-5 py-4 text-body text-muted">
+            Type a subject and press Return to open its dossier.
+          </p>
         )}
-        <footer className="flex items-center justify-between border-t border-line px-4 py-2.5 text-label text-muted">
-          <span>{answering ? 'Esc returns to commands' : 'OnRecord commands'}</span>
-          <span className="flex items-center gap-2"><Keycap>↑↓</Keycap> Navigate <Keycap>↵</Keycap> Open or ask</span>
+        {!answering && mode === 'commands' && (
+          <div id="command-results" className="max-h-[min(60vh,480px)] overflow-y-auto p-2" role="listbox" aria-label="Commands">
+            {filteredActions.length === 0 ? (
+              <div className="px-4 py-10 text-center" role="presentation">
+                <Icon name="search" size="lg" className="mx-auto text-muted" />
+                <p className="mt-3 text-heading text-fg-secondary">No matching commands</p>
+                <p className="mt-1 text-body text-muted">Try an agency, a finding, a phrase from a document, or a view name.</p>
+              </div>
+            ) : groups.map(({ group, start, items }) => (
+              <div key={`${group}-${start}`} role="group" aria-label={group}>
+                <div role="presentation" className="px-3 pb-1 pt-2 text-overline uppercase text-muted">{group}</div>
+                {items.map((action, offset) => {
+                  const index = start + offset;
+                  const selected = selectedIndex === index;
+                  return (
+                    <button
+                      key={action.id}
+                      id={`command-${action.id}`}
+                      type="button"
+                      role="option"
+                      tabIndex={-1}
+                      aria-selected={selected}
+                      onMouseEnter={() => setSelectedIndex(index)}
+                      onClick={() => {
+                        if (!action.keepOpen) closePalette();
+                        action.perform();
+                      }}
+                      className={cn(
+                        'flex h-11 w-full items-center gap-3 rounded-lg px-3 text-left outline-none transition-colors',
+                        selected ? 'command-row-selected text-fg' : 'text-fg-secondary',
+                      )}
+                    >
+                      <Icon name={action.icon} size="md" className="shrink-0 text-muted" />
+                      <span className="flex min-w-0 flex-1 items-baseline gap-2">
+                        <span className="shrink-0 text-control text-fg">{action.label}</span>
+                        <span className="min-w-0 truncate text-caption text-muted">{action.detail}</span>
+                      </span>
+                      {action.current && <span className="shrink-0 text-caption text-muted">Current</span>}
+                      {action.shortcut && <Keycap>{action.shortcut}</Keycap>}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        )}
+        <footer className="flex items-center justify-end gap-4 border-t border-line px-4 py-2.5 text-caption text-muted">
+          {answering || mode === 'dossier' ? (
+            <span className="flex items-center gap-1.5"><Keycap>Esc</Keycap> Back to commands</span>
+          ) : (
+            <>
+              <span className="flex items-center gap-1.5"><Keycap>↑↓</Keycap> Navigate</span>
+              <span className="flex items-center gap-1.5"><Keycap>↵</Keycap> Run</span>
+              <span className="flex items-center gap-1.5"><Keycap>Esc</Keycap> Close</span>
+            </>
+          )}
         </footer>
       </section>
     </div>
@@ -442,8 +536,37 @@ function isQuestionLike(normalized: string) {
   return normalized.length >= 3 && (/\s/.test(normalized) || normalized.endsWith('?'));
 }
 
+/** Keeps the score order but lists each group once, at the position of its best match. */
+function groupContiguously(actions: CommandAction[]) {
+  const order: CommandAction['group'][] = [];
+  const byGroup = new Map<CommandAction['group'], CommandAction[]>();
+  for (const action of actions) {
+    const members = byGroup.get(action.group);
+    if (members) members.push(action);
+    else {
+      order.push(action.group);
+      byGroup.set(action.group, [action]);
+    }
+  }
+  return order.flatMap((group) => byGroup.get(group) ?? []);
+}
+
+function groupRuns(actions: CommandAction[]) {
+  const runs: { group: CommandAction['group']; start: number; items: CommandAction[] }[] = [];
+  actions.forEach((action, index) => {
+    const last = runs.at(-1);
+    if (last && last.group === action.group) last.items.push(action);
+    else runs.push({ group: action.group, start: index, items: [action] });
+  });
+  return runs;
+}
+
 function Keycap({ children }: { children: string }) {
-  return <kbd className="keycap shrink-0 rounded-md border px-1.5 py-0.5 font-sans text-label font-medium text-muted">{children}</kbd>;
+  return (
+    <kbd className="keycap inline-flex h-5 min-w-6 shrink-0 items-center justify-center rounded border px-1 font-sans text-caption font-medium tabular-nums text-muted">
+      {children}
+    </kbd>
+  );
 }
 
 function isApplePlatform() {
