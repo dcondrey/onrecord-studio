@@ -265,19 +265,6 @@ export interface ProvenanceVerificationRecord {
   predatesClassification: boolean;
 }
 
-export interface PiiMaskResult {
-  maskedText: string;
-  findings: Array<{
-    kind: 'SOCIAL_SECURITY_NUMBER' | 'TELEPHONE_NUMBER' | 'PRIVATE_STREET_ADDRESS';
-    byteStart: number;
-    byteEnd: number;
-    characterStart: number;
-    characterEnd: number;
-    matchedCharacterCount: number;
-    confidenceBasisPoints: number;
-  }>;
-}
-
 export interface LegalBriefExportResult {
   requestId: number;
   portalKey: string;
