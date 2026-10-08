@@ -48,7 +48,7 @@ pub mod release_timing;
 pub mod response_time_claim;
 pub mod rolling_production;
 pub mod spending_cases;
-mod text_shared;
+pub(crate) mod text_shared;
 
 /// Summary returned by [`refresh_all_findings`].
 #[derive(Debug, Clone, Default)]

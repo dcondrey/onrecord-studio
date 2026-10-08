@@ -12,6 +12,7 @@ use crate::types::{ClaimCheckOutcome, ClaimCheckScope, ClaimCheckView};
 use crate::{
     analysis::{
         assertion_index::AssertionValue,
+        detectors::text_shared::split_units,
         finding::{
             finding_id, Finding, FindingCitation, FindingConfidence, FindingKind, FindingSeverity,
             FindingSubject,
@@ -434,30 +435,7 @@ fn classify(sentence: &str, tokens: &[Word]) -> Option<ClaimKind> {
 /// Byte ranges of sentences. A period ends a sentence only before whitespace or end of text, so
 /// "$1.2 million" stays whole.
 fn sentences(text: &str) -> Vec<(usize, usize)> {
-    let mut ranges = Vec::new();
-    let mut start = 0usize;
-    let bytes = text.as_bytes();
-    let mut index = 0usize;
-    while index < bytes.len() {
-        let ends = match bytes[index] {
-            b'\n' | b';' | b'!' | b'?' => true,
-            b'.' => bytes
-                .get(index + 1)
-                .is_none_or(|next| next.is_ascii_whitespace()),
-            _ => false,
-        };
-        index += 1;
-        if ends {
-            if text[start..index].trim().len() >= 12 {
-                ranges.push((start, index));
-            }
-            start = index;
-        }
-    }
-    if text[start..].trim().len() >= 12 {
-        ranges.push((start, bytes.len()));
-    }
-    ranges
+    split_units(text, false, 12)
 }
 
 /// Whether `text` holds a `$` immediately followed by a digit.
