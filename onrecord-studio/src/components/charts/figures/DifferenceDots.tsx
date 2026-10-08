@@ -221,7 +221,7 @@ export default function DifferenceDots(props: DifferenceDotsProps) {
               . These lines are not placed at zero.
             </p>
           )}
-          {props.truncated && <p className="text-warning">The query result was cut at its row limit; counts and the largest differences cover the returned rows only.</p>}
+          {props.truncated && <p className="text-warning">The query result was cut at its row limit; counts and the largest differences cover the returned rows only. Lines that could not be compared sort after compared ones, so any beyond the limit are not counted here.</p>}
         </div>
       )}
     </div>

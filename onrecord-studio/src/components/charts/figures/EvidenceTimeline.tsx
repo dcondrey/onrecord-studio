@@ -486,7 +486,7 @@ function rowsOf(props: EvidenceTimelineProps, expanded: boolean): Row[] {
 }
 
 /** The items of an opened pill or count, as buttons that open each one's list row. */
-function GroupListing({ listing, onOpen, onClose }: { listing: MarkGroupListing; onOpen(id: string): void; onClose(): void }) {
+function GroupListing({ listing, onOpen, onClose }: { listing: MarkGroupListing & { opener: Element | null }; onOpen(id: string): void; onClose(): void }) {
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => heading.current?.focus(), [listing]);
   return (
@@ -530,7 +530,14 @@ function GroupListing({ listing, onOpen, onClose }: { listing: MarkGroupListing;
  */
 export default function EvidenceTimeline(props: EvidenceTimelineProps) {
   const [expanded, setExpanded] = useState(false);
-  const [listing, setListing] = useState<MarkGroupListing | null>(null);
+  // The pill or count that opened the list takes focus back when it closes.
+  const [listing, setListing] = useState<(MarkGroupListing & { opener: Element | null }) | null>(null);
+  const openListing = (next: MarkGroupListing) => setListing({ ...next, opener: document.activeElement });
+  const closeListing = () => {
+    const opener = listing?.opener;
+    setListing(null);
+    if (opener instanceof HTMLElement || opener instanceof SVGElement) opener.focus();
+  };
   const rows = rowsOf(props, expanded);
   const dated = props.items.filter((item) => Number.isFinite(Date.parse(item.at)));
   const labelAbove = (width: number) => width < 480;
@@ -590,9 +597,9 @@ export default function EvidenceTimeline(props: EvidenceTimelineProps) {
         interactive={{ roledescription: 'timeline' }}
         storageKey="evidence-timeline-overview"
       >
-        {({ width }) => (dated.length || failed ? <Plot props={props} rows={rows} width={width} onGroup={setListing} /> : null)}
+        {({ width }) => (dated.length || failed ? <Plot props={props} rows={rows} width={width} onGroup={openListing} /> : null)}
       </ChartFrame>
-      {listing && <GroupListing listing={listing} onOpen={props.onOpen} onClose={() => setListing(null)} />}
+      {listing && <GroupListing listing={listing} onOpen={props.onOpen} onClose={closeListing} />}
     </div>
   );
 }

@@ -478,5 +478,9 @@ describe('budget comparison difference chart', () => {
     expect(screen.queryByText(/by the most/)).toBeNull();
     expect(screen.getByText(/^Among the 2 compared lines returned, the largest excess over the budget amount is .*512000: \+\$236K.*cut at the row limit/)).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Actuals minus budget: largest among returned rows' })).toBeTruthy();
+    // Unmatched lines sort last, so a cut result can hold none of them: the gap is stated, never read as 'all matched'.
+    cleanup();
+    render(<DifferenceDots title="Actuals minus budget" sources={{ tables: ['analysis_budget'] }} compared={compared} uncompared={[]} fromLabel="budget" toLabel="actual" truncated />);
+    expect(screen.getByText(/could not be compared sort after compared ones, so any beyond the limit are not counted here/)).toBeTruthy();
   });
 });

@@ -200,6 +200,9 @@ describe('EvidenceTimeline', () => {
     const list = screen.getByRole('region', { name: /6 items in Watch changes/ });
     fireEvent.click(within(list).getByRole('button', { name: /item near3/ }));
     expect(opened).toEqual(['near3']);
+    fireEvent.keyDown(within(list).getByRole('button', { name: /item near3/ }), { key: 'Escape' });
+    expect(screen.queryByRole('region', { name: /6 items in Watch changes/ })).toBeNull();
+    expect(document.activeElement).toBe(pill);
   });
 
   it('makes each contradiction a focusable mark on its own row', () => {
