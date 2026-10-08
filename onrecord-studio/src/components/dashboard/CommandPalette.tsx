@@ -129,7 +129,7 @@ export default function CommandPalette() {
       label: 'Show evidence timeline',
       detail: 'Requests, findings and watch changes on one dated list',
       group: 'Navigate',
-      icon: 'activity',
+      icon: 'calendar',
       keywords: 'timeline chronology dates events history sequence',
       perform: () => {
         setEvidenceMode('timeline');
@@ -401,7 +401,7 @@ export default function CommandPalette() {
 
   return (
     <div
-      className="motion-fade fixed inset-0 z-palette flex justify-center bg-scrim px-4 pt-[14vh]"
+      className="modal-scrim fixed inset-0 z-palette flex justify-center px-4 pt-[14vh]"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) closePalette();
@@ -409,7 +409,7 @@ export default function CommandPalette() {
     >
       <section
         ref={dialogRef}
-        className="glass motion-pop h-fit w-[min(640px,92vw)] overflow-hidden rounded-2xl shadow-dialog"
+        className="glass motion-pop relative h-fit w-[min(640px,92vw)] overflow-hidden rounded-2xl shadow-dialog"
         role="dialog"
         aria-modal="true"
         aria-labelledby="command-palette-title"
@@ -515,7 +515,7 @@ export default function CommandPalette() {
             ))}
           </div>
         )}
-        <footer className="flex items-center justify-end gap-4 border-t border-line px-4 py-2.5 text-caption text-muted">
+        <footer className="flex items-center justify-end gap-4 border-t border-line-strong/70 bg-raised/60 px-4 py-2.5 text-caption text-muted">
           {answering || mode === 'dossier' ? (
             <span className="flex items-center gap-1.5"><Keycap>Esc</Keycap> Back to commands</span>
           ) : (

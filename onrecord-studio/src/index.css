@@ -41,8 +41,9 @@
   --focus: 3 105 161;
   --scrim: rgb(15 23 42 / 0.4);
   --hatch: rgb(148 163 184 / 0.45);
-  /* .72 measured 4.66:1 for muted text over the populated overview; .80 keeps a margin above 4.5. */
-  --glass-alpha: 0.8;
+  /* Glass carries dense text (palette rows, dialog forms); at .94 the blurred page behind stays a
+     tint, never legible, and muted text keeps its panel contrast within a few hundredths. */
+  --glass-alpha: 0.94;
   --shadow-panel: 0 1px 2px rgb(15 23 42 / 0.04), inset 0 1px 0 rgb(255 255 255 / 0.8);
   --shadow-popover: 0 8px 24px rgb(15 23 42 / 0.12), 0 2px 6px rgb(15 23 42 / 0.08);
   --shadow-dialog: 0 24px 64px rgb(15 23 42 / 0.24), 0 4px 16px rgb(15 23 42 / 0.12);
@@ -132,7 +133,7 @@
   --focus: 56 189 248;
   --scrim: rgb(0 0 0 / 0.6);
   --hatch: rgb(148 163 184 / 0.35);
-  --glass-alpha: 0.78;
+  --glass-alpha: 0.94;
   --shadow-panel: 0 1px 2px rgb(0 0 0 / 0.35), inset 0 1px 0 rgb(255 255 255 / 0.04);
   --shadow-popover: 0 8px 24px rgb(0 0 0 / 0.5), 0 2px 6px rgb(0 0 0 / 0.3);
   --shadow-dialog: 0 24px 64px rgb(0 0 0 / 0.6);
@@ -748,6 +749,17 @@ a[href] {
 .motion-pop { animation: motion-pop var(--dur-base) var(--ease-out) both; transform-origin: top left; }
 .motion-slide-in { animation: motion-slide-in var(--dur-slow) var(--ease-out) both; }
 .motion-fade { animation: motion-fade var(--dur-base) var(--ease-out) both; }
+
+/* A modal's flat scrim, drawn on the overlay's ::before. An animated-opacity ancestor becomes the
+   backdrop root of the glass panel inside it, which then blurs only the scrim; as a sibling layer
+   the scrim fades while the panel blurs the page itself. The panel needs `relative` to sit above. */
+.modal-scrim::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--scrim);
+  animation: motion-fade var(--dur-base) var(--ease-out) both;
+}
 
 .motion-stagger > * { animation: motion-reveal var(--dur-slow) var(--ease-out) both; }
 .motion-stagger > :nth-child(2) { animation-delay: 25ms; }

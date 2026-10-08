@@ -71,7 +71,7 @@ function Citation({ citation, sourceName }: { citation: IntentCitation; sourceNa
 function Row({ row, sourceName, onOpen }: { row: IntentRow; sourceName: (portalKey: string) => string; onOpen: ((id: string) => void) | null }) {
   const measured = BASIS_IS_MEASURED.has(row.basis);
   return (
-    <article className="rounded-lg border border-line px-3 py-2.5" data-basis={row.basis}>
+    <article className="px-3 py-3" data-basis={row.basis}>
       <div className="flex flex-wrap items-center gap-1.5">
         <Badge tone="neutral" dashed={!measured} title={row.basisStatement}>{BASIS_LABEL[row.basis]}</Badge>
         {row.relationshipKind && <Badge tone="neutral">{row.relationshipKind}</Badge>}
@@ -133,12 +133,16 @@ export default function IntentAnswerView({ answer, onChooseOption, onOpenFinding
   return (
     <div className="space-y-2 p-2">
       <div className="px-2 pt-1">
-        <Badge tone="neutral">{STATUS_LABEL[answer.status]}</Badge>
-        <p className="mt-2 text-body text-fg">{answer.summary}</p>
+        {answer.status !== 'ANSWERED' && <Badge tone="neutral" className="mb-2">{STATUS_LABEL[answer.status]}</Badge>}
+        <p className="text-body text-fg">{answer.summary}</p>
       </div>
-      {answer.rows.map((row) => (
-        <Row key={row.id} row={row} sourceName={sourceName} onOpen={row.basis === 'STORED_FINDING' ? openFinding : null} />
-      ))}
+      {answer.rows.length > 0 && (
+        <div className="divide-y divide-line-strong/70 rounded-lg border border-line-strong/70">
+          {answer.rows.map((row) => (
+            <Row key={row.id} row={row} sourceName={sourceName} onOpen={row.basis === 'STORED_FINDING' ? openFinding : null} />
+          ))}
+        </div>
+      )}
       {answer.truncated && (
         <p className="px-2 text-caption text-muted">More rows matched than the limit of {answer.rowLimit}; only the first are shown.</p>
       )}

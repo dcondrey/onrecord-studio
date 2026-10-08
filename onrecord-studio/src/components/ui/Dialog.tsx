@@ -67,7 +67,7 @@ export default function Dialog({ onClose, label, size = 'md', placement = 'cente
   const isTop = useIsTopDialog(titleId);
   return createPortal(
     <div
-      className={cn('motion-fade fixed inset-0 grid bg-scrim', sheet ? 'z-sheet justify-items-end' : 'z-dialog place-items-center p-4')}
+      className={cn('modal-scrim fixed inset-0 grid', sheet ? 'z-sheet justify-items-end' : 'z-dialog place-items-center p-4')}
       onKeyDown={onKeyDown}
       onMouseDown={onOverlayMouseDown}
     >
@@ -80,7 +80,7 @@ export default function Dialog({ onClose, label, size = 'md', placement = 'cente
         aria-labelledby={label ? undefined : titleId}
         data-stacked={isTop ? undefined : ''}
         className={cn(
-          'glass flex w-full flex-col overflow-hidden text-fg shadow-dialog outline-none',
+          'glass relative flex w-full flex-col overflow-hidden text-fg shadow-dialog outline-none',
           sheet
             ? 'motion-slide-in h-full max-w-[28rem] rounded-l-2xl border-r-0'
             : cn('motion-pop max-h-[calc(100vh-4rem)] rounded-2xl', WIDTH[size]),

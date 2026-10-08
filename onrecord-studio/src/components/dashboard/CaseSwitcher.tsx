@@ -127,8 +127,10 @@ export default function CaseSwitcher() {
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-body font-medium text-fg">{entry.title}</span>
-                    <span className="line-clamp-2 text-caption tabular-nums text-muted">
-                      {entry.topic || 'No topic'} · {entry.evidence.length} source{entry.evidence.length === 1 ? '' : 's'} · {entry.requests.length} request{entry.requests.length === 1 ? '' : 's'}
+                    <span className="line-clamp-2 text-caption tabular-nums text-muted [text-wrap:pretty]">
+                      {entry.topic || 'No topic'}
+                      {/* No-break spaces keep each count whole, so a wrap never strands "· 1" from its noun. */}
+                      {` ·\u00a0${entry.evidence.length}\u00a0source${entry.evidence.length === 1 ? '' : 's'} ·\u00a0${entry.requests.length}\u00a0request${entry.requests.length === 1 ? '' : 's'}`}
                     </span>
                   </span>
                 </button>
