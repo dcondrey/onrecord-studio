@@ -19,7 +19,7 @@
 // Playwright resolves from PLAYWRIGHT_MODULE, then the project's devDependency, then the Homebrew
 // copy. The browser is CHROME_BIN when set, else installed Google Chrome on macOS, else Playwright's
 // bundled Chromium (`npx playwright install chromium`); --browser=bundled forces the last.
-/* global document, window, HTMLElement, CSS, innerHeight, innerWidth, location, requestAnimationFrame -- page.evaluate bodies run in the browser */
+/* global document, window, HTMLElement, CSS, getComputedStyle, innerHeight, innerWidth, location, requestAnimationFrame -- page.evaluate bodies run in the browser */
 import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -247,12 +247,87 @@ const openDocument = click('document "ESD_Response_Letter_26-0412.pdf"', (page) 
 const sqlEditor = (page) => page.getByLabel('Analytical SQL');
 
 /**
+ * Selects, on the overview's stage, the first queued lead of one of `kinds` whose headline holds
+ * `text` (or lacks it, with `without`), over every lead ranked so far. Selected by kind, not by
+ * pressing J a number of times: real data can reorder the queue.
+ */
+const selectQueued = (description, kinds, text = '', without = false) => async (page, log) => {
+  await page.evaluate(() => window.__uiReview.store.getState().setSincePreset('all'));
+  await settle(page);
+  await page.evaluate(([wanted, words, lacking]) => {
+    const state = window.__uiReview.store.getState();
+    const item = state.workbenchQueue?.leads.find((entry) => wanted.includes(entry.lead?.kind) && entry.headline.includes(words) !== lacking);
+    if (!item) throw new Error(`No queued lead of ${wanted.join(', ')}`);
+    state.selectWorkbenchLead('overview', item.id);
+  }, [kinds, text, without]);
+  log.push(`store.setSincePreset('all'); select the queued ${description}`);
+};
+const TABLE_LEAD_KINDS = ['SERVICE_REPORT_LEAD', 'POLICE_STOP_LEAD', 'ABATEMENT_LOG_LEAD', 'CHARGE_LOG_LEAD', 'DISCLOSURE_FILING_LEAD', 'CAPACITY_COMPARISON_LEAD', 'SPENDING_RECORD_LEAD', 'POLICE_CALL_LEAD', 'PARKING_CITATION_LEAD', 'HOUSING_APPROVAL_LEAD'];
+const stageRegion = (page) => page.getByRole('main').getByRole('region', { name: 'Selected lead', exact: true });
+
+const stageDraft = click('stage "Draft records request"', (page) => page.getByRole('main').getByRole('region', { name: 'Selected lead', exact: true }).getByRole('button', { name: 'Draft records request', exact: true }));
+
+// ---- Layout checks: evaluated at every size before the screenshot; any failure fails the run ----
+
+/** A check returns null when it holds, else what it saw. `fn` runs in the page with `arg`. */
+const check = (name, fn, arg) => ({ name, run: (page) => page.evaluate(fn, arg ?? null) });
+// The overview's leads perspective fits its scroller: nothing above the workbench moves.
+const overviewFits = check('overview fits its scroller', () => {
+  let node = document.getElementById('overview-perspective');
+  while (node && !['auto', 'scroll'].includes(getComputedStyle(node).overflowY)) node = node.parentElement;
+  if (!node) return 'no overview scroller';
+  return node.scrollTop === 0 && node.scrollHeight <= node.clientHeight + 1 ? null : `scrollTop ${node.scrollTop}, content ${node.scrollHeight}px in ${node.clientHeight}px`;
+});
+const queueShows = (cards) => check(`queue shows ${cards} whole cards`, (want) => {
+  const fits = (container, top, bottom) => { const box = container.getBoundingClientRect(); return top >= box.top - 0.5 && bottom <= box.bottom + 0.5; };
+  const list = document.querySelector('ol[aria-label="Leads by attention score"]');
+  let scroller = list?.parentElement;
+  while (scroller && !['auto', 'scroll'].includes(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
+  if (!list || !scroller) return 'no queue';
+  const whole = [...list.querySelectorAll('.lead-card')].filter((card) => { const box = card.getBoundingClientRect(); return fits(scroller, box.top, box.bottom); });
+  const heights = [...list.querySelectorAll('.lead-card')].slice(0, 4).map((card) => Math.round(card.getBoundingClientRect().height));
+  return whole.length >= want ? null : `${whole.length} whole cards in ${Math.round(scroller.clientHeight)}px (card heights ${heights.join(', ')})`;
+}, cards);
+const draftLanded = check('Draft lands on the drafts section', () => {
+  const fits = (container, top, bottom) => { const box = container.getBoundingClientRect(); return top >= box.top - 0.5 && bottom <= box.bottom + 0.5; };
+  const section = document.getElementById('lead-draft');
+  if (!section) return 'no #lead-draft';
+  let scroller = section.parentElement;
+  while (scroller && !['auto', 'scroll'].includes(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
+  const top = section.getBoundingClientRect().top;
+  if (!scroller || !fits(scroller, top, top + 1)) return `#lead-draft top ${Math.round(top)} outside its scroller`;
+  const focused = document.activeElement;
+  if (!(focused instanceof HTMLElement) || !section.contains(focused)) return `focus is on ${focused?.tagName ?? 'nothing'}, outside the section`;
+  const box = focused.getBoundingClientRect();
+  if (!fits(scroller, box.top, box.bottom)) return 'the focused control is clipped';
+  return getComputedStyle(focused).outlineStyle === 'none' ? 'the focused control draws no focus ring' : null;
+});
+const selectedWatchInView = check('selected Watching row in view', () => {
+  const fits = (container, top, bottom) => { const box = container.getBoundingClientRect(); return top >= box.top - 0.5 && bottom <= box.bottom + 0.5; };
+  const body = document.getElementById('watching-body');
+  const row = body?.querySelector('[aria-current="true"]');
+  if (!body || !row) return 'no selected Watching row';
+  const box = row.getBoundingClientRect();
+  return fits(body, box.top, box.bottom) ? null : `row ${Math.round(box.top)}–${Math.round(box.bottom)} outside the body`;
+});
+const paletteSelectionInView = check('palette selection in view', () => {
+  const fits = (container, top, bottom) => { const box = container.getBoundingClientRect(); return top >= box.top - 0.5 && bottom <= box.bottom + 0.5; };
+  const option = document.querySelector('[role="listbox"] [role="option"][aria-selected="true"]');
+  let scroller = option?.parentElement;
+  while (scroller && !['auto', 'scroll'].includes(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
+  if (!option || !scroller) return 'no selected option';
+  const box = option.getBoundingClientRect();
+  return fits(scroller, box.top, box.bottom) ? null : `"${option.textContent?.slice(0, 40)}" outside the list`;
+});
+
+/**
  * `states` lists the variants beyond populated. `anchor`, when set, is scrolled to the top of the
  * viewport before every screenshot, since each width reflows the page under a fixed scroll offset. `primary` are the commands a loading state hangs
- * and an error state fails: the ones whose answer the view's main content waits on.
+ * and an error state fails: the ones whose answer the view's main content waits on. `eachSize`
+ * steps run again after every resize; `checks` are evaluated on every populated capture.
  */
 const VIEWS = [
-  { view: 'overview', steps: [nav('overview')], primary: ['list_saved_portals'], states: ['empty', 'loading', 'error'], discover: true },
+  { view: 'overview', steps: [nav('overview')], checks: [overviewFits, queueShows(4)], primary: ['list_saved_portals'], states: ['empty', 'loading', 'error'], discover: true },
   { view: 'story', steps: [nav('story')], primary: ['list_story_leads'], states: ['empty', 'loading', 'error'], discover: true },
   { view: 'patterns', steps: [nav('patterns')], primary: ['query_corpus_patterns', 'get_corpus_index_status'], states: ['empty', 'loading', 'error'], discover: true },
   { view: 'analysis', steps: [nav('analysis')], primary: ['get_analytical_schema', 'get_embedding_model_status', 'get_embedding_index_status'], states: ['empty', 'loading', 'error'], discover: true },
@@ -280,7 +355,7 @@ const VIEWS = [
   }], primary: ['get_casework_state'], states: [] },
   { view: 'overview-subject-dossier', steps: [nav('overview'), store("store.openSubjectDossier({ kind: 'entity', value: 'e-org-harborview' })", () => window.__uiReview.store.getState().openSubjectDossier({ kind: 'entity', value: 'e-org-harborview' }))], primary: ['get_corpus_entity_neighborhood'], states: ['error'] },
   { view: 'overview-post-ingest-brief', steps: [nav('overview'), store('store.setPostIngestBriefOpen(true)', () => window.__uiReview.store.getState().setPostIngestBriefOpen(true))], primary: [], states: [] },
-  { view: 'overview-sidebar-collapsed', steps: [nav('overview'), store('store.toggleSidebarCollapsed()', () => window.__uiReview.store.getState().toggleSidebarCollapsed())], primary: [], states: [] },
+  { view: 'overview-sidebar-collapsed', steps: [nav('overview'), store('store.toggleSidebarCollapsed()', () => window.__uiReview.store.getState().toggleSidebarCollapsed())], checks: [overviewFits, queueShows(4)], primary: [], states: [] },
 
   { view: 'inspector-finding', steps: [nav('overview'), inspect({ kind: 'finding', id: 'f-contract-ceiling' })], primary: ['build_lead_dossier'], states: ['loading', 'error'] },
   { view: 'inspector-entity', steps: [nav('overview'), inspect({ kind: 'entity', entityId: 'e-org-harborview', label: 'Harborview Shelter Partners' })], primary: ['get_corpus_entity_neighborhood'], states: ['error'] },
@@ -289,18 +364,27 @@ const VIEWS = [
   { view: 'inspector-request', steps: [nav('overview'), inspect({ kind: 'request', portalKey: 'sandiego', requestId: 260412, label: 'Request 26-0412' })], primary: ['list_request_documents'], states: ['error'] },
   { view: 'inspector-case', steps: [nav('overview'), inspect({ kind: 'case', caseId: 'case-storage', label: 'Storage contract ceiling' })], primary: ['get_casework_state'], states: ['error'] },
 
-  { view: 'command-palette', steps: [nav('overview'), event('onrecord:open-command-palette', null)], primary: [], states: [] },
+  { view: 'command-palette', steps: [nav('overview'), event('onrecord:open-command-palette', null)], checks: [paletteSelectionInView], primary: [], states: [] },
   // The passage search never answers, so every capture shows the palette while it searches.
   { view: 'command-palette-pending', scenario: { hang: ['hybrid_search'] }, steps: [nav('overview'), event('onrecord:open-command-palette', null), type('command palette search', (page) => page.getByRole('dialog').getByRole('combobox'), 'harborview')], primary: [], states: [] },
-  { view: 'overview-ledger-stage', steps: [nav('overview'), openWatching, click('Watching "Deadline ledger"', (page) => page.getByRole('button', { name: /^Deadline ledger/ }))], primary: [], states: [] },
+  { view: 'overview-ledger-stage', steps: [nav('overview'), openWatching, click('Watching "Deadline ledger"', (page) => page.getByRole('button', { name: /^Deadline ledger/ }))], checks: [overviewFits, selectedWatchInView], primary: [], states: [] },
   // Each of these scrolls one region to its target; the shell assertion after every step proves
   // none of them scrolled the document.
   { view: 'overview-ledger-in-analytics', steps: [nav('overview'), openWatching, click('Watching "Deadline ledger"', (page) => page.getByRole('button', { name: /^Deadline ledger/ })), click('"Open in response analytics"', (page) => page.getByRole('button', { name: 'Open in response analytics' }))], primary: [], states: [] },
-  { view: 'overview-stage-draft', steps: [nav('overview'), click('stage "Draft records request"', (page) => page.getByRole('main').getByRole('button', { name: 'Draft records request', exact: true }))], primary: [], states: [] },
+  { view: 'overview-stage-draft', steps: [nav('overview'), stageDraft], eachSize: [stageDraft], checks: [overviewFits, draftLanded], primary: [], states: [] },
   { view: 'analysis-budget-from-palette', steps: [nav('overview'), event('onrecord:open-command-palette', null), type('command palette search', (page) => page.getByRole('dialog').getByRole('combobox'), 'budget versus'), click('option "Analysis: Budget versus actuals"', (page) => page.getByRole('option', { name: /Analysis: Budget versus actuals/ }))], primary: [], states: [] },
-  { view: 'overview-lead-3', steps: [nav('overview'), press('j'), press('j')], primary: [], states: [] },
-  { view: 'overview-watching-collapsed', steps: [nav('overview')], widths: [1024], primary: [], states: [] },
-  { view: 'story-desk-workbench', steps: [nav('story')], primary: [], states: [] },
+  { view: 'overview-lead-3', steps: [nav('overview'), press('j'), press('j')], checks: [overviewFits], primary: [], states: [] },
+  { view: 'overview-watching-collapsed', steps: [nav('overview')], widths: [1024], checks: [overviewFits, queueShows(4)], primary: [], states: [] },
+  { view: 'story-desk-workbench', steps: [nav('story')], checks: [queueShows(4)], primary: [], states: [] },
+  // A table lead (no passage): its tables, the query shown, and the action that opens it.
+  { view: 'overview-stage-table-lead', steps: [nav('overview'), selectQueued('table lead with no stored figure', TABLE_LEAD_KINDS, 'SLEEPER', true), click('stage "Show the query"', (page) => stageRegion(page).locator('summary', { hasText: 'Show the query' }))], sections: ['section[aria-label="Selected lead"]'], primary: [], states: [] },
+  // The police-call lead carries a stored LeadFigure (fixtures), drawn on the stage.
+  { view: 'overview-stage-stored-figure', steps: [nav('overview'), selectQueued('police-call lead with a stored figure', ['POLICE_CALL_LEAD'], 'dispatched as SLEEPER')], primary: [], states: [] },
+  { view: 'story-factor-table-draft', steps: [nav('story'), click('tab "Factor table"', (page) => page.getByRole('main').getByRole('tab', { name: 'Factor table', exact: true })), click('first factor-table row', (page) => page.getByRole('main').locator('table [aria-expanded="false"]')), click('"Draft records request"', (page) => page.getByRole('button', { name: /^Draft records request: / }))], anchor: (page) => page.getByRole('region', { name: 'Drafted artifacts' }), primary: [], states: [] },
+  // Below 720px of workbench the panes stack and the queue shows six leads before "Show all".
+  { view: 'overview-stacked', steps: [nav('overview')], sizes: [[900, 900]], anchor: (page) => page.getByRole('button', { name: /^Show all [\d,]+ leads/ }), primary: [], states: [] },
+  // The counted ledger drills into Evidence filtered to statutory misses, which the chip names.
+  { view: 'evidence-statutory-chip', steps: [nav('overview'), openWatching, click('Watching "Deadline ledger"', (page) => page.getByRole('button', { name: /^Deadline ledger/ })), click('first ledger row', (page) => stageRegion(page).locator('svg [role="button"]'))], primary: [], states: [] },
   { view: 'command-palette-question', steps: [nav('overview'), event('onrecord:open-command-palette', null), type('command palette search', (page) => page.getByRole('dialog').getByRole('combobox').or(page.getByRole('dialog').getByRole('textbox')), 'findings for Environmental Services'), async (page, log) => { await page.keyboard.press('Enter'); log.push('press Enter'); }], primary: ['run_intent_query'], states: ['error'] },
   { view: 'help-center', steps: [nav('overview'), event('onrecord:open-help', {})], primary: [], states: [] },
   { view: 'my-requests', steps: [nav('overview'), click('"Open my requests"', (page) => page.getByRole('button', { name: 'Open my requests' }))], primary: ['list_claimed_requests'], states: ['empty', 'error'] },
@@ -534,6 +618,8 @@ let cacheDirectory;
 const index = {
   /** Steps after which document.scrollingElement.scrollTop was not 0; any entry fails the run. */
   shellScrolled: [],
+  /** Layout checks (a view's `checks`) that failed at some size; any entry fails the run. */
+  checkFailures: [],
   label,
   generatedAt: new Date().toISOString(),
   gitHead,
@@ -644,12 +730,32 @@ try {
     const records = [];
     for (const theme of THEMES) {
       await applyTheme(page, theme);
-      for (const [width, height] of SIZES.filter(([size]) => !definition.widths || definition.widths.includes(size))) {
+      for (const [width, height] of definition.sizes ?? SIZES.filter(([size]) => !definition.widths || definition.widths.includes(size))) {
         await page.setViewportSize({ width, height });
-        const settled = await settle(page);
-        if (definition.anchor) await definition.anchor(page).first().evaluate((element) => element.scrollIntoView({ block: 'start' })).catch(() => {});
+        let settled = await settle(page);
+        // Steps that act on the layout (a scroll to a target) run again at each size, as a reader
+        // at that size would trigger them.
+        for (const step of definition.eachSize ?? []) {
+          await step(page, []);
+          settled = await settle(page);
+        }
+        // Scrolls only the anchor's own scroller (scrollIntoView would also scroll the shell), and
+        // stops short of its top so a pane's sticky header doesn't cover the anchor.
+        if (definition.anchor) {
+          await definition.anchor(page).first().evaluate((element) => {
+            let node = element.parentElement;
+            while (node && !(['auto', 'scroll'].includes(getComputedStyle(node).overflowY) && node.scrollHeight > node.clientHeight)) node = node.parentElement;
+            if (node) node.scrollTop += element.getBoundingClientRect().top - node.getBoundingClientRect().top - 64;
+          }).catch(() => {});
+        }
         const file = `${definition.view}__${state}__${theme}__${width}.png`;
         await page.screenshot({ path: path.join(outputDirectory, file) });
+        if (state === 'populated') {
+          for (const { name, run } of definition.checks ?? []) {
+            const failure = await run(page).catch((error) => `check threw: ${String(error?.message ?? error).split('\n')[0]}`);
+            if (failure) index.checkFailures.push({ view: definition.view, theme, width, check: name, failure });
+          }
+        }
         for (const selector of definition.sections ?? []) {
           const element = page.locator(selector).first();
           if (!(await element.count())) continue;
@@ -752,6 +858,9 @@ try {
 index.finishedAt = new Date().toISOString();
 if (index.shellScrolled.length > 0 && !harnessFailure) {
   harnessFailure = new Error(`The app shell scrolled: ${index.shellScrolled.map((entry) => `${entry.view} (${entry.state}) after "${entry.after}": scrollTop ${entry.scrollTop}`).join('; ')}`);
+}
+if (index.checkFailures.length > 0 && !harnessFailure) {
+  harnessFailure = new Error(`Layout checks failed: ${index.checkFailures.map((entry) => `${entry.view} ${entry.theme} ${entry.width}: ${entry.check}: ${entry.failure}`).join('; ')}`);
 }
 // Per view, one entry per rule and target node across all its states, themes and widths, so the six
 // captures of a state do not count one defect six times. `nodes` is the number of distinct targets
