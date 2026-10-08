@@ -1,4 +1,4 @@
-import { Fragment, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { cn } from '../../../utils/cn';
 import Badge from '../../ui/Badge';
 import Button from '../../ui/Button';
@@ -30,6 +30,8 @@ export type BarScaleKind = 'own-0-100' | 'shared' | 'own-max';
 export interface BarTableColumn {
   key: string;
   label: string;
+  /** The header when the full labels do not fit the frame; `title` and the twin keep the full wording. */
+  short?: string;
   /** A second header line: 'not a disposition', 'pattern signal'. */
   note?: string;
   /** The header's full wording, as its tooltip. */
@@ -116,6 +118,8 @@ export interface BarTableProps {
   layout?: 'inline' | 'stacked';
   /** What the hatch stands for here ('Missing values'), when 'Outside this measure' is too general. */
   hatchLabel?: string;
+  /** One-line rows with less vertical padding, for long lists. */
+  dense?: boolean;
   className?: string;
 }
 
@@ -162,8 +166,8 @@ function columnMin(column: BarTableColumn, rows: readonly BarTableRow[]): number
   return min;
 }
 
-function CellBar({ column, cell, min, max, motionKey, dimmed }: { column: BarTableColumn; cell: BarTableCell; min: number; max: number; motionKey: string; dimmed?: boolean }) {
-  const width = column.barWidth ?? 48;
+function CellBar({ column, cell, min, max, motionKey, dimmed, shrink }: { column: BarTableColumn; cell: BarTableCell; min: number; max: number; motionKey: string; dimmed?: boolean; shrink: boolean }) {
+  const width = shrink ? Math.max(16, Math.round((column.barWidth ?? 48) / 2)) : column.barWidth ?? 48;
   // A negative value (a sum can be) draws left of the zero line, inside the same track.
   const x = scaleLinear([min, max > min ? max : min + 1], [0, width], { nice: false });
   const band = { pos: (SVG_HEIGHT - BAR_HEIGHT) / 2, thickness: BAR_HEIGHT };
@@ -190,6 +194,12 @@ function CellBar({ column, cell, min, max, motionKey, dimmed }: { column: BarTab
 }
 
 const VIEW_STORAGE_PREFIX = 'onrecord-chart-view:';
+
+/**
+ * How far the table steps down to fit its frame: 0 as authored, 1 half-length bars and no minimum
+ * column widths, 2 short header labels, 3 the table twin. A chart never scrolls sideways.
+ */
+type FitLevel = 0 | 1 | 2 | 3;
 
 function readView(key: string): 'chart' | 'table' {
   try {
@@ -238,6 +248,20 @@ export default function BarTable(props: BarTableProps) {
   // Too narrow for a name column beside the values: each row's name moves to a line above them.
   const narrow = width > 0 && width < 160 + columns.length * (props.layout === 'stacked' ? 70 : 110);
   const span = columns.length + (narrow ? 0 : 1);
+  const fitRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
+  // The level is measured per frame width: a new width starts again from the authored layout.
+  const [fit, setFit] = useState<{ width: number; level: FitLevel }>({ width, level: 0 });
+  const level: FitLevel = fit.width === width ? fit.level : 0;
+  useLayoutEffect(() => {
+    if (view !== 'chart' || !showsData || level === 3) return;
+    const frame = fitRef.current;
+    const table = tableRef.current;
+    // An unlaid-out frame (0 wide) says nothing about fit.
+    if (!frame || !table || frame.clientWidth === 0) return;
+    if (table.scrollWidth > frame.clientWidth + 1) setFit({ width, level: (level + 1) as FitLevel });
+    else if (fit.width !== width) setFit({ width, level });
+  });
   const maxes = useMemo(() => {
     const byGroup = new Map<string, number[]>();
     for (const row of rows) {
@@ -276,12 +300,18 @@ export default function BarTable(props: BarTableProps) {
     body = <AnalyticsUnavailable heading="This chart could not be drawn" detail={props.error ?? undefined} />;
   } else if (status === 'scoped-out') {
     body = <p className="px-1 py-6 text-body text-muted">Hidden while a case scope is active.</p>;
-  } else if (view === 'table') {
-    body = 'node' in props.twin ? props.twin.node : <TableTwin table={props.twin} />;
+  } else if (view === 'table' || level === 3) {
+    body = (
+      <>
+        {view === 'chart' && <p className="mb-2 text-caption text-muted">Too narrow for the bars: the values are shown as a table.</p>}
+        {'node' in props.twin ? props.twin.node : <TableTwin table={props.twin} />}
+      </>
+    );
   } else {
     body = (
-      <div className="overflow-x-auto">
-        <table aria-labelledby={titleId} className="w-full border-collapse text-body">
+      // Clipped, never scrolled: an overflow steps the fit level down instead.
+      <div ref={fitRef} className="overflow-hidden">
+        <table ref={tableRef} aria-labelledby={titleId} className="w-full border-collapse text-body">
           <thead>
             <tr>
               {!narrow && <th scope="col" className="border-b border-line px-2 pb-2 text-left align-bottom text-caption font-medium text-fg-secondary">{props.rowHeader}</th>}
@@ -291,7 +321,7 @@ export default function BarTable(props: BarTableProps) {
                   <span className="grid justify-items-start gap-0.5 text-left">
                     <span className="flex items-center gap-1">
                       {column.claim === 'counted' && <span aria-hidden="true" className="text-[rgb(var(--violation))]">§</span>}
-                      <span>{column.label}</span>
+                      <span>{level >= 2 && column.short ? column.short : column.label}</span>
                       {sorted && <span aria-hidden="true">{sort?.direction === 'ascending' ? '↑' : '↓'}</span>}
                     </span>
                     {column.note && <span className="text-caption normal-case tracking-normal text-muted">{column.note}</span>}
@@ -301,9 +331,9 @@ export default function BarTable(props: BarTableProps) {
                   <th
                     key={column.key}
                     scope="col"
-                    title={column.title}
+                    title={column.title ?? (level >= 2 && column.short ? column.label : undefined)}
                     aria-sort={column.sortable ? (sorted ? sort?.direction : 'none') : undefined}
-                    className={cn('border-b border-line pb-2 align-bottom text-caption font-medium leading-4 text-fg-secondary', props.layout === 'stacked' ? 'min-w-[3rem] px-1.5' : 'min-w-[4.5rem] px-2')}
+                    className={cn('border-b border-line pb-2 align-bottom text-caption font-medium leading-4 text-fg-secondary', props.layout === 'stacked' ? 'px-1.5' : 'px-2', level === 0 && (props.layout === 'stacked' ? 'min-w-[3rem]' : 'min-w-[4.5rem]'))}
                   >
                     {column.sortable && props.onSort ? (
                       <button type="button" className="focus-ring rounded text-left hover:text-fg" onClick={() => props.onSort?.(column.key)}>{label}</button>
@@ -349,7 +379,7 @@ export default function BarTable(props: BarTableProps) {
                     )}
                   >
                     {!narrow && (
-                      <th scope="row" className="min-w-[10rem] px-2 py-2 text-left font-normal">
+                      <th scope="row" className={cn('px-2 text-left font-normal', level === 0 && 'min-w-[10rem]', props.dense ? 'py-1' : 'py-2')}>
                         {row.header}
                         {drill?.mode === 'row' && (
                           <button type="button" {...drillDown.buttonProps(row.key)} className="focus-ring mt-1 block rounded text-caption text-muted hover:text-fg">
@@ -388,7 +418,7 @@ export default function BarTable(props: BarTableProps) {
                           onPointerLeave={tooltip.hide}
                           onClick={() => activate(i, j)}
                           className={cn(
-                            props.layout === 'stacked' ? 'px-1.5' : 'px-2', 'py-2 align-middle outline-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
+                            props.layout === 'stacked' ? 'px-1.5' : 'px-2', props.dense ? 'py-1' : 'py-2', 'align-middle outline-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
                             cell?.active && drill?.mode === 'cell' && 'cursor-pointer',
                             (drill?.mode === 'row' || (!drill && props.onRowActivate)) && 'cursor-pointer',
                             cellOpen && 'bg-raised/60',
@@ -396,7 +426,7 @@ export default function BarTable(props: BarTableProps) {
                         >
                           {cell ? (
                             <span className={cn('flex', props.layout === 'stacked' ? 'flex-col-reverse items-start gap-1' : 'items-center gap-1.5')}>
-                              <CellBar dimmed={row.dimmed} column={column} cell={cell} min={mins[j]} max={maxes.get(row.group?.key ?? '')?.[j] ?? 0} motionKey={`${row.key}:${column.key}`} />
+                              <CellBar shrink={level >= 1} dimmed={row.dimmed} column={column} cell={cell} min={mins[j]} max={maxes.get(row.group?.key ?? '')?.[j] ?? 0} motionKey={`${row.key}:${column.key}`} />
                               <span className={cn('viz-num whitespace-nowrap text-caption', isValue(cell.value) ? 'text-fg-secondary' : 'text-muted', cellOpen && 'font-semibold text-fg')}>{cell.text}</span>
                             </span>
                           ) : (

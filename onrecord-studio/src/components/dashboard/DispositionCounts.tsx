@@ -30,6 +30,17 @@ const DISPOSITION_LABELS: Record<Disposition, string> = {
 
 const DISPOSITION_ORDER = Object.keys(DISPOSITION_LABELS) as Disposition[];
 
+/** Header labels for a frame too narrow for the full ones; the header's title keeps the full label. */
+const DISPOSITION_SHORT: Record<Disposition, string> = {
+  RELEASED: 'Released',
+  RELEASED_IN_PART: 'In part',
+  WITHHELD: 'Withheld',
+  NO_RECORDS: 'No records',
+  WITHDRAWN: 'Withdrawn',
+  NOT_CLASSIFIED: 'Not classified',
+  NOT_RECORDED: 'Not recorded',
+};
+
 type Held =
   | { status: 'loading' }
   | { status: 'failed'; message: string }
@@ -170,10 +181,11 @@ function DispositionBarTable({ rows, portalName, method }: {
   const unclassified = rows.reduce((sum, row) => sum + countOf(row, 'NOT_CLASSIFIED') + countOf(row, 'NOT_RECORDED'), 0);
 
   const columns: BarTableColumn[] = [
-    ...SHARE_COLUMNS.map((disposition): BarTableColumn => ({ key: disposition, label: DISPOSITION_LABELS[disposition], scale: 'own-0-100', sortable: true, barWidth: 36 })),
+    ...SHARE_COLUMNS.map((disposition): BarTableColumn => ({ key: disposition, label: DISPOSITION_LABELS[disposition], short: DISPOSITION_SHORT[disposition], scale: 'own-0-100', sortable: true, barWidth: 36 })),
     ...ABSENCE_COLUMNS.map((disposition): BarTableColumn => ({
       key: disposition,
       label: DISPOSITION_LABELS[disposition],
+      short: DISPOSITION_SHORT[disposition],
       note: 'not a disposition',
       title: `${DISPOSITION_LABELS[disposition]}: requests with no disposition. Drawn hatched because it is not an answer.`,
       scale: 'own-0-100',

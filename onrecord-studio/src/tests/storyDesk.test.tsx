@@ -136,6 +136,17 @@ describe('StoryDesk', () => {
     expect(screen.getByText('Counted violation (legal claim)')).toBeTruthy();
   });
 
+  it('claims no type for a factor outside the ranker’s closed set', async () => {
+    const unknown = lead('a', 'Lead with a new factor');
+    unknown.publicInterest.factors = [{ name: 'novel factor', basisPoints: 300, evidence: 'new' }];
+    render(<StoryDesk />);
+    await waitFor(() => expect(bridge.pending).toHaveLength(1));
+    act(() => bridge.pending[0]([unknown]));
+    await screen.findByText('Lead with a new factor');
+    const header = screen.getAllByRole('columnheader').find((cell) => cell.getAttribute('title')?.startsWith('novel factor'));
+    expect(header?.textContent).toBe('Novel factor');
+  });
+
   it('opens the dossier for the lead whose button was pressed', async () => {
     render(<StoryDesk />);
     await waitFor(() => expect(bridge.pending).toHaveLength(1));

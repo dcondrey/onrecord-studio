@@ -302,6 +302,17 @@ const FACTOR_ORDER = [
   'evidence strength',
   'freshness',
 ] as const;
+const isKnownFactor = (name: string) => (FACTOR_ORDER as readonly string[]).includes(name);
+/** Header labels for a frame too narrow for the full ones; the full wording stays in the title. */
+const FACTOR_SHORT: Record<string, string> = {
+  'money at stake': 'Money',
+  scale: 'Scale',
+  recurrence: 'Recur.',
+  'record contradicts statement': 'Contra.',
+  'counted statutory or policy violation': 'Counted',
+  'evidence strength': 'Evid.',
+  freshness: 'Fresh',
+};
 const COUNTED_FACTOR = 'counted statutory or policy violation';
 const EVIDENCE_FACTOR = 'evidence strength';
 /** The largest single factor (money at stake), so every factor column shares one 0–2500 bp scale. */
@@ -341,7 +352,7 @@ function RankedLeads({ leads, allLeads, busy, renderDetail }: { leads: StoryLead
   // never rescales one. A factor name outside the ranker's closed set gets its own column after
   // them: it is never dropped.
   const emitted = new Set(allLeads.flatMap((lead) => lead.publicInterest.factors.map((factor) => factor.name)));
-  const factorNames = [...FACTOR_ORDER, ...[...emitted].filter((name) => !(FACTOR_ORDER as readonly string[]).includes(name))];
+  const factorNames = [...FACTOR_ORDER, ...[...emitted].filter((name) => !isKnownFactor(name))];
   const scoreMax = Math.max(1, ...allLeads.map((lead) => lead.publicInterest.totalBasisPoints));
   const factorMax = Math.max(FACTOR_SCALE_MAX_BP, ...allLeads.flatMap((lead) => lead.publicInterest.factors.map((factor) => factor.basisPoints)));
   const rank = new Map(leads.map((lead, index) => [lead.findingId, index + 1]));
@@ -353,8 +364,10 @@ function RankedLeads({ leads, allLeads, busy, renderDetail }: { leads: StoryLead
     ...factorNames.map((name): BarTableColumn => ({
       key: name,
       label: name === COUNTED_FACTOR ? 'Counted violation (legal claim)' : factorLabel(name),
-      note: name === COUNTED_FACTOR ? undefined : 'pattern signal',
-      title: name,
+      short: FACTOR_SHORT[name],
+      // A name outside the closed set has an unknown claim type: no note asserts one for it.
+      note: name === COUNTED_FACTOR || !isKnownFactor(name) ? undefined : 'pattern signal',
+      title: isKnownFactor(name) ? name : `${name} (factor not recognised by this version)`,
       scale: 'shared',
       claim: name === COUNTED_FACTOR ? 'counted' : undefined,
       sortable: true,
