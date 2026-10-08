@@ -100,7 +100,7 @@ export default function OverviewDashboard() {
 
         <PostIngestBrief />
         {workbench ? (
-          <ProfessionalWorkbench key={`${workbench.reportId}:${workbench.review}`} initialReportId={workbench.reportId} initialTab={workbench.review ? 'Evidence review' : 'Cases and follow-through'} />
+          <ProfessionalWorkbench key={`${workbench.reportId}:${workbench.review}`} initialReportId={workbench.reportId} initialTab={workbench.review ? 'Evidence review' : 'Cases'} />
         ) : <>
           <SubjectDossier />
           {portals.length > 0 && <AttentionFeed />}

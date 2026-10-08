@@ -15,7 +15,7 @@ import PackageVerifier from './PackageVerifier';
 import { Field, Select } from '../ui/Field';
 import InlineError from '../ui/InlineError';
 
-const tabs = ['Cases and follow-through', 'Spending and outcomes', 'Coverage and changes', 'Evidence review', 'Organization filings'] as const;
+const tabs = ['Cases', 'Spending', 'Coverage', 'Evidence review', 'Organization filings'] as const;
 type Tab = typeof tabs[number];
 
 const COVERAGE_TOPICS = ['homelessness', 'police', 'abatement', 'bathrooms', 'waste'] as const;
@@ -97,7 +97,7 @@ export default function ProfessionalWorkbench({ initialReportId = '', initialTab
               {COVERAGE_TOPICS.map(topic => <option key={topic} value={topic}>{topicLabel(topic)}</option>)}
             </Select>
           </Field>
-          <p className="pb-1.5 text-caption text-muted">{caseContext.id ? 'Coverage linked to the case selected in Cases and follow-through.' : 'Topic-wide coverage. Select a case to link new expectations to it.'}</p>
+          <p className="pb-1.5 text-caption text-muted">{caseContext.id ? 'Coverage linked to the case selected under Cases.' : 'Topic-wide coverage. Select a case to link new expectations to it.'}</p>
         </div>
         <MonitoringPanel caseId={caseContext.id} topic={caseContext.topic} />
       </>}
@@ -110,8 +110,8 @@ export default function ProfessionalWorkbench({ initialReportId = '', initialTab
             {reports.map(report => <option key={report.id} value={report.id}>{report.synthesis.title}</option>)}
           </Select>
         </Field>
-        <PackageVerifier />
         {reportId ? <EvidenceReviewPanel reportId={reportId} /> : <p className="text-body text-muted">Evidence review needs a saved investigation. Research creates one from collected public records.</p>}
+        <PackageVerifier />
         <details className="group border-t border-line pt-4" onToggle={(event) => { if (event.currentTarget.open) setAssessmentOpened(true); }}>
           <summary className="focus-ring flex cursor-pointer list-none items-center gap-2 rounded text-body font-medium text-fg [&::-webkit-details-marker]:hidden">
             Assess usefulness
