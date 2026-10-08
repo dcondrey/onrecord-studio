@@ -20,6 +20,7 @@ use lopdf::{Document, Object};
 use std::path::Path;
 
 use crate::error::AppError;
+use crate::parsers::pdf::{decode_text_string, resolve_dictionary, resolve_object};
 
 /// Hard read cap. A metadata-only extractor never needs a large PDF loaded into memory; a file
 /// larger than this is either not a records-response document (a scanned book) or is deliberately
@@ -133,16 +134,16 @@ fn extract_from_document(document: &Document) -> PdfMetadataSignals {
             };
             match (key.as_slice(), resolved) {
                 (b"CreationDate", Object::String(bytes, _)) => {
-                    signals.info_creation_date = parse_pdf_date_literal(&bytes);
+                    signals.info_creation_date = parse_pdf_date_literal(bytes);
                 }
                 (b"ModDate", Object::String(bytes, _)) => {
-                    signals.info_mod_date = parse_pdf_date_literal(&bytes);
+                    signals.info_mod_date = parse_pdf_date_literal(bytes);
                 }
                 (b"Producer", Object::String(bytes, _)) | (b"Producer", Object::Name(bytes)) => {
-                    signals.info_producer = decode_pdf_string(&bytes);
+                    signals.info_producer = decode_pdf_string(bytes);
                 }
                 (b"Creator", Object::String(bytes, _)) | (b"Creator", Object::Name(bytes)) => {
-                    signals.info_creator = decode_pdf_string(&bytes);
+                    signals.info_creator = decode_pdf_string(bytes);
                 }
                 _ => {}
             }
@@ -163,38 +164,12 @@ fn extract_from_document(document: &Document) -> PdfMetadataSignals {
     signals
 }
 
-fn resolve_dictionary<'a>(
-    document: &'a Document,
-    value: &'a Object,
-) -> Option<&'a lopdf::Dictionary> {
-    match value {
-        Object::Dictionary(dict) => Some(dict),
-        Object::Reference(id) => match document.get_object(*id).ok()? {
-            Object::Dictionary(dict) => Some(dict),
-            _ => None,
-        },
-        _ => None,
-    }
-}
-
-fn resolve_object<'a>(document: &'a Document, value: &'a Object) -> Option<Object> {
-    match value {
-        Object::Reference(id) => document.get_object(*id).ok().cloned(),
-        other => Some(other.clone()),
-    }
-}
-
 fn read_xmp_stream(document: &Document) -> Option<String> {
     let catalog = document.catalog().ok()?;
-    let metadata_ref = catalog.get(b"Metadata").ok()?;
-    let stream = match metadata_ref {
-        Object::Stream(stream) => stream.clone(),
-        Object::Reference(id) => match document.get_object(*id).ok()? {
-            Object::Stream(stream) => stream.clone(),
-            _ => return None,
-        },
-        _ => return None,
-    };
+    let stream = resolve_object(document, catalog.get(b"Metadata").ok()?)?
+        .as_stream()
+        .ok()?
+        .clone();
     let content = stream
         .decompressed_content_with_limit(crate::parsers::pdf::MAX_DECOMPRESSED_STREAM_BYTES)
         .ok()?;
@@ -270,31 +245,10 @@ fn parse_pdf_date_literal(bytes: &[u8]) -> Option<DateTime<Utc>> {
     Some(local.with_timezone(&Utc))
 }
 
-/// Decode a PDF string. UTF-16 BOM strips honored; anything else is UTF-8 lossy.
 fn decode_pdf_string(bytes: &[u8]) -> Option<String> {
-    let value = if let Some(utf16) = bytes.strip_prefix(&[0xfe, 0xff]) {
-        decode_utf16(utf16, u16::from_be_bytes)
-    } else if let Some(utf16) = bytes.strip_prefix(&[0xff, 0xfe]) {
-        decode_utf16(utf16, u16::from_le_bytes)
-    } else {
-        String::from_utf8_lossy(bytes).into_owned()
-    };
+    let value = decode_text_string(bytes);
     let trimmed = value.trim();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed.to_string())
-    }
-}
-
-fn decode_utf16(bytes: &[u8], from_bytes: fn([u8; 2]) -> u16) -> String {
-    let units: Vec<u16> = bytes
-        .as_chunks::<2>()
-        .0
-        .iter()
-        .map(|pair| from_bytes(*pair))
-        .collect();
-    String::from_utf16_lossy(&units)
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
 }
 
 #[cfg(test)]

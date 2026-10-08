@@ -1,6 +1,7 @@
+use std::collections::HashSet;
 use std::path::Path;
 
-use lopdf::{Document, LoadOptions};
+use lopdf::{Dictionary, Document, LoadOptions, Object};
 
 use crate::error::{AppError, OcrRequirementReason};
 use crate::parsers::source::inspect_regular_file;
@@ -25,6 +26,51 @@ pub(crate) fn load_bounded_mem(bytes: &[u8]) -> lopdf::Result<Document> {
         bytes,
         LoadOptions::with_max_decompressed_size(MAX_DECOMPRESSED_STREAM_BYTES),
     )
+}
+
+/// Follows a reference chain to the object it names. `None` for a dangling reference, a cycle,
+/// or a chain longer than any legitimate writer emits.
+pub(crate) fn resolve_object<'a>(document: &'a Document, object: &'a Object) -> Option<&'a Object> {
+    let mut current = object;
+    let mut visited = HashSet::new();
+    for _ in 0..32 {
+        let Object::Reference(identifier) = current else {
+            return Some(current);
+        };
+        if !visited.insert(*identifier) {
+            return None;
+        }
+        current = document.get_object(*identifier).ok()?;
+    }
+    None
+}
+
+pub(crate) fn resolve_dictionary<'a>(
+    document: &'a Document,
+    object: &'a Object,
+) -> Option<&'a Dictionary> {
+    resolve_object(document, object)?.as_dict().ok()
+}
+
+/// Decodes a PDF text string (ISO 32000-1 7.9.2.2): a UTF-16 byte-order mark selects UTF-16,
+/// anything else is read as UTF-8 lossily.
+pub(crate) fn decode_text_string(bytes: &[u8]) -> String {
+    let decode_utf16 = |units: &[u8], from_bytes: fn([u8; 2]) -> u16| {
+        let units = units
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|pair| from_bytes(*pair))
+            .collect::<Vec<_>>();
+        String::from_utf16_lossy(&units)
+    };
+    if let Some(utf16) = bytes.strip_prefix(&[0xfe, 0xff]) {
+        decode_utf16(utf16, u16::from_be_bytes)
+    } else if let Some(utf16) = bytes.strip_prefix(&[0xff, 0xfe]) {
+        decode_utf16(utf16, u16::from_le_bytes)
+    } else {
+        String::from_utf8_lossy(bytes).into_owned()
+    }
 }
 
 pub fn character_layer_density(text: &str) -> f64 {
