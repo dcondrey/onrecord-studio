@@ -2295,7 +2295,17 @@ fn decode_wordpress_google_drive_listing(
         .collect()
 }
 
+/// `content_type` may carry parameters or mixed case; Hyland item responses pass the raw header.
 fn is_html_resource(url: &Url, content_type: Option<&str>) -> bool {
+    let content_type = content_type.map(|value| {
+        value
+            .split(';')
+            .next()
+            .unwrap_or(value)
+            .trim()
+            .to_ascii_lowercase()
+    });
+    let content_type = content_type.as_deref();
     if content_type.is_some_and(|value| value == "text/html" || value == "application/xhtml+xml") {
         return true;
     }
