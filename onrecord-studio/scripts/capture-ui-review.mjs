@@ -234,6 +234,18 @@ const VIEWS = [
   { view: 'license-device-limit', scenario: { license: 'deviceLimit' }, steps: [], gate: true, primary: [], states: [] },
 
   { view: 'chart-gallery', gallery: true, steps: [], primary: [], states: [] },
+
+  // Figures below the fold: each also gets an element capture at full height (`sections`).
+  { view: 'compare-dispositions', steps: [nav('compare')], sections: ['section[aria-label="Dispositions by department"]'], primary: [], states: [] },
+  { view: 'overview-following', steps: [nav('overview')], sections: ['section[aria-label="Following"]'], primary: [], states: [] },
+  { view: 'story-ranked-leads', steps: [nav('story')], sections: ['figure:has(h3:text-is("Ranked leads"))'], primary: [], states: [] },
+  {
+    view: 'organization-record',
+    steps: [nav('overview'), click('"Open casework and research tools"', (page) => page.getByRole('button', { name: 'Open casework and research tools' })), click('tab "Organization filings"', (page) => page.getByRole('main').getByRole('tab', { name: 'Organization filings', exact: true })), click('portfolio row "Harborview Shelter Partners"', (page) => page.getByRole('main').getByRole('button', { name: 'Harborview Shelter Partners', exact: true }))],
+    sections: ['section[aria-label="Organization filings"]'],
+    primary: ['get_organisation_filings'],
+    states: [],
+  },
 ];
 
 // ---- Page helpers ----------------------------------------------------------------------------
@@ -471,6 +483,19 @@ try {
         const settled = await settle(page);
         const file = `${definition.view}__${state}__${theme}__${width}.png`;
         await page.screenshot({ path: path.join(outputDirectory, file) });
+        for (const selector of definition.sections ?? []) {
+          const element = page.locator(selector).first();
+          if (!(await element.count())) continue;
+          // The app scrolls inside its own panes, which paint only what the viewport shows: grow the
+          // viewport to the element's height for its capture, at the same width.
+          const box = await element.boundingBox();
+          if (box && box.height > height) {
+            await page.setViewportSize({ width, height: Math.min(6000, Math.ceil(box.height) + 160) });
+            await settle(page);
+          }
+          await element.screenshot({ path: path.join(outputDirectory, `${definition.view}__${state}__${theme}__${width}__${slug(selector)}.png`) });
+          await page.setViewportSize({ width, height });
+        }
         if (definition.gallery) {
           // One capture per gallery section at full resolution: a whole-page capture is downscaled
           // when viewed and hides tick-level defects.
