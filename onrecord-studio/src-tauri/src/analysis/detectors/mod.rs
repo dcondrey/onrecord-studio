@@ -50,6 +50,11 @@ pub mod rolling_production;
 pub mod spending_cases;
 pub(crate) mod text_shared;
 
+/// `FindingCitation::document_id` of a citation that names a request rather than a document. Real
+/// document ids are positive; a request id must never stand in, since it would open whichever
+/// unrelated document happens to share the number.
+pub(crate) const REQUEST_LEVEL_DOCUMENT_ID: i64 = 0;
+
 /// Summary returned by [`refresh_all_findings`].
 #[derive(Debug, Clone, Default)]
 pub struct RefreshSummary {
