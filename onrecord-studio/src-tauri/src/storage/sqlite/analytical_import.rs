@@ -12,8 +12,8 @@
 
 use super::analytical::{
     analytical_counting_key, duckdb_type, logical_type_for, normalize_csv_value,
-    schema_warnings_for, slash_date_fields, unique_column_alias, validation_notes_for, DateOrder,
-    Normalized, ANALYTICAL_PARSER_VERSION,
+    schema_warnings_for, slash_date_fields, unconverted_by_column, unique_column_alias,
+    validation_notes_for, DateOrder, Normalized, ANALYTICAL_PARSER_VERSION,
 };
 use super::row_store;
 use super::*;
@@ -809,9 +809,9 @@ fn import_table(
         )
         .optional()
         .map_err(storage("Failed to read the existing snapshot"))?;
-    if let Some((mut result, summary)) = stored {
-        let summary: serde_json::Value = serde_json::from_str(&summary).unwrap_or_default();
-        result.unconverted_cells = summary["unconvertedCells"].as_u64().unwrap_or(0) as usize;
+    if let Some((mut result, summary_text)) = stored {
+        result.unconverted_cells = unconverted_by_column(&summary_text).values().sum();
+        let summary: serde_json::Value = serde_json::from_str(&summary_text).unwrap_or_default();
         result.schema_warnings = summary["warnings"]
             .as_array()
             .map(|warnings| {
