@@ -3,7 +3,8 @@ import { isTauri } from '@tauri-apps/api/core';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useCaseScope } from '../../hooks/useCaseScope';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
-import { ShapeGlyph, type GlyphShape } from '../ui/shapeGlyph';
+import { ShapeGlyph } from '../ui/shapeGlyph';
+import { severityGlyph, severityLabel } from './findingSeverity';
 import { useAppStore } from '../../store/useAppStore';
 import { useInspectFinding } from '../../hooks/useInspectFinding';
 import type { Finding, FindingCitation, FindingSeverity } from '../../types';
@@ -494,23 +495,6 @@ function FindingRow({
       )}
     </li>
   );
-}
-
-function severityGlyph(severity: FindingSeverity): [GlyphShape, string] {
-  switch (severity) {
-    case 'CRITICAL':
-      return ['diamond', 'text-danger'];
-    case 'SERIOUS':
-      return ['triangle', 'text-warning'];
-    case 'NOTABLE':
-      return ['circle', 'text-accent'];
-    case 'INFO':
-      return ['ring', 'text-muted'];
-  }
-}
-
-function severityLabel(severity: FindingSeverity): string {
-  return severity.charAt(0) + severity.slice(1).toLowerCase();
 }
 
 function summariseSeverity(findings: Finding[]): string | null {
