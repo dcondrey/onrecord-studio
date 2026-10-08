@@ -297,7 +297,7 @@ function ChartEmptyState() {
         ))}
       </svg>
       <div className="absolute inset-0 grid place-items-center p-6 text-center">
-        <div className="chart-ready-card max-w-sm rounded-2xl border px-5 py-4 backdrop-blur-xl">
+        <div className="chart-ready-card max-w-sm rounded-2xl border px-5 py-4">
           <div className="mx-auto flex w-fit items-center gap-2 rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-caption font-semibold uppercase tracking-[0.12em] text-accent">
             <Icon name="activity" className="h-3.5 w-3.5" /> Analytics canvas ready
           </div>

@@ -205,15 +205,16 @@ export default function SearchFilter() {
           <option value="closed">Closed</option>
           <option value="referred">Referred</option>
         </Select>
-        {hasFilters && (
-          <button type="button" onClick={clear} className={buttonClass({ variant: 'ghost', className: 'focus-ring' })}>
-            Clear
-          </button>
-        )}
-        <div className="hidden w-24 shrink-0 border-l border-line px-3 text-right sm:block" aria-busy={isSearching || !countKnown || undefined}>
-          {isSearching || !countKnown
+        {/* Always mounted so the field does not shrink under the caret on the first keystroke. */}
+        <button type="button" onClick={clear} aria-hidden={!hasFilters || undefined} tabIndex={hasFilters ? undefined : -1} className={buttonClass({ variant: 'ghost', className: `focus-ring ${hasFilters ? '' : 'invisible'}` })}>
+          Clear
+        </button>
+        <div className="hidden w-24 shrink-0 border-l border-line px-3 text-right sm:block" aria-busy={isSearching || undefined}>
+          {isSearching || (!countKnown && !error)
             ? <div className="flex h-5 items-center justify-end"><span className="skeleton h-3.5 w-10 rounded" /><span className="sr-only">Count not known yet</span></div>
-            : <div className="text-heading tabular-nums text-fg">{formatMatchCount(resultCount)}</div>}
+            : !countKnown
+              ? <div className="flex h-5 items-center justify-end text-caption text-muted">Unavailable</div>
+              : <div className="text-heading tabular-nums text-fg">{formatMatchCount(resultCount)}</div>}
           <div className="text-overline uppercase text-muted">Matches</div>
         </div>
       </div>

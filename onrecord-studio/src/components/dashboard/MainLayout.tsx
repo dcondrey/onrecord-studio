@@ -76,7 +76,8 @@ export default function MainLayout() {
   const [documentError, setDocumentError] = useState<string | null>(null);
   // `chunk` is null while the first chunk is being read, so the viewer opens at once on a skeleton;
   // `error` is a failed read, stated inside the viewer that asked for it.
-  const [activeDocument, setActiveDocument] = useState<{ summary: RequestDocumentSummary; chunk: DocumentTextChunk | null; error: string | null } | null>(null);
+  // `error.offset` is the chunk that failed, so Try again asks for that chunk, not the one on screen.
+  const [activeDocument, setActiveDocument] = useState<{ summary: RequestDocumentSummary; chunk: DocumentTextChunk | null; error: { message: string; offset: number } | null } | null>(null);
   const [pendingEvidenceLink, setPendingEvidenceLink] = useState(readEvidenceLink);
   const requestedEvidenceLink = useAppStore((state) => state.requestedEvidenceLink);
   const consumeEvidenceLink = useAppStore((state) => state.consumeEvidenceLink);
@@ -214,7 +215,7 @@ export default function MainLayout() {
       setActiveDocument({ summary, chunk, error: null });
     } catch (reason) {
       if (!documentOpenGate.isCurrent(request)) return;
-      setActiveDocument((current) => (current ? { ...current, error: displayError(reason).message } : current));
+      setActiveDocument((current) => (current ? { ...current, error: { message: displayError(reason).message, offset: characterOffset } } : current));
     }
   };
 
@@ -328,9 +329,11 @@ export default function MainLayout() {
               </div>
               <div className="flex shrink-0 items-center gap-3">
                 {/* A count is stated only once a query has answered; before that it is unknown, not zero. */}
-                {searchStatus === 'ready' && !searchError
-                  ? <span className="whitespace-nowrap text-caption tabular-nums text-muted">{formatMatchCount(resultsTotal)} {resultsTotal === 1 ? 'record' : 'records'}</span>
-                  : <span aria-hidden="true" className="skeleton h-3 w-16 rounded" />}
+                {searchError !== null || searchStatus === 'failed'
+                  ? <span className="whitespace-nowrap text-caption text-muted">Count unavailable</span>
+                  : searchStatus === 'ready'
+                    ? <span className="whitespace-nowrap text-caption tabular-nums text-muted">{formatMatchCount(resultsTotal)} {resultsTotal === 1 ? 'record' : 'records'}</span>
+                    : <span aria-hidden="true" className="skeleton h-3 w-16 rounded" />}
                 <Button size="sm" onClick={() => setLegalLibraryOpen(true)}>Legal authority library</Button>
               </div>
             </div>
@@ -347,12 +350,12 @@ export default function MainLayout() {
             <div className="flex min-h-0 flex-1 flex-col">
               {results.length === 0 ? (
                 searchError !== null || searchStatus === 'failed' ? (
-                  <div className="grid flex-1 place-items-center p-8">
+                  <div role="alert" className="grid flex-1 place-items-center p-8">
                     <EmptyState
                       compact
                       icon="search"
                       title="Search unavailable"
-                      body="The query did not complete, so there is no result set to interpret. Try again before drawing a conclusion from these filters."
+                      body={<>The query did not complete, so there is no result set to interpret. Try again before drawing a conclusion from these filters.{searchError && <span className="mt-2 block text-danger">{searchError}</span>}</>}
                       actions={<Button size="sm" onClick={requestEvidenceRefresh}>Try again</Button>}
                     />
                   </div>
@@ -580,8 +583,8 @@ export default function MainLayout() {
             <div className="flex min-h-[32rem] min-w-0 flex-col gap-3 xl:min-h-0">
               {activeDocument.error && (
                 <InlineError
-                  summary={activeDocument.chunk ? `The next part of this document could not be read. ${activeDocument.error}` : `This document could not be opened. ${activeDocument.error}`}
-                  onRetry={() => void openDocument(activeDocument.summary, activeDocument.chunk?.characterOffset ?? 0)}
+                  summary={activeDocument.chunk ? `That part of this document could not be read; the text below is unchanged. ${activeDocument.error.message}` : `This document could not be opened. ${activeDocument.error.message}`}
+                  onRetry={() => void openDocument(activeDocument.summary, activeDocument.error?.offset ?? 0)}
                 />
               )}
               {activeDocument.chunk ? (
@@ -692,7 +695,7 @@ function ResultSkeleton() {
     <div role="status" aria-busy="true" className="flex-1">
       <span className="sr-only">Searching the records</span>
       {[0, 1, 2, 3].map((row) => (
-        <div key={row} aria-hidden="true" className="grid grid-cols-[minmax(0,1fr)_120px] gap-4 border-b border-line px-5 py-4" style={{ height: RESULT_ROW_HEIGHT }}>
+        <div key={row} aria-hidden="true" className="grid grid-cols-[minmax(0,1fr)_128px] gap-4 border-b border-line px-5 py-3" style={{ height: RESULT_ROW_HEIGHT }}>
           <div className="space-y-2.5">
             <div className="skeleton h-3 w-32 rounded" />
             <div className="skeleton h-4 w-3/4 rounded" />
@@ -754,7 +757,9 @@ function StatusBadge({ status }: { status: string }) {
   // Portal status text is free-form; only the past-due wordings get their own tone.
   const normalized = status.toLowerCase();
   const overdue = ['overdue', 'past due', 'late'].some((wording) => normalized.includes(wording));
-  return <Badge tone={overdue ? 'warning' : 'neutral'} className="shrink-0">{status.charAt(0).toLocaleUpperCase()}{status.slice(1).toLocaleLowerCase()}</Badge>;
+  // Only a single-case word is re-cased ("CLOSED", "closed"); mixed text such as "Awaiting CPRA reply" is shown as recorded.
+  const singleCase = status === status.toLocaleUpperCase() || status === normalized;
+  return <Badge tone={overdue ? 'warning' : 'neutral'} className="shrink-0">{singleCase ? `${status.charAt(0).toLocaleUpperCase()}${normalized.slice(1)}` : status}</Badge>;
 }
 
 function PolicyBadge({ flag }: { flag: string }) {

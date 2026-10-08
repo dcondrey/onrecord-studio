@@ -157,7 +157,7 @@ export default function AnomalyRadar() {
             <circle cx="120" cy="120" r="34" fill="var(--chart-center)" stroke="var(--chart-grid)" />
             <circle cx="120" cy="120" r="4" fill="var(--viz-cyan)" opacity="0.8" />
           </svg>
-          <div className="chart-ready-card absolute max-w-[230px] rounded-xl border px-4 py-3 text-center backdrop-blur-xl">
+          <div className="chart-ready-card absolute max-w-[230px] rounded-xl border px-4 py-3 text-center">
             <div className="text-label font-semibold text-fg-secondary">No departments profiled yet</div>
             <div className="mt-1 text-caption leading-relaxed text-muted">This panel draws one ring per source and one slice per department, from the agency performance profiles. None have been computed, so there is nothing here to read.</div>
           </div>
@@ -176,7 +176,7 @@ export default function AnomalyRadar() {
           <div className="mt-1 text-caption text-muted">Portal ring → department ring. Select a slice to inspect evidence.</div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <label className="field flex h-7 items-center gap-1 rounded-md border border-control bg-canvas px-2 text-caption text-muted">Slice by <select value={weightMode} onChange={(event) => setWeightMode(event.target.value as 'volume' | 'severity')} className="bg-transparent text-fg-secondary outline-none"><option value="volume">request volume</option><option value="severity">anomaly rate</option></select></label>
+          <label className="field flex h-7 items-center gap-1 rounded-md border border-control bg-canvas px-2 text-caption text-muted">Slice by <select value={weightMode} onChange={(event) => setWeightMode(event.target.value as 'volume' | 'severity')} className="bg-transparent text-fg-secondary outline-none"><option value="volume">request volume</option><option value="severity">flagged-request share</option></select></label>
           <span className="whitespace-nowrap text-caption tabular-nums text-muted">{profiles.length} departments</span>
         </div>
       </div>
@@ -219,7 +219,7 @@ export default function AnomalyRadar() {
           })}
           <circle cx="120" cy="120" r="29" fill="var(--chart-center)" stroke="var(--chart-grid)" />
           <text x="120" y="116" textAnchor="middle" fill="var(--text-muted)" fontSize="11" fontWeight="700">AUDIT</text>
-          <text x="120" y="130" textAnchor="middle" fill="var(--chart-axis)" fontSize="11">{weightMode === 'volume' ? 'VOLUME' : 'SEVERITY'}</text>
+          <text x="120" y="130" textAnchor="middle" fill="var(--chart-axis)" fontSize="11">{weightMode === 'volume' ? 'VOLUME' : 'FLAGGED'}</text>
         </svg>
         <div className="space-y-2 rounded-lg border border-line bg-canvas p-3 text-caption tabular-nums">
           <div className="truncate text-label font-bold text-fg-secondary">{focused?.label ?? 'Hover a slice'}</div>

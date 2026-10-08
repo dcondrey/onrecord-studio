@@ -1,5 +1,5 @@
 import { cn } from '../../utils/cn';
-import { formatInstant, formatShortDate } from '../objects/labels';
+import { formatShortDate } from '../objects/labels';
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 // `new Date('2026-10-09')` is UTC midnight; formatting it in the local zone shows the day before
@@ -11,9 +11,9 @@ function formatRecorded(value: string): string {
 }
 
 /**
- * A recorded date or instant. The visible text is the short reading; the exact value stays in
- * `dateTime` and the tooltip. A date recorded without a time keeps it that way in the tooltip
- * rather than gaining a midnight and a zone. A value that does not parse is shown as recorded.
+ * A recorded date or instant. The visible text is the short reading; the exact value, as recorded,
+ * stays in `dateTime` and the tooltip, so a date keeps no invented midnight and an instant keeps its
+ * second. A value that does not parse is shown as recorded.
  */
 export default function Time({ value, format = formatRecorded, className }: {
   value: string;
@@ -21,7 +21,7 @@ export default function Time({ value, format = formatRecorded, className }: {
   className?: string;
 }) {
   return (
-    <time dateTime={value} title={DATE_ONLY.test(value) ? value : formatInstant(value)} className={cn('tabular-nums', className)}>
+    <time dateTime={value} title={value} className={cn('tabular-nums', className)}>
       {format(value)}
     </time>
   );
