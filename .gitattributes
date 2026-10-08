@@ -1,0 +1,10 @@
+# Check text out with LF on every platform: signed-package fixtures are compared byte for byte,
+# and templates/verifier scripts are embedded with include_str! into what the app ships.
+* text=auto eol=lf
+
+# Byte-exact fixtures: never convert, whatever their line endings.
+onrecord-studio/src-tauri/tests/fixtures/** -text
+onrecord-studio/src-tauri/fixtures/** -text
+
+# Vendored upstream sources stay byte-identical to upstream.
+onrecord-studio/vendor/** -text
