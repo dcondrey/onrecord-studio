@@ -105,7 +105,6 @@ describe('StoryDesk', () => {
     const row = screen.getByRole('row', { name: /^#1, Stated total does not match the table, score 52:/ });
     expect(row.querySelectorAll('td')[0].textContent).toBe('52');
     expect(screen.getAllByText('pattern signal').length).toBeGreaterThan(0);
-    expect(screen.getByText('Counted violation (legal claim)')).toBeTruthy();
     fireEvent.click(within(row).getByRole('button', { name: 'Details' }));
     expect(screen.getByText(/largest figure named/)).toBeTruthy();
     expect(screen.getByText(/1 related finding/)).toBeTruthy();
@@ -118,12 +117,13 @@ describe('StoryDesk', () => {
     const measuredZero = lead('b', 'Measured lead');
     measuredZero.confidence = { kind: 'MEASURED', basisPoints: 3 };
     measuredZero.publicInterest.factors.push({ name: 'evidence strength', basisPoints: 0, evidence: 'confidence 0.03%' });
+    measuredZero.publicInterest.factors.push({ name: 'counted statutory or policy violation', basisPoints: 1800, evidence: 'counted' });
     render(<StoryDesk />);
     await waitFor(() => expect(bridge.pending).toHaveLength(1));
     act(() => bridge.pending[0]([unassessed, measuredZero]));
     await screen.findByText('Unassessed lead');
-    // Score, then money, scale, recurrence, contradiction, counted violation, evidence strength, freshness.
-    const evidence = (name: RegExp) => screen.getByRole('row', { name }).querySelectorAll('td')[6];
+    const column = (title: string) => screen.getAllByRole('columnheader').findIndex((header) => header.getAttribute('title') === title) - 1;
+    const evidence = (name: RegExp) => screen.getByRole('row', { name }).querySelectorAll('td')[column('evidence strength')];
     const notAssessed = evidence(/^#1, Unassessed lead/);
     expect(notAssessed.textContent).toMatch(/\)?not assessed$/);
     expect(notAssessed.querySelector('path')).toBeNull();
@@ -132,7 +132,8 @@ describe('StoryDesk', () => {
     expect(zero.textContent).toBe('+0');
     expect(zero.querySelector('line')).toBeTruthy();
     expect(zero.querySelector('[data-absence]')).toBeNull();
-    expect(screen.getByRole('row', { name: /^#1, Unassessed lead/ }).querySelectorAll('td')[2].textContent).toBe('·');
+    expect(screen.getByRole('row', { name: /^#1, Unassessed lead/ }).querySelectorAll('td')[column('counted statutory or policy violation')].textContent).toBe('·');
+    expect(screen.getByText('Counted violation (legal claim)')).toBeTruthy();
   });
 
   it('opens the dossier for the lead whose button was pressed', async () => {

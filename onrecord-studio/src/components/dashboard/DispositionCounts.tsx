@@ -275,6 +275,7 @@ function DispositionBarTable({ rows, portalName, method }: {
       drill={{ mode: 'cell', render: renderBucket }}
       twin={{ node: <CountsTable rows={ordered} portalName={portalName} /> }}
       twinLabel="Show counts table"
+      layout="stacked"
       legend={[{ key: 'share', label: 'Share of the department’s requests', swatch: 'rect', tone: 'mark' }]}
       controls={method}
       footer={rows.length > VISIBLE_DEPARTMENTS && (

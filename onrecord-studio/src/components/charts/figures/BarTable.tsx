@@ -104,6 +104,8 @@ export interface BarTableProps {
   legend?: LegendItem[];
   controls?: ReactNode;
   footer?: ReactNode;
+  /** 'stacked' sets each value above its bar, for tables with many narrow columns. */
+  layout?: 'inline' | 'stacked';
   className?: string;
 }
 
@@ -225,7 +227,7 @@ export default function BarTable(props: BarTableProps) {
         <table aria-labelledby={titleId} className="w-full border-collapse text-body">
           <thead>
             <tr>
-              <th scope="col" className="border-b border-line px-2 pb-2 text-left align-bottom text-overline uppercase text-muted">{props.rowHeader}</th>
+              <th scope="col" className="border-b border-line px-2 pb-2 text-left align-bottom text-caption font-medium text-fg-secondary">{props.rowHeader}</th>
               {columns.map((column) => {
                 const sorted = sort?.key === column.key;
                 const label = (
@@ -244,10 +246,10 @@ export default function BarTable(props: BarTableProps) {
                     scope="col"
                     title={column.title}
                     aria-sort={column.sortable ? (sorted ? sort?.direction : 'none') : undefined}
-                    className="min-w-[4.5rem] border-b border-line px-2 pb-2 align-bottom text-overline uppercase leading-4 text-muted"
+                    className={cn('border-b border-line px-2 pb-2 align-bottom text-caption font-medium leading-4 text-fg-secondary', props.layout === 'stacked' ? 'min-w-[3rem]' : 'min-w-[4.5rem]')}
                   >
                     {column.sortable && props.onSort ? (
-                      <button type="button" className="focus-ring rounded text-left uppercase hover:text-fg" onClick={() => props.onSort?.(column.key)}>{label}</button>
+                      <button type="button" className="focus-ring rounded text-left hover:text-fg" onClick={() => props.onSort?.(column.key)}>{label}</button>
                     ) : label}
                   </th>
                 );
@@ -315,7 +317,7 @@ export default function BarTable(props: BarTableProps) {
                           )}
                         >
                           {cell ? (
-                            <span className="flex items-center gap-1.5">
+                            <span className={cn('flex', props.layout === 'stacked' ? 'flex-col-reverse items-start gap-1' : 'items-center gap-1.5')}>
                               <CellBar column={column} cell={cell} max={maxes[j]} motionKey={`${row.key}:${column.key}`} />
                               <span className={cn('viz-num whitespace-nowrap text-caption', isValue(cell.value) ? 'text-fg-secondary' : 'text-muted', cellOpen && 'font-semibold text-fg')}>{cell.text}</span>
                             </span>

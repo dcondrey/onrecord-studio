@@ -234,7 +234,7 @@ export default function StoryDesk() {
         {state.status === 'READY' && visibleLeads.length > 0 && (
           <RankedLeads
             leads={visibleLeads}
-            scoreMax={Math.max(...state.leads.map((lead) => lead.publicInterest.totalBasisPoints))}
+            allLeads={state.leads}
             busy={refreshing}
             renderDetail={(lead) => (
               <div className="flex flex-col gap-3">
@@ -324,7 +324,9 @@ export function storyHeadline(leads: readonly StoryLead[]): string {
   if (!second) return `${lead}${from}.`;
   const delta = points(first.publicInterest.totalBasisPoints) - points(second.publicInterest.totalBasisPoints);
   if (delta === 0) return `${lead}${from}. It ties #2.`;
-  const gap = FACTOR_ORDER.reduce((best, name) => (factorPoints(first, name) - factorPoints(second, name) > factorPoints(first, best) - factorPoints(second, best) ? name : best), FACTOR_ORDER[0]);
+  const names = [...new Set([...first.publicInterest.factors, ...second.publicInterest.factors].map((factor) => factor.name))];
+  const lead1Ahead = (name: string) => factorPoints(first, name) - factorPoints(second, name);
+  const gap = names.reduce((best, name) => (lead1Ahead(name) > lead1Ahead(best) ? name : best), names[0]);
   return `${lead}${from}. It is ahead of #2 by ${delta}, mostly on ${gap}.`;
 }
 
@@ -333,15 +335,24 @@ export function storyHeadline(leads: readonly StoryLead[]): string {
  * basis-point scale. An absent factor is a muted dot; an unassessed evidence strength is the
  * dashed not-recorded slot, never a zero bar. A row expands in place to the lead's actions.
  */
-function RankedLeads({ leads, scoreMax, busy, renderDetail }: { leads: StoryLead[]; scoreMax: number; busy: boolean; renderDetail(lead: StoryLead): ReactNode }) {
+function RankedLeads({ leads, allLeads, busy, renderDetail }: { leads: StoryLead[]; allLeads: readonly StoryLead[]; busy: boolean; renderDetail(lead: StoryLead): ReactNode }) {
   const [sortKey, setSortKey] = useState<string>(SCORE_KEY);
+  // Columns and scales come from every loaded lead, so filtering never adds, drops or rescales one.
+  // A factor name outside the ranker's closed set still gets its own column: it is never dropped.
+  const emitted = new Set(allLeads.flatMap((lead) => lead.publicInterest.factors.map((factor) => factor.name)));
+  const factorNames = [
+    ...FACTOR_ORDER.filter((name) => emitted.has(name)),
+    ...[...emitted].filter((name) => !(FACTOR_ORDER as readonly string[]).includes(name)),
+  ];
+  const scoreMax = Math.max(1, ...allLeads.map((lead) => lead.publicInterest.totalBasisPoints));
+  const factorMax = Math.max(FACTOR_SCALE_MAX_BP, ...allLeads.flatMap((lead) => lead.publicInterest.factors.map((factor) => factor.basisPoints)));
   const rank = new Map(leads.map((lead, index) => [lead.findingId, index + 1]));
   const ordered = sortKey === SCORE_KEY ? leads : [...leads].sort((a, b) => factorPoints(b, sortKey) - factorPoints(a, sortKey) || (rank.get(a.findingId) ?? 0) - (rank.get(b.findingId) ?? 0));
   const byId = new Map(leads.map((lead) => [lead.findingId, lead]));
 
   const columns: BarTableColumn[] = [
     { key: SCORE_KEY, label: 'Score', title: 'Attention score: ranks reading order; not newsworthiness and not a claim about any record', scale: 'own-max', max: scoreMax, sortable: true, barWidth: 44 },
-    ...FACTOR_ORDER.map((name): BarTableColumn => ({
+    ...factorNames.map((name): BarTableColumn => ({
       key: name,
       label: name === COUNTED_FACTOR ? 'Counted violation (legal claim)' : factorLabel(name),
       note: name === COUNTED_FACTOR ? undefined : 'pattern signal',
@@ -349,7 +360,7 @@ function RankedLeads({ leads, scoreMax, busy, renderDetail }: { leads: StoryLead
       scale: 'shared',
       claim: name === COUNTED_FACTOR ? 'counted' : undefined,
       sortable: true,
-      barWidth: 28,
+      barWidth: 32,
       missing: { text: '·', title: 'not in this finding’s record' },
     })),
   ];
@@ -372,7 +383,7 @@ function RankedLeads({ leads, scoreMax, busy, renderDetail }: { leads: StoryLead
           tooltip: { rows: [{ key: 'points', value: `+${points(factor.basisPoints)}`, label: factor.name }], note: factor.evidence },
         };
     }
-    const present = FACTOR_ORDER.filter((name) => cells[name]).map((name) => `${name} ${cells[name]?.text}`);
+    const present = factorNames.filter((name) => cells[name]).map((name) => `${name} ${cells[name]?.text}`);
     return {
       key: lead.findingId,
       name: lead.headline,
@@ -404,12 +415,13 @@ function RankedLeads({ leads, scoreMax, busy, renderDetail }: { leads: StoryLead
         headline={storyHeadline(leads)}
         claim="descriptive"
         sources={{ tables: ['findings'], note: 'Attention score ranks reading order; it is not newsworthiness and not a claim about any record' }}
-        summary={`${leads.length} leads. Factor columns share one scale of 0 to ${points(FACTOR_SCALE_MAX_BP)} points. A dot means the factor did not apply; not assessed means the finding's confidence was never measured.`}
+        summary={`${leads.length} leads. Factor columns share one scale of 0 to ${points(factorMax)} points. A dot means the factor did not apply; not assessed means the finding's confidence was never measured.`}
         status="ready"
+        layout="stacked"
         rowHeader="Lead"
         columns={columns}
         rows={rows}
-        sharedMax={FACTOR_SCALE_MAX_BP}
+        sharedMax={factorMax}
         sort={{ key: sortKey, direction: 'descending' }}
         onSort={setSortKey}
         drill={{ mode: 'row', render: (key) => { const lead = byId.get(key); return lead ? renderDetail(lead) : null; } }}
@@ -419,13 +431,13 @@ function RankedLeads({ leads, scoreMax, busy, renderDetail }: { leads: StoryLead
             { key: 'rank', label: 'Rank', align: 'end' },
             { key: 'headline', label: 'Lead' },
             { key: SCORE_KEY, label: 'Score', align: 'end' },
-            ...FACTOR_ORDER.map((name) => ({ key: name, label: name, align: 'end' as const })),
+            ...factorNames.map((name) => ({ key: name, label: name, align: 'end' as const })),
           ],
           rows: ordered.map((lead) => ({
             rank: rank.get(lead.findingId) ?? null,
             headline: lead.headline,
             [SCORE_KEY]: points(lead.publicInterest.totalBasisPoints),
-            ...Object.fromEntries(FACTOR_ORDER.map((name) => {
+            ...Object.fromEntries(factorNames.map((name) => {
               const factor = lead.publicInterest.factors.find((candidate) => candidate.name === name);
               if (!factor) return [name, 'not in this finding’s record'];
               if (name === EVIDENCE_FACTOR && lead.confidence.kind === 'UNASSESSED') return [name, absent('not-recorded', 'confidence not assessed')];
