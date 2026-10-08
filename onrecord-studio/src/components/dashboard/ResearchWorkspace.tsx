@@ -101,7 +101,7 @@ export default function ResearchWorkspace({ onReview }: { onReview?: (reportId: 
     {status?.lastError && <div role="alert" className="rounded-lg border border-warning p-3 text-sm text-warning"><p>Latest research attempt needs attention</p><p className="mt-1">{status.lastError}</p></div>}
     {sourceIssues.length > 0 && (
       <details className="rounded-lg border border-warning p-3 text-label leading-4 text-warning">
-        <summary className="">
+        <summary>
           Collection gaps affect the available evidence: {sourceIssues.map((source) => source.label).slice(0, 3).join("; ")}
           {sourceIssues.length > 3 ? "; additional sources" : ""}
         </summary>
@@ -161,9 +161,6 @@ export default function ResearchWorkspace({ onReview }: { onReview?: (reportId: 
             Open a saved dossier
             <select aria-label="Research dossier" className="analysis-input min-w-0 flex-1" value={report?.id ?? ""} onChange={(event) => open(event.target.value, "findings")}>
               <option value="">Choose an investigation</option>
-              {report && !status.reports.some((item) => item.id === report.id) && (
-                <option value={report.id}>{report.synthesis.title} · currently open</option>
-              )}
               {status.reports.map((item) => (
                 <option key={item.id} value={item.id}>{item.synthesis.title} · {new Date(item.createdAt).toLocaleDateString()}</option>
               ))}
@@ -195,7 +192,7 @@ export default function ResearchWorkspace({ onReview }: { onReview?: (reportId: 
         )}
       </div>
     </details>
-    {status && <details className="app-panel p-4 text-label leading-4 text-muted"><summary className="font-semibold text-fg">Collection coverage and source issues</summary><div className="mt-3 grid gap-3 md:grid-cols-2">{status.sources.map((source) => <div key={source.url}><a href={source.url} target="_blank" rel="noreferrer" className="text-accent">{source.label}</a><p className="mt-1">{source.state}: {source.detail}</p></div>)}</div><p className="mt-3">{status.sources.length === 0 ? "No collection results were returned in this status response. " : ""}Collections are bounded. Paused and removed sources remain under your control. Review Activity for extraction failures and the actual documents acquired.</p></details>}
+    {status && <details className="app-panel p-4 text-label leading-4 text-muted"><summary className="font-semibold text-fg">Collection coverage and source issues</summary><div className="mt-3 grid gap-3 md:grid-cols-2">{status.sources.map((source) => <div key={source.url}>{/^https?:\/\//.test(source.url) ? <a href={source.url} target="_blank" rel="noreferrer" className="text-accent">{source.label}</a> : <span className="text-fg-secondary">{source.label}</span>}<p className="mt-1">{source.state}: {source.detail}</p></div>)}</div><p className="mt-3">{status.sources.length === 0 ? "No collection results were returned in this status response. " : ""}Collections are bounded. Paused and removed sources remain under your control. Review Activity for extraction failures and the actual documents acquired.</p></details>}
   </section>;
 }
 
@@ -244,7 +241,7 @@ function ResearchSettings({
   };
   return (
     <details ref={settingsRef} className="mt-4 text-label leading-4 text-muted">
-      <summary className="">Research settings</summary>
+      <summary>Research settings</summary>
       <fieldset disabled={saving} className="mt-3 space-y-3">
         <div className="flex flex-wrap gap-4">
           <label>
@@ -402,6 +399,7 @@ function Dossier({
     initialSection,
   );
   const [showAllRequests, setShowAllRequests] = useState(false);
+  const relatedFindings = report.synthesis.requests.map((request) => requestFindingLinks(report, request.evidenceIds));
   const ordered = <T,>(items: T[], section: typeof tab) => items.map((item, index) => ({ item, index })).sort((a, b) => section === initialSection && initialItemIndex !== undefined ? Number(b.index === initialItemIndex) - Number(a.index === initialItemIndex) : 0);
   return (
     <div className="app-panel space-y-5 p-5 sm:p-6">
@@ -412,7 +410,7 @@ function Dossier({
         <h3 className="mt-2 text-xl font-semibold text-fg">
           {tab === "findings" ? report.synthesis.title : tab === "requests" ? "Request the records that can move this case forward" : "Follow the decision and establish its outcome"}
         </h3>
-        {tab === "findings" ? <p className="mt-2 text-sm leading-relaxed text-fg-secondary">{report.synthesis.summary}</p> : <details className="mt-2 text-label leading-4 text-muted"><summary className="">Investigation context</summary><p className="mt-2 font-semibold text-fg-secondary">{report.synthesis.title}</p><p className="mt-2 leading-relaxed">{report.synthesis.summary}</p></details>}
+        {tab === "findings" ? <p className="mt-2 text-sm leading-relaxed text-fg-secondary">{report.synthesis.summary}</p> : <details className="mt-2 text-label leading-4 text-muted"><summary>Investigation context</summary><p className="mt-2 font-semibold text-fg-secondary">{report.synthesis.title}</p><p className="mt-2 leading-relaxed">{report.synthesis.summary}</p></details>}
         <p className="mt-2 text-label leading-4 text-muted">
           {new Date(report.createdAt).toLocaleString()} · {report.model} · Saved evidence is reproduced below; source versions and interpretations need review.
         </p>
@@ -576,11 +574,11 @@ function Dossier({
                 </p>
               </details>
               <details className="text-label leading-4 text-muted"><summary className="text-accent">Evidence behind this request</summary><div className="mt-3 space-y-3">
-              {requestFindingLinks(report, request.evidenceIds).length > 0 && (
+              {relatedFindings[index].length > 0 && (
                 <div className="text-label leading-4 text-muted">
                   <p className="font-semibold text-fg-secondary">Related findings sharing cited sources</p>
                   <ul className="mt-1 list-disc space-y-1 pl-4">
-                    {requestFindingLinks(report, request.evidenceIds).map((finding) => (
+                    {relatedFindings[index].map((finding) => (
                       <li key={finding.index}>{finding.title}</li>
                     ))}
                   </ul>
@@ -651,7 +649,7 @@ function Dossier({
       )}
       <ResearchExport report={report} actionStates={actionStates} />
       <details className="text-label leading-4 text-muted">
-        <summary className="">
+        <summary>
           Coverage, limitations, and investigation trail
         </summary>
         <ul className="mt-3 list-disc space-y-2 pl-4">

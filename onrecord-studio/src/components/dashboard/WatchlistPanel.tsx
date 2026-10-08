@@ -64,10 +64,6 @@ export function describeDimension(result: DimensionResult): { text: string; tone
   }
 }
 
-function message(reason: unknown): string {
-  return formatNativeError(reason);
-}
-
 function asList<T>(value: T[] | undefined, what: string): T[] {
   if (!Array.isArray(value)) throw new Error(`The native ${what} response was invalid.`);
   return value;

@@ -300,9 +300,10 @@ function SignalSummary({ criticalDepartments, monitoredDepartments }: { critical
 
 function formatRelativeTime(value: string) {
   const date = new Date(value);
-  if (Number.isNaN(date.valueOf())) return 'recently';
+  if (Number.isNaN(date.valueOf())) return value;
   const seconds = Math.max(0, Math.round((Date.now() - date.valueOf()) / 1000));
   if (seconds < 60) return 'just now';
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  return `${Math.floor(seconds / 3600)}h ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  return `${Math.floor(seconds / 86400)}d ago`;
 }
