@@ -39,6 +39,6 @@ describe('MetadataCard latest verification', () => {
   it('names a check logged before classification as such and keeps an unparseable time as recorded', async () => {
     render(card(3));
     await act(async () => bridge.pending.get(3)!([record(3)]));
-    expect(latest()).toBe('logged before classification · not-a-date');
+    expect(latest()).toBe('Logged before classification · not-a-date');
   });
 });

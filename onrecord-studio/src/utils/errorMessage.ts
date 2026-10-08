@@ -1,4 +1,4 @@
-import { formatNativeError, NativeCommandError } from '../ipc';
+import { formatNativeError } from '../ipc';
 
 function isCodeCharacter(character: string): boolean {
   return (character >= 'A' && character <= 'Z') || (character >= '0' && character <= '9') || character === '_';
@@ -22,6 +22,8 @@ export function displayError(error: unknown): { message: string; code: string | 
       message = rest;
     }
   }
-  if (error instanceof NativeCommandError) message = message.split(error.command).join('this request');
+  // A NativeCommandError names the command it wrapped; read structurally so a stubbed bridge works too.
+  const command = error instanceof Error ? (error as Error & { command?: unknown }).command : undefined;
+  if (typeof command === 'string' && command) message = message.split(command).join('this request');
   return { message, code, detail };
 }
