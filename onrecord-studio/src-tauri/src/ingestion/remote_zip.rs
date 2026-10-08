@@ -203,7 +203,11 @@ pub async fn read_members<S: RangeSource>(
     let (offset, size) = match locate_directory(&tail, tail_first)? {
         Directory::At(offset, size) => (offset, size),
         Directory::Zip64RecordAt(record_offset) => {
-            let record = source.span(record_offset, record_offset + 55).await?;
+            let record_last = record_offset
+                .checked_add(55)
+                .filter(|&last| last < total)
+                .ok_or_else(|| malformed("the zip64 record lies outside the archive"))?;
+            let record = source.span(record_offset, record_last).await?;
             if u32_at(&record, 0)? != ZIP64_END_RECORD {
                 return Err(malformed("no zip64 end-of-directory record"));
             }
@@ -242,26 +246,29 @@ pub async fn read_members<S: RangeSource>(
                 entry.name
             )));
         }
+        // Offsets come from the archive, so every sum is checked: a member must lie wholly before
+        // the directory.
+        let outside = || malformed(&format!("member '{}' lies outside the archive", entry.name));
+        let header_last = entry
+            .header_offset
+            .checked_add(29)
+            .filter(|&last| last < offset)
+            .ok_or_else(outside)?;
         // A local header's name and extra lengths may differ from the directory's.
-        let header = source
-            .span(entry.header_offset, entry.header_offset + 29)
-            .await?;
+        let header = source.span(entry.header_offset, header_last).await?;
         if u32_at(&header, 0)? != LOCAL_HEADER {
             return Err(malformed("a member's local header has the wrong signature"));
         }
-        let data_first = entry.header_offset
-            + 30
-            + u64::from(u16_at(&header, 26)?)
-            + u64::from(u16_at(&header, 28)?);
+        let data_first =
+            header_last + 1 + u64::from(u16_at(&header, 26)?) + u64::from(u16_at(&header, 28)?);
         let data = if entry.compressed == 0 {
             Vec::new()
         } else {
-            if data_first + entry.compressed > offset {
-                return Err(malformed("a member overlaps the directory"));
-            }
-            source
-                .span(data_first, data_first + entry.compressed - 1)
-                .await?
+            let data_end = data_first
+                .checked_add(entry.compressed)
+                .filter(|&end| end <= offset)
+                .ok_or_else(outside)?;
+            source.span(data_first, data_end - 1).await?
         };
         members.push(Some((entry.name.clone(), inflate(entry, &data)?)));
     }
@@ -357,6 +364,23 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(members[0].as_ref().unwrap().1, b"<Return>69999</Return>");
+    }
+
+    #[tokio::test]
+    async fn refuses_a_member_whose_recorded_offset_lies_outside_the_archive() {
+        let mut bytes = archive(0, 10);
+        let at = bytes
+            .windows(4)
+            .rposition(|w| w == DIRECTORY_ENTRY.to_le_bytes())
+            .unwrap();
+        bytes[at + 42..at + 46].copy_from_slice(&0xffff_fff0_u32.to_le_bytes());
+        let source = Memory {
+            bytes,
+            served: Mutex::new(0),
+        };
+        assert!(read_members(&source, &["last_public.xml".to_string()])
+            .await
+            .is_err());
     }
 
     #[tokio::test]
