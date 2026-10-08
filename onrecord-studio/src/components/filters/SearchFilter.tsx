@@ -31,7 +31,6 @@ export default function SearchFilter({ onPendingChange }: { onPendingChange?: (p
   const countKnown = useAppStore((state) => state.searchStatus === 'ready');
   // The exact number of matches, not the number of rows loaded so far.
   const resultCount = useAppStore((state) => state.filteredResultsTotal);
-  const retainedCount = useAppStore((state) => state.filteredResults.length);
   const agencyProfiles = useAppStore((state) => state.agencyProfiles);
   const portalCount = useAppStore((state) => state.portals.length);
   const [inputValue, setInputValue] = useState(searchTerm);
@@ -271,12 +270,6 @@ export default function SearchFilter({ onPendingChange }: { onPendingChange?: (p
           <span role={watchStatus.ok ? 'status' : 'alert'} className={watchStatus.ok ? 'text-caption text-success' : 'text-caption text-danger'}>
             {watchStatus.text}
             {watchStatus.ok && <Button variant="link" onClick={() => setWorkspaceView('overview')} className="ml-1 text-caption">Open watchlist</Button>}
-          </span>
-        )}
-        {/* With nothing retained, the workbench states the failure itself. */}
-        {error && retainedCount > 0 && (
-          <span role="alert" className="basis-full text-danger">
-            Search unavailable; showing {formatMatchCount(retainedCount)} results from the last successful query: {error}
           </span>
         )}
       </div>

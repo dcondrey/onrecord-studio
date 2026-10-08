@@ -598,7 +598,6 @@ export default function MainLayout() {
         <Dialog
           size="xl"
           opaque
-          label={`Document ${activeDocument.summary.fileName}`}
           onClose={() => setActiveDocument(null)}
           className={cn('h-[min(760px,88vh)]', isPdfDocument(activeDocument.summary) && 'max-w-[min(1440px,96vw)]')}
         >
