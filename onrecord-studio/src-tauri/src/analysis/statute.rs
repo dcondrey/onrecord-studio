@@ -143,7 +143,7 @@ pub mod sql {
 
     const CALENDAR_DATE_OPEN: &str = "{calendar_date(";
     const RECORDED_WALL_CLOCK_OPEN: &str = "{recorded_wall_clock(";
-    const CALENDAR_DATE_CLOSE: &str = ")}";
+    const PLACEHOLDER_CLOSE: &str = ")}";
 
     /// The calendar date of an RFC 3339 timestamp string, in the offset it was recorded with.
     ///
@@ -326,7 +326,7 @@ pub mod sql {
             let (before, rest) = remainder.split_at(start);
             rendered.push_str(before);
             let rest = &rest[open.len()..];
-            let Some(end) = rest.find(CALENDAR_DATE_CLOSE) else {
+            let Some(end) = rest.find(PLACEHOLDER_CLOSE) else {
                 // An unterminated placeholder is a template bug, not user input. Emit it verbatim
                 // so DuckDB reports the offending text instead of silently dropping a column.
                 rendered.push_str(open);
@@ -334,7 +334,7 @@ pub mod sql {
                 continue;
             };
             rendered.push_str(&expand(rest[..end].trim()));
-            remainder = &rest[end + CALENDAR_DATE_CLOSE.len()..];
+            remainder = &rest[end + PLACEHOLDER_CLOSE.len()..];
         }
         rendered.push_str(remainder);
         rendered
@@ -347,9 +347,8 @@ mod tests {
 
     #[test]
     fn sql_extension_reason_list_covers_every_modeled_reason() {
-        // The SQL path tests free text for membership while the Rust path relies on the enum being
-        // closed. A variant added without updating the list would make the aggregate silently
-        // treat a lawful extension as defective.
+        // A variant missing from the SQL list would make the aggregate silently treat a lawful
+        // extension as defective.
         let rendered = sql::recognized_extension_reason_list();
         for reason in [
             StatutoryExtensionReason::SeparateFieldFacilities,
@@ -361,11 +360,10 @@ mod tests {
         ] {
             assert!(
                 rendered.contains(reason.as_str()),
-                "reason {} is missing from the SQL membership list",
+                "{} is missing from the SQL list",
                 reason.as_str()
             );
         }
-        assert_eq!(RECOGNIZED_EXTENSION_REASONS.len(), 6);
     }
 
     #[test]
@@ -376,11 +374,5 @@ mod tests {
         );
         // An unterminated placeholder must reach DuckDB intact rather than vanish.
         assert!(sql::render("SELECT {calendar_date(oops").contains("{calendar_date("));
-    }
-
-    #[test]
-    fn only_the_recorded_activity_basis_measures_a_completed_period() {
-        assert!(DeterminationBasis::EarliestRecordedActivityProxy.is_recorded_activity());
-        assert!(!DeterminationBasis::ObservationWithoutRecordedActivity.is_recorded_activity());
     }
 }

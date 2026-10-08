@@ -5,9 +5,8 @@ use crate::types::{StateTransitionLog, StatutoryExtensionRecord, TimelineAnomaly
 use chrono::{DateTime, Days, FixedOffset, NaiveDate, TimeDelta, Utc};
 use serde::{Deserialize, Serialize};
 
-// Thresholds and the citation live in `analysis::statute` because the vectorized aggregate in
-// `analysis::anomaly` renders its SQL from the same values. They are re-exported here so every
-// existing `analysis::timeline` import path keeps working.
+// Defined in `analysis::statute`, which the vectorized aggregate in `analysis::anomaly` renders its
+// SQL from; re-exported for callers of this evaluator.
 pub use crate::analysis::statute::{
     CPRA_INITIAL_DETERMINATION_DAYS, CPRA_MAXIMUM_EXTENSION_DAYS, CPRA_STATUTE_CITATION,
     SUSPICIOUS_CLOSURE_THRESHOLD_SECONDS,

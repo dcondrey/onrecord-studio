@@ -1,17 +1,27 @@
 //! Deterministic, cited monitoring leads. A changed statement is not proof of a changed outcome.
 use crate::types::monitoring::*;
 use chrono::NaiveDate;
+use regex::Regex;
 use std::collections::BTreeSet;
+use std::sync::LazyLock;
 
-pub fn significant_facts(text: &str) -> Vec<MonitoringFact> {
-    let money =
-        regex::Regex::new(r"(?i)(\$\s*[0-9]|[0-9][0-9,.]*\s+(million|billion|dollars))").unwrap();
-    let date = regex::Regex::new(r"(?i)(\b20[0-9]{2}[-/][0-9]{1,2}[-/][0-9]{1,2}\b|\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+[0-9]|\bFY\s*20[0-9]{2})").unwrap();
-    let obligation = regex::Regex::new(
+static MONEY: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)(\$\s*[0-9]|[0-9][0-9,.]*\s+(million|billion|dollars))").unwrap()
+});
+static DATE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)(\b20[0-9]{2}[-/][0-9]{1,2}[-/][0-9]{1,2}\b|\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+[0-9]|\bFY\s*20[0-9]{2})").unwrap()
+});
+static OBLIGATION: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
         r"(?i)\b(shall|must|required|committed|deadline|terminate|extend|deliver|obligation)\b",
     )
-    .unwrap();
-    let outcome = regex::Regex::new(r"(?i)\b(placed|placements|permanent housing|exits|served|completed|closed|closure|operating hours|open hours|hours per week)\b").unwrap();
+    .unwrap()
+});
+static OUTCOME: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)\b(placed|placements|permanent housing|exits|served|completed|closed|closure|operating hours|open hours|hours per week)\b").unwrap()
+});
+
+pub fn significant_facts(text: &str) -> Vec<MonitoringFact> {
     let mut offset = 0;
     let mut facts = Vec::new();
     for line in text.split_inclusive('\n') {
@@ -19,10 +29,10 @@ pub fn significant_facts(text: &str) -> Vec<MonitoringFact> {
         let quote: String = line.trim().chars().take(900).collect();
         if quote.len() >= 12 {
             for (category, pattern) in [
-                ("MONEY", &money),
-                ("DATE", &date),
-                ("OBLIGATION", &obligation),
-                ("OUTCOME", &outcome),
+                ("MONEY", &*MONEY),
+                ("DATE", &*DATE),
+                ("OBLIGATION", &*OBLIGATION),
+                ("OUTCOME", &*OUTCOME),
             ] {
                 if pattern.is_match(&quote) {
                     facts.push(MonitoringFact {

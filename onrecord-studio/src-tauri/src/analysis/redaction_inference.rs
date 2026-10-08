@@ -39,6 +39,9 @@ pub const PERSON_MIN_CORROBORATING_DOCS: usize = 2;
 pub const CONTEXT_CHARS: usize = 240;
 /// Maximum number of candidates returned per report.
 pub const MAX_CANDIDATES: usize = 12;
+/// Matched case-insensitively.
+const BRACKETED_MARKERS: [&str; 3] = ["[REDACTED]", "[WITHHELD]", "[EXEMPT]"];
+const BLOCK_CHARACTERS: [char; 3] = ['█', '▓', '■'];
 
 /// One character span in a document's extracted text that represents a redaction.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -198,26 +201,13 @@ pub async fn infer_redaction_candidates(
 /// Scan a document for redaction spans in its extracted text. Used by the detector to identify
 /// spans to run inference over, and by tests to prove the marker patterns match reality.
 pub fn scan_redaction_spans(text: &str) -> Vec<RedactionSpan> {
-    let mut spans = Vec::new();
-    // Bracketed word markers (case-insensitive): [REDACTED], [WITHHELD], [EXEMPT], etc.
-    for marker in ["[REDACTED]", "[WITHHELD]", "[EXEMPT]"] {
-        let lower = text.to_ascii_lowercase();
-        let needle = marker.to_ascii_lowercase();
-        let mut cursor = 0;
-        while let Some(rel) = lower[cursor..].find(&needle) {
-            let start = cursor + rel;
-            let end = start + marker.len();
-            spans.push(RedactionSpan { start, end });
-            cursor = end;
-        }
-    }
+    let mut spans = bracketed_markers(text);
     // FOIA exemption citations: (b)(6), (b)(7)(C), (b)(7)(D), etc. — these often replace the
     // redacted text inline.
     let bytes = text.as_bytes();
     let mut i = 0;
     while i < bytes.len() {
         if bytes[i] == b'(' && i + 4 < bytes.len() && !cites_a_section(bytes, i) {
-            // Look for `(b)(N)` or `(b)(N)(X)` shape.
             let rest = &text[i..];
             if let Some(match_end) = match_foia_exemption(rest) {
                 spans.push(RedactionSpan {
@@ -230,8 +220,7 @@ pub fn scan_redaction_spans(text: &str) -> Vec<RedactionSpan> {
         }
         i += 1;
     }
-    // Long runs of block characters (█▓■). 3+ consecutive.
-    scan_char_runs(text, &['█', '▓', '■'], 3, &mut spans);
+    scan_char_runs(text, &BLOCK_CHARACTERS, 3, &mut spans);
     // Long runs of underscore or X (5+ — shorter runs are common in unrelated content).
     // A run after a label ("By: ____", "Print Name: ____", "Date: ____") is a blank form field.
     // On a live San Diego collection every underscore "redaction" found was one: the signature
@@ -257,6 +246,23 @@ pub fn scan_redaction_spans(text: &str) -> Vec<RedactionSpan> {
         deduped.push(span);
     }
     deduped
+}
+
+fn bracketed_markers(text: &str) -> Vec<RedactionSpan> {
+    // ASCII lowercasing keeps byte offsets aligned with `text`.
+    let lower = text.to_ascii_lowercase();
+    let mut spans = Vec::new();
+    for marker in BRACKETED_MARKERS {
+        let needle = marker.to_ascii_lowercase();
+        let mut cursor = 0;
+        while let Some(found) = lower[cursor..].find(&needle) {
+            let start = cursor + found;
+            let end = start + needle.len();
+            spans.push(RedactionSpan { start, end });
+            cursor = end;
+        }
+    }
+    spans
 }
 
 fn scan_char_runs(text: &str, targets: &[char], min_run: usize, out: &mut Vec<RedactionSpan>) {
@@ -319,16 +325,14 @@ fn match_foia_exemption(rest: &str) -> Option<usize> {
     if bytes[5] != b')' {
         return None;
     }
-    // Optional `(X)` subclause.
     if bytes.len() >= 9 && bytes[6] == b'(' && bytes[8] == b')' && bytes[7].is_ascii_alphabetic() {
         return Some(9);
     }
     Some(6)
 }
 
-/// Extracts a ±`CONTEXT_CHARS`/2 window around the span, clipped to document boundaries and
-/// snapped to a word boundary on each side. Returns `None` if the resulting window is too short
-/// to reason about.
+/// Extracts a ±`CONTEXT_CHARS`/2 byte window around the span, clipped to the document and widened
+/// to character boundaries. Returns `None` if the window holds fewer than four words.
 fn extract_context(text: &str, span: RedactionSpan) -> Option<String> {
     if span.start >= text.len()
         || span.end > text.len()
@@ -407,7 +411,6 @@ fn bracketed_snippet(text: &str, span: RedactionSpan, context: &str) -> String {
 /// immediately-preceding words.
 pub fn classify_entity_hint(context: &str) -> CandidateKind {
     let lower = context.to_ascii_lowercase();
-    // Person triggers.
     for trigger in [
         "signed by",
         "approved by",
@@ -424,7 +427,6 @@ pub fn classify_entity_hint(context: &str) -> CandidateKind {
             return CandidateKind::Person;
         }
     }
-    // Amount triggers.
     for trigger in [
         "in the amount of",
         "paid",
@@ -437,7 +439,6 @@ pub fn classify_entity_hint(context: &str) -> CandidateKind {
             return CandidateKind::Amount;
         }
     }
-    // Date triggers.
     for trigger in [
         "dated ",
         "as of ",
@@ -449,7 +450,6 @@ pub fn classify_entity_hint(context: &str) -> CandidateKind {
             return CandidateKind::Date;
         }
     }
-    // Organization triggers.
     for trigger in [
         "corporation",
         "company",
@@ -465,21 +465,17 @@ pub fn classify_entity_hint(context: &str) -> CandidateKind {
     CandidateKind::Other
 }
 
+/// The context with its redaction markers removed, as search text.
 fn build_search_query(context: &str) -> String {
-    // Simple: strip redaction markers from the context and use it as the search text.
     let mut cleaned = context.to_string();
-    for marker in ["[REDACTED]", "[WITHHELD]", "[EXEMPT]"] {
-        cleaned = cleaned.replace(marker, " ");
-    }
-    for ch in ['█', '▓', '■'] {
-        cleaned = cleaned.replace(ch, " ");
+    for span in scan_redaction_spans(context) {
+        cleaned.replace_range(span.start..span.end, &" ".repeat(span.end - span.start));
     }
     cleaned
+        .replace(BLOCK_CHARACTERS, " ")
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
-        .trim()
-        .to_string()
 }
 
 /// One candidate site returned from a corpus lookup — raw before ranking.
@@ -702,8 +698,8 @@ fn extract_values_of_kind(text: &str, kind: CandidateKind) -> Vec<String> {
     }
 }
 
-/// Simple capitalized-token bigram/trigram extractor for personal names. Filters common heads
-/// (Mr., Mrs., Dr.) and requires at least two consecutive capitalized tokens.
+/// Runs of two or three consecutive capitalized tokens. Honorifics (Mr., Mrs., Dr.) are not part
+/// of a name, so "Mr. Jane Doe" and "Jane Doe" corroborate one candidate.
 fn extract_person_names(text: &str) -> Vec<String> {
     let mut names = Vec::new();
     let tokens: Vec<&str> = text.split_whitespace().collect();
@@ -739,11 +735,25 @@ fn is_name_token(t: &str) -> bool {
         return false;
     }
     if chars.all(|c| c.is_ascii_alphabetic() || c == '\'' || c == '-') {
-        // Filter obvious non-names.
         let lower = t.to_ascii_lowercase();
         !matches!(
             lower.as_str(),
-            "the" | "a" | "an" | "and" | "or" | "but" | "for" | "of" | "to" | "in" | "on" | "by"
+            "the"
+                | "a"
+                | "an"
+                | "and"
+                | "or"
+                | "but"
+                | "for"
+                | "of"
+                | "to"
+                | "in"
+                | "on"
+                | "by"
+                | "mr"
+                | "mrs"
+                | "ms"
+                | "dr"
         )
     } else {
         false
@@ -804,10 +814,10 @@ fn extract_amounts(text: &str) -> Vec<String> {
                 }
                 j += 1;
             }
-            if saw_digit && j - i >= 2 {
-                if let Some(s) = text.get(i..j) {
-                    out.push(s.to_string());
-                }
+            if saw_digit {
+                // A trailing comma or period is punctuation; keeping it would split one amount
+                // into two candidates across documents.
+                out.push(text[i..j].trim_end_matches([',', '.']).to_string());
             }
             i = j.max(i + 1);
         } else {
@@ -818,9 +828,8 @@ fn extract_amounts(text: &str) -> Vec<String> {
 }
 
 fn extract_dates(text: &str) -> Vec<String> {
-    // Very loose: YYYY-MM-DD, M/D/YYYY, and "Month DD, YYYY" — enough for the redaction case.
+    // ISO `YYYY-MM-DD` only; other written forms are not candidates.
     let mut out = Vec::new();
-    // ISO
     let bytes = text.as_bytes();
     let mut i = 0;
     while i + 10 <= bytes.len() {
@@ -902,21 +911,29 @@ mod tests {
     }
 
     #[test]
-    fn scans_bracketed_redaction_markers() {
-        let text = "The signer [REDACTED] approved. Later [WITHHELD] on request.";
-        let spans = scan_redaction_spans(text);
-        assert_eq!(spans.len(), 2);
-        assert!(spans.iter().any(|s| s.end - s.start == "[REDACTED]".len()));
-    }
-
-    #[test]
-    fn scans_foia_exemption_markers() {
-        let text =
-            "Personal information redacted (b)(6) per exemption; contact (b)(7)(C) for details.";
-        let spans = scan_redaction_spans(text);
-        assert!(!spans.is_empty());
-        assert!(spans.iter().any(|s| &text[s.start..s.end] == "(b)(6)"));
-        assert!(spans.iter().any(|s| &text[s.start..s.end] == "(b)(7)(C)"));
+    fn scans_bracketed_exemption_block_and_underscore_markers() {
+        let text = "The signer [REDACTED] approved (b)(6) and [withheld] under (b)(7)(C). \
+                    Payment to ██████████ arrived. Signed by ________ on 2024-01-01.";
+        let marked: Vec<&str> = scan_redaction_spans(text)
+            .iter()
+            .map(|span| &text[span.start..span.end])
+            .collect();
+        assert_eq!(
+            marked,
+            [
+                "[REDACTED]",
+                "(b)(6)",
+                "[withheld]",
+                "(b)(7)(C)",
+                "██████████",
+                "________"
+            ]
+        );
+        // Every scanned marker, in any case, is kept out of the search text.
+        assert_eq!(
+            build_search_query("Signed by [withheld] (b)(6) and [REDACTED] ________ ██ today"),
+            "Signed by and today"
+        );
     }
 
     #[test]
@@ -942,38 +959,27 @@ mod tests {
     }
 
     #[test]
-    fn scans_block_and_underscore_runs() {
-        let text = "Payment to ██████████ arrived. Signed by ________ on 2024-01-01.";
-        let spans = scan_redaction_spans(text);
-        assert_eq!(spans.len(), 2);
+    fn the_hint_follows_the_context_wording() {
+        for (context, kind) in [
+            (
+                "...the letter was signed by [REDACTED] under seal...",
+                CandidateKind::Person,
+            ),
+            (
+                "...paid in the amount of [REDACTED] from account 1234...",
+                CandidateKind::Amount,
+            ),
+            (
+                "...contracted with [REDACTED] Department of Records...",
+                CandidateKind::Organization,
+            ),
+        ] {
+            assert_eq!(classify_entity_hint(context), kind, "{context}");
+        }
     }
 
     #[test]
-    fn classify_hint_person_from_signed_by() {
-        assert_eq!(
-            classify_entity_hint("...the letter was signed by [REDACTED] under seal..."),
-            CandidateKind::Person,
-        );
-    }
-
-    #[test]
-    fn classify_hint_amount_from_payment_language() {
-        assert_eq!(
-            classify_entity_hint("...paid in the amount of [REDACTED] from account 1234..."),
-            CandidateKind::Amount,
-        );
-    }
-
-    #[test]
-    fn classify_hint_organization_from_head_words() {
-        assert_eq!(
-            classify_entity_hint("...contracted with [REDACTED] Department of Records..."),
-            CandidateKind::Organization,
-        );
-    }
-
-    #[test]
-    fn extract_context_snaps_to_word_boundary_and_returns_none_when_too_thin() {
+    fn extract_context_spans_the_marker_and_returns_none_when_too_thin() {
         let long =
             "one two three four five six seven eight nine ten [REDACTED] alpha beta gamma delta";
         let span_start = long.find("[REDACTED]").unwrap();
@@ -1000,108 +1006,76 @@ mod tests {
         .is_none());
     }
 
+    /// The same value written in two documents must extract identically, or it cannot
+    /// corroborate itself: an honorific or a sentence-ending period is not part of the value.
     #[test]
-    fn extract_person_names_only_returns_bigrams_of_capitalized_tokens() {
-        let text = "Approved by John Smith and Jane Doe today. small words are ignored.";
-        let names = extract_person_names(text);
-        assert!(names.contains(&"John Smith".to_string()));
-        assert!(names.contains(&"Jane Doe".to_string()));
-        assert!(!names
-            .iter()
-            .any(|n| n.to_ascii_lowercase().contains("small")));
+    fn extracted_values_are_normalized_for_corroboration() {
+        let names = extract_person_names(
+            "Approved by Mr. John Smith and Jane Doe today. small words are ignored.",
+        );
+        assert_eq!(names, ["John Smith", "Jane Doe"]);
+        assert_eq!(
+            extract_amounts("The total came to $47,382.19, and a partial payment of $200."),
+            ["$47,382.19", "$200"]
+        );
+        assert_eq!(
+            extract_dates("Effective 2024-01-15 and superseded on 2025-08-30."),
+            ["2024-01-15", "2025-08-30"]
+        );
     }
 
     #[test]
-    fn extract_amounts_captures_dollar_prefixed_numbers() {
-        let text = "The total came to $47,382.19 and a partial payment of $200 was made.";
-        let amounts = extract_amounts(text);
-        assert!(amounts.contains(&"$47,382.19".to_string()));
-        assert!(amounts.contains(&"$200".to_string()));
-    }
-
-    #[test]
-    fn extract_dates_captures_iso_dates() {
-        let text = "Effective 2024-01-15 and superseded on 2025-08-30.";
-        let dates = extract_dates(text);
-        assert!(dates.contains(&"2024-01-15".to_string()));
-        assert!(dates.contains(&"2025-08-30".to_string()));
-    }
-
-    #[test]
-    fn rank_person_requires_two_corroborating_documents() {
-        // Two sites both mention "Jane Doe" — should pass the Person threshold.
-        let sites = vec![
-            CandidateSite {
-                portal_key: "p".into(),
-                document_id: 10,
-                excerpt: "Letter signed by Jane Doe.".into(),
-                raw_score: 0.8,
-            },
-            CandidateSite {
-                portal_key: "p".into(),
-                document_id: 11,
-                excerpt: "Memo from Jane Doe.".into(),
-                raw_score: 0.8,
-            },
-        ];
-        let candidates = rank_candidates(sites, CandidateKind::Person, false);
-        assert!(candidates.iter().any(|c| c.value == "Jane Doe"));
-        // Single site would not pass.
-        let single = vec![CandidateSite {
-            portal_key: "p".into(),
-            document_id: 10,
-            excerpt: "Letter signed by Jane Doe.".into(),
+    fn a_person_needs_two_corroborating_documents_and_cites_each() {
+        let site = |document_id: i64, excerpt: &str| CandidateSite {
+            portal_key: "north".into(),
+            document_id,
+            excerpt: excerpt.into(),
             raw_score: 0.8,
-        }];
-        let candidates = rank_candidates(single, CandidateKind::Person, false);
-        assert!(!candidates.iter().any(|c| c.value == "Jane Doe"));
-    }
-
-    #[test]
-    fn likelihood_is_bounded_below_the_lexical_ceiling() {
-        let sites = (0..5)
-            .map(|i| CandidateSite {
-                portal_key: "p".into(),
-                document_id: 100 + i,
-                excerpt: "Signed by John Smith.".into(),
-                raw_score: 1.0,
-            })
-            .collect();
-        let candidates = rank_candidates(sites, CandidateKind::Person, false);
-        assert!(candidates
+        };
+        let candidates = rank_candidates(
+            vec![
+                site(42, "Payment approved by Jane Doe."),
+                site(43, "Meeting notes: Jane Doe attended."),
+            ],
+            CandidateKind::Person,
+            false,
+        );
+        let jane = candidates.iter().find(|c| c.value == "Jane Doe").unwrap();
+        let cited: Vec<i64> = jane
+            .supporting_evidence
             .iter()
-            .all(|c| c.likelihood_basis_points <= LEXICAL_LIKELIHOOD_CEILING));
-    }
-
-    #[test]
-    fn semantic_ceiling_higher_than_lexical() {
-        let sites = (0..5)
-            .map(|i| CandidateSite {
-                portal_key: "p".into(),
-                document_id: 100 + i,
-                excerpt: "Signed by John Smith.".into(),
-                raw_score: 1.0,
-            })
+            .map(|evidence| evidence.document_id)
             .collect();
-        let candidates = rank_candidates(sites, CandidateKind::Person, true);
-        assert!(candidates
-            .iter()
-            .all(|c| c.likelihood_basis_points <= SEMANTIC_LIKELIHOOD_CEILING));
-        const _: () = assert!(SEMANTIC_LIKELIHOOD_CEILING > LEXICAL_LIKELIHOOD_CEILING);
+        assert_eq!(cited, [42, 43]);
+
+        let single = rank_candidates(
+            vec![site(42, "Letter signed by Jane Doe.")],
+            CandidateKind::Person,
+            false,
+        );
+        assert!(single.is_empty());
     }
 
     #[test]
-    fn corroboration_multiplier_grows_with_document_count() {
-        assert!(corroboration_multiplier(1) < corroboration_multiplier(2));
-        assert!(corroboration_multiplier(2) < corroboration_multiplier(3));
-        assert!((corroboration_multiplier(9) - 1.0).abs() < f64::EPSILON);
-    }
-
-    #[test]
-    fn empty_corpus_lookup_returns_empty_report() {
-        // When no sites are returned, ranking yields no candidates, and empty() is the safe shape.
-        let candidates = rank_candidates(Vec::new(), CandidateKind::Person, false);
-        assert!(candidates.is_empty());
+    fn likelihood_never_exceeds_the_ranking_mode_ceiling() {
+        for (semantic, ceiling) in [
+            (false, LEXICAL_LIKELIHOOD_CEILING),
+            (true, SEMANTIC_LIKELIHOOD_CEILING),
+        ] {
+            let sites = (0..5)
+                .map(|i| CandidateSite {
+                    portal_key: "p".into(),
+                    document_id: 100 + i,
+                    excerpt: "Signed by John Smith.".into(),
+                    raw_score: 1.0,
+                })
+                .collect();
+            let candidates = rank_candidates(sites, CandidateKind::Person, semantic);
+            assert!(!candidates.is_empty());
+            assert!(candidates
+                .iter()
+                .all(|c| c.likelihood_basis_points <= ceiling));
+        }
     }
 
     /// The viewer reports spans in document characters; the engine slices bytes. A name with a
@@ -1117,32 +1091,5 @@ mod tests {
             character_span_to_bytes(text, start, text.chars().count() + 1),
             None
         );
-    }
-
-    #[test]
-    fn evidence_is_traceable_to_specific_documents() {
-        let sites = vec![
-            CandidateSite {
-                portal_key: "north".into(),
-                document_id: 42,
-                excerpt: "Payment approved by Jane Doe.".into(),
-                raw_score: 0.9,
-            },
-            CandidateSite {
-                portal_key: "north".into(),
-                document_id: 43,
-                excerpt: "Meeting notes: Jane Doe attended.".into(),
-                raw_score: 0.7,
-            },
-        ];
-        let candidates = rank_candidates(sites, CandidateKind::Person, false);
-        let jane = candidates.iter().find(|c| c.value == "Jane Doe").unwrap();
-        assert_eq!(jane.supporting_evidence.len(), 2);
-        assert!(jane
-            .supporting_evidence
-            .iter()
-            .all(|e| e.portal_key == "north"));
-        assert!(jane.supporting_evidence.iter().any(|e| e.document_id == 42));
-        assert!(jane.supporting_evidence.iter().any(|e| e.document_id == 43));
     }
 }

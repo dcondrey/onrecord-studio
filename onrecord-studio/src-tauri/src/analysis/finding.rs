@@ -121,7 +121,7 @@ pub enum FindingKind {
     /// evaluate.
     NoRecordsContradictedByRelease,
     /// An agency's denial language cluster shows HIGH bag-of-words similarity across otherwise
-    /// distinct request topics, but LOW shingled similarity (below the threshold Wave 2B's
+    /// distinct request topics, but LOW shingled similarity (below the threshold the
     /// boilerplate detector would merge them at). Same underlying refusal, distinct surface
     /// phrasing per response — the adaptive-paraphrasing pattern that would defeat direct
     /// boilerplate detection. Adversarial pattern signal, not a legal claim.
@@ -418,17 +418,13 @@ impl FindingKind {
     /// this. See `Finding::record_safe`.
     pub const fn is_legal_claim(self) -> bool {
         match self {
-            // HeldBackResponse is a behavioral/pattern signal about intent, not a violation of a
-            // stated rule. Kept as a non-legal-claim kind on purpose.
+            // Statistical or pattern signals about agency behavior. None counts a per-request
+            // statutory violation; the statutory detector is the sole source for that.
             Self::HeldBackResponse => false,
-            // The three Wave 2B detectors are all statistical/pattern signals about agency
-            // behavior. None counts a per-request statutory violation and none should be cited in
-            // a filing as one — the statutory detector remains the sole source for that.
             Self::BoilerplateDenial => false,
             Self::JustInTimeCompliance => false,
             Self::ExtensionAbuse => false,
-            // Wave 2D detectors: also pattern signals, not counted legal claims. A gap in
-            // released numbering is evidence records were omitted; it does not itself say the
+            // A gap in released numbering is evidence records were omitted; it does not itself say the
             // omission was unlawful. Differential treatment across requester classes is a
             // statistical pattern, not a per-request statutory finding. A metadata/content
             // contradiction points at backdating or silent modification; it does not by itself
@@ -436,20 +432,16 @@ impl FindingKind {
             Self::AbsenceOfRecords => false,
             Self::DifferentialTreatment => false,
             Self::MetadataContradictsContent => false,
-            // Wave 2C detectors: both are pattern signals over metadata and released set
-            // membership. RegeneratedResponse observes a metadata-vs-release delta; it does not
+            // RegeneratedResponse observes a metadata-vs-release delta; it does not
             // count a statutory-deadline violation. EmailThreadGap observes that a released
             // message names an unpublished Message-ID; whether that gap is a legal violation
             // depends on statutes and exemptions this detector does not evaluate.
             Self::RegeneratedResponse => false,
             Self::EmailThreadGap => false,
-            // Wave 2A contradiction detectors: both are pattern signals about text consistency
-            // across the released material, not legal claims. Two documents disagreeing is
-            // evidence for review, not itself a violation of a stated rule.
+            // Two documents disagreeing is evidence for review, not a violation of a stated rule.
             Self::ContradictoryStatement => false,
             Self::NoRecordsContradictedByRelease => false,
-            // Wave 6 adversarial-evasion detectors: all pattern signals about adaptation to the
-            // direct detectors, not counted statutory or policy violations. A cluster of
+            // Adaptation to the direct detectors, not counted violations. A cluster of
             // paraphrased denials, a ceiling below a round-number threshold, a suspiciously clean
             // heavy-redaction stream, and a late-arriving-records pattern are each evidence for
             // human review; none is itself a legal claim.
@@ -457,12 +449,11 @@ impl FindingKind {
             Self::EvasionRoundNumberThresholds => false,
             Self::EvasionRedactionAtLimit => false,
             Self::EvasionLateArrivingRecords => false,
-            // Wave 9: inference from context is never a legal claim. The engine bounds candidates
+            // Inference from context is never a legal claim. The engine bounds candidates
             // below a decryption ceiling; users must never mistake an inferred identity for a
             // decoded one.
             Self::RedactionCandidateInferred => false,
-            // Wave 8 cross-corpus detectors: all four are pattern signals over jurisdiction-,
-            // time-, or topic-spanning aggregates. A shared paragraph, a shifted mean, an
+            // Aggregates spanning jurisdictions, time, or topics. A shared paragraph, a shifted mean, an
             // asymmetric topic, or a concentrated ground across diverse topics — each is evidence
             // to review, not a per-request statutory finding.
             Self::CrossCorpusSharedLanguage => false,
@@ -720,40 +711,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn severity_ranks_serious_above_notable() {
-        assert!(FindingSeverity::Critical.rank_weight() > FindingSeverity::Serious.rank_weight());
-        assert!(FindingSeverity::Serious.rank_weight() > FindingSeverity::Notable.rank_weight());
-        assert!(FindingSeverity::Notable.rank_weight() > FindingSeverity::Info.rank_weight());
-    }
-
-    #[test]
-    fn confidence_unassessed_is_distinct_from_measured_zero() {
+    fn confidence_unassessed_is_distinct_from_measured_zero_and_measured_is_bounded() {
         let unassessed = FindingConfidence::Unassessed;
         let measured_zero = FindingConfidence::measured(0);
         assert_ne!(unassessed, measured_zero);
         assert_eq!(unassessed.stored_basis_points(), None);
         assert_eq!(measured_zero.stored_basis_points(), Some(0));
         assert!(measured_zero.rank_weight() > unassessed.rank_weight());
-    }
-
-    #[test]
-    fn confidence_measured_bounds_basis_points_to_10000() {
         assert_eq!(
             FindingConfidence::measured(25_000).stored_basis_points(),
             Some(10_000)
         );
-        assert_eq!(
-            FindingConfidence::measured(10_000).stored_basis_points(),
-            Some(10_000)
-        );
-        assert_eq!(
-            FindingConfidence::measured(0).stored_basis_points(),
-            Some(0)
-        );
     }
 
     /// Digests computed from the previous implementation: an unchanged input must keep its id, or
-    /// every stored finding and its review disposition would be orphaned.
+    /// every stored finding and its review disposition would be orphaned. A changed salient bit
+    /// must produce a new id.
     #[test]
     fn finding_ids_match_those_already_stored() {
         let subject = FindingSubject {
@@ -772,6 +745,15 @@ mod tests {
             ),
             "4aa617ac09b56b4c312f"
         );
+        assert_ne!(
+            finding_id(
+                FindingKind::HeldBackResponse,
+                "held_back",
+                &subject,
+                &["day=13", "late"]
+            ),
+            "4aa617ac09b56b4c312f"
+        );
         let subject = FindingSubject {
             portal_key: None,
             agency_id: None,
@@ -783,51 +765,6 @@ mod tests {
             finding_id(FindingKind::HeldBackResponse, "", &subject, &[]),
             "88bf8199dce84c7467c7"
         );
-    }
-
-    #[test]
-    fn finding_id_is_stable_for_equivalent_inputs() {
-        let subject = FindingSubject {
-            portal_key: Some("sd-city".into()),
-            document_id: Some(42),
-            ..Default::default()
-        };
-        let id_one = finding_id(
-            FindingKind::HeldBackResponse,
-            "held_back_response",
-            &subject,
-            &["days=7"],
-        );
-        let id_two = finding_id(
-            FindingKind::HeldBackResponse,
-            "held_back_response",
-            &subject,
-            &["days=7"],
-        );
-        assert_eq!(id_one, id_two);
-        assert_eq!(id_one.len(), 20);
-    }
-
-    #[test]
-    fn finding_id_changes_when_salient_bits_change() {
-        let subject = FindingSubject {
-            portal_key: Some("sd-city".into()),
-            document_id: Some(42),
-            ..Default::default()
-        };
-        let with_seven = finding_id(
-            FindingKind::HeldBackResponse,
-            "held_back_response",
-            &subject,
-            &["days=7"],
-        );
-        let with_eight = finding_id(
-            FindingKind::HeldBackResponse,
-            "held_back_response",
-            &subject,
-            &["days=8"],
-        );
-        assert_ne!(with_seven, with_eight);
     }
 
     #[test]

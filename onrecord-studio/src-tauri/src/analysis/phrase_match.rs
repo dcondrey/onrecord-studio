@@ -41,13 +41,17 @@ pub(crate) fn words(connector: &str) -> Vec<Word> {
     words
 }
 
+fn matches_at(window: &[Word], phrase: &[&str]) -> bool {
+    window
+        .iter()
+        .zip(phrase)
+        .all(|(word, cue)| word.text == *cue)
+}
+
 fn contains_phrase(words: &[Word], phrase: &[&str]) -> bool {
-    words.windows(phrase.len()).any(|window| {
-        window
-            .iter()
-            .zip(phrase)
-            .all(|(word, cue)| word.text == *cue)
-    })
+    words
+        .windows(phrase.len())
+        .any(|window| matches_at(window, phrase))
 }
 
 pub(crate) fn has_phrase(words: &[Word], phrases: Phrases) -> bool {
@@ -70,12 +74,7 @@ pub(crate) fn find_phrases(words: &[Word], phrases: Phrases) -> Vec<usize> {
             words
                 .windows(phrase.len())
                 .enumerate()
-                .filter(|(_, window)| {
-                    window
-                        .iter()
-                        .zip(*phrase)
-                        .all(|(word, cue)| word.text == *cue)
-                })
+                .filter(|(_, window)| matches_at(window, phrase))
                 .map(|(index, _)| index)
                 .collect::<Vec<_>>()
         })

@@ -389,37 +389,27 @@ mod tests {
     }
 
     #[test]
-    fn the_calls_family_the_feed_sends_is_stored_as_a_police_call_lead() {
-        let family: LeadFamily = serde_json::from_value(serde_json::json!("POLICE_CALLS")).unwrap();
-        assert_eq!(family, LeadFamily::PoliceCalls);
-        assert_eq!(
-            serde_json::to_value(family).unwrap(),
-            serde_json::json!("POLICE_CALLS")
-        );
-        assert_eq!(family.kind().as_str(), "POLICE_CALL_LEAD");
-    }
-
-    #[test]
-    fn the_parking_family_the_feed_sends_is_stored_as_a_parking_citation_lead() {
-        let family: LeadFamily =
-            serde_json::from_value(serde_json::json!("PARKING_CITATIONS")).unwrap();
-        assert_eq!(family, LeadFamily::ParkingCitations);
-        assert_eq!(
-            serde_json::to_value(family).unwrap(),
-            serde_json::json!("PARKING_CITATIONS")
-        );
-        assert_eq!(family.kind().as_str(), "PARKING_CITATION_LEAD");
-    }
-
-    #[test]
-    fn the_housing_family_the_feed_sends_is_stored_as_a_housing_approval_lead() {
-        let family: LeadFamily =
-            serde_json::from_value(serde_json::json!("HOUSING_APPROVALS")).unwrap();
-        assert_eq!(family, LeadFamily::HousingApprovals);
-        assert_eq!(
-            serde_json::to_value(family).unwrap(),
-            serde_json::json!("HOUSING_APPROVALS")
-        );
-        assert_eq!(family.kind().as_str(), "HOUSING_APPROVAL_LEAD");
+    fn each_family_the_feed_sends_is_stored_as_its_lead_kind() {
+        for (wire, family, kind) in [
+            ("POLICE_CALLS", LeadFamily::PoliceCalls, "POLICE_CALL_LEAD"),
+            (
+                "PARKING_CITATIONS",
+                LeadFamily::ParkingCitations,
+                "PARKING_CITATION_LEAD",
+            ),
+            (
+                "HOUSING_APPROVALS",
+                LeadFamily::HousingApprovals,
+                "HOUSING_APPROVAL_LEAD",
+            ),
+        ] {
+            let parsed: LeadFamily = serde_json::from_value(serde_json::json!(wire)).unwrap();
+            assert_eq!(parsed, family);
+            assert_eq!(
+                serde_json::to_value(family).unwrap(),
+                serde_json::json!(wire)
+            );
+            assert_eq!(family.kind().as_str(), kind);
+        }
     }
 }
