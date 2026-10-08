@@ -74,7 +74,7 @@ describe('first-run core data', () => {
 
     discovery.state = { schema: { datasets: [], columns: [] } };
     const skipped = render(<FirstRunData />);
-    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
     expect(offer()).toBeNull();
     skipped.unmount();
     render(<FirstRunData />);

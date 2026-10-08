@@ -1,6 +1,7 @@
 import { useAppStore } from '../../store/useAppStore';
 import { firstRunTableKey, firstRunTables, useFirstRunDataStore, type FirstRunTable } from '../../store/useFirstRunDataStore';
 import { useAutomaticDiscovery } from './AutomaticDiscoveryProvider';
+import Button from '../ui/Button';
 
 const CAPACITY = 'Budget, Encampment reports and shelter beds by year';
 
@@ -39,75 +40,96 @@ export default function FirstRunData() {
   const currentYear = new Date().getUTCFullYear();
   const tables = running || runTables.length ? runTables : partial ? unfetched : firstRunTables();
   const anyImported = Object.values(statuses).some((status) => status.state === 'done');
+  // Before a run there is no per-table status to show, so the closed Encampment years read as one row.
+  const rows = running || runTables.length || partial ? tables.map((table) => ({ key: firstRunTableKey(table), table, label: describe(table, currentYear).label })) : offerRows(tables);
 
   return (
-    <section aria-label="Get San Diego's core public data" className="app-panel space-y-3 p-5">
+    <section aria-label="Get San Diego's core public data" className="app-panel space-y-4 p-5">
       <div>
-        <h3 className="text-sm font-semibold text-fg">
+        <h3 className="text-heading text-fg">
           {partial ? 'San Diego’s core public data is incomplete' : 'Get San Diego’s core public data'}
         </h3>
-        {partial ? (
-          <p className="mt-1 max-w-3xl text-label leading-relaxed text-muted">
-            {unfetched.length} of these tables {unfetched.length === 1 ? 'was' : 'were'} not imported, so the leads that read
-            {unfetched.length === 1 ? ' it' : ' them'} have less to go on. You can fetch the missing ones now, or later from Analysis.
-          </p>
-        ) : (
-          <p className="mt-1 max-w-3xl text-label leading-relaxed text-muted">
-            Your library has no tables yet. These {tables.length} tables show what the City budgeted and spent, what residents
-            reported through Get It Done, and what SDPD was called to, so the leads under What stands out have something to read.
-            Each line names the leads it feeds.
-          </p>
-        )}
-        <p className="mt-1 max-w-3xl text-label leading-relaxed text-muted">
-          They come from the City of San Diego open data portal (data.sandiego.gov) and are retrieved now. The City publishes
-          them in the public domain under the Open Data Commons Public Domain Dedication and License (ODC-PDDL), for
-          information only and without warranty. The current year&apos;s files hold the year so far. The files are large, and
-          the download can take several minutes; it continues if you leave the overview.
-        </p>
-        <p className="mt-1 max-w-3xl text-label leading-relaxed text-muted">
-          Shelter beds are not fetched here: UCSD&apos;s Homelessness Hub publishes the emergency shelter inventory with no
-          licence stated. Until you fetch it, {CAPACITY} shows under What stands out as missing data, the emergency shelter
-          inventory, with a button to fetch it. The closed Encampment years listed are enough for that comparison to run as soon
-          as the inventory is imported; its last count is January 2024.
+        <p className="mt-1 max-w-prose text-body text-muted">
+          {partial
+            ? `${unfetched.length} of these tables ${unfetched.length === 1 ? 'was' : 'were'} not imported, so the leads that read ${unfetched.length === 1 ? 'it' : 'them'} have less to go on. Fetch the missing ones now, or later from Analysis.`
+            : `${numberWord(tables.length)} public tables from data.sandiego.gov: budgets, Get It Done reports and SDPD calls. Large download; it continues in the background.`}
         </p>
       </div>
-      <ul aria-label="Core tables" className="space-y-1 text-label leading-4">
-        {tables.map((table) => {
-          const key = firstRunTableKey(table);
-          const status = statuses[key];
-          const { label, leads } = describe(table, currentYear);
+      <ul aria-label="Core tables" className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-6 text-body">
+        {rows.map(({ key, table, label }) => {
+          const status = table ? statuses[firstRunTableKey(table)] : undefined;
           return (
-            <li key={key} className="flex flex-wrap gap-x-2">
+            <li key={key} className="col-span-2 grid grid-cols-subgrid items-baseline border-b border-line py-1.5 last:border-b-0">
               <span className="text-fg-secondary">{label}</span>
-              <span className="text-muted">Feeds: {leads}.</span>
-              {status?.state === 'waiting' && <span className="text-muted">Waiting</span>}
-              {status?.state === 'fetching' && <span role="status" className="text-accent">Fetching…</span>}
-              {status?.state === 'done' && (
-                <span className="text-success">
-                  {status.rows.toLocaleString('en-US')} rows imported{status.rejected > 0 ? `, ${status.rejected.toLocaleString('en-US')} rejected` : ''}
-                </span>
-              )}
-              {status?.state === 'failed' && <span role="alert" className="text-warning">Not imported: {status.error}</span>}
-              {!status && partial && <span role="alert" className="text-warning">Not fetched: the download stopped before reaching it</span>}
+              <span className="text-right text-caption tabular-nums">
+                {status?.state === 'waiting' && <span className="text-muted">Waiting</span>}
+                {status?.state === 'fetching' && <span role="status" className="text-fg-secondary">Fetching…</span>}
+                {status?.state === 'done' && (
+                  <span className="text-success">
+                    {status.rows.toLocaleString('en-US')} rows imported{status.rejected > 0 ? `, ${status.rejected.toLocaleString('en-US')} rejected` : ''}
+                  </span>
+                )}
+                {status?.state === 'failed' && <span role="alert" className="text-danger">Not imported: {status.error}</span>}
+                {table && !status && partial && <span role="alert" className="text-warning">Not fetched: the download stopped before reaching it</span>}
+              </span>
             </li>
           );
         })}
       </ul>
+      <details className="text-caption text-muted">
+        <summary className="focus-ring w-fit cursor-pointer rounded hover:text-fg">Details</summary>
+        <div className="mt-2 max-w-prose space-y-2">
+          <p>
+            The tables come from the City of San Diego open data portal (data.sandiego.gov) and are retrieved now. The City
+            publishes them in the public domain under the Open Data Commons Public Domain Dedication and License (ODC-PDDL), for
+            information only and without warranty. The current year&apos;s files hold the year so far.
+          </p>
+          <ul className="list-disc space-y-0.5 pl-4">
+            {tables.map((table) => {
+              const { label, leads } = describe(table, currentYear);
+              return <li key={firstRunTableKey(table)}>{label}: {leads}.</li>;
+            })}
+          </ul>
+          <p>
+            Shelter beds are not fetched here: UCSD&apos;s Homelessness Hub publishes the emergency shelter inventory with no
+            license stated. Until you fetch it, {CAPACITY} shows under What stands out as missing data, with a button to fetch
+            it. The closed Encampment years listed are enough for that comparison to run as soon as the inventory is imported;
+            its last count is January 2024.
+          </p>
+        </div>
+      </details>
       {!running && (
         <div className="flex flex-wrap gap-2">
-          <button type="button" className="analysis-button" onClick={() => void run(controller)}>
+          <Button variant="primary" onClick={() => void run(controller)}>
             {partial ? 'Get the missing tables' : 'Get the tables'}
-          </button>
+          </Button>
           {partial && anyImported && (
-            <button type="button" className="secondary-action focus-ring rounded-xl border px-3.5 py-2 text-label text-fg-secondary" onClick={() => useAppStore.getState().setWorkspaceView('analysis')}>
-              See what stands out
-            </button>
+            <Button onClick={() => useAppStore.getState().setWorkspaceView('analysis')}>See what stands out</Button>
           )}
-          <button type="button" className="secondary-action focus-ring rounded-xl border px-3.5 py-2 text-label text-fg-secondary" onClick={dismiss}>
-            {partial ? 'Close' : 'Skip'}
-          </button>
+          <Button variant="ghost" onClick={dismiss}>{partial ? 'Close' : 'Not now'}</Button>
         </div>
       )}
     </section>
   );
+}
+
+const NUMBER_WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve'];
+function numberWord(count: number) {
+  return NUMBER_WORDS[count] ?? count.toLocaleString('en-US');
+}
+
+/** The offer lists the closed Encampment years as one span instead of a row per year. */
+function offerRows(tables: FirstRunTable[]): { key: string; table: FirstRunTable | null; label: string }[] {
+  const currentYear = new Date().getUTCFullYear();
+  const closedYears = tables.filter((table) => table.dataset === 'GET_IT_DONE_ENCAMPMENTS' && table.year !== null).map((table) => table.year as number);
+  const rows: { key: string; table: FirstRunTable | null; label: string }[] = [];
+  for (const table of tables) {
+    if (table.dataset === 'GET_IT_DONE_ENCAMPMENTS' && closedYears.length > 1) {
+      if (rows.some((row) => row.key === 'encampment-years')) continue;
+      rows.push({ key: 'encampment-years', table: null, label: `Get It Done encampment reports closed, ${Math.min(...closedYears)}–${Math.max(...closedYears)}` });
+      continue;
+    }
+    rows.push({ key: firstRunTableKey(table), table, label: describe(table, currentYear).label });
+  }
+  return rows;
 }
