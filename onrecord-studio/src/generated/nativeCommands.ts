@@ -136,6 +136,7 @@ export interface NativeCommandMap {
   import_auxiliary_events: { args: { portalKey?: string | null; sourceKind: Types.AuxiliaryStreamKind; displayName: string; sourceUri?: string | null; events: Types.AuxiliaryEventInput[] }; result: Types.AuxiliaryImportResult };
   register_statutory_extension: { args: { requestId: number; portalKey: string; extension: Types.StatutoryExtensionRecord }; result: string[] };
   get_request_statutory_extension: { args: { requestId: number; portalKey: string }; result: Types.StatutoryExtensionRecord | null };
+  get_portal_request_deadline: { args: { portalKey: string; requestId: number }; result: Types.DeadlineAnalysis };
   import_legal_authority: { args: { input: Types.LegalAuthorityImport }; result: Types.LegalAuthorityImportResult };
   list_legal_authorities: { args: NoArgs; result: Types.LegalAuthoritySummary[] };
   list_legal_authority_versions: { args: { statuteId: string }; result: Types.LegalAuthorityVersionSummary[] };

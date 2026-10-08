@@ -187,6 +187,7 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::investigation::import_auxiliary_events,
         commands::investigation::register_statutory_extension,
         commands::investigation::get_request_statutory_extension,
+        commands::investigation::get_portal_request_deadline,
         commands::investigation::import_legal_authority,
         commands::investigation::list_legal_authorities,
         commands::investigation::list_legal_authority_versions,

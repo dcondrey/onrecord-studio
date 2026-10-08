@@ -47,6 +47,10 @@ pub struct StatutoryComplianceAnalysis {
     pub evidence_summary: String,
 }
 
+/// One request's evaluated deadline under its IPC name (`DeadlineAnalysis` in TypeScript), shared
+/// by the tracker and the portal read command so both surfaces read the same evaluator output.
+pub type DeadlineAnalysis = StatutoryComplianceAnalysis;
+
 pub fn calculate_operational_latency_for_status(
     request_id: u64,
     status: &str,
