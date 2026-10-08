@@ -59,7 +59,7 @@ describe('caseItems', () => {
   // also called "not a legal claim" here.
   it('states each finding\'s claim basis from its kind', () => {
     const finding = (kind: Finding['kind']): Finding => ({
-      id: kind, kind, severity: 'SERIOUS', confidence: { kind: 'NOT_ASSESSED' } as Finding['confidence'], subject: { kind: 'AGENCY' } as unknown as Finding['subject'],
+      id: kind, kind, severity: 'SERIOUS', confidence: { kind: 'MEASURED', basisPoints: 5000 }, subject: { kind: 'AGENCY' } as unknown as Finding['subject'],
       headline: 'h', explanation: 'e', citations: [], discoveredAt: '2026-10-01T00:00:00Z', lastSeenAt: '2026-10-02T00:00:00Z', dismissedAt: null, sourceDetector: 'encampment_notice',
     });
     const [counted, signal] = findingItems([finding('ENCAMPMENT_NOTICE_SHORTFALL'), finding('BOILERPLATE_DENIAL')]);
