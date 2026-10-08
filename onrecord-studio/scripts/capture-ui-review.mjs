@@ -1,17 +1,26 @@
 // Captures every workspace view and major panel of the real <App/> for UI review, driven by a
-// stubbed IPC bridge serving invented San Diego data (scripts/ui-review-fixtures.mjs). Browser only:
-// no native application, network, or model is involved.
+// stubbed IPC bridge (scripts/ui-review-fixtures.mjs). `--data=real` answers every surface the San
+// Diego packs hold from scripts/ui-review-fixtures-real.mjs (built by build-real-ui-fixtures.mjs);
+// the default serves invented data throughout. Browser only: no native application, network, or
+// model is involved.
 //
-//   node scripts/capture-ui-review.mjs [outputDirectory] [--only=view,view] [--concurrency=3]
+//   node scripts/capture-ui-review.mjs [outputDirectory] [--data=real] [--only=view,view] [--concurrency=3]
+//     [--widths=1024,1280,1680] [--states=populated,empty,loading,error] [--browser=chrome|bundled]
+//
+// --states limits every view to those states; --states=top keeps the full state set for the
+// top-level workspace views and only populated for the rest (the CI subset).
 //
 // Output: <view>__<state>__<theme>__<width>.png plus index.json (steps, console errors, failed
-// requests, stub gaps, and a keyboard-focus-order accessibility record per view). Exits non-zero
-// only when the harness itself fails (server, browser, app shell unreachable), never on findings.
+// requests, stub gaps, SQL the real fixtures could not answer, axe-core violations per capture and
+// per view, and a keyboard-focus-order record per view). Exits non-zero only when the harness
+// itself fails (server, browser, app shell unreachable), never on findings.
 //
-// PLAYWRIGHT_MODULE and CHROME_BIN override the Playwright build and Chrome executable.
+// Playwright resolves from PLAYWRIGHT_MODULE, then the project's devDependency, then the Homebrew
+// copy. The browser is CHROME_BIN when set, else installed Google Chrome on macOS, else Playwright's
+// bundled Chromium (`npx playwright install chromium`); --browser=bundled forces the last.
 /* global document, window, HTMLElement, CSS, innerHeight, innerWidth, location, requestAnimationFrame -- page.evaluate bodies run in the browser */
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
@@ -34,12 +43,27 @@ const label = flag('label') ?? `${gitHead}-${new Date().toISOString().slice(0, 1
 const outputDirectory = path.resolve(positional[0] ?? path.join('/Volumes/A/onrecord-ui-review', label));
 const only = flag('only')?.split(',').filter(Boolean) ?? null;
 const concurrency = Math.max(1, Number(flag('concurrency') ?? 3));
-const playwrightModule = process.env.PLAYWRIGHT_MODULE ?? '/opt/homebrew/lib/node_modules/@playwright/mcp/node_modules/playwright/index.mjs';
-const chromeBin = process.env.CHROME_BIN ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const data = flag('data') ?? 'invented';
+if (!['invented', 'real'].includes(data)) throw new Error(`--data must be "invented" or "real", not "${data}"`);
+const real = data === 'real' ? await import('./ui-review-fixtures-real.mjs') : null;
+const HOMEBREW_PLAYWRIGHT = '/opt/homebrew/lib/node_modules/@playwright/mcp/node_modules/playwright/index.mjs';
+const MAC_CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const browserChoice = flag('browser') ?? 'chrome';
+if (!['chrome', 'bundled'].includes(browserChoice)) throw new Error(`--browser must be "chrome" or "bundled", not "${browserChoice}"`);
+const chromeBin = browserChoice === 'bundled' ? null
+  : process.env.CHROME_BIN ?? (process.platform === 'darwin' && existsSync(MAC_CHROME) ? MAC_CHROME : null);
 
 const THEMES = ['light', 'dark'];
-const SIZES = [[1024, 700], [1280, 800], [1680, 1050]];
-const SETTLE_TIMEOUT_MS = 15_000;
+const ALL_SIZES = [[1024, 700], [1280, 800], [1680, 1050]];
+const widths = flag('widths')?.split(',').filter(Boolean).map(Number) ?? null;
+const SIZES = widths ? ALL_SIZES.filter(([width]) => widths.includes(width)) : ALL_SIZES;
+if (widths && SIZES.length !== widths.length) throw new Error(`--widths takes ${ALL_SIZES.map(([width]) => width).join(', ')}, not "${flag('widths')}"`);
+const STATE_NAMES = ['populated', 'empty', 'loading', 'error'];
+const statesFlag = flag('states');
+const stateFilter = statesFlag === null || statesFlag === 'top' ? null : statesFlag.split(',').filter(Boolean);
+if (stateFilter?.some((state) => !STATE_NAMES.includes(state))) throw new Error(`--states takes "top" or ${STATE_NAMES.join(', ')}, not "${statesFlag}"`);
+// Real data gives automatic discovery ~90 queries to finish before a capture.
+const SETTLE_TIMEOUT_MS = real ? 60_000 : 15_000;
 const QUIET_MS = 350;
 
 const stem = `__ui_review_${process.pid}_${Date.now()}`;
@@ -48,10 +72,15 @@ const htmlFile = path.join(root, `${stem}.html`);
 
 // The entry installs the IPC stub before the app's modules evaluate, then boots src/main.tsx
 // unchanged so the capture is of the production component tree.
-const entry = `import { createHandlers, injectedError } from './scripts/ui-review-fixtures.mjs';
+// Automatic discovery paces its queries one per 250 ms tick (~90 with real data, over 20 s per page
+// load); the entry drops that pause, so a page reaches the same settled state in a fraction of the
+// time. Its other delays (idle, retry, hidden) are left alone.
+const entry = `const pacedSetTimeout = window.setTimeout.bind(window);
+window.setTimeout = (callback, delay, ...rest) => pacedSetTimeout(callback, delay === 250 && new Error().stack?.includes('/src/utils/discoveryController') ? 0 : delay, ...rest);
+import { createHandlers, injectedError } from './scripts/ui-review-fixtures.mjs';
 const scenario = JSON.parse(new URLSearchParams(location.search).get('scenario') || '{}');
-const handlers = createHandlers(scenario);
-const review = { calls: [], gaps: [], handlerErrors: [], injected: [], hung: [], plugins: [], inflight: 0, lastActivity: performance.now() };
+const handlers = createHandlers(scenario, scenario.data === 'real' ? await import('./scripts/ui-review-fixtures-real.mjs') : null);
+const review = { calls: [], gaps: [], handlerErrors: [], sqlMisses: [], injected: [], hung: [], plugins: [], inflight: 0, lastActivity: performance.now() };
 window.__uiReview = review;
 const callbacks = new Map();
 let nextId = 1;
@@ -90,7 +119,8 @@ window.__TAURI_INTERNALS__ = {
       try {
         result = handler(args || {});
       } catch (error) {
-        review.handlerErrors.push(command + ': ' + String(error));
+        if (error?.errorType === 'UI_REVIEW_SQL_MISS') review.sqlMisses.push(args.sql);
+        else review.handlerErrors.push(command + ': ' + String(error));
         throw error;
       }
       return result instanceof ArrayBuffer ? result.slice(0) : structuredClone(result);
@@ -152,14 +182,21 @@ const store = (description, fn, arg) => async (page, log) => {
   await page.evaluate(fn, arg);
   log.push(description);
 };
+const select = (description, locate, value) => async (page, log) => {
+  await locate(page).filter({ visible: true }).first().selectOption(value, { timeout: 8_000 });
+  log.push(`select "${value}" in ${description}`);
+};
 const event = (name, detail) => store(`dispatch window event '${name}'`, ([eventName, eventDetail]) => window.dispatchEvent(new CustomEvent(eventName, { detail: eventDetail })), [name, detail]);
 const inspect = (target) => store(`store.inspect(${JSON.stringify(target)})`, (t) => window.__uiReview.store.getState().inspect(t), target);
 
 const selectRequest = click('evidence result "Encampment abatement notices…"', (page) => page.getByRole('main').getByText(/Encampment abatement notices posted along Imperial/));
 const openDocument = click('document "ESD_Response_Letter_26-0412.pdf"', (page) => page.getByRole('button', { name: /ESD_Response_Letter_26-0412\.pdf/ }));
 
+const sqlEditor = (page) => page.getByLabel('Analytical SQL');
+
 /**
- * `states` lists the variants beyond populated. `primary` are the commands a loading state hangs
+ * `states` lists the variants beyond populated. `anchor`, when set, is scrolled to the top of the
+ * viewport before every screenshot, since each width reflows the page under a fixed scroll offset. `primary` are the commands a loading state hangs
  * and an error state fails: the ones whose answer the view's main content waits on.
  */
 const VIEWS = [
@@ -208,7 +245,21 @@ const VIEWS = [
   { view: 'license-trial-expired', scenario: { license: 'trialExpired' }, steps: [], gate: true, primary: [], states: [] },
   { view: 'license-sign-in-required', scenario: { license: 'signInRequired' }, steps: [], gate: true, primary: [], states: [] },
   { view: 'license-device-limit', scenario: { license: 'deviceLimit' }, steps: [], gate: true, primary: [], states: [] },
+  // Row-level results only appear after a reader runs SQL; these two show the real tables' rows.
+  ...(real ? [
+    { view: 'analysis-sql-preview', steps: [nav('analysis'), type('SQL editor', (page) => page.getByLabel('Analytical SQL'), real.PREVIEW_SQL), click('"Run"', (page) => page.getByRole('button', { name: 'Run', exact: true }))], anchor: sqlEditor, primary: ['run_analytical_sql'], states: ['error'] },
+    { view: 'analysis-budget-comparison', steps: [nav('analysis'),
+      select('"Budget snapshot"', (page) => page.getByLabel('Budget snapshot'), real.BUDGET_COMPARISON.budgetSnapshotId),
+      select('"Actuals snapshot"', (page) => page.getByLabel('Actuals snapshot'), real.BUDGET_COMPARISON.actualsSnapshotId),
+      type('"Comparison fiscal year"', (page) => page.getByLabel('Comparison fiscal year'), real.BUDGET_COMPARISON.fiscalYear),
+      click('"Compare budget and actuals"', (page) => page.getByRole('button', { name: 'Compare budget and actuals' }))], anchor: sqlEditor, primary: [], states: [] },
+  ] : []),
 ];
+
+const TOP_LEVEL = new Set(Object.keys(NAV_LABELS).concat('evidence-timeline'));
+/** The states captured for a definition under --states. */
+const statesFor = (definition) => ['populated', ...definition.states].filter((state) =>
+  statesFlag === 'top' ? state === 'populated' || TOP_LEVEL.has(definition.view) : !stateFilter || stateFilter.includes(state));
 
 // ---- Page helpers ----------------------------------------------------------------------------
 
@@ -232,10 +283,11 @@ async function settle(page) {
 async function drain(page) {
   return page.evaluate(() => {
     const review = window.__uiReview;
-    if (!review) return { gaps: [], handlerErrors: [], injected: [], hung: [] };
-    const taken = { gaps: [...new Set(review.gaps)], handlerErrors: [...review.handlerErrors], injected: [...new Set(review.injected)], hung: [...new Set(review.hung)] };
+    if (!review) return { gaps: [], handlerErrors: [], sqlMisses: [], injected: [], hung: [] };
+    const taken = { gaps: [...new Set(review.gaps)], handlerErrors: [...review.handlerErrors], sqlMisses: [...new Set(review.sqlMisses)], injected: [...new Set(review.injected)], hung: [...new Set(review.hung)] };
     review.gaps.length = 0;
     review.handlerErrors.length = 0;
+    review.sqlMisses.length = 0;
     review.injected.length = 0;
     return taken;
   });
@@ -256,7 +308,7 @@ async function applyTheme(page, theme) {
   await page.evaluate((value) => window.__uiReview?.store?.getState().setTheme(value), theme);
 }
 
-/** Keyboard focus order (axe-core is not installed): Tab from the top, naming each stop heuristically. */
+/** Keyboard focus order, which axe does not test: Tab from the top, naming each stop heuristically. */
 async function focusOrder(page) {
   await page.evaluate(() => {
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -302,7 +354,7 @@ async function focusOrder(page) {
   });
   const images = await page.evaluate(() => [...document.querySelectorAll('img:not([alt]), svg[role=img]:not([aria-label]):not([aria-labelledby])')].filter((element) => element.getClientRects().length > 0).length);
   return {
-    method: 'keyboard-focus-order (heuristic accessible names; axe-core not available)',
+    method: 'keyboard-focus-order (heuristic accessible names)',
     stops,
     stopCount: stops.length,
     emptyNameStops: stops.filter((stop) => stop.emptyName).length,
@@ -322,9 +374,43 @@ async function discoverSubviews(page) {
   });
 }
 
+const AXE_TARGETS_KEPT = 20;
+
+/**
+ * axe-core over the whole document as it stands; the script is injected once per page load.
+ * Serious and critical violations keep every target: check-ui-review.mjs gates on them per target,
+ * and a truncated list would turn one new node into a false "new" plus a false "disappeared".
+ */
+async function axeScan(page) {
+  try {
+    return await page.evaluate(async (kept) => {
+      const results = await window.axe.run(document, { resultTypes: ['violations'] });
+      return {
+        violations: results.violations.map((violation) => ({
+          id: violation.id, impact: violation.impact ?? null, help: violation.help, helpUrl: violation.helpUrl, count: violation.nodes.length,
+          targets: (['serious', 'critical'].includes(violation.impact) ? violation.nodes : violation.nodes.slice(0, kept))
+            .map((node) => node.target.map((part) => (Array.isArray(part) ? part.join(' >>> ') : part)).join(' ')),
+        })),
+      };
+    }, AXE_TARGETS_KEPT);
+  } catch (error) {
+    return { error: String(error?.message ?? error).split('\n')[0] };
+  }
+}
+
 const slug = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
 
 // ---- Run --------------------------------------------------------------------------------------
+
+async function loadPlaywright() {
+  if (process.env.PLAYWRIGHT_MODULE) return import(pathToFileURL(process.env.PLAYWRIGHT_MODULE).href);
+  try {
+    return await import('playwright');
+  } catch (error) {
+    if (error?.code !== 'ERR_MODULE_NOT_FOUND' || !existsSync(HOMEBREW_PLAYWRIGHT)) throw error;
+    return import(pathToFileURL(HOMEBREW_PLAYWRIGHT).href);
+  }
+}
 
 async function freePort() {
   return new Promise((resolve, reject) => {
@@ -347,20 +433,30 @@ const index = {
   fixtureNow: new Date(FIXTURE_NOW).toISOString(),
   themes: THEMES,
   sizes: SIZES.map(([width, height]) => ({ width, height })),
-  accessibilityMethod: 'keyboard-focus-order',
+  data,
+  states: statesFlag ?? 'all',
+  only,
+  browser: null,
+  accessibilityMethod: 'axe-core violations per capture, plus keyboard-focus-order per view',
   axeAvailable: false,
+  axeVersion: null,
   views: [],
   captures: [],
   accessibility: {},
+  axe: {},
+  sqlMisses: [],
   unreachable: [],
 };
 let harnessFailure = null;
 
 try {
-  if (!existsSync(playwrightModule)) throw new Error(`Playwright not found at ${playwrightModule}; set PLAYWRIGHT_MODULE.`);
-  if (!existsSync(chromeBin)) throw new Error(`Chrome not found at ${chromeBin}; set CHROME_BIN.`);
-  index.axeAvailable = existsSync(path.join(root, 'node_modules/axe-core/axe.min.js'));
-  const { chromium } = await import(pathToFileURL(playwrightModule).href);
+  if (chromeBin && !existsSync(chromeBin)) throw new Error(`Chrome not found at ${chromeBin}; set CHROME_BIN or pass --browser=bundled.`);
+  const axeFile = path.join(root, 'node_modules/axe-core/axe.min.js');
+  index.axeAvailable = existsSync(axeFile);
+  if (!index.axeAvailable) throw new Error(`axe-core not found at ${axeFile}; run npm ci.`);
+  const axeSource = await readFile(axeFile, 'utf8');
+  index.axeVersion = JSON.parse(await readFile(path.join(root, 'node_modules/axe-core/package.json'), 'utf8')).version;
+  const { chromium } = await loadPlaywright();
   const { createServer } = await import('vite');
   await mkdir(outputDirectory, { recursive: true });
   await writeFile(entryFile, entry);
@@ -379,13 +475,14 @@ try {
   });
   await vite.listen();
   const origin = `http://127.0.0.1:${port}`;
-  browser = await chromium.launch({ executablePath: chromeBin, headless: true });
+  browser = await chromium.launch({ ...(chromeBin ? { executablePath: chromeBin } : {}), headless: true });
+  index.browser = `${chromeBin ?? 'bundled chromium'} ${browser.version()}`;
 
   const urlFor = (scenario) => `${origin}/${stem}.html?scenario=${encodeURIComponent(JSON.stringify(scenario))}`;
 
   /** One page load: run the steps, then capture both themes at every size. */
   async function captureState(context, definition, state) {
-    const baseScenario = { mode: 'full', ...(definition.scenario ?? {}) };
+    const baseScenario = { mode: 'full', ...(real ? { data } : {}), ...(definition.scenario ?? {}) };
     const scenario = state === 'empty' ? { ...baseScenario, mode: 'empty' }
       : state === 'loading' ? { ...baseScenario, hang: definition.primary }
         : state === 'error' ? { ...baseScenario, fail: definition.primary }
@@ -431,18 +528,21 @@ try {
       return null;
     }
     const preamble = { ...take(), ...(await drain(page)) };
+    const axeInjected = await page.addScriptTag({ content: axeSource }).then(() => true, () => false);
     const records = [];
     for (const theme of THEMES) {
       await applyTheme(page, theme);
       for (const [width, height] of SIZES) {
         await page.setViewportSize({ width, height });
         const settled = await settle(page);
+        if (definition.anchor) await definition.anchor(page).first().evaluate((element) => element.scrollIntoView({ block: 'start' })).catch(() => {});
         const file = `${definition.view}__${state}__${theme}__${width}.png`;
         await page.screenshot({ path: path.join(outputDirectory, file) });
+        const axe = axeInjected ? await axeScan(page) : { error: 'axe-core could not be injected into the page' };
         const observed = { ...take(), ...(await drain(page)) };
         records.push({
           file, view: definition.view, state, theme, width, height, steps,
-          scenario, settled,
+          scenario, settled, axe,
           // Everything seen while loading and running the steps belongs to the first capture.
           ...(records.length === 0 ? merge(preamble, observed) : observed),
         });
@@ -458,7 +558,7 @@ try {
   async function runDefinition(context, definition) {
     const record = { view: definition.view, steps: null, states: [] };
     index.views.push(record);
-    for (const state of ['populated', ...definition.states]) {
+    for (const state of statesFor(definition)) {
       const page = await captureState(context, definition, state);
       if (!page) continue;
       record.states.push(state);
@@ -515,18 +615,62 @@ try {
 }
 
 index.finishedAt = new Date().toISOString();
+// Per view, one entry per rule and target node across all its states, themes and widths, so the six
+// captures of a state do not count one defect six times. `nodes` is the number of distinct targets
+// (bounded by the AXE_TARGETS_KEPT kept per capture); `instances` sums axe's own node counts.
+const IMPACTS = ['critical', 'serious', 'moderate', 'minor'];
+for (const capture of index.captures) {
+  const view = (index.axe[capture.view] ??= { scannedCaptures: 0, failedScans: 0, rules: {} });
+  if (capture.axe?.error) { view.failedScans += 1; continue; }
+  view.scannedCaptures += 1;
+  for (const violation of capture.axe?.violations ?? []) {
+    const rule = (view.rules[violation.id] ??= { id: violation.id, impact: violation.impact, help: violation.help, helpUrl: violation.helpUrl, captures: 0, instances: 0, states: [], targets: [] });
+    rule.captures += 1;
+    rule.instances += violation.count;
+    if (!rule.states.includes(capture.state)) rule.states.push(capture.state);
+    for (const target of violation.targets) if (!rule.targets.includes(target)) rule.targets.push(target);
+  }
+}
+for (const view of Object.values(index.axe)) {
+  view.rules = Object.values(view.rules).map((rule) => ({ ...rule, nodes: rule.targets.length })).sort((a, b) => IMPACTS.indexOf(a.impact) - IMPACTS.indexOf(b.impact) || b.nodes - a.nodes);
+  view.nodesByImpact = Object.fromEntries(IMPACTS.map((impact) => [impact, view.rules.filter((rule) => rule.impact === impact).reduce((sum, rule) => sum + rule.nodes, 0)]));
+}
+const topRules = {};
+for (const [viewName, view] of Object.entries(index.axe)) {
+  for (const rule of view.rules) {
+    const entry = (topRules[rule.id] ??= { id: rule.id, impact: rule.impact, help: rule.help, nodes: 0, views: [] });
+    entry.nodes += rule.nodes;
+    entry.views.push(viewName);
+  }
+}
+index.axeTop = Object.values(topRules).sort((a, b) => b.nodes - a.nodes);
+const misses = new Map();
+for (const capture of index.captures) for (const sql of capture.sqlMisses ?? []) misses.set(sql, [...new Set([...(misses.get(sql) ?? []), capture.view])]);
+index.sqlMisses = [...misses].map(([sql, views]) => ({ sql, views }));
 index.summary = {
   views: index.views.length,
   captures: index.captures.length,
   unreachable: index.unreachable.length,
   capturesWithConsoleErrors: index.captures.filter((capture) => capture.consoleErrors?.some((entry) => entry.type === 'error') || capture.pageErrors?.length).length,
   stubGaps: [...new Set(index.captures.flatMap((capture) => capture.gaps ?? []))].sort(),
+  unsettledCaptures: index.captures.filter((capture) => !capture.settled).length,
+  sqlMisses: index.sqlMisses.length,
+  axeScannedCaptures: index.captures.filter((capture) => capture.axe && !capture.axe.error).length,
+  axeFailedScans: index.captures.filter((capture) => capture.axe?.error).length,
 };
 if (index.captures.length > 0 || harnessFailure) {
   await mkdir(outputDirectory, { recursive: true });
   await writeFile(path.join(outputDirectory, 'index.json'), `${JSON.stringify({ ...index, harnessFailure: harnessFailure ? String(harnessFailure.stack ?? harnessFailure) : null }, null, 2)}\n`);
 }
-console.log(`${index.captures.length} captures of ${index.views.length} views, ${index.unreachable.length} unreachable -> ${outputDirectory}`);
+if (Object.keys(index.axe).length) {
+  const rows = Object.entries(index.axe).map(([view, summary]) => [view, ...IMPACTS.slice(0, 3).map((impact) => String(summary.nodesByImpact[impact]))]);
+  const width = Math.max(4, ...rows.map(([view]) => view.length));
+  console.log(`\naxe-core ${index.axeVersion}: distinct violating nodes per view (rule x target, across states, themes and widths)`);
+  console.log(`${'view'.padEnd(width)}  critical  serious  moderate`);
+  for (const [view, critical, serious, moderate] of rows) console.log(`${view.padEnd(width)}  ${critical.padStart(8)}  ${serious.padStart(7)}  ${moderate.padStart(8)}`);
+  console.log(`\ntop rules: ${index.axeTop.slice(0, 8).map((rule) => `${rule.id} (${rule.impact}, ${rule.nodes} nodes, ${rule.views.length} views)`).join('; ')}`);
+}
+console.log(`${index.captures.length} captures of ${index.views.length} views (${data} data), ${index.unreachable.length} unreachable, ${index.summary.unsettledCaptures} unsettled, ${index.sqlMisses.length} SQL misses, ${index.summary.axeFailedScans} failed axe scans -> ${outputDirectory}`);
 if (harnessFailure) {
   console.error(harnessFailure);
   process.exit(1);

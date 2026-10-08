@@ -1,0 +1,1212 @@
+{
+  "note": "Serious and critical axe-core violations accepted as of this run; regenerate with `npm run ui:check -- <run> --write-baseline` after fixing some.",
+  "generatedFrom": {
+    "label": "73977fde-202610081057",
+    "gitHead": "73977fde",
+    "generatedAt": "2026-10-08T10:57:10.480Z",
+    "data": "real",
+    "browser": "bundled chromium 156.0.8078.4",
+    "axeVersion": "4.14.0",
+    "widths": [
+      1024,
+      1280,
+      1680
+    ],
+    "states": "all"
+  },
+  "impacts": [
+    "critical",
+    "serious"
+  ],
+  "views": [
+    "account-menu",
+    "activity",
+    "analysis",
+    "analysis-budget-comparison",
+    "analysis-sql-preview",
+    "briefing",
+    "case-switcher",
+    "collection-plan",
+    "command-palette",
+    "command-palette-question",
+    "compare",
+    "evidence",
+    "evidence-authority-library",
+    "evidence-document-viewer",
+    "evidence-request-detail",
+    "evidence-timeline",
+    "first-run",
+    "help-center",
+    "inspector-agency",
+    "inspector-case",
+    "inspector-document",
+    "inspector-entity",
+    "inspector-finding",
+    "inspector-request",
+    "license-device-limit",
+    "license-sign-in-required",
+    "license-trial",
+    "license-trial-expired",
+    "meetings",
+    "my-requests",
+    "my-requests-detail",
+    "overview",
+    "overview-casework-tools",
+    "overview-casework-tools-drawer-verify-a-signed-chain-of-custody-or-evid",
+    "overview-casework-tools-tab-coverage-and-changes",
+    "overview-casework-tools-tab-evidence-review",
+    "overview-casework-tools-tab-organisation-filings",
+    "overview-casework-tools-tab-spending-and-outcomes",
+    "overview-casework-tools-tab-usefulness",
+    "overview-drawer-browse-sources-and-add-records",
+    "overview-drawer-collection-coverage-and-source-issues",
+    "overview-drawer-collection-coverage-and-storage",
+    "overview-drawer-plan-an-investigation-or-draft-a-request",
+    "overview-drawer-research-controls-and-saved-dossiers",
+    "overview-drawer-shared-language-and-topics-across-corpor",
+    "overview-drawer-topics-encampments-belongings-police-spe",
+    "overview-post-ingest-brief",
+    "overview-response-analytics",
+    "overview-sidebar-collapsed",
+    "overview-subject-dossier",
+    "patterns",
+    "patterns-tab-import-and-export",
+    "patterns-tab-ledger-history",
+    "profile-settings",
+    "self-review",
+    "story",
+    "story-tab-all-findings"
+  ],
+  "violations": {
+    "account-menu": {
+      "label-content-name-mismatch": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".p-2.border-line:nth-child(1) > .justify-between.flex-wrap.gap-2 > .analysis-button[type=\"button\"]",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "analysis-budget-comparison": {
+      "scrollable-region-focusable": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".max-h-80",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "analysis-sql-preview": {
+      "scrollable-region-focusable": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".max-h-80",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "case-switcher": {
+      "label-content-name-mismatch": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".p-2.border-line:nth-child(1) > .justify-between.flex-wrap.gap-2 > .analysis-button[type=\"button\"]",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "collection-plan": {
+      "label-content-name-mismatch": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".p-2.border-line:nth-child(1) > .justify-between.flex-wrap.gap-2 > .analysis-button[type=\"button\"]",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "command-palette": {
+      "label-content-name-mismatch": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".p-2.border-line:nth-child(1) > .justify-between.flex-wrap.gap-2 > .analysis-button[type=\"button\"]",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "command-palette-question": {
+      "aria-valid-attr-value": {
+        "impact": "critical",
+        "targets": [
+          {
+            "target": ".h-14",
+            "states": [
+              "error",
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          }
+        ]
+      },
+      "label-content-name-mismatch": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".p-2.border-line:nth-child(1) > .justify-between.flex-wrap.gap-2 > .analysis-button[type=\"button\"]",
+            "states": [
+              "error",
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          }
+        ]
+      },
+      "scrollable-region-focusable": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": "#command-results",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "compare": {
+      "label-content-name-mismatch": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": "tr:nth-child(1) > .font-mono:nth-child(4) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(1) > .font-mono:nth-child(5) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(1) > .font-mono:nth-child(6) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(1) > .font-mono:nth-child(7) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(1) > .font-mono:nth-child(8) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(1) > .font-mono:nth-child(9) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(2) > .font-mono:nth-child(4) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(2) > .font-mono:nth-child(5) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(2) > .font-mono:nth-child(6) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(2) > .font-mono:nth-child(7) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(2) > .font-mono:nth-child(8) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(2) > .font-mono:nth-child(9) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(3) > .font-mono:nth-child(4) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(3) > .font-mono:nth-child(5) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(3) > .font-mono:nth-child(6) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(3) > .font-mono:nth-child(7) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(3) > .font-mono:nth-child(8) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(3) > .font-mono:nth-child(9) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(4) > .font-mono:nth-child(4) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(4) > .font-mono:nth-child(5) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(4) > .font-mono:nth-child(6) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(4) > .font-mono:nth-child(7) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(4) > .font-mono:nth-child(8) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(4) > .font-mono:nth-child(9) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(5) > .font-mono:nth-child(4) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading"
+            ],
+            "widths": [
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(5) > .font-mono:nth-child(5) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading"
+            ],
+            "widths": [
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(5) > .font-mono:nth-child(6) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading"
+            ],
+            "widths": [
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(5) > .font-mono:nth-child(7) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading"
+            ],
+            "widths": [
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(5) > .font-mono:nth-child(8) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading"
+            ],
+            "widths": [
+              1680
+            ]
+          },
+          {
+            "target": "tr:nth-child(5) > .font-mono:nth-child(9) > .px-1.rounded.hover\\:text-accent",
+            "states": [
+              "error",
+              "loading"
+            ],
+            "widths": [
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "evidence": {
+      "aria-prohibited-attr": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".right-3",
+            "states": [
+              "loading"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "evidence-document-viewer": {
+      "scrollable-region-focusable": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".p-5",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "help-center": {
+      "label-content-name-mismatch": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".p-2.border-line.border:nth-child(1) > .justify-between.flex-wrap.gap-2 > .analysis-button[type=\"button\"]",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "inspector-agency": {
+      "label-content-name-mismatch": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".p-2.border-line:nth-child(1) > .justify-between.flex-wrap.gap-2 > .analysis-button[type=\"button\"]",
+            "states": [
+              "error",
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "inspector-case": {
+      "label-content-name-mismatch": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".p-2.border-line:nth-child(1) > .justify-between.flex-wrap.gap-2 > .analysis-button[type=\"button\"]",
+            "states": [
+              "error",
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "inspector-document": {
+      "label-content-name-mismatch": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".p-2.border-line:nth-child(1) > .justify-between.flex-wrap.gap-2 > .analysis-button[type=\"button\"]",
+            "states": [
+              "error",
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          }
+        ]
+      },
+      "scrollable-region-focusable": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".max-h-72",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "inspector-entity": {
+      "label-content-name-mismatch": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".p-2.border-line:nth-child(1) > .flex-wrap.justify-between.gap-2 > .analysis-button[type=\"button\"]",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          },
+          {
+            "target": ".p-2.border-line:nth-child(1) > .justify-between.flex-wrap.gap-2 > .analysis-button[type=\"button\"]",
+            "states": [
+              "error"
+            ],
+            "widths": [
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "inspector-finding": {
+      "label-content-name-mismatch": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".p-2.border-line:nth-child(1) > .justify-between.flex-wrap.gap-2 > .analysis-button[type=\"button\"]",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "inspector-request": {
+      "label-content-name-mismatch": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".p-2.border-line:nth-child(1) > .justify-between.flex-wrap.gap-2 > .analysis-button[type=\"button\"]",
+            "states": [
+              "error",
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "license-trial": {
+      "label-content-name-mismatch": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".p-2.border-line:nth-child(1) > .justify-between.flex-wrap.gap-2 > .analysis-button[type=\"button\"]",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "my-requests": {
+      "label-content-name-mismatch": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".p-2.border-line:nth-child(1) > .justify-between.flex-wrap.gap-2 > .analysis-button[type=\"button\"]",
+            "states": [
+              "error",
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "my-requests-detail": {
+      "label-content-name-mismatch": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".p-2.border-line:nth-child(1) > .justify-between.flex-wrap.gap-2 > .analysis-button[type=\"button\"]",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "overview": {
+      "label-content-name-mismatch": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".p-2.border-line:nth-child(1) > .justify-between.flex-wrap.gap-2 > .analysis-button[type=\"button\"]",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": ".p-2.border-line:nth-child(2) > .justify-between.flex-wrap.gap-2 > .analysis-button[type=\"button\"]",
+            "states": [
+              "error",
+              "loading"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": ".p-2.border-line:nth-child(3) > .justify-between.flex-wrap.gap-2 > .analysis-button[type=\"button\"]",
+            "states": [
+              "error",
+              "loading"
+            ],
+            "widths": [
+              1280,
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "overview-drawer-shared-language-and-topics-across-corpor": {
+      "label-content-name-mismatch": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".text-left.flex-1.min-w-0",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1280,
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "overview-post-ingest-brief": {
+      "label-content-name-mismatch": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".bg-canvas\\/40.p-3.rounded-xl:nth-child(1) > .hover\\:bg-accent\\/5.group.items-start",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": ".bg-canvas\\/40.p-3.rounded-xl:nth-child(2) > .hover\\:bg-accent\\/5.group.items-start",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": ".bg-canvas\\/40.p-3.rounded-xl:nth-child(3) > .hover\\:bg-accent\\/5.group.items-start",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": ".p-2.border-line:nth-child(1) > .justify-between.flex-wrap.gap-2 > .analysis-button[type=\"button\"]",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "overview-response-analytics": {
+      "nested-interactive": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".min-h-\\[280px\\]",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "overview-sidebar-collapsed": {
+      "label-content-name-mismatch": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".p-2.border-line:nth-child(1) > .justify-between.flex-wrap.gap-2 > .analysis-button[type=\"button\"]",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          },
+          {
+            "target": "button[aria-label=\"Activity\"]",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": "button[aria-label=\"Meetings\"]",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": "button[aria-label=\"Story desk\"]",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "patterns": {
+      "label-content-name-mismatch": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".focus-visible\\:\\[\\&\\>circle\\:first-of-type\\]\\:stroke-white.focus\\:outline-none[role=\"button\"]:nth-child(10)",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          }
+        ]
+      },
+      "nested-interactive": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".h-\\[430px\\]",
+            "states": [
+              "error",
+              "loading",
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "patterns-tab-import-and-export": {
+      "nested-interactive": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".h-\\[430px\\]",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "patterns-tab-ledger-history": {
+      "nested-interactive": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".h-\\[430px\\]",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "profile-settings": {
+      "label-content-name-mismatch": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".p-2.border-line:nth-child(1) > .justify-between.flex-wrap.gap-2 > .analysis-button[type=\"button\"]",
+            "states": [
+              "error",
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "self-review": {
+      "label-content-name-mismatch": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".p-2.border-line:nth-child(1) > .justify-between.flex-wrap.gap-2 > .analysis-button[type=\"button\"]",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "story": {
+      "label-content-name-mismatch": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".motion-lift.bg-canvas\\/40.hover\\:border-line-strong:nth-child(1) > .gap-2.items-center.text-label > .motion-press.hover\\:border-accent\\/30.border-control",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": ".motion-lift.bg-canvas\\/40.hover\\:border-line-strong:nth-child(2) > .gap-2.items-center.text-label > .motion-press.hover\\:border-accent\\/30.border-control",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": ".motion-lift.bg-canvas\\/40.hover\\:border-line-strong:nth-child(3) > .gap-2.items-center.text-label > .motion-press.hover\\:border-accent\\/30.border-control",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          },
+          {
+            "target": ".motion-lift.bg-canvas\\/40.hover\\:border-line-strong:nth-child(4) > .gap-2.items-center.text-label > .motion-press.hover\\:border-accent\\/30.border-control",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          }
+        ]
+      }
+    },
+    "story-tab-all-findings": {
+      "label-content-name-mismatch": {
+        "impact": "serious",
+        "targets": [
+          {
+            "target": ".focus-within\\:ring-1.focus-within\\:ring-accent\\/50.bg-canvas\\/40:nth-child(1) > .sm\\:flex-nowrap.gap-3.items-start > .flex-row.items-end.sm\\:w-auto > .hover\\:border-accent\\/30.hover\\:text-fg.px-2:nth-child(2)",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": ".focus-within\\:ring-1.focus-within\\:ring-accent\\/50.bg-canvas\\/40:nth-child(1) > .sm\\:flex-nowrap.gap-3.items-start > .gap-1\\.5.flex-1.flex-col > .text-left.min-w-0[type=\"button\"]",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1024,
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": ".focus-within\\:ring-1.focus-within\\:ring-accent\\/50.bg-canvas\\/40:nth-child(2) > .sm\\:flex-nowrap.gap-3.items-start > .flex-row.items-end.sm\\:w-auto > .hover\\:border-accent\\/30.hover\\:text-fg.px-2:nth-child(2)",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": ".focus-within\\:ring-1.focus-within\\:ring-accent\\/50.bg-canvas\\/40:nth-child(2) > .sm\\:flex-nowrap.gap-3.items-start > .gap-1\\.5.flex-1.flex-col > .text-left.min-w-0[type=\"button\"]",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1280,
+              1680
+            ]
+          },
+          {
+            "target": ".focus-within\\:ring-1.focus-within\\:ring-accent\\/50.bg-canvas\\/40:nth-child(3) > .sm\\:flex-nowrap.gap-3.items-start > .flex-row.items-end.sm\\:w-auto > .hover\\:border-accent\\/30.hover\\:text-fg.px-2:nth-child(2)",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          },
+          {
+            "target": ".focus-within\\:ring-1.focus-within\\:ring-accent\\/50.bg-canvas\\/40:nth-child(3) > .sm\\:flex-nowrap.gap-3.items-start > .gap-1\\.5.flex-1.flex-col > .text-left.min-w-0[type=\"button\"]",
+            "states": [
+              "populated"
+            ],
+            "widths": [
+              1680
+            ]
+          }
+        ]
+      }
+    }
+  }
+}
