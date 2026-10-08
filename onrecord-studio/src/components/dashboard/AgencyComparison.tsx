@@ -51,7 +51,7 @@ interface ColumnDefinition {
 const COLUMNS: readonly ColumnDefinition[] = [
   {
     key: 'averageClosureDays',
-    label: 'Avg closure days',
+    label: 'Avg days',
     full: 'Average days from filing to closure',
     format: (p) => (p.averageClosureDays === null ? null : p.averageClosureDays.toFixed(1)),
   },
@@ -194,7 +194,7 @@ export default function AgencyComparison() {
               <thead>
                 <tr>
                   <Th numeric className="sticky left-0 z-[11] w-12 min-w-12">Rank</Th>
-                  <Th className="sticky left-12 z-[11] min-w-[14rem]">Agency</Th>
+                  <Th className="sticky left-12 z-[11] min-w-[12rem]">Agency</Th>
                   {COLUMNS.map((definition) => {
                     const active = definition.key === column;
                     return (
@@ -224,7 +224,7 @@ export default function AgencyComparison() {
                   return (
                     <tr key={`${profile.portalSubdomain}-${profile.agencyId}`} className="group">
                       <Td numeric className="sticky left-0 w-12 bg-panel text-muted group-hover:bg-raised">{index + 1}</Td>
-                      <Td className="sticky left-12 min-w-[14rem] bg-panel group-hover:bg-raised">
+                      <Td className="sticky left-12 min-w-[12rem] bg-panel group-hover:bg-raised">
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                           <ObjectLink
                             target={{ kind: 'agency', portalKey: profile.portalSubdomain, agencyId: profile.agencyId, label: profile.agencyName }}

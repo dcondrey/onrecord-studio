@@ -69,7 +69,7 @@ describe('AgencyComparison', () => {
     render(<AgencyComparison />);
     const names = bodyRows().map((row) => within(within(row).getAllByRole('cell')[1]).getAllByRole('button')[0].textContent);
     expect(names).toEqual(['Sheriff', 'Parks', 'Water']);
-    expect(screen.getByRole('columnheader', { name: /Avg closure days/ }).getAttribute('aria-sort')).toBe('descending');
+    expect(screen.getByRole('columnheader', { name: /Avg days/ }).getAttribute('aria-sort')).toBe('descending');
   });
 
   it('keeps an absent latency last when the sort direction flips', () => {

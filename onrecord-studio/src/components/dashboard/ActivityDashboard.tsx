@@ -58,9 +58,9 @@ export default function ActivityDashboard() {
         />
 
         <section aria-label="Session throughput" className="app-panel grid grid-cols-1 divide-y divide-line overflow-hidden sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-4 xl:divide-x">
-          <Stat label="Requests this session" value={metrics.requestsProcessed} detail="From current runtime snapshots" />
-          <Stat label="Tasks completed this session" value={metrics.completedTasks} detail={`${metrics.queuedTasks.toLocaleString()} waiting in queues`} />
-          <Stat label="Documents saved this session" value={metrics.documentsDownloaded} detail={formatBytes(metrics.bytesTransferred)} />
+          <Stat label="Requests" value={metrics.requestsProcessed} detail="This session, from runtime snapshots" />
+          <Stat label="Tasks completed" value={metrics.completedTasks} detail={`This session · ${metrics.queuedTasks.toLocaleString()} waiting in queues`} />
+          <Stat label="Documents saved" value={metrics.documentsDownloaded} detail={`This session · ${formatBytes(metrics.bytesTransferred)}`} />
           <Stat
             label="Failed tasks"
             value={metrics.failedTasks}
@@ -74,7 +74,7 @@ export default function ActivityDashboard() {
             <PanelHeader
               titleId="event-stream-heading"
               title="Event stream"
-              description="Newest first, kept for this session."
+              description="Newest first."
               actions={<>
                 <SearchField size="sm" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter events" aria-label="Filter activity" wrapperClassName="w-44" />
                 <SegmentedControl<LogFilter>

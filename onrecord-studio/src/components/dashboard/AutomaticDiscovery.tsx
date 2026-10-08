@@ -123,11 +123,12 @@ export default function AutomaticDiscovery() {
         actions={<Button size="sm" onClick={controller.refresh}>Refresh</Button>}
       />
       <PanelBody className="space-y-5">
-        <p role="status" className="text-caption tabular-nums text-muted empty:hidden">
-          {state.paused ? 'Automatic checks are waiting for your current analysis.'
-            : checking && datasets.length > 0 ? `Checked ${checked.toLocaleString()} of ${datasets.length.toLocaleString()} ${datasets.length === 1 ? 'table' : 'tables'}`
-              : ''}
-        </p>
+        {(state.paused || (checking && datasets.length > 0)) && (
+          <p role="status" className="text-caption tabular-nums text-muted">
+            {state.paused ? 'Automatic checks are waiting for your current analysis.'
+              : `Checked ${checked.toLocaleString()} of ${datasets.length.toLocaleString()} ${datasets.length === 1 ? 'table' : 'tables'}`}
+          </p>
+        )}
         {Object.keys(state.errors).length > 0 && (
           <ul role="alert" className="space-y-1 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-body text-warning">
             {Object.entries(state.errors).map(([key, error]) => (

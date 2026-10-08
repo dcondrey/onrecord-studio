@@ -26,10 +26,21 @@ const STATUS_LABEL: Record<IntentStatus, string> = {
 
 const QUOTE_LIMIT = 220;
 
-/** Cuts at the last word boundary inside the limit so a quote never ends mid-word. */
+const SENTENCE_END = '.!?"”’)]';
+
+/**
+ * Cuts at the last word boundary inside the limit so a quote never ends mid-word. A stored
+ * excerpt can itself stop just after starting a new sentence ("…were located. T"); that dangling
+ * fragment is dropped and marked as cut.
+ */
 function trimQuote(quote: string): string {
-  if (quote.length <= QUOTE_LIMIT) return quote;
-  const cut = quote.slice(0, QUOTE_LIMIT);
+  const trimmed = quote.trim();
+  if (trimmed.length <= QUOTE_LIMIT) {
+    const lastSpace = trimmed.lastIndexOf(' ');
+    const dangling = lastSpace > 0 && SENTENCE_END.includes(trimmed[lastSpace - 1]) && trimmed.length - lastSpace - 1 <= 2;
+    return dangling ? `${trimmed.slice(0, lastSpace)} …` : trimmed;
+  }
+  const cut = trimmed.slice(0, QUOTE_LIMIT);
   const boundary = cut.lastIndexOf(' ');
   return `${(boundary > 0 ? cut.slice(0, boundary) : cut).replace(/[\s.,;:]+$/, '')}…`;
 }

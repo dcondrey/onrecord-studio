@@ -93,7 +93,7 @@ export default function CaseSwitcher() {
           onBlur={(event) => {
             if (!root.current?.contains(event.relatedTarget as Node | null)) close(false);
           }}
-          className="glass motion-pop absolute right-0 top-full z-popover mt-2 w-80 overflow-hidden rounded-xl p-1.5"
+          className="glass motion-pop absolute right-0 top-full z-popover mt-2 w-96 overflow-hidden rounded-xl p-1.5"
         >
           {(casework.status === 'pending' || (casework.status === 'ready' && casework.data === null)) && (
             <Skeleton variant="lines" lines={3} label="Loading cases" className="p-2" />
