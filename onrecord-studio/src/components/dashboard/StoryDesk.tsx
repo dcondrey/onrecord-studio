@@ -23,6 +23,7 @@ import CaseScopeBar from './CaseScopeBar';
 import { useCaseScope } from '../../hooks/useCaseScope';
 import { cn } from '../../utils/cn';
 import ArtifactDrafts from './ArtifactDrafts';
+import StoredLeadFigure from './StoredLeadFigure';
 import BarTable, { type BarTableColumn, type BarTableRow } from '../charts/figures/BarTable';
 import { absent, measured } from '../charts/core/nulls';
 
@@ -239,6 +240,7 @@ export default function StoryDesk() {
             renderDetail={(lead) => (
               <div className="flex flex-col gap-3">
                 <FamilyBadge family={findingFamily(lead.kind)} />
+                <StoredLeadFigure findingId={lead.findingId} fallback={null} />
                 <ul className="grid gap-1 text-caption text-fg-secondary" aria-label="Ranking factors">
                   {lead.publicInterest.factors.map((factor) => (
                     <li key={factor.name}>

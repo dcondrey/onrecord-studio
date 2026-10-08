@@ -5,7 +5,7 @@ import { useAppStore } from '../../store/useAppStore';
 import type { DossierGap, EvidenceLink, LeadDossier as LeadDossierData, LeadFigure as LeadFigureData } from '../../types';
 import LeadFigure from '../charts/figures/LeadFigure';
 import { useDiscoveryController } from './AutomaticDiscoveryProvider';
-import { tableLeadSources, type TableLeadSources } from '../../utils/tableLeadSources';
+import { leadProse, tableLeadSources, type TableLeadSources } from '../../utils/tableLeadSources';
 import { findingToBriefingEvidence } from './BriefingWorkspace';
 import ArtifactDrafts from './ArtifactDrafts';
 import EvidenceChain from '../objects/EvidenceChain';
@@ -23,7 +23,6 @@ type DossierState =
   | { status: 'ready'; dossier: LeadDossierData; figure: FigureState }
   | { status: 'failed'; message: string };
 
-const TABLES_READ = '\n\nTables read:\n';
 
 /**
  * Assembles one finding into a dossier: the records it cites, the findings that touch the same
@@ -133,9 +132,7 @@ function LeadFigureSection({ dossier, figure }: { dossier: LeadDossierData; figu
       </>
     );
   }
-  const explanation = dossier.finding.explanation;
-  const tablesAt = explanation.lastIndexOf(TABLES_READ);
-  const prose = tablesAt < 0 ? explanation : explanation.slice(0, tablesAt);
+  const prose = leadProse(dossier.finding.explanation);
   const tables = sources?.tables.map((table) => table.parts?.name ?? table.line) ?? [];
   // A mark opens the lead's own query in Analysis, as its card does.
   const sql = sources?.sql;

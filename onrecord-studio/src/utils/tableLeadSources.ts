@@ -48,3 +48,9 @@ export function tableLeadSources(explanation: string): TableLeadSources | null {
   if (lines.length === 0 || sql.trim() === '') return null;
   return { tables: lines.map((line) => ({ line, parts: tableParts(line) })), sql };
 }
+
+/** A table lead's own words: its explanation before the tables and SQL it was computed with. */
+export function leadProse(explanation: string): string {
+  const tablesAt = explanation.lastIndexOf(TABLES_HEADING);
+  return tablesAt < 0 ? explanation : explanation.slice(0, tablesAt);
+}

@@ -19,6 +19,7 @@ import StateGrid, { type StateGridCell, type StateGridRow } from '../charts/figu
 import { seqStep } from '../charts/marks/HeatCell';
 import { FindingEvidence } from '../ui/EvidenceBasis';
 import ArtifactDrafts from './ArtifactDrafts';
+import StoredLeadFigure from './StoredLeadFigure';
 import EvidenceGaps from './EvidenceGaps';
 import EvidencePacketExport from './EvidencePacketExport';
 
@@ -29,6 +30,8 @@ import { touchesOwnOrganization, useAffiliationDisclosure } from '../account/use
 
 /** A failed user action. Kept apart from a failed load: the list is still valid when one of these is set. */
 const PAGE_SIZE = 50;
+/** `analysis::service_leads::SLUG`: the detector whose findings may store a lead figure. */
+const TABLE_LEAD_DETECTOR = 'service_report_leads';
 const SEVERITIES: FindingSeverity[] = ['CRITICAL', 'SERIOUS', 'NOTABLE', 'INFO'];
 type FindingSort = 'ranked' | 'newest';
 
@@ -559,6 +562,9 @@ function FindingRow({
   onAssemble: () => void;
   onOpenSource: (citation: FindingCitation) => void;
 }) {
+  // A table lead may carry a stored figure, read by id; it leads the row in place of the prose.
+  const tableLead = finding.sourceDetector === TABLE_LEAD_DETECTOR;
+  const explanation = <p className="mt-1 whitespace-pre-line break-words text-body text-muted">{finding.explanation}</p>;
   return (
     <li className="flex flex-col gap-3 rounded-lg border border-line p-4 transition-colors hover:border-line-strong" data-own-organization={own ? 'true' : undefined}>
       {own && <Badge tone="neutral">Your organization (self-declared)</Badge>}
@@ -571,11 +577,12 @@ function FindingRow({
             className="focus-ring min-w-0 rounded text-left"
           >
             <p className="text-heading text-fg">{finding.headline}</p>
-            <p className="mt-1 whitespace-pre-line break-words text-body text-muted">{finding.explanation}</p>
+            {!tableLead && explanation}
             <p className="mt-1 text-caption tabular-nums text-muted">
               {severityLabel(finding.severity)} · {formatRelativeTime(finding.lastSeenAt)}
             </p>
           </button>
+          {tableLead && <StoredLeadFigure findingId={finding.id} fallback={explanation} reserve />}
           <FindingEvidence finding={finding} onOpenSource={onOpenSource} />
         </div>
       </div>
