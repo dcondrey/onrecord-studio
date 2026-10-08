@@ -10,11 +10,14 @@ pub(crate) const MAX_SOURCE_BYTES: u64 = 96 * 1024 * 1024;
 const MAX_ROWS: usize = 750_000;
 const MAX_COLUMNS: usize = 512;
 const MAX_CELLS: usize = 6_000_000;
-/// Delimited text is streamed, but DuckDB holds an import's rows until its transaction commits:
-/// measured peaks were 50-80 bytes per cell (CFS 2025, 6.5M cells, 379 MB; Get It Done 2025,
-/// 8.7M cells, 707 MB). Twenty million cells bounds one import near 1.5 GB.
+/// Delimited text is streamed in Arrow batches into a file-backed database whose buffer manager
+/// spills, so an import's peak no longer grows with its cells. Measured peak RSS of one release
+/// import into a file database on a 32 GB Mac (2026-10-07): APR Table A, 12.9M cells, 693 MB;
+/// SCO city revenues, 38.4M cells, 755 MB; APR Table A2, 63.7M cells, 1.46 GB (1.08 GB under
+/// `memory_limit = '1GB'`); Table A2 twice over, 127.3M cells, 1.54 GB. The cell bound is that
+/// last measurement, and the byte bound stays the binding one for wide files.
 pub(crate) const MAX_STREAMED_BYTES: u64 = 1024 * 1024 * 1024;
-const MAX_STREAMED_CELLS: usize = 20_000_000;
+const MAX_STREAMED_CELLS: usize = 128_000_000;
 
 pub(crate) struct PreparedTable {
     pub headers: Vec<String>,

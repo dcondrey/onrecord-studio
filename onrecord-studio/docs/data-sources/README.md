@@ -59,7 +59,7 @@ or when no shelter is reasonably available. 63.0406(a): written notice of clean-
   Appendix B lists sign locations as a City dataset) — request both.
 - In the app: Analysis → Analytical Import → "Fetch and import" downloads NIBRS offenses, calls for
   service (2015 on) or Get It Done encampment reports for a year, SANDAG schools, or SANDAG transit
-  stops. Delimited files are streamed (up to 1 GB and 20 million cells; calls for service 2024, the
+  stops. Delimited files are streamed (up to 1 GB and 128 million cells; calls for service 2024, the
   largest year, is 970,649 rows x 14 columns). Get It Done closed-year files are kept as a subset by
   choice: `service_name = 'Encampment'`, or "closed reports (those seen open)", the rows whose
   `service_request_id` appears in an imported open copy; the publisher file's SHA-256 is stored in the
