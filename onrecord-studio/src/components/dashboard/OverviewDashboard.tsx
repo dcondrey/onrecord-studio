@@ -15,7 +15,7 @@ import DataMaintenance from './DataMaintenance';
 import ResearchSnapshotExport from './ResearchSnapshotExport';
 import RegistrySnapshots from './RegistrySnapshots';
 import AutomaticDiscovery from './AutomaticDiscovery';
-import { invokeCommand } from '../../ipc';
+import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { AgencyPerformanceProfile } from '../../types';
 import AttentionFeed from './AttentionFeed';
@@ -168,7 +168,7 @@ function PeriodComparison({ activePortalKey }: { activePortalKey: string | null 
       setCurrent(currentProfiles.filter((profile) => !activePortalKey || profile.portalSubdomain === activePortalKey));
       setPrior(priorProfiles.filter((profile) => !activePortalKey || profile.portalSubdomain === activePortalKey));
     }).catch((reason) => {
-      if (comparisonGate.isCurrent(request)) setError(String(reason));
+      if (comparisonGate.isCurrent(request)) setError(formatNativeError(reason));
     }).finally(() => {
       if (comparisonGate.isCurrent(request)) setIsLoading(false);
     });

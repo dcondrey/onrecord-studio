@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { invokeCommand } from '../../ipc';
+import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
 import type { DimensionResult, WatchChange, WatchDimension, WatchKind, WatchSummary } from '../../types';
@@ -65,7 +65,7 @@ export function describeDimension(result: DimensionResult): { text: string; tone
 }
 
 function message(reason: unknown): string {
-  return reason instanceof Error ? reason.message : String(reason);
+  return formatNativeError(reason);
 }
 
 function asList<T>(value: T[] | undefined, what: string): T[] {
@@ -111,7 +111,7 @@ export default function WatchlistPanel() {
         setLoaded(true);
       } catch (reason) {
         if (!gate.isCurrent(request)) return;
-        setError(message(reason));
+        setError(formatNativeError(reason));
       } finally {
         if (gate.isCurrent(request)) setBusy(false);
       }
@@ -137,7 +137,7 @@ export default function WatchlistPanel() {
       setTarget('');
       setSelectedId(saved.id);
     } catch (reason) {
-      setError(message(reason));
+      setError(formatNativeError(reason));
     }
   };
 
@@ -150,7 +150,7 @@ export default function WatchlistPanel() {
       setSelectedId((current) => (current === id ? null : current));
       setReload((count) => count + 1);
     } catch (reason) {
-      setError(message(reason));
+      setError(formatNativeError(reason));
     }
   };
 

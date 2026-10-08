@@ -4,7 +4,7 @@ import { Citations, EvidenceLinks } from "./ResearchEvidence";
 import ResearchExport from "./ResearchExport";
 import { requestFindingLinks } from "../../utils/researchExport";
 import { isTauri } from "@tauri-apps/api/core";
-import { invokeCommand } from "../../ipc";
+import { formatNativeError, invokeCommand } from "../../ipc";
 import type {
   ResearchFinding,
   ResearchPolicy,
@@ -35,7 +35,7 @@ export default function ResearchWorkspace({ onReview }: { onReview?: (reportId: 
       const next = await invokeCommand("get_research_status", {});
       if (gate.isCurrent(token)) { setStatus(next); setError(""); }
     } catch (reason) {
-      if (gate.isCurrent(token)) setError(String(reason));
+      if (gate.isCurrent(token)) setError(formatNativeError(reason));
     }
   };
   useEffect(() => {
@@ -60,7 +60,7 @@ export default function ResearchWorkspace({ onReview }: { onReview?: (reportId: 
   const run = async () => {
     setPending(true); setError("");
     try { await invokeCommand("run_research_now", { topic }); await refresh(); }
-    catch (reason) { setError(String(reason)); }
+    catch (reason) { setError(formatNativeError(reason)); }
     finally { setPending(false); }
   };
   const missingCredential = status && status.policy.provider !== "ollama" && !status.credentialAvailable;
@@ -236,7 +236,7 @@ function ResearchSettings({
         setDirty(false);
       }
     } catch (reason) {
-      if (gate.isCurrent(token)) setError(String(reason));
+      if (gate.isCurrent(token)) setError(formatNativeError(reason));
     } finally {
       if (gate.isCurrent(token)) setSaving(false);
     }
@@ -726,7 +726,7 @@ function ActionState({
       await invokeCommand("set_research_action_state", { actionKey, state });
       onChanged();
     } catch (reason) {
-      setError(String(reason));
+      setError(formatNativeError(reason));
     } finally {
       setSaving(false);
     }

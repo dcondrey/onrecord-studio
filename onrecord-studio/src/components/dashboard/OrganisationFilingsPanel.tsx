@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { invokeCommand } from '../../ipc';
+import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type {
   AnalyticalSchema, HybridSearchResult, RecordGapRequestStatus, RequestSearchResult, FilingExplanation, Form990Statement, OrganisationCheckSummary, OrganisationFilings, OrganisationMatch,
@@ -133,8 +133,8 @@ function Library({ filings }: { filings: OrganisationFilings }) {
     const request = gate.begin();
     const found: string[] = [];
     void Promise.all([
-      invokeCommand('hybrid_search', { query: name, limit: 10 }).then((hits) => Array.isArray(hits) ? hits : [], (reason) => { found.push(`Document search: ${String(reason)}`); return []; }),
-      invokeCommand('query_audit_records_page', { searchTerm: name, pageSize: 10 }).then((page) => Array.isArray(page?.records) ? page.records : [], (reason) => { found.push(`Request search: ${String(reason)}`); return []; }),
+      invokeCommand('hybrid_search', { query: name, limit: 10 }).then((hits) => Array.isArray(hits) ? hits : [], (reason) => { found.push(`Document search: ${formatNativeError(reason)}`); return []; }),
+      invokeCommand('query_audit_records_page', { searchTerm: name, pageSize: 10 }).then((page) => Array.isArray(page?.records) ? page.records : [], (reason) => { found.push(`Request search: ${formatNativeError(reason)}`); return []; }),
     ]).then(([hits, held]) => { if (!gate.isCurrent(request)) return; setDocuments(hits); setRequests(held); setNotes(found); });
     return gate.invalidate;
   }, [gate, name]);
@@ -147,13 +147,13 @@ function Library({ filings }: { filings: OrganisationFilings }) {
   const track = () => {
     if (!input) return;
     const request = gate.begin();
-    invokeCommand('request_record_gap', { input }).then(() => { if (gate.isCurrent(request)) setMessage('Tracked. Record the submission date in casework once you have filed it.'); }, (reason) => { if (gate.isCurrent(request)) setMessage(String(reason)); });
+    invokeCommand('request_record_gap', { input }).then(() => { if (gate.isCurrent(request)) setMessage('Tracked. Record the submission date in casework once you have filed it.'); }, (reason) => { if (gate.isCurrent(request)) setMessage(formatNativeError(reason)); });
   };
   const collect = () => {
     if (!custodian || !name) return;
     const request = gate.begin();
     invokeCommand('start_data_source', { url: custodian.registration.originUrl, guidance: guidanceForSubject(name) })
-      .then(() => { if (gate.isCurrent(request)) setMessage(`Collection started from ${custodian.registration.displayName} for "${name}"; the source is listed in the sidebar. The lists above are read again when you reopen this organisation.`); }, (reason) => { if (gate.isCurrent(request)) setMessage(String(reason)); });
+      .then(() => { if (gate.isCurrent(request)) setMessage(`Collection started from ${custodian.registration.displayName} for "${name}"; the source is listed in the sidebar. The lists above are read again when you reopen this organisation.`); }, (reason) => { if (gate.isCurrent(request)) setMessage(formatNativeError(reason)); });
   };
   const date = (value: string | null) => value ? value.slice(0, 10) : '';
   return <section aria-label="In your library" className="space-y-3">
@@ -265,7 +265,7 @@ function BatchCheck({ auditKey, onDone }: { auditKey: string; onDone: () => void
       const added = payees.map((p) => p.vendorValue).filter((value) => !held.has(normalisedName(value)));
       setText((current) => [current.trimEnd(), ...added].filter(Boolean).join('\n'));
       if (!payees.length) setError('No payee is listed: map a payment table under "Tables searched for payments" first.');
-    }, (reason) => { if (gate.isCurrent(request)) setError(String(reason)); })
+    }, (reason) => { if (gate.isCurrent(request)) setError(formatNativeError(reason)); })
       .finally(() => { if (gate.isCurrent(request)) setBusy(''); });
   };
   const lookUp = async () => {
@@ -277,7 +277,7 @@ function BatchCheck({ auditKey, onDone }: { auditKey: string; onDone: () => void
         const candidates = (await invokeCommand('search_organisations', { query: entry })).slice(0, 5);
         const exact = candidates.filter((c) => normalisedName(c.name) === normalisedName(entry));
         found.push({ entry, candidates, chosen: exact.length === 1 ? exact[0] : null });
-      } catch (reason) { found.push({ entry, candidates: [], chosen: null }); setError(`${entry}: ${String(reason)}`); }
+      } catch (reason) { found.push({ entry, candidates: [], chosen: null }); setError(`${entry}: ${formatNativeError(reason)}`); }
       if (!gate.isCurrent(request)) return;
       setResolutions([...found]);
     }
@@ -289,7 +289,7 @@ function BatchCheck({ auditKey, onDone }: { auditKey: string; onDone: () => void
     setBusy('check'); setProgress({ done: 0, total: targets.length, failed });
     for (const [index, ein] of targets.entries()) {
       try { await invokeCommand('check_organisation_filings', { ein, auditKey: auditKey.trim() || null }); }
-      catch (reason) { failed.push(`${ein}: ${String(reason)}`); }
+      catch (reason) { failed.push(`${ein}: ${formatNativeError(reason)}`); }
       if (!gate.isCurrent(request)) return;
       setProgress({ done: index + 1, total: targets.length, failed: [...failed] });
     }
@@ -332,7 +332,7 @@ function Portfolio({ rows, onOpen }: { rows: PortfolioRow[]; onOpen: (row: Portf
       if (!outputPath) return;
       await invokeCommand('export_organisation_portfolio_csv', { outputPath, content: portfolioCsv(rows) });
       setMessage(`Written to ${outputPath}.`);
-    } catch (reason) { setMessage(String(reason)); }
+    } catch (reason) { setMessage(formatNativeError(reason)); }
   };
   return <section aria-label="Checked organisations" className="space-y-2">
     <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold text-fg">Checked organisations</h3><button type="button" className="analysis-button" onClick={() => { void exportCsv(); }}>Export CSV</button></div>
@@ -363,7 +363,7 @@ function PaymentTables({ schema, mappings, onChange }: { schema: AnalyticalSchem
   const columns = dataset ? (schema?.columns ?? []).filter((c) => c.tableName === dataset.tableName).map((c) => c.columnName) : [];
   const run = (work: Promise<OrganisationPaymentMapping[]>) => {
     const request = gate.begin();
-    work.then((saved) => { if (gate.isCurrent(request)) { onChange(saved); setError(''); } }, (reason) => { if (gate.isCurrent(request)) setError(String(reason)); });
+    work.then((saved) => { if (gate.isCurrent(request)) { onChange(saved); setError(''); } }, (reason) => { if (gate.isCurrent(request)) setError(formatNativeError(reason)); });
   };
   const nameOf = (id: string) => datasets.find((d) => d.snapshotId === id)?.displayName ?? id;
   return <details className="rounded-lg border border-line-strong p-3">
@@ -431,7 +431,7 @@ export default function OrganisationFilingsPanel({ initialQuery = '' }: { initia
       if (!recordGate.isCurrent(request)) return;
       setFilings(result);
       if (work === 'check') loadChecked();
-    }, (reason) => { if (recordGate.isCurrent(request)) setError(String(reason)); })
+    }, (reason) => { if (recordGate.isCurrent(request)) setError(formatNativeError(reason)); })
       .finally(() => { if (recordGate.isCurrent(request)) setBusy(''); });
   };
 
@@ -441,7 +441,7 @@ export default function OrganisationFilingsPanel({ initialQuery = '' }: { initia
     const request = searchGate.begin();
     setBusy('search'); setError('');
     invokeCommand('search_organisations', { query: text }).then((found) => { if (searchGate.isCurrent(request)) setMatches(found); },
-      (reason) => { if (searchGate.isCurrent(request)) setError(String(reason)); })
+      (reason) => { if (searchGate.isCurrent(request)) setError(formatNativeError(reason)); })
       .finally(() => { if (searchGate.isCurrent(request)) setBusy((current) => current === 'search' ? '' : current); });
   };
 

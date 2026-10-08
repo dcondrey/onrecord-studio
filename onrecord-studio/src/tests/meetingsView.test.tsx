@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CalendarMeeting, FindingCitation, MeetingCalendar, MeetingDocument } from '../types';
 const bridge = vi.hoisted(() => ({ invoke: vi.fn() }));
-vi.mock('../ipc', () => ({ invokeCommand: bridge.invoke }));
+vi.mock('../ipc', async (importOriginal) => ({ ...(await importOriginal<typeof import('../ipc')>()), invokeCommand: bridge.invoke }));
 import MeetingsView from '../components/dashboard/MeetingsView';
 
 const cite = (quote: string, start: number | null = 0): FindingCitation => ({

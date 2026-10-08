@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { invokeCommand } from '../../ipc';
+import { formatNativeError, invokeCommand } from '../../ipc';
 import type { CoverageExpectation, MonitoringEvidence, MonitoringStatus, ServiceObservation } from '../../types/monitoring';
 import { citationLocation, observationPoints, optionalMeasurement } from '../../utils/monitoring';
 
@@ -37,7 +37,7 @@ export default function MonitoringPanel({ caseId = null, topic = 'homelessness' 
       setStatus(next);
     } catch (failure) {
       if (identityRef.current !== requestedIdentity || generation.current !== requestedGeneration) return;
-      setError(String(failure));
+      setError(formatNativeError(failure));
     } finally {
       if (identityRef.current === requestedIdentity && generation.current === requestedGeneration) setBusy(false);
     }
@@ -52,7 +52,7 @@ export default function MonitoringPanel({ caseId = null, topic = 'homelessness' 
       setStatus(next);
     }).catch(failure => {
       if (identityRef.current !== requestedIdentity || generation.current !== requestedGeneration) return;
-      setError(String(failure));
+      setError(formatNativeError(failure));
     }).finally(() => {
       if (identityRef.current === requestedIdentity && generation.current === requestedGeneration) setBusy(false);
     });
@@ -70,7 +70,7 @@ export default function MonitoringPanel({ caseId = null, topic = 'homelessness' 
       await load();
     } catch (failure) {
       if (identityRef.current !== requestedIdentity || generation.current !== requestedGeneration) return;
-      setError(String(failure)); setBusy(false);
+      setError(formatNativeError(failure)); setBusy(false);
     }
   }
 
@@ -126,7 +126,7 @@ function CoverageForm({ caseId, topic, busy, onSave }: { caseId: string | null; 
 function ObservationForm({ topic, caseId, sources, busy, onSave }: { topic: string; caseId: string | null; sources: MonitoringEvidence[]; busy: boolean; onSave: (value: ServiceObservation) => void }) {
   const [sourceIndex, setSourceIndex] = useState(0); const [error, setError] = useState<string | null>(null);
   const source = sources[sourceIndex];
-  return <form className={`${panelClass} grid gap-3 md:grid-cols-2`} onSubmit={event => { event.preventDefault(); if (!source) return; const data = new FormData(event.currentTarget); const get = (key: string) => String(data.get(key) ?? '').trim(); try { onSave({ id: '', caseId, topic, kind: get('kind'), place: get('place'), observedOn: get('date'), latitude: optionalMeasurement(get('latitude')), longitude: optionalMeasurement(get('longitude')), hoursPerWeek: optionalMeasurement(get('hours')), status: get('status') || 'NOT_RECORDED', evidence: source, reviewed: true }); } catch (failure) { setError(String(failure)); } }}>
+  return <form className={`${panelClass} grid gap-3 md:grid-cols-2`} onSubmit={event => { event.preventDefault(); if (!source) return; const data = new FormData(event.currentTarget); const get = (key: string) => String(data.get(key) ?? '').trim(); try { onSave({ id: '', caseId, topic, kind: get('kind'), place: get('place'), observedOn: get('date'), latitude: optionalMeasurement(get('latitude')), longitude: optionalMeasurement(get('longitude')), hoursPerWeek: optionalMeasurement(get('hours')), status: get('status') || 'NOT_RECORDED', evidence: source, reviewed: true }); } catch (failure) { setError(formatNativeError(failure)); } }}>
     <label className="text-label leading-4 text-muted md:col-span-2">Supporting public record<select className={inputClass} value={sourceIndex} onChange={event => setSourceIndex(Number(event.target.value))}>{sources.map((candidate, index) => <option value={index} key={`${candidate.portalKey}:${candidate.documentId}`}>{candidate.title}</option>)}</select></label>
     {source && <div className="md:col-span-2"><Citation source={source} /></div>}
     <label className="text-label leading-4 text-muted">Observation type<select name="kind" className={inputClass}><option value="FACILITY">Public facility access</option><option value="OPERATION">Documented operation</option><option value="OBSERVATION">Other observation / report</option></select></label>

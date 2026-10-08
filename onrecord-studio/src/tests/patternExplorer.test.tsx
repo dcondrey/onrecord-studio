@@ -29,7 +29,7 @@ vi.hoisted(() => {
   });
 });
 
-vi.mock('../ipc', () => ({ invokeCommand: bridge.invoke }));
+vi.mock('../ipc', async (importOriginal) => ({ ...(await importOriginal<typeof import('../ipc')>()), invokeCommand: bridge.invoke }));
 
 function pattern(id: string, documentId: number, label: string): CorpusPattern {
   return {

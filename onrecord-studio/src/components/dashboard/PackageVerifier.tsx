@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { invokeCommand } from '../../ipc';
+import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { PackageVerificationResult } from '../../types/investigation';
 
@@ -23,7 +23,7 @@ export default function PackageVerifier() {
         setFileName(file.name);
       }
     } catch (reason) {
-      if (gate.isCurrent(token)) setError(String(reason));
+      if (gate.isCurrent(token)) setError(formatNativeError(reason));
     } finally {
       if (gate.isCurrent(token)) setBusy(false);
     }

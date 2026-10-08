@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { invokeCommand } from '../../ipc';
+import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type {
   AgendaItemChangeKind,
@@ -263,7 +263,7 @@ export default function MeetingsView() {
       })
       .catch((reason: unknown) => {
         if (!gate.isCurrent(request)) return;
-        setError(String(reason));
+        setError(formatNativeError(reason));
         setLoading(false);
       });
   }, [gate]);

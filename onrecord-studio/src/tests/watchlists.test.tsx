@@ -20,7 +20,7 @@ vi.hoisted(() => {
 });
 import { useAppStore } from '../store/useAppStore';
 const bridge = vi.hoisted(() => ({ invoke: vi.fn() }));
-vi.mock('../ipc', () => ({ invokeCommand: bridge.invoke }));
+vi.mock('../ipc', async (importOriginal) => ({ ...(await importOriginal<typeof import('../ipc')>()), invokeCommand: bridge.invoke }));
 import WatchlistPanel, { describeDimension } from '../components/dashboard/WatchlistPanel';
 
 function dimension(overrides: Partial<DimensionResult>): DimensionResult {

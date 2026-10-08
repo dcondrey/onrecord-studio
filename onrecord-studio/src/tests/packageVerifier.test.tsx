@@ -5,7 +5,7 @@ import PackageVerifier from '../components/dashboard/PackageVerifier';
 import type { PackageVerificationResult } from '../types/investigation';
 
 const invoke = vi.hoisted(() => vi.fn());
-vi.mock('../ipc', () => ({ invokeCommand: invoke }));
+vi.mock('../ipc', async (importOriginal) => ({ ...(await importOriginal<typeof import('../ipc')>()), invokeCommand: invoke }));
 afterEach(() => { cleanup(); invoke.mockReset(); });
 
 const passing = (): PackageVerificationResult => ({

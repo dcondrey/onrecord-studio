@@ -12,7 +12,7 @@ import UnredactorPanel from '../documents/UnredactorPanel';
 import LegalAuthorityManager from '../legal/LegalAuthorityManager';
 import LegalCompliancePanel from '../legal/LegalCompliancePanel';
 import { isTauri } from '@tauri-apps/api/core';
-import { invokeCommand } from '../../ipc';
+import { formatNativeError, invokeCommand } from '../../ipc';
 import StatutoryDeadlineAppeal from './StatutoryDeadlineAppeal';
 import type {
   DocumentTextChunk,
@@ -106,7 +106,7 @@ export default function MainLayout() {
         if (count && stillCurrent()) store.setFilteredResultsTotal(generation, count.total);
       }
     } catch (reason) {
-      if (stillCurrent()) store.setSearchPageState(generation, { loadingMore: false, moreError: String(reason) });
+      if (stillCurrent()) store.setSearchPageState(generation, { loadingMore: false, moreError: formatNativeError(reason) });
     }
   }, []);
   const documentListGate = useLatestRequestGate();
@@ -144,7 +144,7 @@ export default function MainLayout() {
     }).then((values) => {
       if (documentListGate.isCurrent(request)) { setDocuments(values); setDocumentError(null); }
     }).catch((reason) => {
-      if (documentListGate.isCurrent(request)) setDocumentError(String(reason));
+      if (documentListGate.isCurrent(request)) setDocumentError(formatNativeError(reason));
     });
     return documentListGate.invalidate;
   }, [documentListGate, documentOpenGate, evidenceRefreshRequests, selectedRequestPortalKey, selectedRequestId]);
@@ -176,7 +176,7 @@ export default function MainLayout() {
     } catch (reason) {
       if (documentOwnerRef.current?.requestId !== owner?.requestId
         || documentOwnerRef.current?.portalKey !== owner?.portalKey) return;
-      setDocumentError(String(reason));
+      setDocumentError(formatNativeError(reason));
     } finally {
       setPurgingDocument(false);
     }
@@ -199,7 +199,7 @@ export default function MainLayout() {
       setActiveDocument({ summary, chunk });
     } catch (reason) {
       if (!documentOpenGate.isCurrent(request)) return;
-      setDocumentError(String(reason));
+      setDocumentError(formatNativeError(reason));
     }
   };
 
@@ -238,7 +238,7 @@ export default function MainLayout() {
       }
     } catch (reason) {
       if (exportGate.isCurrent(request)) {
-        setExportState({ key, isExporting: false, result: null, error: String(reason) });
+        setExportState({ key, isExporting: false, result: null, error: formatNativeError(reason) });
       }
     }
   };

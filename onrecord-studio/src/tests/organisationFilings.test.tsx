@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import type { Form990Statement, OrganisationFilings } from '../types';
 
 const bridge = vi.hoisted(() => ({ invoke: vi.fn(), open: vi.fn() }));
-vi.mock('../ipc', () => ({ invokeCommand: bridge.invoke }));
+vi.mock('../ipc', async (importOriginal) => ({ ...(await importOriginal<typeof import('../ipc')>()), invokeCommand: bridge.invoke }));
 vi.mock('../store/useAppStore', () => ({ useAppStore: Object.assign((selector: (s: unknown) => unknown) => selector({ portals: [{ registration: { portalKey: 'sdhc', displayName: 'San Diego Housing Commission', originUrl: 'https://sdhc.test', canonicalUrl: 'https://sdhc.test/requests' } }] }), { getState: () => ({ openCasework: bridge.open }) }) }));
 import OrganisationFilingsPanel from '../components/dashboard/OrganisationFilingsPanel';
 
@@ -93,7 +93,7 @@ describe('organisation filings', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Check 3 organisations' }));
     await screen.findByText(/3 of 3 checked, 1 failed/);
     expect(checked).toEqual(['222222222', '330215585', '330580463']);
-    expect(screen.getByText(/222222222: Error: index unread/)).toBeTruthy();
+    expect(screen.getByText(/222222222: index unread/)).toBeTruthy();
     expect(lists).toBe(2);
   });
 
@@ -114,7 +114,7 @@ describe('organisation filings', () => {
     await open('111111111');
     expect(await screen.findByText('Services agreement')).toBeTruthy();
     expect(screen.getByText('First Organisation shall provide outreach.')).toBeTruthy();
-    expect(screen.getByText(/Request search: Error: no request index/)).toBeTruthy();
+    expect(screen.getByText(/Request search: no request index/)).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Agency'), { target: { value: 'sdhc' } });
     fireEvent.click(await screen.findByRole('button', { name: 'Search San Diego Housing Commission for this name' }));
     await screen.findByText(/Collection started from San Diego Housing Commission for "First Organisation"/);

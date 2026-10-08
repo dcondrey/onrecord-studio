@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MonitoringEvidence, MonitoringStatus, ServiceObservation } from '../types/monitoring';
 import { observationPoints, optionalMeasurement } from '../utils/monitoring';
 const bridge = vi.hoisted(() => ({ invoke: vi.fn() }));
-vi.mock('../ipc', () => ({ invokeCommand: bridge.invoke }));
+vi.mock('../ipc', async (importOriginal) => ({ ...(await importOriginal<typeof import('../ipc')>()), invokeCommand: bridge.invoke }));
 import MonitoringPanel from '../components/dashboard/MonitoringPanel';
 
 const evidence: MonitoringEvidence = { portalKey: 'city', documentId: 1, title: 'Published restroom inventory', sourceUrl: 'https://www.sandiego.gov/facilities.csv', sourceSha256: 'a'.repeat(64), extractionSha256: 'b'.repeat(64), quote: 'Public restroom, 2026-09-01, latitude 32.7 longitude -117.1. Weekly hours not recorded.', characterOffset: 0, snapshotId: null, rowNumber: null };

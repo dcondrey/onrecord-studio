@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { invokeCommand } from '../../ipc';
+import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
 import type {
@@ -112,7 +112,7 @@ export default function PatternExplorer() {
       );
     } catch (reason) {
       if (!refreshGate.isCurrent(request)) return;
-      setError(reason instanceof Error ? reason.message : String(reason));
+      setError(formatNativeError(reason));
     } finally {
       if (refreshGate.isCurrent(request)) setIsLoading(false);
     }
@@ -169,7 +169,7 @@ export default function PatternExplorer() {
       setSavedRecipes(nextRecipes);
       setRecipeName('');
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
+      setError(formatNativeError(reason));
     }
   }, [currentRecipeControls, recipeIsPreviewed, recipeName, savedRecipes]);
 
@@ -189,7 +189,7 @@ export default function PatternExplorer() {
       persistPatternRecipes(window.localStorage, nextRecipes);
       setSavedRecipes(nextRecipes);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
+      setError(formatNativeError(reason));
     }
   }, [savedRecipes]);
 
@@ -217,7 +217,7 @@ export default function PatternExplorer() {
       setExcerpt({ evidence, chunk });
     } catch (reason) {
       if (!evidenceGate.isCurrent(request)) return;
-      setError(reason instanceof Error ? reason.message : String(reason));
+      setError(formatNativeError(reason));
     } finally {
       if (evidenceGate.isCurrent(request)) setExcerptLoadingKey(null);
     }
