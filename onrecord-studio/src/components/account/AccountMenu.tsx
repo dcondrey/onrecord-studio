@@ -4,7 +4,6 @@ import { providerLabel } from '../licensing/providers';
 import Button from '../ui/Button';
 import Switch from '../ui/Switch';
 import Dialog, { DialogBody, DialogHeader } from '../ui/Dialog';
-import Icon from '../ui/icons';
 import { useAppStore } from '../../store/useAppStore';
 import { useProfileLensStore } from '../../store/useProfileLensStore';
 import { isDirectChannel } from '../../utils/licenseState';
@@ -69,20 +68,11 @@ export default function AccountMenu() {
     if (hasResult) controller.dismissDeleteResult();
   };
 
-  const initial = (status.accountEmail ?? '').trim().charAt(0).toUpperCase();
   const licensed = status.state === 'LICENSED';
 
   return (
     <>
-      <button
-        type="button"
-        aria-label="Account"
-        title="Account"
-        onClick={() => setOpen(true)}
-        className="focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-full bg-raised text-control text-fg-secondary transition-colors hover:bg-line hover:text-fg"
-      >
-        {initial ? <span aria-hidden="true">{initial}</span> : <Icon name="globe" size="sm" />}
-      </button>
+      <Button variant="ghost" iconOnly icon="user" title="Account" aria-label="Account" onClick={() => setOpen(true)} className="focus-ring" />
       {open ? (
         <Dialog onClose={close}>
           <DialogHeader title="Account" />

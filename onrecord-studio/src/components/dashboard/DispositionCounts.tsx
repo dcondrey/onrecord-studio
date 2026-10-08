@@ -2,7 +2,13 @@ import { Fragment, useEffect, useState } from 'react';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { DepartmentDispositions, Disposition } from '../../types';
+import { useAppStore } from '../../store/useAppStore';
+import { cn } from '../../utils/cn';
+import Badge from '../ui/Badge';
+import InlineError from '../ui/InlineError';
 import MethodNote from '../ui/MethodNote';
+import Skeleton from '../ui/Skeleton';
+import Table, { Td, Th } from '../ui/Table';
 import ObjectLink from '../objects/ObjectLink';
 
 /** Below this many requests one request moves a department's share by a fifth or more. */
@@ -42,6 +48,7 @@ export default function DispositionCounts({ portalSubdomain }: { portalSubdomain
   const gate = useLatestRequestGate();
   const [held, setHeld] = useState<Held>({ status: 'loading' });
   const [expanded, setExpanded] = useState<string | null>(null);
+  const savedSources = useAppStore((state) => state.portals);
 
   useEffect(() => {
     const token = gate.begin();
@@ -58,10 +65,14 @@ export default function DispositionCounts({ portalSubdomain }: { portalSubdomain
       });
   }, [gate, portalSubdomain]);
 
+  const spansPortals = held.status === 'ready' && new Set(held.rows.map((row) => row.portalSubdomain)).size > 1;
+  const portalName = (portalKey: string) =>
+    savedSources.find(({ registration }) => registration.portalKey === portalKey)?.registration.displayName ?? portalKey;
+
   return (
-    <section aria-label="Dispositions by department" className="space-y-2">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold text-fg">Dispositions by department</h3>
+    <section aria-label="Dispositions by department" className="app-panel overflow-hidden">
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b border-line px-5 py-4">
+        <h3 className="text-heading text-fg">Dispositions by department</h3>
         <MethodNote label="How dispositions are counted">
           <p>
             Each request is counted once, from the closure notice stored for it, by the first rule its
@@ -83,101 +94,102 @@ export default function DispositionCounts({ portalSubdomain }: { portalSubdomain
           </p>
         </MethodNote>
       </div>
-      {held.status === 'loading' && <p className="text-label text-muted">Counting dispositions…</p>}
+      {held.status === 'loading' && <Skeleton variant="lines" lines={4} label="Counting dispositions" className="px-5 py-4" />}
       {held.status === 'failed' && (
-        <p role="alert" className="text-label text-danger">Dispositions could not be counted: {held.message}</p>
+        <div className="p-4"><InlineError summary="Dispositions could not be counted." detail={held.message} /></div>
       )}
       {held.status === 'ready' && held.rows.length === 0 && (
-        <p className="text-label text-muted">No requests are stored for this scope.</p>
+        <p className="px-5 py-4 text-body text-muted">No requests are stored for this scope.</p>
       )}
       {held.status === 'ready' && held.rows.length > 0 && (
-        <div className="overflow-x-auto rounded-xl border border-line bg-canvas/40">
-          <table className="w-full text-left text-label" aria-label="Dispositions by department">
-            <thead className="border-b border-line text-caption uppercase tracking-wider text-muted">
-              <tr>
-                <th scope="col" className="px-3 py-2">Department</th>
-                <th scope="col" className="px-3 py-2">Portal</th>
-                <th scope="col" className="px-3 py-2">Requests (denominator)</th>
-                {DISPOSITION_ORDER.map((disposition) => (
-                  <th key={disposition} scope="col" className="px-3 py-2">{DISPOSITION_LABELS[disposition]}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {held.rows.map((row) => {
-                const key = departmentKey(row);
-                const small = row.totalRequests < SMALL_DEPARTMENT_REQUESTS;
-                const name = row.agencyName ?? 'Department not recorded';
-                const open = row.buckets.find((bucket) => `${key}\u0000${bucket.disposition}` === expanded);
-                return (
-                  <Fragment key={key}>
-                    <tr className="text-fg-secondary">
-                      <td className="px-3 py-2 font-semibold">
+        <Table label="Dispositions by department">
+          <thead>
+            <tr>
+              <Th className="min-w-[12rem] py-2 align-bottom">Department</Th>
+              <Th numeric className="py-2 align-bottom">Requests</Th>
+              {DISPOSITION_ORDER.map((disposition) => (
+                <Th key={disposition} numeric className="h-auto min-w-[5.5rem] whitespace-normal py-2 align-bottom leading-4">{DISPOSITION_LABELS[disposition]}</Th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {held.rows.map((row) => {
+              const key = departmentKey(row);
+              const small = row.totalRequests < SMALL_DEPARTMENT_REQUESTS;
+              const name = row.agencyName ?? 'Department not recorded';
+              const open = row.buckets.find((bucket) => `${key}\u0000${bucket.disposition}` === expanded);
+              return (
+                <Fragment key={key}>
+                  <tr>
+                    <Td className="min-w-[12rem]">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         {row.agencyId === null ? (
                           <span className="text-muted">{name}</span>
                         ) : (
-                          <ObjectLink target={{ kind: 'agency', portalKey: row.portalSubdomain, agencyId: row.agencyId, label: name }} className="text-fg decoration-line-strong hover:text-accent">{name}</ObjectLink>
+                          <ObjectLink target={{ kind: 'agency', portalKey: row.portalSubdomain, agencyId: row.agencyId, label: name }} className="line-clamp-2 font-medium text-fg no-underline hover:underline">{name}</ObjectLink>
                         )}
                         {small && (
-                          <span
-                            title={`${row.totalRequests} requests; one request moves each share by a fifth or more.`}
-                            className="ml-2 rounded-full border border-line-strong px-2 py-0.5 text-caption font-normal text-muted"
-                          >
-                            small (n={row.totalRequests})
-                          </span>
+                          <Badge tone="neutral" dashed title={`${row.totalRequests} requests; one request moves each share by a fifth or more.`}>
+                            Small sample
+                          </Badge>
                         )}
+                      </div>
+                      {spansPortals && <p className="mt-0.5 text-caption text-muted" title={row.portalSubdomain}>{portalName(row.portalSubdomain)}</p>}
+                    </Td>
+                    <Td numeric>{row.totalRequests.toLocaleString()}</Td>
+                    {DISPOSITION_ORDER.map((disposition) => {
+                      const bucket = row.buckets.find((candidate) => candidate.disposition === disposition);
+                      const count = bucket?.requests.length ?? 0;
+                      const bucketKey = `${key}\u0000${disposition}`;
+                      const isOpen = expanded === bucketKey;
+                      return (
+                        <Td key={disposition} numeric>
+                          {count === 0 ? (
+                            <span className="text-muted">0</span>
+                          ) : (
+                            <button
+                              type="button"
+                              aria-expanded={isOpen}
+                              aria-label={`${DISPOSITION_LABELS[disposition]}: ${count} of ${row.totalRequests} requests, ${name}`}
+                              onClick={() => setExpanded((current) => (current === bucketKey ? null : bucketKey))}
+                              className={cn(
+                                'focus-ring inline-flex flex-col items-end rounded text-right',
+                                isOpen && '[&>span:first-child]:decoration-solid',
+                              )}
+                            >
+                              <span className="text-fg underline decoration-dotted decoration-fg/40 underline-offset-4 hover:decoration-solid">{count.toLocaleString()}</span>
+                              <span className="text-caption text-muted">{share(count, row.totalRequests)}</span>
+                            </button>
+                          )}
+                        </Td>
+                      );
+                    })}
+                  </tr>
+                  {open && (
+                    <tr>
+                      <td colSpan={2 + DISPOSITION_ORDER.length} className="border-b border-line bg-raised/40 px-3 py-2">
+                        <span className="mr-2 text-caption font-medium text-fg-secondary">
+                          {DISPOSITION_LABELS[open.disposition]} · {name}
+                        </span>
+                        <span className="inline-flex flex-wrap gap-x-3 gap-y-1">
+                          {open.requests.map((request) => (
+                            <ObjectLink
+                              key={request.requestId}
+                              target={{ kind: 'request', portalKey: row.portalSubdomain, requestId: request.requestId, label: request.rpid ?? undefined }}
+                              className="font-mono text-code text-fg no-underline hover:underline"
+                            >
+                              {request.rpid ?? `request ${request.requestId}`}
+                            </ObjectLink>
+                          ))}
+                        </span>
                       </td>
-                      <td className="px-3 py-2 text-muted">{row.portalSubdomain}</td>
-                      <td className="px-3 py-2 font-mono">{row.totalRequests.toLocaleString()}</td>
-                      {DISPOSITION_ORDER.map((disposition) => {
-                        const bucket = row.buckets.find((candidate) => candidate.disposition === disposition);
-                        const count = bucket?.requests.length ?? 0;
-                        const bucketKey = `${key}\u0000${disposition}`;
-                        return (
-                          <td key={disposition} className="px-3 py-2 font-mono">
-                            {count === 0 ? (
-                              <span className="text-muted">0</span>
-                            ) : (
-                              <button
-                                type="button"
-                                aria-expanded={expanded === bucketKey}
-                                aria-label={`${DISPOSITION_LABELS[disposition]}: ${count} of ${row.totalRequests} requests, ${name}`}
-                                onClick={() => setExpanded((current) => (current === bucketKey ? null : bucketKey))}
-                                className="focus-ring rounded px-1 hover:text-accent"
-                              >
-                                {count.toLocaleString()} <span className="text-muted">{share(count, row.totalRequests)}</span>
-                              </button>
-                            )}
-                          </td>
-                        );
-                      })}
                     </tr>
-                    {open && (
-                      <tr>
-                        <td colSpan={3 + DISPOSITION_ORDER.length} className="bg-surface/40 px-3 py-2">
-                          <span className="mr-2 text-caption uppercase tracking-wider text-muted">
-                            {DISPOSITION_LABELS[open.disposition]} · {name}
-                          </span>
-                          <span className="inline-flex flex-wrap gap-x-3 gap-y-1">
-                            {open.requests.map((request) => (
-                              <ObjectLink
-                                key={request.requestId}
-                                target={{ kind: 'request', portalKey: row.portalSubdomain, requestId: request.requestId, label: request.rpid ?? undefined }}
-                                className="font-mono text-fg decoration-line-strong hover:text-accent"
-                              >
-                                {request.rpid ?? `request ${request.requestId}`}
-                              </ObjectLink>
-                            ))}
-                          </span>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                  )}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </Table>
       )}
     </section>
   );

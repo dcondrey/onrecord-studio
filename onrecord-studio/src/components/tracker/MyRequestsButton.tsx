@@ -10,7 +10,7 @@ export default function MyRequestsButton() {
       <Button
         variant="ghost"
         iconOnly
-        icon="clock"
+        icon="clipboard"
         title="Requests you filed and their deadlines"
         aria-label="Open my requests"
         onClick={() => setOpen(true)}

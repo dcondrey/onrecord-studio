@@ -50,6 +50,7 @@ function LicensedWorkspace() {
   const setPortalRuntimesFailed = useAppStore((state) => state.setPortalRuntimesFailed);
   const workspaceInitializationAttempt = useAppStore((state) => state.workspaceInitializationAttempt);
   const inspectorOpen = useAppStore((state) => state.inspectorStack.length > 0);
+  const runtimeRefreshRequests = useAppStore((state) => state.runtimeRefreshRequests);
   const setPortalSyncState = useAppStore((state) => state.setPortalSyncState);
   const setAnalyticsData = useAppStore((state) => state.setAnalyticsData);
   const setAnalyticsError = useAppStore((state) => state.setAnalyticsError);
@@ -153,6 +154,11 @@ function LicensedWorkspace() {
     if (analyticsRefreshRequests === 0) return;
     void refreshAnalytics();
   }, [analyticsRefreshRequests, refreshAnalytics]);
+
+  useEffect(() => {
+    if (runtimeRefreshRequests === 0) return;
+    void refreshRuntimes();
+  }, [runtimeRefreshRequests, refreshRuntimes]);
 
   useEffect(() => {
     const reconcile = () => void refreshRuntimes();

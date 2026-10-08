@@ -62,7 +62,7 @@ export default function EvidenceChain({ dossier }: { dossier: LeadDossier }) {
   );
 }
 
-function ChainNode({ icon, tone, title, caption, last, children }: { icon: IconName; tone: 'danger' | 'warning' | 'accent' | 'muted'; title: string; caption: string; last?: boolean; children: ReactNode }) {
+function ChainNode({ icon, tone, title, caption, last, children }: { icon: IconName; tone: 'danger' | 'warning' | 'accent' | 'neutral' | 'muted'; title: string; caption: string; last?: boolean; children: ReactNode }) {
   return (
     <li className="motion-reveal relative pb-4 pl-9">
       {!last && <span aria-hidden="true" className="absolute bottom-0 left-[13px] top-7 w-px bg-line-strong" />}
@@ -73,6 +73,7 @@ function ChainNode({ icon, tone, title, caption, last, children }: { icon: IconN
           tone === 'danger' && 'border-danger/30 bg-danger/10 text-danger',
           tone === 'warning' && 'border-warning/30 bg-warning/10 text-warning',
           tone === 'accent' && 'border-accent/30 bg-accent/10 text-accent',
+          tone === 'neutral' && 'border-line-strong bg-raised text-fg-secondary',
           tone === 'muted' && 'border-line bg-surface text-muted',
         )}
       >

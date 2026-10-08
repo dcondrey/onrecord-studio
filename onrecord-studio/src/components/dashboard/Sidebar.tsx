@@ -55,8 +55,8 @@ export default function Sidebar() {
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
-        <div className={cn('flex h-[64px] shrink-0 items-center border-b border-line', isCollapsed ? 'justify-center px-3' : 'gap-2.5 px-3.5')}>
-          <img src="/brand-mark.png" alt="" className="h-9 w-9 shrink-0 rounded-[9px]" />
+        <div className={cn('flex h-14 shrink-0 items-center border-b border-line', isCollapsed ? 'justify-center px-3' : 'gap-2.5 px-3.5')}>
+          <img src="/brand-mark.png" alt="" className="h-8 w-8 shrink-0 rounded-lg" />
           {!isCollapsed && (
             <div className="min-w-0">
               <div className="truncate text-label font-semibold tracking-[-0.015em] text-fg">{PRODUCT_NAME}</div>

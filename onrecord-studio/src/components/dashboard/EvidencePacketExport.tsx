@@ -104,12 +104,12 @@ export default function EvidencePacketExport({ portalKey = null, findingIds }: E
       {includeAnnotations && (
         <div className="mt-2 rounded border border-warning/30 bg-warning/5 p-3 text-label leading-4 text-warning">
           <p>
-            Adds a separate section, labelled as the reviewer&apos;s reading and not part of the record. For
+            Adds a separate section, labeled as the reviewer&apos;s reading and not part of the record. For
             each annotation on a document the claims cite it writes the code, author, status, anchor state,
             the quoted passage and your note, with the document&apos;s citation and text digest, into both the
             Markdown and the JSON file. Notes can hold private commentary: anything in a note is written.
             Annotations on documents that are not public are not written. Orphaned annotations are kept and
-            labelled.
+            labeled.
           </p>
           {previewError && <p role="alert" className="mt-2 text-danger">{previewError}</p>}
           {!previewError && !preview && <p className="mt-2">Counting annotations…</p>}

@@ -3,7 +3,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { openHelp } from './helpEvents';
 import Button from '../ui/Button';
 
-/** The "?" control in the header. It opens Help on the topic for whichever view is showing. */
+/** The help control in the header. It opens Help on the topic for whichever view is showing. */
 export default function HelpButton() {
   const view = useAppStore((state) => state.workspaceView);
   const topic = helpTopicForView(view);

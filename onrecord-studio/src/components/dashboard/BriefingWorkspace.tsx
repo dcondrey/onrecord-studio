@@ -8,8 +8,11 @@ import {
 import { cn } from '../../utils/cn';
 import { focusSourceComposer } from '../../utils/sanDiego';
 import Icon from '../ui/icons';
+import Badge from '../ui/Badge';
+import Button from '../ui/Button';
+import PageHeader from '../ui/PageHeader';
 import { INVESTIGATION_TOPICS } from '../../utils/investigations';
-import { invokeCommand } from '../../ipc';
+import { formatNativeError, invokeCommand } from '../../ipc';
 import type { Finding } from '../../types';
 import { downloadFile } from './downloadFile';
 
@@ -38,6 +41,8 @@ const STARTER_SOURCES: StarterSource[] = [
   { label: 'City Auditor reports', url: 'https://www.sandiego.gov/auditor/reports', purpose: 'Follow a specific audit recommendation through management responses and evidence of implementation.', tier: 'Independent research' },
 ];
 
+const SEARCHES_PER_LANE = 4;
+
 const RESEARCH_LANES: ResearchLane[] = INVESTIGATION_TOPICS.map((topic) => ({
   title: topic.title,
   agendaItem: 'Match to a verified agenda item',
@@ -45,6 +50,25 @@ const RESEARCH_LANES: ResearchLane[] = INVESTIGATION_TOPICS.map((topic) => ({
   questions: [topic.question, ...topic.records.map((record) => `What do the available records establish about: ${record}`), topic.limitation],
   searches: topic.searches,
 }));
+
+/** Each lane's first few searches, with a term already offered by an earlier lane left out. */
+function distinctLaneSearches(lanes: ResearchLane[]): Map<string, string[]> {
+  const offered = new Set<string>();
+  const result = new Map<string, string[]>();
+  for (const lane of lanes) {
+    const shown: string[] = [];
+    for (const search of lane.searches) {
+      const key = search.trim().toLocaleLowerCase();
+      if (shown.length === SEARCHES_PER_LANE || offered.has(key)) continue;
+      offered.add(key);
+      shown.push(search);
+    }
+    result.set(lane.title, shown);
+  }
+  return result;
+}
+
+const laneSearches = distinctLaneSearches(RESEARCH_LANES);
 
 export default function BriefingWorkspace() {
   const project = useAppStore((state) => state.briefingProject);
@@ -87,7 +111,13 @@ export default function BriefingWorkspace() {
       updateProject({ autoDrafted: true });
       return;
     }
+    draftFromFindings();
+    // draftFromFindings closes over the store setters only, all stable.
+  }, [addBriefingEvidence, project.autoDrafted, project.evidence.length, updateProject]);
+
+  function draftFromFindings() {
     setIsAutoDrafting(true);
+    setAutoDraftError(null);
     invokeCommand('list_findings', { filter: null, limit: 20 })
       .then((rows) => {
         const drafted = rows
@@ -97,10 +127,10 @@ export default function BriefingWorkspace() {
         updateProject({ autoDrafted: true });
       })
       .catch((reason) => {
-        setAutoDraftError(String(reason));
+        setAutoDraftError(formatNativeError(reason));
       })
       .finally(() => setIsAutoDrafting(false));
-  }, [addBriefingEvidence, project.autoDrafted, project.evidence.length, updateProject]);
+  }
 
   const hasAutoDraftedItems = project.evidence.some((item) => item.id.startsWith(AUTO_DRAFT_ID_PREFIX));
 
@@ -139,64 +169,74 @@ export default function BriefingWorkspace() {
 
   return (
     <main className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto w-full max-w-[1700px] space-y-4 p-4 sm:p-5 lg:p-6">
-        <section className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <div className="app-eyebrow flex items-center gap-2 text-warning"><Icon name="clipboard" className="h-3.5 w-3.5" /> Presentation briefing</div>
-            <h2 className="mt-2 text-[26px] font-semibold tracking-[-0.035em] text-fg sm:text-[30px]">Turn evidence into a defensible public comment.</h2>
-            <p className="mt-1.5 max-w-3xl text-label leading-relaxed text-muted">Start with the agenda, save traceable records or masked excerpts, record the limitation beside each claim, and end with one action the Commission can verify.</p>
+      <div className="mx-auto w-full max-w-content space-y-6 px-4 pb-10 pt-6 md:px-6">
+        <PageHeader
+          title="Prepare a public comment"
+          summary="Start with the agenda, save traceable records or masked excerpts, record the limitation beside each claim, and end with one action the body can verify."
+          actions={<>
+            <Button
+              variant="link"
+              className="tabular-nums text-muted hover:text-fg"
+              onClick={() => document.getElementById('briefing-checks')?.scrollIntoView({ block: 'start' })}
+            >
+              Checks {completedChecks} of {checks.length}
+            </Button>
+            <Button onClick={useAccountabilityStarter}>Use template</Button>
+            <Button variant="primary" onClick={exportOutline}>Export outline</Button>
+          </>}
+        />
+        {autoDraftError && (
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3">
+            <p className="min-w-0 flex-1 text-body text-warning">Findings could not be drafted into this briefing.</p>
+            <Button size="sm" disabled={isAutoDrafting} onClick={draftFromFindings}>Retry</Button>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="secondary-action rounded-xl border px-3 py-2 text-caption text-muted">{completedChecks}/{checks.length} presentation checks complete</span>
-            <button type="button" onClick={useAccountabilityStarter} className="focus-ring rounded-xl border border-highlight/30 bg-highlight/10 px-3 py-2 text-caption font-semibold text-highlight">Use accountability briefing template</button>
-            <button type="button" onClick={exportOutline} className="primary-action focus-ring rounded-xl px-3 py-2 text-caption font-semibold text-white">Export outline</button>
-          </div>
-        </section>
+        )}
+        {isAutoDrafting && <p role="status" className="text-caption text-muted">Drafting from your findings…</p>}
 
-        {exported && <div role="status" className="rounded-xl border border-success/30 bg-success/5 px-4 py-2 text-caption text-success">Markdown outline exported. It includes local evidence locators, source URLs, preserved-file hashes when available, and explicit operator-assessment labels.</div>}
+        {exported && <div role="status" className="flex items-start justify-between gap-3 rounded-lg border border-success/30 bg-success/10 px-4 py-2 text-caption text-success"><span>Markdown outline exported. It includes local evidence locators, source URLs, preserved-file hashes when available, and explicit operator-assessment labels.</span><Button size="sm" variant="ghost" iconOnly icon="x" aria-label="Dismiss" className="-my-1 -mr-2 shrink-0" onClick={() => setExported(false)} /></div>}
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(340px,0.7fr)]">
           <div className="space-y-4">
             <section className="app-panel overflow-hidden">
-              <SectionHeader step="01" title="Frame the presentation" detail="Keep the claim narrower than the evidence and the requested action concrete." />
+              <SectionHeader step="1" title="Frame the presentation" detail="Keep the claim narrower than the evidence and the requested action concrete." />
               <div className="grid gap-3 p-4 md:grid-cols-2">
                 <Field label="Presentation title">
-                  <input value={project.title} maxLength={240} onChange={(event) => updateProject({ title: event.target.value })} className="briefing-input" />
+                  <input value={project.title} maxLength={240} onChange={(event) => updateProject({ title: event.target.value })} className="analysis-input w-full" />
                 </Field>
                 <Field label="Audience">
-                  <input value={project.audience} maxLength={240} onChange={(event) => updateProject({ audience: event.target.value })} className="briefing-input" />
+                  <input value={project.audience} maxLength={240} onChange={(event) => updateProject({ audience: event.target.value })} className="analysis-input w-full" />
                 </Field>
                 <Field label="Meeting date">
-                  <input type="date" value={project.meetingDate} onChange={(event) => updateProject({ meetingDate: event.target.value })} className="briefing-input" />
+                  <input type="date" value={project.meetingDate} onChange={(event) => updateProject({ meetingDate: event.target.value })} className="analysis-input w-full" />
                 </Field>
                 <Field label="Speaking time (minutes)">
-                  <input type="number" min={1} max={120} value={project.durationMinutes} onChange={(event) => updateProject({ durationMinutes: clamp(Number(event.target.value), 1, 120) })} className="briefing-input" />
+                  <input type="number" min={1} max={120} value={project.durationMinutes} onChange={(event) => updateProject({ durationMinutes: clamp(Number(event.target.value), 1, 120) })} className="analysis-input w-full" />
                 </Field>
                 <Field label="Objective" wide>
-                  <textarea value={project.objective} maxLength={4_000} rows={2} onChange={(event) => updateProject({ objective: event.target.value })} className="briefing-input resize-y py-2" />
+                  <textarea value={project.objective} maxLength={4_000} rows={2} onChange={(event) => updateProject({ objective: event.target.value })} className="analysis-input h-auto min-h-20 w-full resize-y py-2" />
                 </Field>
-                <Field label="Opening — agenda item + consequence" wide>
-                  <textarea value={project.opening} maxLength={8_000} rows={3} placeholder="Example: Before SDPD deploys a roadside screening tool, the public should be able to see what it measures, how errors are handled, and how its use will be audited." onChange={(event) => updateProject({ opening: event.target.value })} className="briefing-input resize-y py-2" />
+                <Field label="Opening" help="Name the agenda item and its consequence." wide>
+                  <textarea value={project.opening} maxLength={8_000} rows={3} placeholder="Example: Before SDPD deploys a roadside screening tool, the public should be able to see what it measures, how errors are handled, and how its use will be audited." onChange={(event) => updateProject({ opening: event.target.value })} className="analysis-input h-auto min-h-20 w-full resize-y py-2" />
                 </Field>
-                <Field label="Requested action — decision + owner + date" wide>
-                  <textarea value={project.requestedAction} maxLength={8_000} rows={3} placeholder="Example: Place the written operating policy and validation protocol on the next Policy Committee agenda, with public reporting requirements and a named follow-up date." onChange={(event) => updateProject({ requestedAction: event.target.value })} className="briefing-input resize-y py-2" />
+                <Field label="Requested action" help="A decision, who owns it, and by when." wide>
+                  <textarea value={project.requestedAction} maxLength={8_000} rows={3} placeholder="Example: Place the written operating policy and validation protocol on the next Policy Committee agenda, with public reporting requirements and a named follow-up date." onChange={(event) => updateProject({ requestedAction: event.target.value })} className="analysis-input h-auto min-h-20 w-full resize-y py-2" />
                 </Field>
               </div>
             </section>
 
             <section className="app-panel overflow-hidden">
-              <SectionHeader step="02" title="Interrogate the record" detail="Use these research prompts when relevant to your topic. Confirm the date, agenda items, location, and speaking time in the posted meeting record." />
+              <SectionHeader step="2" title="Interrogate the record" detail="Use these research prompts when relevant to your topic. Confirm the date, agenda items, location, and speaking time in the posted meeting record." />
               <div className="grid gap-3 p-4 lg:grid-cols-3">
                 {RESEARCH_LANES.map((lane) => (
                   <article key={lane.title} className="rounded-xl border border-line bg-canvas/40 p-3.5">
-                    <div className="text-caption font-semibold uppercase tracking-wider text-warning">{lane.agendaItem}</div>
-                    <h3 className="mt-1.5 text-label font-semibold text-fg">{lane.title}</h3>
+                    <div className="text-caption text-muted">{lane.agendaItem}</div>
+                    <h3 className="mt-1 text-heading text-fg">{lane.title}</h3>
                     <p className="mt-1.5 text-caption leading-relaxed text-muted">{lane.purpose}</p>
                     <ul className="mt-3 space-y-2 text-caption leading-relaxed text-muted">
                       {lane.questions.map((question) => <li key={question} className="flex gap-2"><span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-accent" /> <span>{question}</span></li>)}
                     </ul>
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      {lane.searches.map((search) => <button key={search} type="button" onClick={() => runSearch(search)} className="focus-ring rounded-full border border-accent/30 bg-accent/5 px-2 py-1 text-caption font-semibold text-accent">Search “{search}”</button>)}
+                    <div role="group" aria-label="Search evidence for" className="mt-3 flex flex-wrap gap-1.5">
+                      {laneSearches.get(lane.title)?.map((search) => <button key={search} type="button" onClick={() => runSearch(search)} className="focus-ring h-6 rounded-full border border-line px-2.5 text-caption text-fg-secondary transition-colors hover:bg-raised hover:text-fg">{search}</button>)}
                     </div>
                   </article>
                 ))}
@@ -204,7 +244,7 @@ export default function BriefingWorkspace() {
             </section>
 
             <section className="app-panel overflow-hidden">
-              <SectionHeader step="03" title="Build the evidence board" detail="Save leads from Evidence, open the underlying document, then promote only what you reviewed." />
+              <SectionHeader step="3" title="Build the evidence board" detail="Save leads from Evidence, open the underlying document, then promote only what you reviewed." />
               {project.evidence.length === 0 ? (
                 <div className="m-4 grid min-h-48 place-items-center rounded-xl border border-dashed border-line bg-canvas/40 p-6 text-center">
                   <div className="max-w-md">
@@ -223,7 +263,7 @@ export default function BriefingWorkspace() {
                           ? 'The workspace populates with the most notable findings from your data. You review and promote what belongs in the briefing.'
                           : 'The workspace found no detector findings to draft, or the drafted items were removed. Run a focused search, select a request, and choose "Save lead to briefing" — or open Evidence and add manually.'}
                     </p>
-                    <button type="button" onClick={() => setWorkspaceView('evidence')} className="focus-ring mt-3 rounded-lg border border-highlight/30 bg-highlight/10 px-3 py-2 text-caption font-semibold text-highlight">Open Evidence</button>
+                    <Button size="sm" className="mt-3" onClick={() => setWorkspaceView('evidence')}>Open Evidence</Button>
                   </div>
                 </div>
               ) : (
@@ -255,7 +295,7 @@ export default function BriefingWorkspace() {
 
           <aside aria-label="Briefing sources" className="space-y-4">
             <section className="app-panel overflow-hidden">
-              <SectionHeader step="A" title="Primary-source queue" detail="Stage a target in the top source bar, then press Add to preserve and index it locally." />
+              <SectionHeader title="Primary-source queue" detail="Add a source to preserve and index it locally." />
               <div className="space-y-2 p-3">
                 {STARTER_SOURCES.map((source) => {
                   const connected = portals.some(({ registration }) => sameHost(registration.canonicalUrl, source.url));
@@ -263,13 +303,13 @@ export default function BriefingWorkspace() {
                     <article key={source.url} className="rounded-xl border border-line bg-canvas/40 p-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="text-caption font-semibold uppercase tracking-wider text-muted">{source.tier}</div>
-                          <h3 className="mt-1 text-label font-semibold leading-snug text-fg-secondary">{source.label}</h3>
+                          <div className="text-caption text-muted">{source.tier}</div>
+                          <h3 className="mt-0.5 text-control text-fg">{source.label}</h3>
                         </div>
-                        <span className={cn('shrink-0 rounded-full border px-2 py-1 text-caption font-semibold uppercase tracking-wide', connected ? 'border-success/30 bg-success/5 text-success' : 'border-line-strong text-muted')}>{connected ? 'Host added' : 'Not staged'}</span>
+                        <Badge tone={connected ? 'success' : 'neutral'} className="shrink-0">{connected ? 'Added' : 'Not added'}</Badge>
                       </div>
                       <p className="mt-2 text-caption leading-relaxed text-muted">{source.purpose}</p>
-                      <button type="button" onClick={() => stageSource(source.url)} className="focus-ring mt-2 flex w-full items-center justify-between rounded-lg border border-control px-2.5 py-2 text-caption font-semibold text-muted transition hover:border-accent/30 hover:text-accent"><span>Stage in source bar</span><Icon name="arrow" className="h-3 w-3" /></button>
+                      {!connected && <Button size="sm" className="mt-2" onClick={() => stageSource(source.url)}>Add source</Button>}
                     </article>
                   );
                 })}
@@ -277,7 +317,7 @@ export default function BriefingWorkspace() {
             </section>
 
             <section className="app-panel overflow-hidden">
-              <SectionHeader step="B" title={`${Math.max(1, Math.round(project.durationMinutes))}-minute run of show`} detail={`Aim for about ${Math.max(1, Math.round(project.durationMinutes)) * 130} spoken words; clarity beats coverage.`} />
+              <SectionHeader title={`${Math.max(1, Math.round(project.durationMinutes))}-minute run of show`} detail={`Aim for about ${Math.max(1, Math.round(project.durationMinutes)) * 130} spoken words; clarity beats coverage.`} />
               <ol className="space-y-2 p-4 text-caption text-muted">
                 <RunStep share={15} label="Opening" detail="Name the agenda item and the concrete consequence." />
                 <RunStep share={50} label="Two strongest facts" detail="State the source before the inference; avoid a pile of examples." />
@@ -287,8 +327,8 @@ export default function BriefingWorkspace() {
               </ol>
             </section>
 
-            <section className="app-panel overflow-hidden">
-              <SectionHeader step="C" title="Promotion standard" detail="The app auto-drafts a starting briefing; you still decide what gets promoted to Ready." />
+            <section id="briefing-checks" className="app-panel scroll-mt-6 overflow-hidden">
+              <SectionHeader title="Promotion standard" detail="The app auto-drafts a starting briefing; you still decide what gets promoted to Ready." />
               <ul className="space-y-2 p-4 text-caption leading-relaxed text-muted">
                 {checks.map((check) => <Check key={check.label} done={check.done}>{check.label}</Check>)}
               </ul>
@@ -311,8 +351,8 @@ function EvidenceCard({ item, number, onChange, onReview, onRemove }: {
     <article className="rounded-xl border border-line bg-canvas/40 p-3.5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="text-caption font-semibold uppercase tracking-wider text-accent">Point {number} · {item.kind === 'DOCUMENT_EXCERPT' ? 'Document excerpt' : 'Request lead'}</div>
-          <h3 className="mt-1 truncate text-label font-semibold text-fg-secondary">{item.label}</h3>
+          <div className="text-caption text-muted">Point {number} · {item.kind === 'DOCUMENT_EXCERPT' ? 'Document excerpt' : 'Request lead'}</div>
+          <h3 className="mt-0.5 truncate text-control text-fg" title={item.label}>{item.label}</h3>
           <div className="mt-1 font-mono text-caption text-muted">{item.portalKey} / request {item.requestId}{item.documentId === null ? '' : ` / document ${item.documentId}`}{item.documentId !== null && item.characterOffset !== null ? ` / character ${item.characterOffset}` : ''}</div>
         </div>
         <div className="flex items-center gap-2">
@@ -321,7 +361,7 @@ function EvidenceCard({ item, number, onChange, onReview, onRemove }: {
             <option value="REVIEWED">Source reviewed</option>
             <option value="READY">Presentation ready</option>
           </select>
-          <button type="button" onClick={onReview} className="focus-ring rounded-lg border border-control px-2.5 py-2 text-caption font-semibold text-muted hover:text-highlight">Review</button>
+          <Button size="sm" onClick={onReview}>Review</Button>
           <button type="button" onClick={onRemove} aria-label={`Remove ${item.label} from briefing`} className="focus-ring grid h-8 w-8 place-items-center rounded-lg border border-control text-muted hover:border-danger/30 hover:text-danger"><Icon name="trash" className="h-3 w-3" /></button>
         </div>
       </div>
@@ -329,26 +369,40 @@ function EvidenceCard({ item, number, onChange, onReview, onRemove }: {
       {item.rawFileSha256 && <div className="mt-2 break-all font-mono text-caption text-muted">Preserved SHA-256 {item.rawFileSha256}</div>}
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         <Field label="Claim this supports">
-          <textarea value={item.claim} maxLength={4_000} rows={3} placeholder="State only what this record establishes." onChange={(event) => onChange({ claim: event.target.value })} className="briefing-input resize-y py-2" />
+          <textarea value={item.claim} maxLength={4_000} rows={3} placeholder="State only what this record establishes." onChange={(event) => onChange({ claim: event.target.value })} className="analysis-input h-auto min-h-20 w-full resize-y py-2" />
         </Field>
         <Field label="Context, limitation, or counterpoint">
-          <textarea value={item.note} maxLength={4_000} rows={3} placeholder="What does it not establish? What source would corroborate it?" onChange={(event) => onChange({ note: event.target.value })} className="briefing-input resize-y py-2" />
+          <textarea value={item.note} maxLength={4_000} rows={3} placeholder="What does it not establish? What source would corroborate it?" onChange={(event) => onChange({ note: event.target.value })} className="analysis-input h-auto min-h-20 w-full resize-y py-2" />
         </Field>
       </div>
     </article>
   );
 }
 
-function SectionHeader({ step, title, detail }: { step: string; title: string; detail: string }) {
-  return <div className="flex items-start gap-3 border-b border-line px-4 py-3.5"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-highlight/10 font-mono text-caption font-semibold text-highlight">{step}</span><div><h2 className="text-label font-semibold text-fg">{title}</h2><p className="mt-1 text-caption leading-relaxed text-muted">{detail}</p></div></div>;
+function SectionHeader({ step, title, detail }: { step?: string; title: string; detail: string }) {
+  return (
+    <div className="flex items-start gap-3 border-b border-line px-5 py-4">
+      {step && <span aria-hidden="true" className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-raised text-caption font-medium tabular-nums text-fg-secondary">{step}</span>}
+      <div className="min-w-0">
+        <h2 className="text-heading text-fg">{step && <span className="sr-only">Step {step}: </span>}{title}</h2>
+        <p className="mt-1 text-caption text-muted">{detail}</p>
+      </div>
+    </div>
+  );
 }
 
-function Field({ label, wide = false, children }: { label: string; wide?: boolean; children: React.ReactNode }) {
-  return <label className={cn('block text-caption font-semibold uppercase tracking-wider text-muted', wide && 'md:col-span-2')}>{label}<span className="mt-1.5 block">{children}</span></label>;
+function Field({ label, help, wide = false, children }: { label: string; help?: string; wide?: boolean; children: React.ReactNode }) {
+  return (
+    <label className={cn('block text-control text-fg-secondary', wide && 'md:col-span-2')}>
+      {label}
+      {help && <span className="mt-0.5 block text-caption font-normal text-muted">{help}</span>}
+      <span className="mt-1.5 block">{children}</span>
+    </label>
+  );
 }
 
 function RunStep({ share, label, detail }: { share: number; label: string; detail: string }) {
-  return <li className="grid grid-cols-[38px_minmax(0,1fr)] gap-2"><span className="font-mono font-semibold text-warning">{share}%</span><span><strong className="font-semibold text-fg-secondary">{label}.</strong> {detail}</span></li>;
+  return <li className="grid grid-cols-[38px_minmax(0,1fr)] gap-2"><span className="font-medium tabular-nums text-fg-secondary">{share}%</span><span><strong className="font-semibold text-fg-secondary">{label}.</strong> {detail}</span></li>;
 }
 
 function Check({ done, children }: { done: boolean; children: React.ReactNode }) {

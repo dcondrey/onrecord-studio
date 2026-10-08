@@ -67,9 +67,9 @@ describe('AgencyComparison', () => {
       ],
     });
     render(<AgencyComparison />);
-    const names = bodyRows().map((row) => within(row).getAllByRole('cell')[1].textContent);
+    const names = bodyRows().map((row) => within(within(row).getAllByRole('cell')[1]).getAllByRole('button')[0].textContent);
     expect(names).toEqual(['Sheriff', 'Parks', 'Water']);
-    expect(screen.getByRole('columnheader', { name: /Avg closure days/ }).getAttribute('aria-sort')).toBe('descending');
+    expect(screen.getByRole('columnheader', { name: /Avg days/ }).getAttribute('aria-sort')).toBe('descending');
   });
 
   it('keeps an absent latency last when the sort direction flips', () => {
@@ -88,9 +88,9 @@ describe('AgencyComparison', () => {
     });
     render(<AgencyComparison />);
     const cells = within(bodyRows()[0]).getAllByRole('cell').map((cell) => cell.textContent);
-    expect(cells[3]).toBe(NO_MEASURABLE_CLOSURE);
+    expect(cells[2]).toBe(NO_MEASURABLE_CLOSURE);
     expect(cells).not.toContain('0.0');
-    expect(within(bodyRows()[0]).getByText('small sample')).toBeTruthy();
+    expect(within(bodyRows()[0]).getByText('Small sample')).toBeTruthy();
   });
 
   it('marks slower than peers only at or above the threshold, and never as a violation', () => {
@@ -103,10 +103,9 @@ describe('AgencyComparison', () => {
       ],
     });
     render(<AgencyComparison />);
-    fireEvent.click(screen.getByRole('button', { name: /Z-score/ }));
     const marked = bodyRows()
-      .filter((row) => within(row).queryByText('slower than peers') !== null)
-      .map((row) => within(row).getAllByRole('cell')[1].textContent);
+      .filter((row) => within(row).queryByText('Slower than peers') !== null)
+      .map((row) => within(within(row).getAllByRole('cell')[1]).getAllByRole('button')[0].textContent);
     expect(marked.sort()).toEqual(['Above', 'At']);
     expect(screen.queryByText(/violat/i, { selector: 'td span' })).toBeNull();
   });
@@ -120,20 +119,34 @@ describe('AgencyComparison', () => {
     });
     render(<AgencyComparison />);
     fireEvent.change(screen.getByRole('combobox', { name: 'Portal filter' }), { target: { value: 'sd-county' } });
-    expect(bodyRows().map((row) => within(row).getAllByRole('cell')[1].textContent)).toEqual(['Sheriff']);
+    expect(bodyRows().map((row) => within(within(row).getAllByRole('cell')[1]).getAllByRole('button')[0].textContent)).toEqual(['Sheriff']);
   });
 
   it('offers to add a source when there is nothing to profile', () => {
-    useAppStore.setState({ agencyProfiles: [], portals: [] });
+    useAppStore.setState({ agencyProfiles: [], analyticsStatus: 'ready', portals: [] });
     render(<AgencyComparison />);
     expect(screen.getByRole('heading', { name: 'No agencies to compare yet' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Add a source' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add source' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Refresh analytics' })).toBeNull();
+  });
+
+  it('does not call profiles uncomputed while the first analytics response is still pending', () => {
+    useAppStore.setState({
+      agencyProfiles: [],
+      analyticsStatus: 'pending',
+      analyticsError: null,
+      portals: [{ registration: { portalKey: 'p', displayName: 'P', canonicalUrl: 'https://p.example', originUrl: 'https://p.example', apiLayout: { requestsEndpoint: '', requestsPointer: '', metadataPointer: null, pageParameter: '', pageSizeParameter: '' }, verifiedAt: '2026-01-01T00:00:00Z', sourceKind: 'NEXT_REQUEST' }, lifecycleState: 'ACTIVE', healthStatus: 'verified', lastError: null }],
+    });
+    render(<AgencyComparison />);
+    expect(screen.queryByRole('heading', { name: 'Agency profiles have not been computed' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Refresh analytics' })).toBeNull();
+    expect(screen.getByText('Loading agency profiles')).toBeTruthy();
   });
 
   it('renders the empty state with a refresh action when analytics has produced no profiles', () => {
     useAppStore.setState({
       agencyProfiles: [],
+      analyticsStatus: 'ready',
       analyticsRefreshRequests: 0,
       portals: [{ registration: { portalKey: 'p', displayName: 'P', canonicalUrl: 'https://p.example', originUrl: 'https://p.example', apiLayout: { requestsEndpoint: '', requestsPointer: '', metadataPointer: null, pageParameter: '', pageSizeParameter: '' }, verifiedAt: '2026-01-01T00:00:00Z', sourceKind: 'NEXT_REQUEST' }, lifecycleState: 'ACTIVE', healthStatus: 'verified', lastError: null }],
     });
@@ -142,5 +155,15 @@ describe('AgencyComparison', () => {
     expect(screen.queryByRole('table')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Refresh analytics' }));
     expect(useAppStore.getState().analyticsRefreshRequests).toBe(1);
+  });
+
+  it('states a failed read instead of claiming the profiles were never computed', () => {
+    useAppStore.setState({ agencyProfiles: [], analyticsError: 'DATABASE_UNAVAILABLE: busy', analyticsRefreshRequests: 0 });
+    render(<AgencyComparison />);
+    expect(screen.getByRole('alert').textContent).toContain('Agency profiles could not be read.');
+    expect(screen.queryByRole('heading', { name: 'Agency profiles have not been computed' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(useAppStore.getState().analyticsRefreshRequests).toBe(1);
+    useAppStore.setState({ analyticsError: null });
   });
 });

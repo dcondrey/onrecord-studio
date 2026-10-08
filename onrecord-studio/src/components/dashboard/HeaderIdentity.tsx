@@ -1,34 +1,18 @@
-import Icon from '../ui/icons';
 import type { PortalRegistration } from '../../types';
-import type { WorkspaceView } from '../../store/useAppStore';
+import { useAppStore } from '../../store/useAppStore';
+import { viewLabel } from './NavigationControls';
 
-const viewLabels: Record<WorkspaceView, string> = {
-  overview: 'San Diego research desk',
-  story: 'Story desk',
-  patterns: 'Corpus connections',
-  analysis: 'Analysis workbench',
-  evidence: 'Evidence workspace',
-  activity: 'Ingestion activity',
-  briefing: 'Presentation briefing',
-  meetings: 'Public meetings',
-  compare: 'Agency comparison',
-};
-
-/** The title block at the left of the header: current view, active source, and its verified badge. */
-export function HeaderIdentity({ workspaceView, activePortal }: { workspaceView: WorkspaceView; activePortal: PortalRegistration | null }) {
+/** The view's name, then the source it is scoped to, separated by a rule rather than a chevron so it never reads as a path. */
+export function HeaderIdentity({ activePortal }: { activePortal: PortalRegistration | null }) {
+  const view = useAppStore((state) => state.workspaceView);
+  const source = activePortal?.displayName ?? 'All saved sources';
   return (
-    <div className="min-w-0 flex-1 lg:w-[210px] lg:flex-none xl:w-[270px]">
-      <div className="truncate text-caption font-medium text-muted">{viewLabels[workspaceView]}</div>
-      <div className="mt-1 flex min-w-0 items-center gap-2">
-        <h1 className="truncate text-[15px] font-semibold tracking-[-0.015em] text-fg">
-          {activePortal?.displayName ?? 'All saved sources'}
-        </h1>
-        {activePortal && (
-          <span className="hidden shrink-0 items-center gap-1 rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-caption font-semibold uppercase tracking-wider text-success sm:flex">
-            <Icon name="shield" className="h-2.5 w-2.5" /> Verified
-          </span>
-        )}
-      </div>
+    <div className="flex min-w-0 items-center gap-3">
+      <h1 className="shrink-0 text-heading text-fg">{viewLabel(view)}</h1>
+      <span aria-hidden="true" className="h-4 w-px shrink-0 bg-line-strong" />
+      <p className="min-w-0 truncate text-control text-fg-secondary" title={source}>
+        <span className="sr-only">Source: </span>{source}
+      </p>
     </div>
   );
 }

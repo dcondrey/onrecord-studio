@@ -179,7 +179,7 @@ export default function StoryDesk() {
                 >
                   Get San Diego’s core public data
                 </button>
-                <button type="button" onClick={openSourceConnector} className="motion-press focus-ring rounded-lg border border-control px-3 py-1.5 text-label font-semibold text-fg-secondary">Add a source</button>
+                <button type="button" onClick={openSourceConnector} className="motion-press focus-ring rounded-lg border border-control px-3 py-1.5 text-label font-semibold text-fg-secondary">Add source</button>
               </>}
             />
           ) : savedSourceCount === 0 ? (
@@ -187,7 +187,7 @@ export default function StoryDesk() {
               icon="flag"
               title="No leads yet"
               body="Leads come from findings on the records you collect. Add a records portal, website or file to start."
-              actions={<button type="button" onClick={openSourceConnector} className="motion-press focus-ring rounded-lg border border-transparent primary-action px-3 py-1.5 text-label font-semibold text-white">Add a source</button>}
+              actions={<button type="button" onClick={openSourceConnector} className="motion-press focus-ring rounded-lg border border-transparent primary-action px-3 py-1.5 text-label font-semibold text-white">Add source</button>}
             />
           ) : (
             <EmptyState

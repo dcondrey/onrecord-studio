@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { invokeCommand } from '../ipc';
 import { useAppStore, type WorkspaceView } from '../store/useAppStore';
-import type { MeetingCalendar } from '../types';
+import type { CalendarMeeting, MeetingCalendar } from '../types';
 import { useLatestRequestGate } from './useLatestRequestGate';
 
 export interface WorkspaceBadge {
@@ -57,16 +57,16 @@ export function useWorkspaceBadges(): Partial<Record<WorkspaceView, WorkspaceBad
 }
 
 /** Days from the calendar's own `today` to the nearest meeting with a recorded upcoming date. */
-export function nextUpcomingMeeting(calendar: MeetingCalendar): { days: number; body: string } | null {
+export function nextUpcomingMeeting(calendar: MeetingCalendar): { days: number; body: string; meeting: CalendarMeeting } | null {
   const today = Date.parse(`${calendar.today.slice(0, 10)}T00:00:00Z`);
   if (Number.isNaN(today)) return null;
-  let best: { days: number; body: string } | null = null;
+  let best: { days: number; body: string; meeting: CalendarMeeting } | null = null;
   for (const meeting of calendar.meetings) {
     if (meeting.timing !== 'UPCOMING' || !meeting.date) continue;
     const date = Date.parse(`${meeting.date.slice(0, 10)}T00:00:00Z`);
     if (Number.isNaN(date) || date < today) continue;
     const days = Math.round((date - today) / 86_400_000);
-    if (!best || days < best.days) best = { days, body: meeting.body };
+    if (!best || days < best.days) best = { days, body: meeting.body, meeting };
   }
   return best;
 }

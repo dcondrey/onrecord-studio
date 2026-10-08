@@ -15,7 +15,7 @@ const TONE: Record<BadgeTone, string> = {
   success: 'border-success/30 bg-success/10 text-success',
   warning: 'border-warning/30 bg-warning/10 text-warning',
   danger: 'border-danger/30 bg-danger/10 text-danger',
-  violation: 'border-danger bg-danger font-semibold text-on-danger',
+  violation: 'border-danger/40 bg-violation font-semibold text-on-violation',
 };
 
 /** The leading shape that carries a badge's meaning without relying on its colour. */

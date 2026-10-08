@@ -65,7 +65,7 @@ function useGatedRun() {
 function Licence({ summary }: { summary: DataPackSummary }) {
   return (
     <div className="rounded border border-line p-2">
-      <p className="text-fg-secondary">Licence: {summary.licenceId} ({summary.licenceUrl})</p>
+      <p className="text-fg-secondary">License: {summary.licenceId} ({summary.licenceUrl})</p>
       <p className="mt-1 text-muted">{summary.disclaimer}</p>
     </div>
   );

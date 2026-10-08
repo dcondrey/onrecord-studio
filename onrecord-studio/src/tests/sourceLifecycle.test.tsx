@@ -94,6 +94,12 @@ function mountWith(lifecycleState: SourceLifecycleState, syncing: boolean) {
   render(<Header />);
 }
 
+/** The active source's actions live in one menu beside its name in the header. */
+function chooseSourceAction(name: string) {
+  fireEvent.click(screen.getByRole('button', { name: 'Source actions' }));
+  fireEvent.click(screen.getByRole('menuitem', { name }));
+}
+
 describe('source lifecycle controls', () => {
   beforeEach(() => {
     bridge.calls.length = 0;
@@ -103,7 +109,7 @@ describe('source lifecycle controls', () => {
 
   it('pauses the running source by source key', async () => {
     mountWith('ACTIVE', true);
-    fireEvent.click(screen.getByRole('button', { name: 'Pause synchronization' }));
+    chooseSourceAction('Pause synchronization');
     await waitFor(() => expect(bridge.calls).toHaveLength(1));
     expect(bridge.calls[0]).toEqual({
       command: 'pause_source_sync',
@@ -115,11 +121,12 @@ describe('source lifecycle controls', () => {
 
   it('offers resume only once the source is paused, and adopts the run it returns', async () => {
     mountWith('ACTIVE', true);
-    expect(screen.queryByRole('button', { name: 'Resume synchronization' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Source actions' }));
+    expect(screen.queryByRole('menuitem', { name: 'Resume synchronization' })).toBeNull();
     cleanup();
 
     mountWith('PAUSED', false);
-    fireEvent.click(screen.getByRole('button', { name: 'Resume synchronization' }));
+    chooseSourceAction('Resume synchronization');
     await waitFor(() => expect(bridge.calls).toHaveLength(1));
     expect(bridge.calls[0]).toEqual({
       command: 'resume_source_sync',
@@ -133,7 +140,7 @@ describe('source lifecycle controls', () => {
   // Confirming first is the affordance; reporting the retained count afterwards is the claim.
   it('confirms a removal, states that documents are kept, and reports what was kept', async () => {
     mountWith('ACTIVE', false);
-    fireEvent.click(screen.getByRole('button', { name: 'Remove source' }));
+    chooseSourceAction('Remove source');
     expect(bridge.calls).toHaveLength(0);
     expect(screen.getByText(/Documents already ingested from this source are kept/)).toBeTruthy();
 

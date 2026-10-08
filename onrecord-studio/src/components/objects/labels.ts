@@ -16,11 +16,11 @@ export function severityLabel(severity: FindingSeverity): string {
   return severity.charAt(0) + severity.slice(1).toLowerCase();
 }
 
-export function severityTone(severity: FindingSeverity): 'danger' | 'warning' | 'accent' | 'muted' {
+export function severityTone(severity: FindingSeverity): 'danger' | 'warning' | 'neutral' | 'muted' {
   switch (severity) {
     case 'CRITICAL': return 'danger';
     case 'SERIOUS': return 'warning';
-    case 'NOTABLE': return 'accent';
+    case 'NOTABLE': return 'neutral';
     case 'INFO': return 'muted';
   }
 }
@@ -38,11 +38,19 @@ export function confidenceLabel(confidence: FindingConfidence): string {
 
 export function formatShortDate(value: string): string {
   const date = new Date(value);
-  // A bare calendar date parses as UTC midnight; read it in UTC so it is not shown as the day before.
-  const dateOnly = value.length === 10 && !value.includes('T');
+  // A bare calendar date parses as UTC midnight; read in a zone west of UTC it would print the day before.
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
   return Number.isNaN(date.valueOf())
     ? value
-    : new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: dateOnly ? 'UTC' : undefined }).format(date);
+    : new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric', ...(dateOnly ? { timeZone: 'UTC' } : {}) }).format(date);
+}
+
+/** "Oct 7, 2026, 1:00 PM" in the reader's zone: when something was checked, to the minute. */
+export function formatDateTime(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.valueOf())
+    ? value
+    : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
 /**

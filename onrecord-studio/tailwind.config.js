@@ -18,6 +18,8 @@ export default {
         'control': 'rgb(var(--control) / <alpha-value>)',
         'accent': 'rgb(var(--accent) / <alpha-value>)',
         'on-accent': 'rgb(var(--on-accent) / <alpha-value>)',
+        'violation': 'rgb(var(--violation) / <alpha-value>)',
+        'on-violation': 'rgb(var(--on-violation) / <alpha-value>)',
         'highlight': 'rgb(var(--highlight) / <alpha-value>)',
         'success': 'rgb(var(--success) / <alpha-value>)',
         'warning': 'rgb(var(--warning) / <alpha-value>)',

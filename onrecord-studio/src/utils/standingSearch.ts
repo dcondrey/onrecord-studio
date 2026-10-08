@@ -1,3 +1,4 @@
+import { formatDateTime } from '../components/objects/labels';
 import type { CountBasis, SeriesGap, StandingQueryRun } from '../types/standingSearch';
 
 /** Exact and estimated counts are different claims; the label travels with every breakdown. */
@@ -20,7 +21,7 @@ export function describeRun(run: StandingQueryRun): string {
       : run.changedSincePrevious
         ? `match set changed from ${run.previousMatchCount?.toLocaleString('en-US') ?? '?'} to ${run.result.matchCount.toLocaleString('en-US')}`
         : 'same match set as the previous run';
-  return `Ran ${run.ranAt.slice(0, 16).replace('T', ' ')} UTC against ${corpus}; ${run.result.matchCount.toLocaleString('en-US')} matching requests (exact); ${change}.`;
+  return `Ran ${formatDateTime(run.ranAt)} against ${corpus}; ${run.result.matchCount.toLocaleString('en-US')} matching requests (exact); ${change}.`;
 }
 
 export function describeGap(gap: SeriesGap): string {

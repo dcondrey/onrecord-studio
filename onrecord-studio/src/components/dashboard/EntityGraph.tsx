@@ -22,6 +22,9 @@ import { useAffiliationDisclosure } from '../account/useProfile';
 import AnalyticsUnavailable from '../charts/AnalyticsUnavailable';
 import { ShapeGlyph } from '../ui/shapeGlyph';
 import { RegistryAnchorNote } from '../ui/RegistryAnchorNote';
+import { CountBadge } from '../ui/Badge';
+import Button from '../ui/Button';
+import { Input } from '../ui/Field';
 import {
   ConfidenceMeter,
   EdgeBasisChip,
@@ -274,6 +277,7 @@ export default function EntityGraph() {
     });
   const missing = list.status === 'missing';
   const pathView = pathAnswer !== null && pathAnswer.request.fromEntityId === selectedId ? pathAnswer : null;
+  const entityName = (entityId: string) => seeds.find((seed) => seed.entityId === entityId)?.displayValue ?? entityId;
 
   // On a narrow screen the drawing scrolls sideways; start with the centre entity in view.
   const centredOn = knownCentre?.entityId ?? null;
@@ -324,17 +328,17 @@ export default function EntityGraph() {
   return (
     <section className="app-panel flex flex-col overflow-hidden p-5">
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="app-eyebrow">Entity graph</div>
-          <div className="mt-1 text-label text-muted">
+        <div className="min-w-0">
+          <h3 className="text-heading text-fg">Entity graph</h3>
+          <p className="mt-1 max-w-prose text-caption text-muted">
             Dotted arcs with a hollow marker are co-occurrence: proximity this app derived, not a
-            relationship the documents stated. Labelled arcs with a solid diamond are relations read
+            relationship the documents stated. Labeled arcs with a solid diamond are relations read
             from the text. Distance reads shared documents.
-          </div>
+          </p>
         </div>
-        <div className="rounded border border-line bg-surface/70 px-2 py-1 font-mono text-caption text-muted">
-          {seeds.length} entities indexed
-        </div>
+        <span className="shrink-0 text-caption tabular-nums text-muted">
+          {seeds.length.toLocaleString('en-US')} {seeds.length === 1 ? 'entity' : 'entities'} indexed
+        </span>
       </div>
 
       <div className="mt-3 flex flex-wrap gap-1.5">
@@ -344,17 +348,19 @@ export default function EntityGraph() {
             type="button"
             onClick={() => setSelectedId(seed.entityId)}
             data-own-organization={isOwn(seed.entityId) ? 'true' : undefined}
+            title={seed.displayValue}
+            aria-pressed={seed.entityId === selectedId}
             className={cn(
-              'focus-ring rounded border px-2 py-1 font-mono text-caption transition-colors',
+              'focus-ring inline-flex h-7 max-w-[18rem] items-center gap-1.5 rounded-full border pl-2.5 pr-1 text-caption transition-colors',
               isOwn(seed.entityId) && 'ring-1 ring-accent/50',
               dimOthers && !isOwn(seed.entityId) && 'opacity-40',
               seed.entityId === selectedId
-                ? 'border-control bg-raised text-fg'
-                : 'border-control bg-surface/70 text-muted hover:border-control',
+                ? 'border-accent/30 bg-accent/10 text-accent'
+                : 'border-line-strong text-fg-secondary hover:bg-raised',
             )}
           >
-            {truncateLabel(seed.displayValue)}
-            <span className="ml-1.5 text-muted">{seed.documentCount}</span>
+            <span className="truncate">{seed.displayValue}</span>
+            <CountBadge value={seed.documentCount.toLocaleString('en-US')} />
           </button>
         ))}
       </div>
@@ -403,7 +409,7 @@ export default function EntityGraph() {
       ) : !centre ? (
         <div className="mt-6 grid flex-1 place-items-center text-center" aria-busy="true">
           <div className="max-w-xs text-caption leading-relaxed text-muted">
-            Reading the neighbourhood from the corpus index. Nothing is known about this entity's
+            Reading the neighborhood from the corpus index. Nothing is known about this entity's
             relationships until it answers.
           </div>
         </div>
@@ -511,7 +517,7 @@ export default function EntityGraph() {
             </label>
             {hiddenByFilters && counts && (
               <span role="status">
-                The filters match {counts.total.toLocaleString('en-US')} of {counts.unfilteredTotal.toLocaleString('en-US')} neighbours. Hidden relationships are filtered out, not absent.
+                The filters match {counts.total.toLocaleString('en-US')} of {counts.unfilteredTotal.toLocaleString('en-US')} neighbors. Hidden relationships are filtered out, not absent.
                 {asOf && !includeUndated ? ' Relationships with no recorded dates are hidden.' : ''}
               </span>
             )}
@@ -578,7 +584,7 @@ export default function EntityGraph() {
                 role="button"
                 aria-label={`${edge.neighbor.displayValue}: ${kindLabels[edge.neighbor.kind]}, ${gradeLabel(edge.neighbor.validationGrade)}, ${edgeVisual(edge.kind, edge.basis).label}. Select to centre the graph on it.`}
                 className={cn(
-                  'focus:outline-none focus-visible:[&>circle:first-of-type]:stroke-white',
+                  'focus:outline-none focus-visible:[&>circle:first-of-type]:stroke-[rgb(var(--focus))] focus-visible:[&>circle:first-of-type]:[stroke-width:2.5]',
                   dimOthers && !isOwn(edge.neighbor.entityId) && 'opacity-40',
                 )}
                 data-own-organization={isOwn(edge.neighbor.entityId) ? 'true' : undefined}
@@ -636,12 +642,12 @@ export default function EntityGraph() {
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-caption text-muted" aria-busy={list.status === 'loading'}>
             {list.status === 'loading' ? (
-              <span role="status">Updating the neighbours for this filter…</span>
+              <span role="status">Updating the neighbors for this filter…</span>
             ) : (
               <span role="status">
                 {counts
-                  ? `Drawing the ${placed.length} strongest of ${counts.total.toLocaleString('en-US')} neighbours. All of them are listed in the table below.`
-                  : `Drawing the ${placed.length} strongest neighbours. The total is not available yet; the table below lists every neighbour.`}
+                  ? `Drawing the ${placed.length} strongest of ${counts.total.toLocaleString('en-US')} neighbors. All of them are listed in the table below.`
+                  : `Drawing the ${placed.length} strongest neighbors. The total is not available yet; the table below lists every neighbor.`}
               </span>
             )}
             {kindFilter === null &&
@@ -696,7 +702,7 @@ export default function EntityGraph() {
               />
               {loadedAliases.length > 0 && (
                 <p className="mt-1 text-caption text-muted">
-                  The table lists {centre.displayValue}'s own neighbours. Combined spellings add their strongest neighbours to the drawing only.
+                  The table lists {centre.displayValue}'s own neighbors. Combined spellings add their strongest neighbors to the drawing only.
                 </p>
               )}
             </>
@@ -707,12 +713,12 @@ export default function EntityGraph() {
               {kindLabels[centre.kind]} · {centre.documentCount} documents
             </span>
             <ValidationGradeChip grade={centre.validationGrade} />
-            <span className="font-mono">
+            <span className="tabular-nums">
               {counts
-                ? `${counts.total.toLocaleString('en-US')} neighbours`
+                ? `${counts.total.toLocaleString('en-US')} neighbors`
                 : listing?.countFailed
-                  ? 'Neighbour total unavailable'
-                  : 'Counting neighbours'}
+                  ? 'Neighbor total unavailable'
+                  : 'Counting neighbors'}
             </span>
             <span className="ml-auto">
               Node badge shape carries validation grade; hollow badge with dashed outline is a lead.
@@ -728,7 +734,9 @@ export default function EntityGraph() {
             className="mt-2 flex flex-wrap items-center gap-2 border-t border-line pt-2 text-caption"
             onSubmit={(event) => {
               event.preventDefault();
-              const toEntityId = pathTargetId.trim();
+              const typed = pathTargetId.trim();
+              // The field offers indexed entities by name; a typed id is still accepted as written.
+              const toEntityId = seeds.find((seed) => seed.displayValue.toLocaleLowerCase() === typed.toLocaleLowerCase())?.entityId ?? typed;
               if (!selectedId || !toEntityId) return;
               const request: PathRequest = { fromEntityId: selectedId, toEntityId };
               const token = pathGate.begin();
@@ -757,39 +765,40 @@ export default function EntityGraph() {
                 });
             }}
           >
-            <label className="font-mono text-muted" htmlFor="entity-path-target">
-              Find path to entity id:
+            <label className="text-control text-fg-secondary" htmlFor="entity-path-target">
+              Trace a path to
             </label>
-            <input
+            <Input
               id="entity-path-target"
               type="text"
+              role="combobox"
+              list="entity-path-options"
+              autoComplete="off"
               value={pathTargetId}
               onChange={(event) => setPathTargetId(event.target.value)}
-              className="focus-ring min-w-[220px] flex-1 rounded border border-control bg-surface/70 px-2 py-1 font-mono text-caption text-fg"
-              placeholder="paste the neighbour id from another view"
+              className="min-w-[220px] flex-1"
+              placeholder="An indexed entity"
             />
-            <button
-              type="submit"
-              className="focus-ring rounded border border-control bg-raised/70 px-2 py-1 font-mono text-caption text-fg hover:border-control"
-            >
-              Trace
-            </button>
+            <datalist id="entity-path-options">
+              {seeds.filter((seed) => seed.entityId !== selectedId).map((seed) => <option key={seed.entityId} value={seed.displayValue} />)}
+            </datalist>
+            <Button type="submit" disabled={!pathTargetId.trim()}>Trace</Button>
             {pathView?.kind === 'pending' && (
               <span className="text-muted" aria-busy="true">
-                Tracing from {centre.displayValue} to {pathView.request.toEntityId}.
+                Tracing from {centre.displayValue} to {entityName(pathView.request.toEntityId)}.
               </span>
             )}
             {pathView?.kind === 'failed' && <span className="text-danger">{pathView.message}</span>}
             {pathView?.kind === 'notConnected' && (
               <span className="text-muted">
-                No path within {pathView.maxHops} hops from {centre.displayValue} to {pathView.request.toEntityId}:
+                No path within {pathView.maxHops} hops from {centre.displayValue} to {entityName(pathView.request.toEntityId)}:
                 the search found none within that bound, not proof the two entities have no connection in this corpus.
               </span>
             )}
             {pathView?.kind === 'searchCapped' && (
               <span className="text-warning">
                 The search stopped after exploring {pathView.exploredEntities} entities without reaching{' '}
-                {pathView.request.toEntityId} within {pathView.maxHops} hops, so whether {centre.displayValue} connects
+                {entityName(pathView.request.toEntityId)} within {pathView.maxHops} hops, so whether {centre.displayValue} connects
                 to it is unknown.
               </span>
             )}
@@ -800,7 +809,7 @@ export default function EntityGraph() {
               </span>
             )}
             {pathView?.kind === 'found' && (
-              <span className="w-full font-mono text-fg-secondary">
+              <span className="w-full tabular-nums text-fg-secondary">
                 {pathView.path.hops} hops{' '}
                 {pathView.path.weakestConfidenceBasisPoints != null
                   ? `· weakest edge ${(pathView.path.weakestConfidenceBasisPoints / 100).toFixed(1)}%`

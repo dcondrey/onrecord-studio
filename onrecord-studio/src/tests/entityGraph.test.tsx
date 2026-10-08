@@ -224,7 +224,7 @@ describe("EntityGraph", () => {
     await waitFor(() => expect(resolvers.has("entity-slow")).toBe(true));
 
     expect(screen.queryByText(/no longer in the index/)).toBeNull();
-    expect(screen.getByText(/Reading the neighbourhood/)).toBeTruthy();
+    expect(screen.getByText(/Reading the neighborhood/)).toBeTruthy();
   });
 
   it("does not carry one entity's missing verdict onto the next entity while it loads", async () => {
@@ -237,7 +237,7 @@ describe("EntityGraph", () => {
     await waitFor(() => expect(resolvers.has("entity-fast")).toBe(true));
 
     expect(screen.queryByText(/no longer in the index/)).toBeNull();
-    expect(screen.getByText(/Reading the neighbourhood/)).toBeTruthy();
+    expect(screen.getByText(/Reading the neighborhood/)).toBeTruthy();
   });
 
   // A path is a statement about the pair it was traced for. The origin is the centre entity at
@@ -251,7 +251,7 @@ describe("EntityGraph", () => {
     );
     await screen.findAllByText("FIRST NEIGHBOUR");
 
-    fireEvent.change(screen.getByLabelText(/Find path to entity id/), {
+    fireEvent.change(screen.getByLabelText(/Trace a path to/), {
       target: { value: "entity-elsewhere" },
     });
     fireEvent.submit(screen.getByRole("button", { name: "Trace" }));
@@ -277,7 +277,7 @@ describe("EntityGraph", () => {
     );
     await screen.findAllByText("FIRST NEIGHBOUR");
 
-    fireEvent.change(screen.getByLabelText(/Find path to entity id/), {
+    fireEvent.change(screen.getByLabelText(/Trace a path to/), {
       target: { value: "entity-elsewhere" },
     });
     fireEvent.submit(screen.getByRole("button", { name: "Trace" }));
@@ -300,7 +300,7 @@ describe("EntityGraph", () => {
     );
     await screen.findAllByText("FIRST NEIGHBOUR");
 
-    fireEvent.change(screen.getByLabelText(/Find path to entity id/), {
+    fireEvent.change(screen.getByLabelText(/Trace a path to/), {
       target: { value: "entity-missing" },
     });
     fireEvent.submit(screen.getByRole("button", { name: "Trace" }));
@@ -335,7 +335,7 @@ describe("EntityGraph with more neighbours than a drawing holds", () => {
       edges: manyEdges("org", 20),
       nextCursor: "page-2",
     });
-    await screen.findByText(/20 of 30 neighbours loaded/);
+    await screen.findByText(/20 of 30 neighbors loaded/);
 
     // The drawing holds its budget of 18 even though 20 are loaded; the rest are named, not dropped.
     expect(container.querySelectorAll("svg [data-edge-family]").length).toBe(18);
@@ -351,7 +351,7 @@ describe("EntityGraph with more neighbours than a drawing holds", () => {
       edges: manyEdges("tail", 10),
       nextCursor: null,
     });
-    await screen.findByText(/30 of 30 neighbours loaded/);
+    await screen.findByText(/30 of 30 neighbors loaded/);
     expect(screen.getByText("End of the list.")).toBeTruthy();
   });
 
@@ -405,7 +405,7 @@ describe("EntityGraph with more neighbours than a drawing holds", () => {
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(screen.queryByText(/LEAKED/)).toBeNull();
-    expect(screen.getByText(/1 of 1 neighbours loaded/)).toBeTruthy();
+    expect(screen.getByText(/1 of 1 neighbors loaded/)).toBeTruthy();
   });
 
   it("says the total could not be counted rather than showing it as zero", async () => {

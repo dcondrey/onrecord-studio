@@ -156,7 +156,7 @@ describe('FindingsInbox', () => {
       expect(screen.getByText(/no findings surfaced yet/i)).toBeTruthy();
     });
     // Refresh remains available even in the empty state.
-    expect(screen.getByRole('button', { name: /refresh findings/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^refresh$/i })).toBeTruthy();
   });
 
   it('only claims more findings exist when the backend returns more than the page size', async () => {
@@ -257,7 +257,7 @@ describe('FindingsInbox', () => {
     // After the initial load, arrange a new list to be returned on next fetch.
     bridge.listRows = [sampleFinding({ id: 'fresh', headline: 'Fresh finding after refresh' })];
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /refresh findings/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^refresh$/i }));
     });
     await waitFor(() => {
       expect(bridge.invoked.some((call) => call.command === 'refresh_findings')).toBe(true);
@@ -275,12 +275,12 @@ describe('FindingsInbox', () => {
       expect(screen.getByText('Finding from the previous sweep')).toBeTruthy();
     });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /refresh findings/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^refresh$/i }));
     });
     // The reload keyed off the refresh counter must have settled before we judge the alert.
     await waitFor(() => {
       expect(bridge.invoked.filter((call) => call.command === 'list_findings').length).toBeGreaterThanOrEqual(2);
-      expect(screen.getByRole('button', { name: /refresh findings/i })).toBeTruthy();
+      expect(screen.getByRole('button', { name: /^refresh$/i })).toBeTruthy();
     });
     const alert = screen.getByRole('alert');
     expect(alert.textContent).toMatch(/refresh unavailable/);

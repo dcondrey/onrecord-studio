@@ -169,8 +169,10 @@ interface AppState {
   workspaceInitializationAttempt: number;
   ocrCapability: OcrCapability | null;
   portalRuntimes: PortalRuntimeSnapshot[];
+  /** Whether `portalRuntimes` holds a measured snapshot. An empty array while pending or failed is absence, not "nothing running". */
   portalRuntimesStatus: ReadStatus;
   portalRuntimesError: string | null;
+  runtimeRefreshRequests: number;
   activePortalKey: string | null;
   portalUrlDraft: string;
   syncingPortalKeys: string[];
@@ -182,9 +184,10 @@ interface AppState {
   agencyProfiles: AgencyPerformanceProfile[];
   crossAgencyCorrelations: CrossAgencyCorrelation[];
   analyticsUpdatedAt: string | null;
+  /** Whether `agencyProfiles` holds a computed response; an empty list is "not computed" only when ready. */
+  analyticsStatus: ReadStatus;
   /** Set when the last analytics refresh failed, so panels can say so instead of reporting an empty result as a finding. */
   analyticsError: string | null;
-  analyticsStatus: ReadStatus;
   /**
    * Incremented by any surface that writes data the analytics aggregates read, so the single
    * refresh that owns those queries re-runs. A panel left on a pre-write aggregate reports a
@@ -283,16 +286,19 @@ interface AppState {
   setPortalUrlDraft: (url: string) => void;
   upsertPortal: (portal: PortalRegistration) => void;
   setPortals: (portals: SavedSource[]) => void;
+  retryWorkspaceInitialization: () => void;
   setWorkspaceInitialization: (
     status: WorkspaceInitializationStatus,
     error?: string | null,
   ) => void;
-  retryWorkspaceInitialization: () => void;
   setOcrCapability: (capability: OcrCapability | null) => void;
   setPortalLifecycleState: (portalKey: string, lifecycleState: SourceLifecycleState) => void;
   removePortal: (portalKey: string) => void;
   setPortalRuntimes: (runtimes: PortalRuntimeSnapshot[]) => void;
+  /** Records a failed runtime read. A failed refresh over a measured snapshot keeps that snapshot; only a failed first read is absence. */
   setPortalRuntimesFailed: (message: string) => void;
+  /** Re-runs the runtime snapshot from the one place that owns it (App). */
+  requestRuntimeRefresh: () => void;
   setActivePortal: (portalKey: string | null) => void;
   setPortalSyncState: (portalKey: string, syncing: boolean, syncRunId?: string) => void;
   setAudioAlertsEnabled: (enabled: boolean) => void;
@@ -370,6 +376,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   portalRuntimes: [],
   portalRuntimesStatus: 'pending',
   portalRuntimesError: null,
+  runtimeRefreshRequests: 0,
   activePortalKey: null,
   portalUrlDraft: '',
   syncingPortalKeys: [],
@@ -381,8 +388,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   agencyProfiles: [],
   crossAgencyCorrelations: [],
   analyticsUpdatedAt: null,
-  analyticsError: null,
   analyticsStatus: 'pending',
+  analyticsError: null,
   analyticsRefreshRequests: 0,
   evidenceRefreshRequests: 0,
   findingsRefreshRequests: 0,
@@ -546,12 +553,11 @@ export const useAppStore = create<AppState>((set, get) => ({
           ? state.activePortalKey
           : portals[0]?.registration.portalKey ?? null,
     })),
+  retryWorkspaceInitialization: () => set((state) => ({ workspaceInitializationAttempt: state.workspaceInitializationAttempt + 1 })),
   setWorkspaceInitialization: (
     workspaceInitializationStatus,
     workspaceInitializationError = null,
   ) => set({ workspaceInitializationStatus, workspaceInitializationError }),
-  retryWorkspaceInitialization: () =>
-    set((state) => ({ workspaceInitializationAttempt: state.workspaceInitializationAttempt + 1 })),
   setOcrCapability: (ocrCapability) => set({ ocrCapability }),
   setPortalLifecycleState: (portalKey, lifecycleState) =>
     set((state) => ({
@@ -588,7 +594,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       isSyncing: syncingPortalKeys.length > 0,
     };
   }),
-  setPortalRuntimesFailed: (portalRuntimesError) => set({ portalRuntimesStatus: 'failed', portalRuntimesError }),
+  setPortalRuntimesFailed: (portalRuntimesError) =>
+    set((state) => ({ portalRuntimesStatus: state.portalRuntimesStatus === 'ready' ? 'ready' : 'failed', portalRuntimesError })),
+  requestRuntimeRefresh: () =>
+    set((state) => ({
+      portalRuntimesStatus: state.portalRuntimesStatus === 'ready' ? 'ready' : 'pending',
+      portalRuntimesError: null,
+      runtimeRefreshRequests: state.runtimeRefreshRequests + 1,
+    })),
   setActivePortal: (activePortalKey) =>
     set({
       activePortalKey,
@@ -653,8 +666,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       agencyProfiles,
       crossAgencyCorrelations,
       analyticsUpdatedAt: new Date().toISOString(),
-      analyticsError: null,
       analyticsStatus: 'ready',
+      analyticsError: null,
     }),
   setAnalyticsError: (analyticsError) =>
     set((state) => ({
@@ -662,7 +675,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       analyticsStatus: analyticsError === null ? state.analyticsStatus : 'failed',
     })),
   requestAnalyticsRefresh: () =>
-    set((state) => ({ analyticsRefreshRequests: state.analyticsRefreshRequests + 1 })),
+    set((state) => ({
+      analyticsRefreshRequests: state.analyticsRefreshRequests + 1,
+      // A retry after a failure is a load again; a refresh over a computed result keeps showing it.
+      analyticsStatus: state.analyticsStatus === 'failed' ? 'pending' : state.analyticsStatus,
+      analyticsError: state.analyticsStatus === 'failed' ? null : state.analyticsError,
+    })),
   requestEvidenceRefresh: () =>
     set((state) => ({ evidenceRefreshRequests: state.evidenceRefreshRequests + 1 })),
   requestFindingsRefresh: () =>

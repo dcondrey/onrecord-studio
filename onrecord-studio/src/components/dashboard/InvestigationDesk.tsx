@@ -105,17 +105,13 @@ export default function InvestigationDesk() {
 
   return (
     <section aria-label="San Diego investigations" className="space-y-4">
-      <div className="onboarding-panel rounded-2xl border p-5 sm:p-6">
-        <div className="app-eyebrow text-accent">Investigate San Diego</div>
-        <h3 className="mt-2 text-xl font-semibold text-fg">
-          Follow the money. Check the services.
-        </h3>
-        <p className="mt-2 text-sm text-muted">
+      <div>
+        <p className="text-caption text-muted">
           Choose a question, collect the underlying records, and document what
           the evidence supports.
         </p>
         <div
-          className="mt-4 flex flex-wrap gap-2"
+          className="mt-3 flex flex-wrap gap-2"
           role="group"
           aria-label="Investigation topics"
         >
@@ -125,10 +121,10 @@ export default function InvestigationDesk() {
               type="button"
               aria-pressed={topic.id === item.id}
               className={cn(
-                "focus-ring rounded-lg border px-3 py-2 text-sm",
+                "focus-ring h-8 rounded-lg border px-3 text-control transition-colors",
                 topic.id === item.id
                   ? "border-accent/30 bg-accent/10 text-accent"
-                  : "border-control text-fg-secondary",
+                  : "border-line-strong text-fg-secondary hover:bg-raised",
               )}
               onClick={() => {
                 setWorkspace((current) => ({ ...current, topicId: item.id }));
@@ -140,12 +136,12 @@ export default function InvestigationDesk() {
           ))}
         </div>
       </div>
-      <div className="app-panel space-y-5 p-5 sm:p-6">
+      <div className="space-y-5 rounded-lg border border-line p-5">
         <div>
-          <h3 className="text-lg font-semibold text-fg">
+          <h3 className="text-heading text-fg">
             {topic.question}
           </h3>
-          <p className="mt-2 text-sm leading-relaxed text-fg-secondary">
+          <p className="mt-1 text-body text-fg-secondary">
             {topic.method}
           </p>
           <p className="mt-2 text-label leading-relaxed text-muted">

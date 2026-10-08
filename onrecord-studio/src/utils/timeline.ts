@@ -1,6 +1,6 @@
+import { findingKindLabel, formatShortDate } from '../components/objects/labels';
 import type { ClaimedRequest, Finding, TimelineEventKind, WatchChange } from '../types';
 import { isLegalClaimKind } from '../types/findings';
-import { enumLabel, formatShortDate } from '../components/objects/labels';
 
 export type TimelineSource = 'REQUEST' | 'FINDING' | 'WATCH' | 'CASE';
 
@@ -73,7 +73,7 @@ export function findingItems(findings: Finding[]): TimelineItem[] {
     detail: null,
     // The same basis the inspector and the overview state, so no surface calls a counted
     // statutory violation a pattern signal.
-    provenance: `${enumLabel(finding.sourceDetector)} detector; first seen ${formatShortDate(finding.discoveredAt)}. ${isLegalClaimKind(finding.kind) ? 'Counted violation.' : 'Pattern signal, not a legal claim.'}`,
+    provenance: `${findingKindLabel(finding.kind)} check · first found ${formatShortDate(finding.discoveredAt)} · ${isLegalClaimKind(finding.kind) ? 'Counted violation' : 'Pattern signal, not a legal claim'}`,
     evidence: finding.explanation,
     findingId: finding.id,
   }));

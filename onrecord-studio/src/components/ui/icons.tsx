@@ -24,6 +24,7 @@ export type IconName =
   | 'filePlus'
   | 'globe'
   | 'help'
+  | 'user'
   | 'grid'
   | 'menu'
   | 'moon'
@@ -79,6 +80,7 @@ export default function Icon({ name, size = 'md', className, ...props }: IconPro
     eject: <><path d="M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3" /><path d="m15 16 5-4-5-4" /><path d="M20 12H10" /></>,
     filePlus: <><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v5h5M9 14h6M12 11v6" /></>,
     globe: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" /></>,
+    user: <><circle cx="12" cy="8" r="4" /><path d="M4.5 20a7.5 7.5 0 0 1 15 0" /></>,
     help: <><circle cx="12" cy="12" r="9" /><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.4c-.6.3-1 .8-1 1.5v.4" /><path d="M12 17h.01" /></>,
     grid: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,
     menu: <><path d="M4 7h16M4 12h16M4 17h16" /></>,

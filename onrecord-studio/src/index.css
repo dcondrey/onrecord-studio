@@ -29,6 +29,10 @@
   --muted: 82 97 116;
   --accent: 14 116 144;
   --on-accent: 255 255 255;
+  /* The counted-violation badge: crimson with white text in both themes (6.47:1), so its weight does
+     not change with the theme; dark mode's pastel danger text step would make it the loudest block. */
+  --violation: 185 28 28;
+  --on-violation: 255 255 255;
   --lead: 109 40 217;
   --lead-mark: 124 58 237;
   --on-lead: 255 255 255;
@@ -44,8 +48,9 @@
   --focus: 3 105 161;
   --scrim: rgb(15 23 42 / 0.4);
   --hatch: rgb(148 163 184 / 0.45);
-  /* .72 measured 4.66:1 for muted text over the populated overview; .80 keeps a margin above 4.5. */
-  --glass-alpha: 0.8;
+  /* Glass carries dense text (palette rows, dialog forms); at .94 the blurred page behind stays a
+     tint, never legible, and muted text keeps its panel contrast within a few hundredths. */
+  --glass-alpha: 0.94;
   --shadow-panel: 0 1px 2px rgb(15 23 42 / 0.04), inset 0 1px 0 rgb(255 255 255 / 0.8);
   --shadow-popover: 0 8px 24px rgb(15 23 42 / 0.12), 0 2px 6px rgb(15 23 42 / 0.08);
   --shadow-dialog: 0 24px 64px rgb(15 23 42 / 0.24), 0 4px 16px rgb(15 23 42 / 0.12);
@@ -138,7 +143,7 @@
   --focus: 56 189 248;
   --scrim: rgb(0 0 0 / 0.6);
   --hatch: rgb(148 163 184 / 0.35);
-  --glass-alpha: 0.78;
+  --glass-alpha: 0.94;
   --shadow-panel: 0 1px 2px rgb(0 0 0 / 0.35), inset 0 1px 0 rgb(255 255 255 / 0.04);
   --shadow-popover: 0 8px 24px rgb(0 0 0 / 0.5), 0 2px 6px rgb(0 0 0 / 0.3);
   --shadow-dialog: 0 24px 64px rgb(0 0 0 / 0.6);

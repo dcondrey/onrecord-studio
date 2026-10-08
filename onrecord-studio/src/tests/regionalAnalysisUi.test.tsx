@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 const bridge = vi.hoisted(() => ({ calls: [] as { name: string; args: Record<string, unknown> }[] }));
-vi.mock('../store/useAppStore', () => ({ useAppStore: { getState: () => ({}) } }));
+vi.mock('../store/useAppStore', () => ({ useAppStore: Object.assign((selector: (state: { workspaceView: string }) => unknown) => selector({ workspaceView: 'analysis' }), { getState: () => ({}) }) }));
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn(), save: vi.fn() }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: async (name: string, args: Record<string, unknown>) => {
   bridge.calls.push({ name, args });

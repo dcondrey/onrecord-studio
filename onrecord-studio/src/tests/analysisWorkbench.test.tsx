@@ -23,7 +23,7 @@ const upkeep = {
 };
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn(), save: vi.fn() }));
-vi.mock('../ipc', () => ({ invokeCommand: bridge.invoke }));
+vi.mock('../ipc', () => ({ invokeCommand: bridge.invoke, formatNativeError: (error: unknown) => (error instanceof Error ? error.message : String(error)) }));
 vi.mock('../store/useAppStore', () => ({
   useAppStore: Object.assign((selector: (state: { evidenceRefreshRequests: number }) => unknown) =>
     selector({ evidenceRefreshRequests: 0 }), {
