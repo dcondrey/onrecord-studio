@@ -25,6 +25,20 @@ function Cell({ value, none }: { value: string | null; none: string }) {
   return <>{value}</>;
 }
 
+/** A whole record, stored as a JSON object of the publisher's cells, as 'header: text' pairs. */
+function recordText(json: string | null): string | null {
+  if (json === null) return null;
+  try {
+    const cells: unknown = JSON.parse(json);
+    if (cells && typeof cells === 'object' && !Array.isArray(cells)) {
+      return Object.entries(cells as Record<string, unknown>).map(([header, text]) => `${header}: ${text === null ? '(none)' : String(text)}`).join(' · ');
+    }
+  } catch {
+    // Not an object: shown as the record stored it.
+  }
+  return json;
+}
+
 function recordLabel(row: DataPackChangeRow): string | null {
   if (row.publisherRecordId === null) return null;
   return row.keyOccurrence !== null && row.keyOccurrence > 1 ? `${row.publisherRecordId} (repeat ${row.keyOccurrence})` : row.publisherRecordId;
@@ -98,15 +112,35 @@ export default function ChangeRecordRows({ location, manifestSha256, change, onC
                   </tr>
                 </thead>
                 <tbody>
-                  {page.rows.map((row, index) => (
-                    <tr key={page.offset + index} className="odd:bg-surface/40 align-top">
-                      <td className="whitespace-nowrap border-b border-line px-2 py-1 text-fg">{KIND_LABEL[row.change]}</td>
-                      <td className="border-b border-line px-2 py-1 font-mono text-fg-secondary"><Cell value={recordLabel(row)} none="no publisher key" /></td>
-                      <td className="border-b border-line px-2 py-1 text-fg-secondary"><Cell value={row.field} none="the whole record" /></td>
-                      <td className="max-w-[240px] break-words border-b border-line px-2 py-1 text-fg-secondary"><Cell value={row.before} none="not in the earlier retrieval" /></td>
-                      <td className="max-w-[240px] break-words border-b border-line px-2 py-1 text-fg-secondary"><Cell value={row.after} none="not in the later retrieval" /></td>
-                    </tr>
-                  ))}
+                  {page.rows.map((row, index) => {
+                    const column = row.change === 'column_added' || row.change === 'column_removed';
+                    const record = row.change === 'added' || row.change === 'removed';
+                    return (
+                      <tr key={page.offset + index} className="odd:bg-surface/40 align-top">
+                        <td className="whitespace-nowrap border-b border-line px-2 py-1 text-fg">{KIND_LABEL[row.change]}</td>
+                        <td className="border-b border-line px-2 py-1 font-mono text-fg-secondary">
+                          {column ? <Cell value={null} none="a column, not a record" /> : <Cell value={recordLabel(row)} none="no publisher key: matched by its cells" />}
+                        </td>
+                        <td className="border-b border-line px-2 py-1 text-fg-secondary">
+                          {record ? <span className="text-muted">whole record</span> : <Cell value={row.field} none="no field recorded" />}
+                        </td>
+                        {column ? (
+                          <td colSpan={2} className="border-b border-line px-2 py-1 text-muted">
+                            {row.change === 'column_added' ? 'Not in the earlier retrieval; in the later one' : 'In the earlier retrieval; not in the later one'}
+                          </td>
+                        ) : (
+                          <>
+                            <td className="max-w-[240px] break-words border-b border-line px-2 py-1 text-fg-secondary">
+                              {row.change === 'added' ? <Cell value={null} none="not in the earlier retrieval" /> : <Cell value={record ? recordText(row.before) : row.before} none="no value in the earlier retrieval" />}
+                            </td>
+                            <td className="max-w-[240px] break-words border-b border-line px-2 py-1 text-fg-secondary">
+                              {row.change === 'removed' ? <Cell value={null} none="not in the later retrieval" /> : <Cell value={record ? recordText(row.after) : row.after} none="no value in the later retrieval" />}
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
