@@ -48,3 +48,22 @@ it('labels a counted spending case and a pattern differently and shows the cited
  expect(screen.queryByText(/wasted|illegal/i)).toBeNull();
  expect(screen.getAllByRole('button',{name:'Inspect 1 cited rows'}).length).toBeGreaterThanOrEqual(2);
 });
+
+it('draws a contract overrun in ink from the decimal strings and says when no payments dataset is mapped',async()=>{
+ const chain={agency:'City of San Diego',contractId:'H-24-1180',program:'Storage',vendor:'V-9',currency:'USD',baseAuthority:'1000000.00',amendments:'250000.00',totalAuthority:'1250000.00',payments:'1486200.10',remainingAuthority:'-236200.10',stages:{budget:['source'],contract:['source'],amendment:[],payment:['source'],outcome:[]},missingLinks:[],limitations:[]};
+ const mapped:FinancialWorkspace={...workspace,mappings:[{role:'payment',snapshotId:'pay',columns:{},currency:'USD',agency:'City of San Diego'}]};
+ bridge.invoke.mockImplementation((command:string)=>command==='get_financial_workspace'?Promise.resolve(mapped):Promise.resolve({...report,chains:[chain]}));
+ await mounted();await run();fireEvent.click(screen.getByRole('button',{name:'Spending chains'}));
+ expect(screen.getByText('1 of 1 contracts show posted payments above retrieved authority; largest: H-24-1180 by +$236,200.10.')).toBeTruthy();
+ expect(screen.getByText('+$236,200.10 over retrieved authority')).toBeTruthy();
+ expect(document.body.innerHTML).not.toContain('--viz-counted');
+ // A stage with no cited rows is a hollow node read as not linked; a linked one opens its rows.
+ expect(screen.getByRole('img',{name:/Contract H-24-1180 · Storage, Amendment: not linked/})).toBeTruthy();
+ fireEvent.click(screen.getByRole('img',{name:/Contract H-24-1180 · Storage, Payment: 1 cited row/}));
+ expect(screen.getByRole('region',{name:'Financial source evidence'})).toBeTruthy();
+ cleanup();
+ bridge.invoke.mockImplementation((command:string)=>command==='get_financial_workspace'?Promise.resolve(workspace):Promise.resolve({...report,chains:[chain]}));
+ await mounted();await run();fireEvent.click(screen.getByRole('button',{name:'Spending chains'}));
+ expect(screen.getByText(/No payments dataset mapped, so none of 1 contract is compared/)).toBeTruthy();
+ expect(screen.queryByText(/over retrieved authority/)).toBeNull();
+});

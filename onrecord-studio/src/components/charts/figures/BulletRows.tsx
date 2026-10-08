@@ -8,7 +8,7 @@ import type { ChartSources } from '../frame/SourceCaption';
 import type { TwinTable } from '../frame/TableTwin';
 import { TooltipContent, type TooltipRow } from '../frame/Tooltip';
 import { VIZ, type YardstickLabel } from '../core/claim';
-import { fitsInside } from '../core/layout';
+import { fitsInside, measureText } from '../core/layout';
 import { isValue, type Measured } from '../core/nulls';
 import { scaleLinear, type ContinuousScale } from '../core/scale';
 import { useRovingFocus } from '../hooks/useRovingFocus';
@@ -85,6 +85,8 @@ export interface BulletRow {
   name: string;
   tooltip: { title: string; rows: TooltipRow[]; note?: string };
   stages?: StageNode[];
+  /** Enter or a click on the bullet: open its cited rows. */
+  onOpen?(): void;
 }
 
 /** Rows that share one currency share one axis; a different currency is a different group and axis. */
@@ -174,7 +176,7 @@ function Plot({ groups, width, yardstick }: { groups: BulletGroup[]; width: numb
   const tooltip = useTooltip();
   const blocks = groupLayout(groups, width);
   const flat = blocks.flatMap((block) => block.rows.map((row, i) => ({ row, data: block.group.rows[i] })));
-  const rowFocus = useRovingFocus({ shape: { rows: Math.max(1, flat.length) }, onActivate: () => {}, onEscape: tooltip.hide });
+  const rowFocus = useRovingFocus({ shape: { rows: Math.max(1, flat.length) }, onActivate: (i) => flat[i]?.data.onOpen?.(), onEscape: tooltip.hide });
   const stageRows = flat.filter(({ data }) => data.stages && data.stages.length > 0);
   const stageCols = Math.max(1, ...stageRows.map(({ data }) => data.stages?.length ?? 0));
   const stageFocus = useRovingFocus({
@@ -182,7 +184,10 @@ function Plot({ groups, width, yardstick }: { groups: BulletGroup[]; width: numb
     onActivate: (i, j = 0) => stageRows[i]?.data.stages?.[j]?.onOpen?.(),
     onEscape: tooltip.hide,
   });
-  const right = width - Math.min(230, Math.round(width * 0.3));
+  // Room on the right for the longest words at a bar's end, so an overrun label is never dropped.
+  const words = Math.max(0, ...groups.flatMap((group) => group.rows.map((row) => measureText(row.overrunLabel ?? row.barLabel ?? ''))));
+  const plotLeft = Math.max(0, ...blocks.map((block) => block.plotX));
+  const right = Math.max(plotLeft + 80, width - Math.min(words + 12, Math.round(width * 0.55)));
   const scales = new Map<string, ContinuousScale>();
   for (const block of blocks) {
     if (!scales.has(block.group.currency)) {
@@ -224,6 +229,7 @@ function Plot({ groups, width, yardstick }: { groups: BulletGroup[]; width: numb
                     interaction={{
                       name: data.name,
                       item: rowFocus.getItemProps(index),
+                      onClick: data.onOpen,
                       onPointerMove: (event) => tooltip.show(content, event),
                       onPointerLeave: tooltip.hide,
                       onFocusMark: (box) => tooltip.show(content, box),
@@ -254,7 +260,7 @@ function Plot({ groups, width, yardstick }: { groups: BulletGroup[]; width: numb
                 </g>
               );
             })}
-            <Axis scale={x} kind="currency" orient="bottom" offset={block.axisY} />
+            <Axis scale={x} kind={block.group.currency === 'USD' ? 'currency' : 'count'} orient="bottom" offset={block.axisY} />
           </g>
         );
       })}
