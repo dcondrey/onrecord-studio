@@ -17,10 +17,10 @@ export default function LifecycleFunnel() {
     const statutory = profiles.reduce((sum, profile) => sum + profile.statutoryViolationCount, 0);
     const fast = profiles.reduce((sum, profile) => sum + profile.suspiciousFastClosureCount, 0);
     return [
-      { label: 'Ingested requests', value: total, policy: null, status: null, predicate: 'All indexed requests', color: 'var(--viz-indigo)' },
-      { label: 'Closed requests', value: closed, policy: null, status: 'closed', predicate: 'Status is closed', color: 'var(--viz-cyan)' },
-      { label: 'Statutory exceptions', value: statutory, policy: 'STATUTORY_LATENCY_VIOLATION', status: null, predicate: 'Statutory latency predicate matches', color: 'var(--viz-amber)' },
-      { label: 'Fast-drop closures', value: fast, policy: 'SUSPICIOUSLY_FAST_CLOSURE', status: 'closed', predicate: 'Status is closed AND rapid-closure predicate matches', color: 'var(--viz-red)' },
+      { label: 'Ingested requests', value: total, policy: null, status: null, predicate: 'All indexed requests', color: 'var(--viz-slate)', ink: 'var(--viz-on-slate)' },
+      { label: 'Closed requests', value: closed, policy: null, status: 'closed', predicate: 'Status is closed', color: 'var(--viz-cyan)', ink: 'var(--viz-on-color)' },
+      { label: 'Statutory exceptions', value: statutory, policy: 'STATUTORY_LATENCY_VIOLATION', status: null, predicate: 'Statutory latency predicate matches', color: 'var(--viz-amber)', ink: 'var(--viz-on-color)' },
+      { label: 'Fast-drop closures', value: fast, policy: 'SUSPICIOUSLY_FAST_CLOSURE', status: 'closed', predicate: 'Status is closed AND rapid-closure predicate matches', color: 'var(--viz-red)', ink: 'var(--viz-on-color)' },
     ];
   }, [profiles]);
   const maximum = Math.max(1, ...stages.map((stage) => stage.value));
@@ -57,8 +57,8 @@ export default function LifecycleFunnel() {
               <div className="h-8 overflow-hidden rounded-lg border border-line bg-canvas/70 p-1">
                 {hasData && (
                   <div
-                    className="flex h-full items-center justify-end rounded-md px-2 text-caption font-bold shadow-[0_0_18px_rgba(15,23,42,0.2)] transition-[width,filter] duration-500 group-hover:brightness-110"
-                    style={{ width: `${width}%`, color: 'var(--viz-on-color)', background: stage.color }}
+                    className="flex h-full items-center justify-end rounded-md px-2 text-caption font-semibold tabular-nums transition-[width,filter] duration-500 group-hover:brightness-110"
+                    style={{ width: `${width}%`, color: stage.ink, background: stage.color }}
                   >
                     {((stage.value / maximum) * 100).toFixed(1)}%
                   </div>

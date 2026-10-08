@@ -113,8 +113,6 @@ export default function StoryDesk() {
     <main className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto w-full max-w-[1200px] space-y-4 p-4 lg:p-6">
         <PageHeader
-          icon="flag"
-          eyebrow="Story desk"
           title="What the records point to"
           summary="Findings ranked by what the records show, with every claim one click from its source."
           method={<>

@@ -23,8 +23,8 @@ const MODES = {
   'light, increased contrast': { ...light, ...more },
   'dark, increased contrast': { ...dark, ...more, ...block(':root[data-contrast="more"][data-theme="dark"]') },
 };
-const TEXT = ['fg', 'fg-secondary', 'muted', 'accent', 'highlight', 'success', 'warning', 'danger'];
-const SURFACES = ['canvas', 'surface', 'raised'];
+const TEXT = ['fg', 'fg-secondary', 'muted', 'accent', 'lead', 'highlight', 'success', 'warning', 'danger'];
+const SURFACES = ['bg', 'panel', 'canvas', 'surface', 'raised'];
 
 function luminance(channels: string) {
   const [r, g, b] = channels.split(' ').map((value) => {
@@ -57,6 +57,16 @@ describe('colour roles', () => {
         for (const surface of SURFACES) {
           const ratio = contrast(tokens[text], tokens[surface]);
           if (ratio < minimum) failures.push(`${mode}: ${text} on ${surface} ${ratio.toFixed(2)}:1 < ${minimum}`);
+        }
+      }
+      for (const [text, fill] of [['on-accent', 'accent'], ['on-lead', 'lead-mark'], ['on-danger', 'danger']]) {
+        const ratio = contrast(tokens[text], tokens[fill]);
+        if (ratio < 4.5) failures.push(`${mode}: ${text} on ${fill} ${ratio.toFixed(2)}:1 < 4.5`);
+      }
+      for (const mark of ['lead-mark', 'success-mark', 'danger-mark', 'warning-mark']) {
+        for (const surface of ['bg', 'panel']) {
+          const ratio = contrast(tokens[mark], tokens[surface]);
+          if (ratio < 3) failures.push(`${mode}: ${mark} on ${surface} ${ratio.toFixed(2)}:1 < 3`);
         }
       }
       for (const surface of SURFACES) {

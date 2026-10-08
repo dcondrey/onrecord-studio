@@ -1,5 +1,6 @@
 import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { ShapeGlyph, type GlyphShape } from './shapeGlyph';
+import type { GlyphShape } from './shapeGlyph';
+import Badge from './Badge';
 import { cn } from '../../utils/cn';
 import { isLegalClaimKind } from '../../types/findings';
 import { PLAIN_FINDING_TEXT } from '../../content/plainLanguage';
@@ -11,38 +12,18 @@ import type { EntityValidationGrade, RelationshipBasis, RelationshipKind } from 
  * shape with a text label; colour is redundant reinforcement, never the only carrier.
  */
 
-function Glyph({ shape, className, dashed }: { shape: GlyphShape; className?: string; dashed?: boolean }) {
-  return (
-    <svg viewBox="-6 -6 12 12" className={cn('h-2.5 w-2.5 shrink-0', className)} aria-hidden="true">
-      <ShapeGlyph
-        shape={shape}
-        cx={0}
-        cy={0}
-        radius={4.4}
-        fill={shape === 'ring' ? 'none' : 'currentColor'}
-        stroke="currentColor"
-        strokeWidth={shape === 'ring' ? 1.6 : 0}
-        strokeDasharray={dashed ? '2 1.6' : undefined}
-      />
-    </svg>
-  );
-}
-
-function Chip({ shape, dashed, tone, border, children, ...rest }: {
+function Chip({ shape, dashed, tone, border, title, children, ...rest }: {
   shape: GlyphShape;
   dashed?: boolean;
   tone: string;
   border: string;
+  title?: string;
   children: ReactNode;
 } & Record<`data-${string}`, string>) {
   return (
-    <span
-      {...rest}
-      className={cn('inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-caption font-semibold', tone, border)}
-    >
-      <Glyph shape={shape} dashed={dashed} />
+    <Badge {...rest} title={title} glyph={shape} dashed={dashed} className={cn(tone, border)}>
       {children}
-    </span>
+    </Badge>
   );
 }
 
@@ -52,11 +33,11 @@ function Chip({ shape, dashed, tone, border, children, ...rest }: {
  */
 export function FindingBasisChip({ kind }: { kind: FindingKind }) {
   return isLegalClaimKind(kind) ? (
-    <Chip data-basis="legal-claim" shape="diamond" tone="text-danger" border="border-danger/60 bg-danger/10">
+    <Chip data-basis="legal-claim" shape="diamond" tone="text-danger" border="border-danger bg-danger/10">
       Legal claim: counted violation
     </Chip>
   ) : (
-    <Chip data-basis="pattern-signal" shape="ring" dashed tone="text-fg" border="border-dashed border-line-strong bg-raised/40">
+    <Chip data-basis="pattern-signal" shape="ring" dashed tone="text-fg" border="border-line-strong bg-raised/40">
       Pattern signal, not a legal claim
     </Chip>
   );
@@ -79,7 +60,7 @@ export function ConfidenceMeter({ confidence }: { confidence: FindingConfidence 
         <span
           aria-hidden="true"
           className="h-1.5 w-12 rounded-sm border border-dashed border-line-strong"
-          style={{ backgroundImage: 'repeating-linear-gradient(135deg, transparent 0 3px, rgba(148,163,184,0.45) 3px 4px)' }}
+          style={{ backgroundImage: 'repeating-linear-gradient(135deg, transparent 0 3px, var(--hatch) 3px 4px)' }}
         />
         <span>Unassessed</span>
       </span>
@@ -129,7 +110,7 @@ export function ValidationGradeChip({ grade }: { grade: EntityValidationGrade })
         shape={shape}
         dashed={grade === 'PATTERN_ONLY'}
         tone={tone}
-        border={grade === 'PATTERN_ONLY' ? 'border-dashed border-line-strong bg-raised/40' : 'border-line-strong bg-surface/70'}
+        border={grade === 'PATTERN_ONLY' ? 'border-line-strong bg-raised/40' : 'border-line-strong bg-surface/70'}
       >
         {label}
       </Chip>
@@ -190,15 +171,24 @@ export function edgeVisual(kind: RelationshipKind, basis: RelationshipBasis): Ed
   };
 }
 
+/**
+ * The pill names the relation in a word or two so it fits a table cell; how the link is known
+ * stays in the accessible name and the tooltip. A proximity edge never claims a stated relation.
+ */
 export function EdgeBasisChip({ kind, basis }: { kind: RelationshipKind; basis: RelationshipBasis }) {
   const visual = edgeVisual(kind, basis);
-  return visual.family === 'proximity' ? (
-    <Chip data-edge-family="proximity" shape="ring" dashed tone="text-fg" border="border-dashed border-line-strong bg-raised/40">
-      Co-occurrence: proximity only ({BASIS_TEXT[basis]})
-    </Chip>
-  ) : (
-    <Chip data-edge-family="typed" shape="diamond" tone="text-accent" border="border-accent/60 bg-accent/10">
-      {visual.label}: relation read from text ({BASIS_TEXT[basis]})
+  if (visual.family === 'proximity') {
+    const detail = 'proximity only: the names appear near each other in the text; no relation was read';
+    return (
+      <Chip data-edge-family="proximity" shape="ring" dashed tone="text-fg" border="border-line-strong bg-raised/40" title={`Co-occurs: ${detail}`}>
+        Co-occurs<span className="sr-only">: {detail}</span>
+      </Chip>
+    );
+  }
+  const detail = `relation read from text, ${BASIS_TEXT[basis]}`;
+  return (
+    <Chip data-edge-family="typed" shape="diamond" tone="text-accent" border="border-accent/30 bg-accent/10" title={`${visual.label}: ${detail}`}>
+      {visual.label}<span className="sr-only">: {detail}</span>
     </Chip>
   );
 }

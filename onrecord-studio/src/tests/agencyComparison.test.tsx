@@ -126,7 +126,7 @@ describe('AgencyComparison', () => {
   it('offers to add a source when there is nothing to profile', () => {
     useAppStore.setState({ agencyProfiles: [], portals: [] });
     render(<AgencyComparison />);
-    expect(screen.getByRole('status').textContent).toMatch(/No agencies to compare yet/);
+    expect(screen.getByRole('heading', { name: 'No agencies to compare yet' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Add a source' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Refresh analytics' })).toBeNull();
   });
@@ -138,7 +138,7 @@ describe('AgencyComparison', () => {
       portals: [{ registration: { portalKey: 'p', displayName: 'P', canonicalUrl: 'https://p.example', originUrl: 'https://p.example', apiLayout: { requestsEndpoint: '', requestsPointer: '', metadataPointer: null, pageParameter: '', pageSizeParameter: '' }, verifiedAt: '2026-01-01T00:00:00Z', sourceKind: 'NEXT_REQUEST' }, lifecycleState: 'ACTIVE', healthStatus: 'verified', lastError: null }],
     });
     render(<AgencyComparison />);
-    expect(screen.getByRole('status').textContent).toMatch(/Agency profiles have not been computed/);
+    expect(screen.getByRole('heading', { name: 'Agency profiles have not been computed' })).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Refresh analytics' }));
     expect(useAppStore.getState().analyticsRefreshRequests).toBe(1);

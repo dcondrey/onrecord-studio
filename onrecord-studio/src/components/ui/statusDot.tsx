@@ -17,14 +17,15 @@ const SHAPE: Record<StatusDotState, { path: 'circle' | 'ring' | 'diamond' | 'bar
  * Without Color Alone" claim requires.
  *
  * `label` is the accessible name. Passing an empty string marks the dot decorative, which is
- * correct only where the same state is already stated in adjacent text.
+ * correct only where the same state is already stated in adjacent text. `pulse` breathes the dot
+ * while its source is ingesting; it is static under reduced motion.
  */
-export default function StatusDot({ state, label, className }: { state: StatusDotState; label: string; className?: string }) {
+export default function StatusDot({ state, label, pulse = false, className }: { state: StatusDotState; label: string; pulse?: boolean; className?: string }) {
   const { path, radius, className: tone } = SHAPE[state];
   return (
     <svg
       viewBox="-6 -6 12 12"
-      className={cn('h-2 w-2 shrink-0', tone, className)}
+      className={cn('h-2 w-2 shrink-0', tone, pulse && 'motion-breathe', className)}
       role={label ? 'img' : undefined}
       aria-label={label || undefined}
       aria-hidden={label ? undefined : true}
