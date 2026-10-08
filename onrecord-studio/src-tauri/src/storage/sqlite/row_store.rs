@@ -7,8 +7,8 @@
 //! is a view over both that builds the legacy row shape on read; a `snapshot_id` filter prunes
 //! every other snapshot's branch, so a reader of one snapshot scans only that snapshot.
 
-use super::analytical::quote_ident;
 use super::*;
+use crate::storage::{quote_ident, sql_literal};
 
 /// Validation-summary key naming a snapshot's column store.
 pub(super) const ROW_STORE_KEY: &str = "rowStore";
@@ -124,10 +124,6 @@ pub(crate) fn rebuild_row_view(conn: &Connection) -> Result<(), AppError> {
     .map_err(storage)
 }
 
-fn literal(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "''"))
-}
-
 /// One snapshot's rows in the ledger's shape. Original values are the row's fields in order,
 /// surplus fields included and absent ones left out; converted values come from the typed table,
 /// which holds only rows that were not rejected.
@@ -141,7 +137,7 @@ fn branch_sql(snapshot: &str, typed: &str, source: &str, columns: &[(String, Str
         .join(", ");
     let converted = columns
         .iter()
-        .map(|(alias, _)| format!("{}, t.{}", literal(alias), quote_ident(alias)))
+        .map(|(alias, _)| format!("{}, t.{}", sql_literal(alias), quote_ident(alias)))
         .collect::<Vec<_>>()
         .join(", ");
     format!(
@@ -153,8 +149,8 @@ fn branch_sql(snapshot: &str, typed: &str, source: &str, columns: &[(String, Str
             CASE WHEN s._malformed THEN '{{}}' ELSE json_object({converted})::VARCHAR END AS normalized_payload_json,
             CAST(s._malformed AS BIGINT) AS malformed, s._messages AS validation_errors_json
          FROM {source_table} s LEFT JOIN {typed_table} t ON t._source_row = s._row",
-        snapshot = literal(snapshot),
-        headers = literal(&headers),
+        snapshot = sql_literal(snapshot),
+        headers = sql_literal(&headers),
         source_table = quote_ident(source),
         typed_table = quote_ident(typed),
     )

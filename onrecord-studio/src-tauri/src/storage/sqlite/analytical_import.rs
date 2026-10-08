@@ -11,12 +11,13 @@
 //! empty source cell.
 
 use super::analytical::{
-    analytical_counting_key, duckdb_type, logical_type_for, normalize_csv_value, quote_ident,
+    analytical_counting_key, duckdb_type, logical_type_for, normalize_csv_value,
     schema_warnings_for, slash_date_fields, unique_column_alias, validation_notes_for, DateOrder,
     Normalized, ANALYTICAL_PARSER_VERSION,
 };
 use super::row_store;
 use super::*;
+use crate::storage::quote_ident;
 use crate::storage::tabular::{TableRow, TableSource, TypeEvidence};
 use crate::types::{AnalyticalImportRequest, AnalyticalImportResult};
 use duckdb::arrow::array::{

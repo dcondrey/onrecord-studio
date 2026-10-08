@@ -1,6 +1,7 @@
 //! Analytical CSV imports and the restricted SQL surface over them.
 
 use super::*;
+use crate::storage::quote_ident;
 
 impl DuckDbRepository {
     pub async fn encampment_ordinance_report(
@@ -352,10 +353,6 @@ pub(crate) fn unconverted_by_column(
         .and_then(|summary| summary.get("unconvertedByColumn").cloned())
         .and_then(|counts| serde_json::from_value(counts).ok())
         .unwrap_or_default()
-}
-
-pub(crate) fn quote_ident(value: &str) -> String {
-    format!("\"{}\"", value.replace('"', "\"\""))
 }
 
 pub(super) fn unique_column_alias(header: &str, index: usize, headers: &[String]) -> String {
