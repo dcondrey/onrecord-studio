@@ -260,7 +260,7 @@ function PackBars({ report, selectedId, onSelect }: { report: TopicPacksReport; 
   const packs = [...report.topics].sort((a, b) => b.documentTotal - a.documentTotal || a.title.localeCompare(b.title));
   const top = packs[0];
   const withFindings = packs.filter((pack) => pack.findingTotal > 0).length;
-  const headline = top ? `${top.title} tags the most documents (${count(top.documentTotal)}); ${withFindings} of ${packs.length} packs have a finding about a tagged record.` : null;
+  const headline = top ? `${top.title} tags the most documents (${count(top.documentTotal)}); ${withFindings} of ${packs.length} packs ${withFindings === 1 ? 'has' : 'have'} a finding about a tagged record.` : null;
   return (
     <ChartFrame
       title="Topic packs by tagged documents"
