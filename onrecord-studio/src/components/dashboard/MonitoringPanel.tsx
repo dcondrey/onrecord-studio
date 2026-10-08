@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
-import type { CoverageExpectation, MonitoringEvidence, MonitoringStatus, ServiceObservation } from '../../types/monitoring';
+import type { CoverageAssessment, CoverageExpectation, MonitoringEvidence, MonitoringStatus, ServiceObservation } from '../../types/monitoring';
+import { absent } from '../charts/core/nulls';
+import StateGrid, { type StateGridCell, type StateGridRow } from '../charts/figures/StateGrid';
 import { citationLocation, observationPoints, optionalMeasurement } from '../../utils/monitoring';
 import Button from '../ui/Button';
 import SegmentedControl from '../ui/SegmentedControl';
@@ -19,6 +21,56 @@ function Citation({ source }: { source: MonitoringEvidence }) {
   </details>;
 }
 
+/** The corpus status of each expectation, mapped once; an unmapped status prints as sent, on neutral. */
+function acquisitionCell(item: CoverageAssessment): StateGridCell {
+  const { recordType, agency, period } = item.expectation;
+  const where = `${agency}, ${recordType}, ${period}`;
+  const base = { actionable: true, tip: { rows: [], note: item.explanation } };
+  switch (item.status) {
+    case 'NOT_LOCATED':
+      return { ...base, kind: 'gap', lead: true, absence: absent('not-recorded', 'no matching record in the stored corpus'), glyph: 'ring', text: 'not found', name: `${where}: expected, not found in the stored corpus. A record to request.` };
+    case 'MATCHES_NEED_REVIEW':
+      return { ...base, kind: 'state', tone: 'neutral', glyph: 'diamond', text: `${item.candidates.length} to review`, name: `${where}: ${item.candidates.length} possible ${item.candidates.length === 1 ? 'match needs' : 'matches need'} review.` };
+    case 'RECEIPT_RECORDED':
+      return { ...base, kind: 'state', tone: 'positive', glyph: 'check', text: 'received', name: `${where}: receipt recorded and its cited source still verifies.` };
+    case 'SOURCE_CHANGED':
+      return { ...base, kind: 'state', tone: 'neutral', glyph: 'triangle', text: 'source changed', name: `${where}: receipt recorded, but its cited source no longer verifies.` };
+    case 'WAIVED':
+      return { ...base, kind: 'state', tone: 'neutral', glyph: 'bar', text: 'waived', name: `${where}: waived.` };
+    default:
+      return { ...base, kind: 'state', tone: 'neutral', glyph: 'circle', text: item.status, name: `${where}: ${item.status}.` };
+  }
+}
+
+/** Rows are record types grouped by agency, columns the periods; a period with no expectation is not checked. */
+export function acquisitionMatrix(coverage: readonly CoverageAssessment[]) {
+  const periods = [...new Set(coverage.map((item) => item.expectation.period))].sort();
+  const keyed = new Map<string, CoverageAssessment[]>();
+  for (const item of coverage) {
+    const key = `${item.expectation.agency}\u0000${item.expectation.recordType}`;
+    keyed.set(key, [...(keyed.get(key) ?? []), item]);
+  }
+  const rows: (StateGridRow & { items: (CoverageAssessment | null)[] })[] = [...keyed.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, items]) => {
+      const { agency, recordType } = items[0].expectation;
+      const byPeriod = periods.map((period) => items.find((item) => item.expectation.period === period) ?? null);
+      return {
+        key,
+        label: recordType,
+        group: agency,
+        items: byPeriod,
+        cells: byPeriod.map((item, j) => item
+          ? acquisitionCell(item)
+          : { kind: 'gap' as const, absence: absent('not-covered', 'no record of this type is expected for this period'), glyph: 'bar' as const, text: 'not expected', name: `${agency}, ${recordType}, ${periods[j]}: no record expected for this period.` }),
+      };
+    });
+  const missing = coverage.filter((item) => item.status === 'NOT_LOCATED').length;
+  const agencies = new Set(coverage.map((item) => item.expectation.agency)).size;
+  const headline = `${missing} of ${coverage.length} expected ${coverage.length === 1 ? 'record' : 'records'} not yet found, across ${agencies} ${agencies === 1 ? 'agency' : 'agencies'}.`;
+  return { periods, rows, headline };
+}
+
 export default function MonitoringPanel({ caseId = null, topic = 'homelessness' }: { caseId?: string | null; topic?: string }) {
   const [result, setStatus] = useState<MonitoringStatus | null>(null);
   const status = result?.topic === topic && result.caseId === caseId ? result : null;
@@ -28,6 +80,8 @@ export default function MonitoringPanel({ caseId = null, topic = 'homelessness' 
   const [newCoverage, setNewCoverage] = useState(false);
   const [newObservation, setNewObservation] = useState(false);
   const [selectedObservation, setSelectedObservation] = useState<string | null>(null);
+  const [coverageView, setCoverageView] = useState<'matrix' | 'list'>('matrix');
+  const [expandedCell, setExpandedCell] = useState<{ row: number; col: number } | null>(null);
   const [dateFrom, setDateFrom] = useState(''); const [dateTo, setDateTo] = useState('');
   // Every read and save begins a request on one gate, and the effect below begins a new one
   // whenever the case or topic changes, so a result for the previous case is never written.
@@ -47,7 +101,7 @@ export default function MonitoringPanel({ caseId = null, topic = 'homelessness' 
   }, [caseId, gate, topic]);
 
   useEffect(() => {
-    setStatus(null); setNewCoverage(false); setNewObservation(false); setSelectedObservation(null);
+    setStatus(null); setNewCoverage(false); setNewObservation(false); setSelectedObservation(null); setExpandedCell(null);
     void load();
     return gate.invalidate;
   }, [gate, load]);
@@ -70,6 +124,8 @@ export default function MonitoringPanel({ caseId = null, topic = 'homelessness' 
   const observations = (status?.observations ?? []).filter(o => (!dateFrom || o.observedOn >= dateFrom) && (!dateTo || o.observedOn <= dateTo));
   const points = observationPoints(observations);
   const selected = observations.find(o => o.id === selectedObservation);
+  const matrix = status ? acquisitionMatrix(status.coverage) : null;
+  const expandedItem = matrix && expandedCell ? matrix.rows[expandedCell.row]?.items[expandedCell.col] ?? null : null;
   return <section aria-label="Evidence monitoring">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <p className="max-w-prose text-body text-muted">Turn unresolved questions into records to acquire, and compare cited versions before drawing conclusions.</p>
@@ -89,7 +145,27 @@ export default function MonitoringPanel({ caseId = null, topic = 'homelessness' 
       <Button size="sm" onClick={() => setNewCoverage(!newCoverage)}>Define a consequential missing record</Button>
       {newCoverage && <CoverageForm caseId={caseId} topic={topic} busy={busy} onSave={value => void save('coverage', value)} />}
       {!status.coverage.length && <p className="text-sm text-muted">Define the records needed to resolve a specific question. Requests from saved research dossiers also appear here automatically.</p>}
-      {status.coverage.map(item => <article key={item.expectation.id} className={panelClass}>
+      {status.coverage.length > 0 && <SegmentedControl label="Acquisition priorities as" mode="filter" size="sm" value={coverageView} onChange={setCoverageView} options={[{ value: 'matrix', label: 'Matrix' }, { value: 'list', label: 'List view' }]} />}
+      {coverageView === 'matrix' && matrix && status.coverage.length > 0 && <StateGrid
+        title="Acquisition matrix"
+        storageKey="acquisition-matrix"
+        headline={matrix.headline}
+        sources={{ tables: ['monitor_coverage', 'monitor_listings'] }}
+        summary={`${matrix.rows.length} record types by ${matrix.periods.length} periods. Activate a cell to open that expectation below.`}
+        status="ready"
+        rowHeader="Record type"
+        columns={matrix.periods.map((period) => ({ key: period, label: period }))}
+        rows={matrix.rows}
+        selected={expandedCell}
+        onActivate={(row, col) => setExpandedCell((current) => current?.row === row && current.col === col ? null : { row, col })}
+        onEscape={() => setExpandedCell(null)}
+        legend={[
+          { key: 'missing', label: 'Expected, not found (a record to request)', swatch: 'slot-dashed', tone: 'lead' },
+          { key: 'received', label: 'Receipt recorded', swatch: 'dot', tone: 'positive' },
+          { key: 'other', label: 'To review, changed or waived', swatch: 'hollow', tone: 'mark' },
+        ]}
+      />}
+      {(coverageView === 'list' ? status.coverage : expandedItem ? [expandedItem] : []).map(item => <article key={item.expectation.id} className={panelClass}>
         <div className="text-body text-warning">{item.status.replace(/_/g, ' ')} · {item.expectation.agency} · {item.expectation.period}</div>
         <h4 className="mt-2 font-semibold text-fg">{item.expectation.recordType}</h4>
         <p className="mt-2 text-sm text-fg-secondary">Unlocks: {item.expectation.consequence}</p><p className="mt-2 text-body text-muted">{item.explanation}</p>

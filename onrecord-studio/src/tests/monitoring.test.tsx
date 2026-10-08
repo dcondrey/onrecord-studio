@@ -31,6 +31,7 @@ describe('investigative evidence monitoring', () => {
     bridge.invoke.mockImplementation((command: string, args: { caseId?: string }) => command === 'save_monitoring_coverage' ? saved.promise : Promise.resolve(fixture(args.caseId ?? 'none')));
     const view = render(<MonitoringPanel caseId="old" topic="bathrooms" />);
     await screen.findByText('old restroom operating logs');
+    fireEvent.keyDown(screen.getByRole('img', { name: /restroom operating logs, FY2027/ }), { key: 'Enter' });
     fireEvent.click(screen.getByText('Record receipt after checking scope and period'));
     view.rerender(<MonitoringPanel caseId="current" topic="bathrooms" />);
     await screen.findByText('current restroom operating logs');
@@ -43,9 +44,24 @@ describe('investigative evidence monitoring', () => {
     bridge.invoke.mockImplementation((command: string) => Promise.resolve(command === 'save_monitoring_coverage' ? null : fixture('riverbed')));
     render(<MonitoringPanel caseId="riverbed" topic="bathrooms" />);
     await screen.findByText('riverbed restroom operating logs');
+    fireEvent.keyDown(screen.getByRole('img', { name: /restroom operating logs, FY2027/ }), { key: 'Enter' });
     fireEvent.click(screen.getByText('Record receipt after checking scope and period'));
     await act(async () => {});
     expect(bridge.invoke).toHaveBeenCalledWith('save_monitoring_coverage', { expectation: expect.objectContaining({ caseId: 'riverbed', state: 'RECEIVED', evidence: [evidence] }) });
+  });
+
+  it('outlines an expected record not found as a gap to request, and prints an unmapped status as sent', async () => {
+    const missing = fixture('gap');
+    missing.coverage[0] = { ...missing.coverage[0], status: 'NOT_LOCATED', candidates: [] };
+    missing.coverage.push({ ...missing.coverage[0], expectation: { ...missing.coverage[0].expectation, id: 'other', period: 'FY2028' }, status: 'SOMETHING_NEW' });
+    bridge.invoke.mockResolvedValue(missing);
+    render(<MonitoringPanel caseId="gap" topic="bathrooms" />);
+    const gap = await screen.findByRole('img', { name: /FY2027: expected, not found in the stored corpus/ });
+    expect(gap.querySelector('[data-tone="lead"]')).toBeTruthy();
+    expect(gap.textContent).toContain('not found');
+    const raw = screen.getByRole('img', { name: /FY2028: SOMETHING_NEW/ });
+    expect(raw.querySelector('[data-tone="neutral"]')).toBeTruthy();
+    expect(screen.getByText('1 of 2 expected records not yet found, across 1 agency.')).toBeTruthy();
   });
 
   it('preserves zero measurements and never invents a missing coordinate', () => {
