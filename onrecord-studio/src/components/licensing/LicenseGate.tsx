@@ -136,9 +136,12 @@ export default function LicenseGate({ controller }: { controller: LicenseControl
     // A bug that denies every license check (like the Keychain allow-list bug fixed in beta.3)
     // can only reach an affected user through a signed update offered here, since LicenseSwitch
     // never mounts the workspace's own UpdatePrompt while the gate is showing.
-    <main className="app-theme flex h-screen w-screen items-center justify-center overflow-y-auto bg-bg px-6 text-fg">
+    // The page scrolls, not the card: a card taller than the window keeps its top in view and
+    // continues below the fold, rather than centring off both edges or hiding a nested scroller.
+    <main className="app-theme h-screen w-screen overflow-y-auto bg-bg px-6 text-fg">
       <UpdatePrompt />
-      <section className="my-8 max-h-[calc(100vh-4rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-line bg-panel p-8 shadow-dialog" aria-labelledby="license-gate-heading">
+      <div className="flex min-h-full items-center justify-center py-8">
+      <section className="w-full max-w-lg rounded-2xl border border-line bg-panel p-8 shadow-dialog" aria-labelledby="license-gate-heading">
         <div className="flex items-center gap-2">
           <img src="/brand-mark.png" alt="" className="h-6 w-6 rounded-md" />
           <p className="text-heading text-fg">{PRODUCT_NAME}</p>
@@ -210,11 +213,11 @@ export default function LicenseGate({ controller }: { controller: LicenseControl
 
         {showVerify || loading ? (
           <Button
-            variant={verifyIsPrimary ? 'primary' : showUpgrade ? 'link' : 'secondary'}
+            variant={verifyIsPrimary ? 'primary' : 'link'}
             size="lg"
             disabled={busy || (loading && !error)}
             onClick={controller.refresh}
-            className={showUpgrade ? 'mx-auto mt-4 flex' : 'mt-6 w-full'}
+            className={verifyIsPrimary ? 'mt-6 w-full' : 'mx-auto mt-4 flex'}
           >
             {refreshing || (loading && !error)
               ? direct || loading
@@ -234,6 +237,7 @@ export default function LicenseGate({ controller }: { controller: LicenseControl
           </p>
         ) : null}
       </section>
+      </div>
     </main>
   );
 }
