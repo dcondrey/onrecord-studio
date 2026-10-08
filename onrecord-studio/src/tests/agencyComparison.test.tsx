@@ -123,16 +123,30 @@ describe('AgencyComparison', () => {
   });
 
   it('offers to add a source when there is nothing to profile', () => {
-    useAppStore.setState({ agencyProfiles: [], portals: [] });
+    useAppStore.setState({ agencyProfiles: [], analyticsStatus: 'ready', portals: [] });
     render(<AgencyComparison />);
     expect(screen.getByRole('heading', { name: 'No agencies to compare yet' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Add source' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Refresh analytics' })).toBeNull();
   });
 
+  it('does not call profiles uncomputed while the first analytics response is still pending', () => {
+    useAppStore.setState({
+      agencyProfiles: [],
+      analyticsStatus: 'pending',
+      analyticsError: null,
+      portals: [{ registration: { portalKey: 'p', displayName: 'P', canonicalUrl: 'https://p.example', originUrl: 'https://p.example', apiLayout: { requestsEndpoint: '', requestsPointer: '', metadataPointer: null, pageParameter: '', pageSizeParameter: '' }, verifiedAt: '2026-01-01T00:00:00Z', sourceKind: 'NEXT_REQUEST' }, lifecycleState: 'ACTIVE', healthStatus: 'verified', lastError: null }],
+    });
+    render(<AgencyComparison />);
+    expect(screen.queryByRole('heading', { name: 'Agency profiles have not been computed' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Refresh analytics' })).toBeNull();
+    expect(screen.getByText('Loading agency profiles')).toBeTruthy();
+  });
+
   it('renders the empty state with a refresh action when analytics has produced no profiles', () => {
     useAppStore.setState({
       agencyProfiles: [],
+      analyticsStatus: 'ready',
       analyticsRefreshRequests: 0,
       portals: [{ registration: { portalKey: 'p', displayName: 'P', canonicalUrl: 'https://p.example', originUrl: 'https://p.example', apiLayout: { requestsEndpoint: '', requestsPointer: '', metadataPointer: null, pageParameter: '', pageSizeParameter: '' }, verifiedAt: '2026-01-01T00:00:00Z', sourceKind: 'NEXT_REQUEST' }, lifecycleState: 'ACTIVE', healthStatus: 'verified', lastError: null }],
     });

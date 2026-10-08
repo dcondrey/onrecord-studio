@@ -60,6 +60,8 @@ function LicensedWorkspace() {
   const setOcrCapability = useAppStore((state) => state.setOcrCapability);
   const upsertPortal = useAppStore((state) => state.upsertPortal);
   const setPortalRuntimes = useAppStore((state) => state.setPortalRuntimes);
+  const setPortalRuntimesError = useAppStore((state) => state.setPortalRuntimesError);
+  const runtimeRefreshRequests = useAppStore((state) => state.runtimeRefreshRequests);
   const setPortalSyncState = useAppStore((state) => state.setPortalSyncState);
   const setAnalyticsData = useAppStore((state) => state.setAnalyticsData);
   const setAnalyticsError = useAppStore((state) => state.setAnalyticsError);
@@ -148,6 +150,7 @@ function LicensedWorkspace() {
       setPortalRuntimes(runtimes);
     } catch (error) {
       const message = String(error);
+      setPortalRuntimesError(message);
       const now = Date.now();
       if (
         shouldReportFailure(
@@ -161,7 +164,7 @@ function LicensedWorkspace() {
         appendSyncLog(`Portal runtime refresh failed: ${message}`);
       }
     }
-  }, [appendSyncLog, setPortalRuntimes, setPortalSyncState]);
+  }, [appendSyncLog, setPortalRuntimes, setPortalRuntimesError]);
 
   useEffect(() => {
     let active = true;
@@ -208,6 +211,11 @@ function LicensedWorkspace() {
     if (analyticsRefreshRequests === 0) return;
     void refreshAnalytics();
   }, [analyticsRefreshRequests, refreshAnalytics]);
+
+  useEffect(() => {
+    if (runtimeRefreshRequests === 0) return;
+    void refreshRuntimes();
+  }, [runtimeRefreshRequests, refreshRuntimes]);
 
   useEffect(() => {
     const reconcile = () => void refreshRuntimes();

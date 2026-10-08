@@ -51,13 +51,13 @@ interface ColumnDefinition {
 const COLUMNS: readonly ColumnDefinition[] = [
   {
     key: 'averageClosureDays',
-    label: 'Avg days',
+    label: 'Avg days to close',
     full: 'Average days from filing to closure',
     format: (p) => (p.averageClosureDays === null ? null : p.averageClosureDays.toFixed(1)),
   },
-  { key: 'validLatencySampleSize', label: 'Measured', full: 'Closures with a measurable latency', format: (p) => p.validLatencySampleSize.toLocaleString() },
+  { key: 'validLatencySampleSize', label: 'Measured closures', full: 'Closures with a measurable latency', format: (p) => p.validLatencySampleSize.toLocaleString() },
   { key: 'statutoryViolationCount', label: 'Violations', full: 'Counted statutory violations', format: (p) => p.statutoryViolationCount.toLocaleString() },
-  { key: 'statutoryViolationRate', label: 'Rate', full: 'Share of measured requests past the statutory deadline', format: (p) => `${(p.statutoryViolationRate * 100).toFixed(1)}%` },
+  { key: 'statutoryViolationRate', label: 'Violation rate', full: 'Share of measured requests past the statutory deadline', format: (p) => `${(p.statutoryViolationRate * 100).toFixed(1)}%` },
   {
     key: 'suspiciousFastClosureCount',
     label: 'Fast closures',
@@ -104,6 +104,7 @@ export function sortProfiles(
 export default function AgencyComparison() {
   const agencyProfiles = useAppStore((s) => s.agencyProfiles);
   const analyticsError = useAppStore((s) => s.analyticsError);
+  const analyticsStatus = useAppStore((s) => s.analyticsStatus);
   const requestAnalyticsRefresh = useAppStore((s) => s.requestAnalyticsRefresh);
   const setWorkspaceView = useAppStore((s) => s.setWorkspaceView);
   const savedSources = useAppStore((s) => s.portals);
@@ -160,7 +161,9 @@ export default function AgencyComparison() {
           />
         )}
 
-        {agencyProfiles.length === 0 ? (
+        {agencyProfiles.length === 0 && analyticsStatus === 'pending' ? (
+          <ComparisonSkeleton />
+        ) : agencyProfiles.length === 0 ? (
           analyticsError ? null : savedSources.length === 0 ? (
             <EmptyState
               icon="building"
@@ -210,8 +213,9 @@ export default function AgencyComparison() {
                           title={definition.full}
                           className={cn('focus-ring inline-flex items-center gap-1 rounded uppercase hover:text-fg', active && 'text-fg')}
                         >
-                          {definition.label}
+                          {/* The glyph leads so the label's right edge lines up with the right-aligned figures. */}
                           <span aria-hidden="true" className={cn('w-2 text-center', !active && 'invisible')}>{direction === 'desc' ? '▾' : '▴'}</span>
+                          {definition.label}
                         </button>
                       </Th>
                     );
@@ -268,5 +272,40 @@ export default function AgencyComparison() {
         {savedSources.length > 0 && <DispositionCounts portalSubdomain={portalFilter || null} />}
       </div>
     </main>
+  );
+}
+
+/** The table at its loaded shape: the same header row and rows at body height, so nothing shifts on arrival. */
+function ComparisonSkeleton() {
+  return (
+    <section className="app-panel overflow-hidden" aria-label="Agency comparison table" aria-busy="true">
+      <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3">
+        <div className="skeleton h-7 w-48 rounded-md" />
+        <div className="skeleton h-4 w-20 rounded" />
+      </div>
+      <div role="status">
+        <span className="sr-only">Loading agency profiles</span>
+        <Table label="Agency comparison, loading">
+          <thead>
+            <tr>
+              <Th numeric className="w-12 min-w-12">Rank</Th>
+              <Th className="min-w-[12rem]">Agency</Th>
+              {COLUMNS.map((definition) => <Th key={definition.key} numeric className="px-2">{definition.label}</Th>)}
+            </tr>
+          </thead>
+          <tbody aria-hidden="true">
+            {Array.from({ length: 6 }, (_, row) => (
+              <tr key={row}>
+                <Td numeric><span className="skeleton ml-auto block h-3 w-4 rounded" /></Td>
+                <Td><span className={cn('skeleton block h-3 rounded', row % 2 === 0 ? 'w-48' : 'w-36')} /></Td>
+                {COLUMNS.map((definition) => (
+                  <Td key={definition.key} numeric className="px-2"><span className="skeleton ml-auto block h-3 w-10 rounded" /></Td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      </div>
+    </section>
   );
 }

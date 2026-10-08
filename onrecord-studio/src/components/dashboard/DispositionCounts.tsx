@@ -5,7 +5,6 @@ import type { DepartmentDispositions, Disposition } from '../../types';
 import { useAppStore } from '../../store/useAppStore';
 import { cn } from '../../utils/cn';
 import Badge from '../ui/Badge';
-import Icon from '../ui/icons';
 import InlineError from '../ui/InlineError';
 import MethodNote from '../ui/MethodNote';
 import Skeleton from '../ui/Skeleton';
@@ -109,7 +108,7 @@ export default function DispositionCounts({ portalSubdomain }: { portalSubdomain
               <Th className="min-w-[14rem]">Department</Th>
               <Th numeric>Requests</Th>
               {DISPOSITION_ORDER.map((disposition) => (
-                <Th key={disposition} numeric>{DISPOSITION_LABELS[disposition]}</Th>
+                <Th key={disposition} numeric className="h-auto min-w-[6.5rem] whitespace-normal py-2 align-bottom leading-4">{DISPOSITION_LABELS[disposition]}</Th>
               ))}
             </tr>
           </thead>
@@ -153,10 +152,13 @@ export default function DispositionCounts({ portalSubdomain }: { portalSubdomain
                               aria-expanded={isOpen}
                               aria-label={`${DISPOSITION_LABELS[disposition]}: ${count} of ${row.totalRequests} requests, ${name}`}
                               onClick={() => setExpanded((current) => (current === bucketKey ? null : bucketKey))}
-                              className="focus-ring inline-flex items-center gap-1 whitespace-nowrap rounded text-fg underline decoration-dotted decoration-fg/40 underline-offset-4 hover:decoration-solid"
+                              className={cn(
+                                'focus-ring inline-flex flex-col items-end rounded text-right',
+                                isOpen && '[&>span:first-child]:decoration-solid',
+                              )}
                             >
-                              {count.toLocaleString()} <span className="text-muted">({share(count, row.totalRequests)})</span>
-                              <Icon name="chevron" size="xs" className={cn('text-muted transition-transform', isOpen && 'rotate-90')} />
+                              <span className="text-fg underline decoration-dotted decoration-fg/40 underline-offset-4 hover:decoration-solid">{count.toLocaleString()}</span>
+                              <span className="text-caption text-muted">{share(count, row.totalRequests)}</span>
                             </button>
                           )}
                         </Td>

@@ -27,6 +27,8 @@ import {
   type BriefingProject,
 } from '../utils/briefing';
 
+export type LoadStatus = 'pending' | 'ready' | 'failed';
+
 export interface IngestionMetrics {
   pagesProcessed: number;
   documentsDownloaded: number;
@@ -164,6 +166,10 @@ interface AppState {
   workspaceInitializationError: string | null;
   ocrCapability: OcrCapability | null;
   portalRuntimes: PortalRuntimeSnapshot[];
+  /** Whether `portalRuntimes` holds a measured snapshot. An empty array while pending or failed is absence, not "nothing running". */
+  portalRuntimesStatus: LoadStatus;
+  portalRuntimesError: string | null;
+  runtimeRefreshRequests: number;
   activePortalKey: string | null;
   portalUrlDraft: string;
   syncingPortalKeys: string[];
@@ -175,6 +181,8 @@ interface AppState {
   agencyProfiles: AgencyPerformanceProfile[];
   crossAgencyCorrelations: CrossAgencyCorrelation[];
   analyticsUpdatedAt: string | null;
+  /** Whether `agencyProfiles` holds a computed response; an empty list is "not computed" only when ready. */
+  analyticsStatus: LoadStatus;
   /** Set when the last analytics refresh failed, so panels can say so instead of reporting an empty result as a finding. */
   analyticsError: string | null;
   /**
@@ -279,6 +287,9 @@ interface AppState {
   setPortalLifecycleState: (portalKey: string, lifecycleState: SourceLifecycleState) => void;
   removePortal: (portalKey: string) => void;
   setPortalRuntimes: (runtimes: PortalRuntimeSnapshot[]) => void;
+  setPortalRuntimesError: (message: string) => void;
+  /** Re-runs the runtime snapshot from the one place that owns it (App). */
+  requestRuntimeRefresh: () => void;
   setActivePortal: (portalKey: string | null) => void;
   setPortalSyncState: (portalKey: string, syncing: boolean, syncRunId?: string) => void;
   setAudioAlertsEnabled: (enabled: boolean) => void;
@@ -352,6 +363,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   workspaceInitializationError: null,
   ocrCapability: null,
   portalRuntimes: [],
+  portalRuntimesStatus: 'pending',
+  portalRuntimesError: null,
+  runtimeRefreshRequests: 0,
   activePortalKey: null,
   portalUrlDraft: '',
   syncingPortalKeys: [],
@@ -363,6 +377,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   agencyProfiles: [],
   crossAgencyCorrelations: [],
   analyticsUpdatedAt: null,
+  analyticsStatus: 'pending',
   analyticsError: null,
   analyticsRefreshRequests: 0,
   evidenceRefreshRequests: 0,
@@ -549,6 +564,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       .sort((left, right) => left.localeCompare(right));
     return {
       portalRuntimes,
+      portalRuntimesStatus: 'ready' as const,
+      portalRuntimesError: null,
       syncingPortalKeys,
       syncRunIdsByPortal: Object.fromEntries(
         running.map((runtime) => [runtime.portal.portalKey, runtime.syncRunId]),
@@ -556,6 +573,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       isSyncing: syncingPortalKeys.length > 0,
     };
   }),
+  setPortalRuntimesError: (portalRuntimesError) => set({ portalRuntimesStatus: 'failed', portalRuntimesError }),
+  requestRuntimeRefresh: () =>
+    set((state) => ({ portalRuntimesStatus: 'pending', portalRuntimesError: null, runtimeRefreshRequests: state.runtimeRefreshRequests + 1 })),
   setActivePortal: (activePortalKey) =>
     set({
       activePortalKey,
@@ -619,11 +639,18 @@ export const useAppStore = create<AppState>((set, get) => ({
       agencyProfiles,
       crossAgencyCorrelations,
       analyticsUpdatedAt: new Date().toISOString(),
+      analyticsStatus: 'ready',
       analyticsError: null,
     }),
-  setAnalyticsError: (analyticsError) => set({ analyticsError }),
+  setAnalyticsError: (analyticsError) =>
+    set((state) => ({ analyticsError, analyticsStatus: analyticsError ? 'failed' : state.analyticsStatus })),
   requestAnalyticsRefresh: () =>
-    set((state) => ({ analyticsRefreshRequests: state.analyticsRefreshRequests + 1 })),
+    set((state) => ({
+      analyticsRefreshRequests: state.analyticsRefreshRequests + 1,
+      // A retry after a failure is a load again; a refresh over a computed result keeps showing it.
+      analyticsStatus: state.analyticsStatus === 'failed' ? 'pending' : state.analyticsStatus,
+      analyticsError: state.analyticsStatus === 'failed' ? null : state.analyticsError,
+    })),
   requestEvidenceRefresh: () =>
     set((state) => ({ evidenceRefreshRequests: state.evidenceRefreshRequests + 1 })),
   requestFindingsRefresh: () =>

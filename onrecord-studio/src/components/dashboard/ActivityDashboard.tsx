@@ -4,6 +4,8 @@ import { cn } from '../../utils/cn';
 import { useMetrics } from '../../hooks/useMetrics';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
+import InlineError from '../ui/InlineError';
+import Skeleton from '../ui/Skeleton';
 import { SearchField } from '../ui/Field';
 import PageHeader from '../ui/PageHeader';
 import { PanelHeader } from '../ui/Panel';
@@ -16,6 +18,10 @@ type LogFilter = 'all' | 'errors';
 
 export default function ActivityDashboard() {
   const runtimes = useAppStore((state) => state.portalRuntimes);
+  const runtimesStatus = useAppStore((state) => state.portalRuntimesStatus);
+  const runtimesError = useAppStore((state) => state.portalRuntimesError);
+  const requestRuntimeRefresh = useAppStore((state) => state.requestRuntimeRefresh);
+  const measured = runtimesStatus === 'ready';
   const syncLogs = useAppStore((state) => state.syncLogs);
   const syncingPortalKeys = useAppStore((state) => state.syncingPortalKeys);
   const collecting = syncingPortalKeys.length;
@@ -49,7 +55,7 @@ export default function ActivityDashboard() {
         <PageHeader
           title="Collection activity"
           summary="Source queues, parsing throughput and problems for this session."
-          actions={
+          actions={measured &&
             <Badge tone={collecting > 0 ? 'success' : 'neutral'} className="h-8 gap-2 px-3 text-control">
               <StatusDot state={collecting > 0 ? 'active' : 'idle'} pulse={collecting > 0} label={collecting > 0 ? 'Collecting' : 'Idle'} />
               {collecting > 0 ? `${collecting.toLocaleString()} ${collecting === 1 ? 'source' : 'sources'} collecting` : 'Nothing collecting'}
@@ -57,16 +63,35 @@ export default function ActivityDashboard() {
           }
         />
 
-        <section aria-label="Session throughput" className="app-panel grid grid-cols-1 divide-y divide-line overflow-hidden sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-4 xl:divide-x">
-          <Stat label="Requests" value={metrics.requestsProcessed} detail="This session, from runtime snapshots" />
-          <Stat label="Tasks completed" value={metrics.completedTasks} detail={`This session · ${metrics.queuedTasks.toLocaleString()} waiting in queues`} />
-          <Stat label="Documents saved" value={metrics.documentsDownloaded} detail={`This session · ${formatBytes(metrics.bytesTransferred)}`} />
-          <Stat
-            label="Failed tasks"
-            value={metrics.failedTasks}
-            detail={metrics.taskFailureRatePercentage === null ? 'No tasks have finished yet' : `${metrics.taskFailureRatePercentage.toFixed(1)}% of finished tasks`}
-            className={metrics.failedTasks > 0 ? '[&_.numeric-value]:text-danger' : undefined}
+        {runtimesStatus === 'failed' && (
+          <InlineError
+            summary="Source runtimes couldn't be read, so this session's queue figures are not available."
+            detail={runtimesError ?? undefined}
+            onRetry={requestRuntimeRefresh}
           />
+        )}
+
+        <section
+          aria-label="Session throughput"
+          aria-busy={runtimesStatus === 'pending' || undefined}
+          className="app-panel grid grid-cols-1 divide-y divide-line overflow-hidden sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-4 xl:divide-x"
+        >
+          {runtimesStatus === 'pending' ? (
+            ['Requests', 'Tasks completed', 'Documents saved', 'Failed tasks'].map((label) => <StatSkeleton key={label} label={label} />)
+          ) : (
+            <>
+              <Stat label="Requests" value={measured ? metrics.requestsProcessed : null} unavailableReason={UNAVAILABLE} detail="This session, from runtime snapshots" />
+              <Stat label="Tasks completed" value={measured ? metrics.completedTasks : null} unavailableReason={UNAVAILABLE} detail={`This session · ${metrics.queuedTasks.toLocaleString()} waiting in queues`} />
+              <Stat label="Documents saved" value={measured ? metrics.documentsDownloaded : null} unavailableReason={UNAVAILABLE} detail={`This session · ${formatBytes(metrics.bytesTransferred)}`} />
+              <Stat
+                label="Failed tasks"
+                value={measured ? metrics.failedTasks : null}
+                unavailableReason={UNAVAILABLE}
+                detail={metrics.taskFailureRatePercentage === null ? 'No tasks have finished yet' : `${metrics.taskFailureRatePercentage.toFixed(1)}% of finished tasks`}
+                className={measured && metrics.failedTasks > 0 ? '[&_.numeric-value]:text-danger' : undefined}
+              />
+            </>
+          )}
         </section>
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
@@ -105,7 +130,11 @@ export default function ActivityDashboard() {
             </div>
             {syncLogs.length > 0 && (
               <div className="flex items-center justify-between border-t border-line px-5 py-3 text-caption text-muted">
-                <span className="tabular-nums">{visibleLogs.length.toLocaleString()} of {syncLogs.length.toLocaleString()} events</span>
+                <span className="tabular-nums">
+                  {visibleLogs.length === syncLogs.length
+                    ? `${syncLogs.length.toLocaleString()} ${syncLogs.length === 1 ? 'event' : 'events'}`
+                    : `${visibleLogs.length.toLocaleString()} of ${syncLogs.length.toLocaleString()} events`}
+                </span>
                 <Button size="sm" variant="ghost" onClick={resetMetrics}>Clear session telemetry</Button>
               </div>
             )}
@@ -114,7 +143,11 @@ export default function ActivityDashboard() {
           <section aria-labelledby="runtimes-heading" className="app-panel min-h-[420px] overflow-hidden">
             <PanelHeader titleId="runtimes-heading" title="Source runtimes" description="Queue health for each source." />
             <div className="space-y-3 p-4">
-              {runtimes.length === 0 ? (
+              {runtimesStatus === 'pending' ? (
+                <Skeleton variant="block" height={128} label="Loading source runtimes" className="space-y-3" />
+              ) : runtimesStatus === 'failed' ? (
+                <p className="px-1 py-2 text-body text-muted">Not available until the runtimes can be read.</p>
+              ) : runtimes.length === 0 ? (
                 <div className="grid min-h-72 place-items-center rounded-lg border border-dashed border-line p-6 text-center">
                   <div>
                     <p className="text-heading text-fg-secondary">No source runtimes</p>
@@ -148,6 +181,22 @@ export default function ActivityDashboard() {
             </div>
           </section>
         </div>
+      </div>
+    </div>
+  );
+}
+
+const UNAVAILABLE = 'Not available: the runtime snapshot did not load.';
+
+/** A throughput tile at its final height (overline, metric, caption), so nothing shifts on load. */
+function StatSkeleton({ label }: { label: string }) {
+  return (
+    <div role="status" className="p-4">
+      <span className="sr-only">Loading {label.toLocaleLowerCase()}</span>
+      <div aria-hidden="true">
+        <div className="skeleton h-4 w-24 rounded" />
+        <div className="skeleton mt-1 h-7 w-16 rounded" />
+        <div className="skeleton mt-1 h-4 w-40 rounded" />
       </div>
     </div>
   );

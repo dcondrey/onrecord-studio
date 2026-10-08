@@ -1,11 +1,39 @@
-import type { ReactNode, TdHTMLAttributes, ThHTMLAttributes } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type TdHTMLAttributes, type ThHTMLAttributes } from 'react';
 import { cn } from '../../utils/cn';
 
-/** A wide table scrolls inside its panel, never the page. */
+/**
+ * A wide table scrolls inside its panel, never the page. While columns remain past the right
+ * edge, a fade there says so; a clipped column with no cue reads as the whole table.
+ */
 export default function Table({ label, className, children }: { label?: string; className?: string; children: ReactNode }) {
+  const scroller = useRef<HTMLDivElement>(null);
+  const [moreRight, setMoreRight] = useState(false);
+  useEffect(() => {
+    const element = scroller.current;
+    if (!element) return;
+    const measure = () => setMoreRight(element.scrollLeft + element.clientWidth < element.scrollWidth - 1);
+    measure();
+    element.addEventListener('scroll', measure, { passive: true });
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(element);
+    if (element.firstElementChild) observer?.observe(element.firstElementChild);
+    return () => {
+      element.removeEventListener('scroll', measure);
+      observer?.disconnect();
+    };
+  }, []);
   return (
-    <div className={cn('overflow-x-auto', className)}>
-      <table aria-label={label} className="w-full border-collapse text-body">{children}</table>
+    <div className={cn('relative', className)}>
+      <div ref={scroller} className="overflow-x-auto">
+        <table aria-label={label} className="w-full border-collapse text-body">{children}</table>
+      </div>
+      <div
+        aria-hidden="true"
+        className={cn(
+          'pointer-events-none absolute inset-y-0 right-0 z-sticky w-10 bg-gradient-to-l from-panel to-transparent transition-opacity duration-fast',
+          moreRight ? 'opacity-100' : 'opacity-0',
+        )}
+      />
     </div>
   );
 }
