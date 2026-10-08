@@ -182,7 +182,6 @@ function Stage({ dossier, figure, storyLead, rank, compare, source, onDraft, act
             {factors && (
               <details className="group">
                 <summary className="focus-ring inline-flex w-fit cursor-pointer list-none items-center gap-1.5 rounded text-overline uppercase text-muted hover:text-fg [&::-webkit-details-marker]:hidden">
-                  <Icon name="chevron" size="xs" className="transition-transform group-open:rotate-90" />
                   Why it ranks here
                 </summary>
                 <div className="mt-3">{factors}</div>
@@ -270,7 +269,6 @@ function ComputedFrom({ sources, detector }: { sources: TableLeadSources; detect
       </ul>
       <details className="group mt-4">
         <summary className="focus-ring inline-flex w-fit cursor-pointer list-none items-center gap-1.5 rounded text-caption text-fg-secondary hover:text-fg [&::-webkit-details-marker]:hidden">
-          <Icon name="chevron" size="xs" className="transition-transform group-open:rotate-90" />
           Show the query
         </summary>
         <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md bg-raised/60 p-3 font-mono text-code text-fg-secondary">{sources.sql}</pre>

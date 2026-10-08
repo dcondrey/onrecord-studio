@@ -14,7 +14,6 @@ import { downloadText } from './textDownload';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
 import InlineError from '../ui/InlineError';
-import Icon from '../ui/icons';
 
 /** A stored lead's figure, none (not a lead, cut short, or stored before figures), or why it could not be read. */
 export type FigureState = { figure: LeadFigureData | null } | { error: string };
@@ -210,7 +209,6 @@ function Fold({ title, children }: { title: string; children: React.ReactNode })
   return (
     <details className="group py-2">
       <summary className="focus-ring flex w-full cursor-pointer list-none items-center gap-1.5 rounded text-body font-medium text-fg [&::-webkit-details-marker]:hidden">
-        <Icon name="chevron" size="xs" className="text-muted transition-transform group-open:rotate-90" />
         {title}
       </summary>
       <div className="mt-2 pl-4">{children}</div>
