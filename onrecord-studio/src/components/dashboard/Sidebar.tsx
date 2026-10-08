@@ -5,6 +5,7 @@ import { PRODUCT_BYLINE, PRODUCT_NAME } from '../../config/brand';
 import Icon from '../ui/icons';
 import { OPEN_COMMAND_PALETTE_EVENT } from './CommandPalette';
 import { openSourceConnector } from './sourceEvents';
+import { isApplePlatform } from './NavigationControls';
 import { useWorkspaceBadges } from '../../hooks/useWorkspaceBadges';
 import { workspaceCommandRegistry } from '../../commands/registry';
 import StatusDot from '../ui/statusDot';
@@ -153,16 +154,13 @@ export default function Sidebar() {
             const degraded = healthStatus === 'degraded';
             const syncing = syncingPortalKeys.includes(portal.portalKey);
             const selected = activePortalKey === portal.portalKey;
-            // `activeTasks` is how many downloads are in flight right now, which is a concurrency
-            // limit and never rises. Reporting it beside the queue depth read as "2 of 1500 done"
-            // and made a source that had already finished hundreds of documents look stalled.
-            // Progress is settled work against total work; in-flight tasks are neither.
+            // Progress is settled work against total work. In-flight downloads are capped by the
+            // concurrency limit, so counting them as done would make a long crawl look stalled.
             const settledTasks = runtime ? runtime.completedTasks + runtime.failedTasks : 0;
             const totalTasks = runtime
               ? settledTasks + runtime.queuedTasks + runtime.activeTasks
               : 0;
-            // Failures are settled work, so they belong in the numerator, but they are not
-            // successes and must never be folded silently into one figure.
+            // Failures count as settled but are reported apart, never folded into one figure.
             const percentComplete = totalTasks > 0 ? Math.round((settledTasks / totalTasks) * 100) : 0;
             return (
               <button
@@ -329,10 +327,4 @@ export default function Sidebar() {
 
 function openCommandPalette() {
   window.dispatchEvent(new Event(OPEN_COMMAND_PALETTE_EVENT));
-}
-
-function isApplePlatform() {
-  const platform = navigator.platform.toLocaleLowerCase();
-  const userAgent = navigator.userAgent.toLocaleLowerCase();
-  return platform.includes('mac') || userAgent.includes('mac os');
 }

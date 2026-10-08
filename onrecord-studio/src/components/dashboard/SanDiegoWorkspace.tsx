@@ -1,17 +1,22 @@
+import { useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { focusSourceComposer, openFileImport, SAN_DIEGO_RECORDS_URL, SAN_DIEGO_SOURCES } from '../../utils/sanDiego';
 import Icon from '../ui/icons';
 import StarterSets from './StarterSets';
 
+type Source = (typeof SAN_DIEGO_SOURCES)[number];
+const sourceCategory = (source: Source) => source.category ?? 'Government';
+const sourceEvidenceType = (source: Source) => source.evidenceType ?? (source.category === 'News and reporting' ? 'Reporting' : 'Source collection');
+
 export default function SanDiegoWorkspace() {
   const [sourceSearch, setSourceSearch] = useState('');
   const [category, setCategory] = useState('All sources');
   const [evidenceType, setEvidenceType] = useState('All evidence types');
-  const categories = ['All sources', ...new Set(SAN_DIEGO_SOURCES.map((source) => source.category ?? 'Government'))];
-  const evidenceTypes = ['All evidence types', ...new Set(SAN_DIEGO_SOURCES.map((source) => source.evidenceType ?? (source.category === 'News and reporting' ? 'Reporting' : 'Source collection')))];
+  const categories = ['All sources', ...new Set(SAN_DIEGO_SOURCES.map(sourceCategory))];
+  const evidenceTypes = ['All evidence types', ...new Set(SAN_DIEGO_SOURCES.map(sourceEvidenceType))];
   const visibleSources = SAN_DIEGO_SOURCES.filter((source) =>
-    (category === 'All sources' || (source.category ?? 'Government') === category)
-    && (evidenceType === 'All evidence types' || (source.evidenceType ?? (source.category === 'News and reporting' ? 'Reporting' : 'Source collection')) === evidenceType)
+    (category === 'All sources' || sourceCategory(source) === category)
+    && (evidenceType === 'All evidence types' || sourceEvidenceType(source) === evidenceType)
     && `${source.label} ${source.publisher ?? ''} ${source.url} ${(source.aliases ?? []).join(' ')} ${source.description} ${source.analysisNotes ?? ''} ${source.period ?? ''}`.toLowerCase().includes(sourceSearch.trim().toLowerCase()),
   );
   const setPortalUrlDraft = useAppStore((state) => state.setPortalUrlDraft);
@@ -61,7 +66,7 @@ export default function SanDiegoWorkspace() {
           return (
             <article key={source.id} className="app-panel flex flex-col p-5">
               <div className="flex items-center gap-2 text-sm font-semibold text-fg"><Icon name="filePlus" className="h-4 w-4 text-accent" />{source.label}</div>
-              {source.publisher && <div className="mt-1 text-label leading-4 text-accent">{source.publisher} · {source.category}</div>}
+              {source.publisher && <div className="mt-1 text-label leading-4 text-accent">{source.publisher} · {sourceCategory(source)}</div>}
               <p className="mt-2 text-label leading-relaxed text-muted">{source.description}</p>
               <p className="mt-2 text-label leading-relaxed text-muted">{source.coverage}</p>
               {source.analysisNotes && <p className="mt-2 text-label leading-relaxed text-fg-secondary">{source.analysisNotes}</p>}
@@ -89,4 +94,3 @@ export default function SanDiegoWorkspace() {
     </section>
   );
 }
-import { useState } from 'react';

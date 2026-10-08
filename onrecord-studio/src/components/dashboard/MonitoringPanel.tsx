@@ -7,7 +7,7 @@ const inputClass = 'w-full rounded-lg border border-line-strong bg-canvas p-2 te
 const panelClass = 'rounded-xl border border-line-strong bg-canvas/40 p-4';
 
 function Citation({ source }: { source: MonitoringEvidence }) {
-  return <details className="mt-2 text-label leading-4 text-muted"><summary className="">Inspect source and identity</summary>
+  return <details className="mt-2 text-label leading-4 text-muted"><summary>Inspect source and identity</summary>
     <a className="mt-2 block text-accent underline" href={source.sourceUrl} target="_blank" rel="noreferrer">{source.title}</a>
     <p className="mt-1">{citationLocation(source)} · SHA-256 {source.sourceSha256.slice(0, 16)}…</p>
     <blockquote className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap border-l-2 border-line-strong pl-3 text-fg-secondary">{source.quote}</blockquote>
@@ -112,7 +112,7 @@ export default function MonitoringPanel({ caseId = null, topic = 'homelessness' 
       {status.comparisons.map((comparison, index) => <article className={panelClass} key={`${comparison.kind}:${index}`}><h4 className="font-semibold text-fg">{comparison.title}</h4><p className="mt-2 text-sm text-accent">{comparison.calculation}</p><p className="mt-2 text-sm text-fg-secondary">{comparison.implication}</p><p className="mt-2 text-label leading-4 text-muted">{comparison.limitations.join(' ')}</p>{comparison.observationIds.map(id => { const observation = status.observations.find(o => o.id === id); return observation ? <Citation key={id} source={observation.evidence} /> : null; })}</article>)}
       <div className="max-h-[36rem] space-y-3 overflow-auto">{observations.map(observation => <article className={panelClass} key={observation.id}><div className="text-label leading-4 text-muted">{observation.kind} · {observation.observedOn} · {observation.reviewed ? 'Reviewed for comparison' : 'Needs review'}</div><h4 className="mt-1 font-semibold text-fg">{observation.place}</h4><p className="mt-1 text-label leading-4 text-muted">Hours/week: {observation.hoursPerWeek ?? 'Unknown'} · Coordinates: {observation.latitude === null ? 'Unknown' : `${observation.latitude}, ${observation.longitude}`} · {observation.status}</p><Citation source={observation.evidence} /><button disabled={busy || observation.status === 'SOURCE_CHANGED'} className="analysis-button mt-3" onClick={() => void save('observation', { ...observation, caseId, topic, reviewed: !observation.reviewed })}>{observation.reviewed ? 'Exclude from comparisons' : 'Confirm source and include in this case'}</button></article>)}</div>
     </div>}
-    {status && <details className="mt-4 text-label leading-4 text-muted"><summary className="">Coverage and interpretation limits</summary>{status.limitations.map(limit => <p className="mt-2" key={limit}>{limit}</p>)}</details>}
+    {status && <details className="mt-4 text-label leading-4 text-muted"><summary>Coverage and interpretation limits</summary>{status.limitations.map(limit => <p className="mt-2" key={limit}>{limit}</p>)}</details>}
   </section>;
 }
 
