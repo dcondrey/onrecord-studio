@@ -24,6 +24,9 @@ import ChartFrame, { type ChartFrameProps } from '../components/charts/frame/Cha
 import { ReferenceLine } from '../components/charts/frame/ReferenceLine';
 import { absent } from '../components/charts/core/nulls';
 import type { YardstickLabel } from '../components/charts/core/claim';
+import { Axis } from '../components/charts/frame/Axis';
+import { scaleLinear } from '../components/charts/core/scale';
+import { LABEL_FONT, measureText } from '../components/charts/core/layout';
 
 afterEach(() => {
   cleanup();
@@ -95,5 +98,34 @@ describe('ReferenceLine', () => {
     silence.mockRestore();
     render(<svg><ReferenceLine kind="yardstick" label="72 h before start (reference; no notice rule is evaluated)" at={10} extent={[0, 100]} axis="x" /></svg>);
     expect(screen.getByText(/72 h before start \(reference/)).toBeTruthy();
+  });
+});
+
+describe('Axis', () => {
+  // A label's drawn extent after edge anchoring, by the same measure the axis uses.
+  function extents(container: HTMLElement): Array<{ label: string; left: number; right: number }> {
+    return [...container.querySelectorAll('text')].map((node) => {
+      const label = node.textContent ?? '';
+      const width = measureText(label, LABEL_FONT);
+      const x = Number(node.getAttribute('x'));
+      const anchor = node.getAttribute('text-anchor');
+      const left = anchor === 'start' ? x : anchor === 'end' ? x - width : x - width / 2;
+      return { label, left, right: left + width };
+    });
+  }
+
+  it('never draws two bottom labels over each other, including an edge label anchored inward', () => {
+    for (let width = 60; width <= 420; width += 7) {
+      const { container, unmount } = render(
+        <svg>
+          <Axis orient="bottom" offset={0} scale={scaleLinear([0, 1000], [0, width])} kind="days" tickCount={6} />
+        </svg>,
+      );
+      const drawn = extents(container);
+      for (let i = 1; i < drawn.length; i++) expect(drawn[i].left, `width ${width}: ${drawn[i - 1].label} / ${drawn[i].label}`).toBeGreaterThanOrEqual(drawn[i - 1].right);
+      // The domain's end stays labelled once the two edge labels can both fit.
+      if (width >= 100) expect(drawn[drawn.length - 1].label).toBe('1,000 d');
+      unmount();
+    }
   });
 });

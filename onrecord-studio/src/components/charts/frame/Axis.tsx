@@ -65,19 +65,52 @@ function ticksOf(props: AxisProps, length: number): AxisTick[] {
   return props.band.domain.map((key) => ({ at: props.band(key) + props.band.bandwidth / 2, label: props.format ? props.format(key) : key, title: key }));
 }
 
-/** Drops labels that would overlap their neighbour (keeping the first), so ticks never collide. */
-function thin(ticks: AxisTick[], horizontal: boolean): AxisTick[] {
-  if (!horizontal) return ticks.filter((tick, i) => i === 0 || Math.abs(tick.at - ticks[i - 1].at) >= 14);
-  const kept: AxisTick[] = [];
-  let end = -Infinity;
-  for (const tick of ticks) {
+interface PlacedTick extends AxisTick {
+  x: number;
+  anchor: 'start' | 'middle' | 'end';
+  left: number;
+  right: number;
+}
+
+/** Minimum clear space between two bottom-axis labels. */
+const LABEL_GAP = 6;
+
+/**
+ * Places each bottom label where it is drawn: one that would cross either end of the range is
+ * anchored inward, which shifts its extent toward its neighbour.
+ */
+function place(ticks: AxisTick[], r0: number, r1: number, band: boolean): PlacedTick[] {
+  return ticks.map((tick) => {
     const width = measureText(tick.label, LABEL_FONT);
-    if (tick.at - width / 2 >= end + 6) {
-      kept.push(tick);
-      end = tick.at + width / 2;
-    }
+    const anchor = band ? 'middle' : tick.at - width / 2 < r0 ? 'start' : tick.at + width / 2 > r1 ? 'end' : 'middle';
+    const x = anchor === 'start' ? Math.max(r0, tick.at - 2) : anchor === 'end' ? Math.min(r1, tick.at + 2) : tick.at;
+    const left = anchor === 'start' ? x : anchor === 'end' ? x - width : x - width / 2;
+    return { ...tick, x, anchor, left, right: left + width };
+  });
+}
+
+/**
+ * Drops labels that would overlap a kept neighbour, measured at their drawn (anchored) extent so
+ * an edge label pulled inward is never printed over the one beside it. The first and last labels
+ * mark the axis's extent and are kept; interior labels give way to the last.
+ */
+function thinPlaced(ticks: PlacedTick[]): PlacedTick[] {
+  const clear = (a: PlacedTick, b: PlacedTick) => b.left >= a.right + LABEL_GAP;
+  const kept: PlacedTick[] = [];
+  for (const tick of ticks) {
+    const previous = kept[kept.length - 1];
+    if (!previous || clear(previous, tick)) kept.push(tick);
+  }
+  const last = ticks[ticks.length - 1];
+  if (last && kept[kept.length - 1] !== last) {
+    while (kept.length > 1 && !clear(kept[kept.length - 1], last)) kept.pop();
+    if (clear(kept[kept.length - 1], last)) kept.push(last);
   }
   return kept;
+}
+
+function thinVertical(ticks: AxisTick[]): AxisTick[] {
+  return ticks.filter((tick, i) => i === 0 || Math.abs(tick.at - ticks[i - 1].at) >= 14);
 }
 
 /**
@@ -89,29 +122,25 @@ export function Axis(props: AxisProps) {
   const [r0, r1] = range ? [Math.min(range[0], range[1]), Math.max(range[0], range[1])] : [0, 0];
   const length = r1 - r0;
   const horizontal = props.orient === 'bottom';
-  const ticks = thin(ticksOf(props, length), horizontal);
   const hairline = { stroke: VIZ.baseline, strokeWidth: 1, shapeRendering: 'crispEdges' as const };
   if (horizontal) {
+    const ticks = thinPlaced(place(ticksOf(props, length), r0, r1, 'band' in props));
     return (
       <g aria-hidden="true">
         {props.line !== false && length > 0 && <line x1={r0} x2={r1} y1={props.offset + 0.5} y2={props.offset + 0.5} style={hairline} />}
-        {ticks.map((tick) => {
-          const width = measureText(tick.label, LABEL_FONT);
-          const anchor = 'band' in props ? 'middle' : tick.at - width / 2 < r0 ? 'start' : tick.at + width / 2 > r1 ? 'end' : 'middle';
-          const x = anchor === 'start' ? Math.max(r0, tick.at - 2) : anchor === 'end' ? Math.min(r1, tick.at + 2) : tick.at;
-          return (
-            <g key={`${tick.at}-${tick.label}`}>
-              {!('band' in props) && <line x1={Math.round(tick.at) + 0.5} x2={Math.round(tick.at) + 0.5} y1={props.offset} y2={props.offset + 4} style={hairline} />}
-              <text x={x} y={props.offset + 16} textAnchor={anchor} className={TICK_CLASS}>
-                {tick.title && tick.title !== tick.label && <title>{tick.title}</title>}
-                {tick.label}
-              </text>
-            </g>
-          );
-        })}
+        {ticks.map((tick) => (
+          <g key={`${tick.at}-${tick.label}`}>
+            {!('band' in props) && <line x1={Math.round(tick.at) + 0.5} x2={Math.round(tick.at) + 0.5} y1={props.offset} y2={props.offset + 4} style={hairline} />}
+            <text x={tick.x} y={props.offset + 16} textAnchor={tick.anchor} className={TICK_CLASS}>
+              {tick.title && tick.title !== tick.label && <title>{tick.title}</title>}
+              {tick.label}
+            </text>
+          </g>
+        ))}
       </g>
     );
   }
+  const ticks = thinVertical(ticksOf(props, length));
   return (
     <g aria-hidden="true">
       {props.line && length > 0 && <line x1={props.offset + 0.5} x2={props.offset + 0.5} y1={r0} y2={r1} style={hairline} />}
