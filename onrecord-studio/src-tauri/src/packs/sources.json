@@ -1,0 +1,27 @@
+[
+  {
+    "pack": "ca-homelessness-system",
+    "table": "ca_system_performance_measures",
+    "title": "CA System Performance Measures, Statewide and by CoC",
+    "publisher": "California Interagency Council on Homelessness",
+    "page": "https://data.ca.gov/dataset/ca-system-performance-measures-statewide-and-by-coc",
+    "url": "https://publish.data.ca.gov/dataset/d3f9ca4d-3e60-434b-9fa3-91ee0befd34d/resource/e02178d9-1d34-4798-9979-f50af9f1742e/download/ca-spms-prior-years-and-last-twelve-months-cy2025.csv",
+    "years": null,
+    "format": "csv",
+    "worksheet": null,
+    "licence": {
+      "id": "CC0-1.0",
+      "url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "attribution": null,
+      "disclaimer": null,
+      "evidence": "\"license\":\"Creative Commons CCZero\" and \"rights\":\"No restrictions on Public Use\" in the dataset metadata of https://data.ca.gov/dataset/ca-system-performance-measures-statewide-and-by-coc (CKAN license_id cc-zero)"
+    },
+    "key": null,
+    "time": { "column": null, "kind": "undated" },
+    "partial": false,
+    "bytes": 25975,
+    "rows": 368,
+    "headers": ["Location", "Metric", "Jan 2020 - Dec 2020", "Jan 2021 - Dec 2021", "Jan 2022 - Dec 2022", "Jan 2023 - Dec 2023", "Jan 2024 - Dec 2024", "Jan 2025 - Dec 2025"],
+    "notes": "Wide: one column per calendar year, so rows carry no time column. The download URL answers 302 to a presigned Cloudflare R2 URL valid for 60 seconds. The file name names its last year (cy2025); the next release is expected at a new URL. Starts with a UTF-8 BOM; CRLF line ends."
+  }
+]

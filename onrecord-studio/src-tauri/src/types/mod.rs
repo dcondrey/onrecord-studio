@@ -42,8 +42,8 @@ pub use corpus::{
     EntityResolutionBasis, EntityValidationGrade, RelationshipBasis, RelationshipKind,
 };
 pub use data_packs::{
-    DataPackFileSummary, DataPackImportOutcome, DataPackSummary, DataPackTable, PublishedPack,
-    PublishedPackSelection,
+    DataPackFileLicence, DataPackFileSummary, DataPackImportOutcome, DataPackSummary,
+    DataPackTable, PublishedPack, PublishedPackSelection,
 };
 pub use document_origin::{
     DocumentInternalMetadata, DocumentOrigin, DocumentOriginReport, HeldComparison,

@@ -22,6 +22,7 @@ pub(crate) mod import;
 pub(crate) mod published;
 #[cfg(feature = "pack-builder")]
 pub mod snapshot;
+pub(crate) mod sources;
 
 /// The manifest's file name inside a pack directory.
 pub(crate) const PACK_MANIFEST_FILE: &str = "manifest.json";
@@ -118,6 +119,10 @@ pub(crate) struct PackFile {
     /// For a change record, what it compares and how many rows of each kind it holds.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub changes: Option<ChangeSummary>,
+    /// The file's own licence, in a pack that mixes publishers; absent when the pack's licence
+    /// covers it, so a manifest without one keeps its signed bytes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub licence: Option<crate::types::DataPackFileLicence>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -412,6 +417,7 @@ mod tests {
                 last_modified: None,
                 etag: None,
                 changes: None,
+                licence: None,
             }],
             key_id: None,
             checks: Vec::new(),

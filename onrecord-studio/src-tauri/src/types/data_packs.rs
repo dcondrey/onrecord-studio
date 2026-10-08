@@ -50,8 +50,24 @@ pub struct DataPackFileSummary {
     pub source_url: String,
     /// When the pack builder retrieved the file from its publisher, RFC 3339.
     pub retrieved_at: String,
-    /// `None`: the City source list does not publish this file, so the app does not import it.
+    /// `None`: no source list the app holds publishes this file, so the app does not import it.
     pub dataset_kind: Option<AnalyticalDatasetKind>,
+    /// The file's own licence, as the signed manifest states it; `None` when the pack's licence
+    /// covers it.
+    pub licence: Option<DataPackFileLicence>,
+}
+
+/// The licence one file of a pack is published under, where a pack mixes publishers.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DataPackFileLicence {
+    /// An SPDX id, or a named public-domain basis such as `public-domain-us-government`.
+    pub id: String,
+    pub url: String,
+    /// The credit line the licence requires; `None` when it requires none.
+    pub attribution: Option<String>,
+    /// The disclaimer the publisher requires; `None` when it requires none.
+    pub disclaimer: Option<String>,
 }
 
 /// A pack OnRecord publishes, and the public repository the app fetches it from.

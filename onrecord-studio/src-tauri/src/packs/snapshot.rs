@@ -246,22 +246,29 @@ async fn snapshot_target<S: SnapshotSource>(
         retrieved_at: retrieved.retrieved_at.to_rfc3339(),
         sha256: retrieved.sha256,
         bytes: retrieved.bytes,
-        rows: count_rows(&path, &target.file_name).await?,
+        rows: count_rows(&path, &target.file_name, None).await?,
         excluded_rows: None,
         year: None,
         partial: target.partial,
         last_modified: retrieved.last_modified,
         etag: retrieved.etag,
         changes: None,
+        licence: None,
     };
     // From here the original is kept whatever else fails: its bytes are the history.
     let mut files = vec![original.clone()];
     // One scratch database per file, removed as soon as its records are written.
     let conformed = async {
         let (guard, scratch) = scratch_database().await?;
-        let (parquet, current) =
-            write_conformed_parquet(&scratch, work, &original, target.kind.clone(), pack_version)
-                .await?;
+        let (parquet, current) = write_conformed_parquet(
+            &scratch,
+            work,
+            &original,
+            target.kind.clone(),
+            None,
+            pack_version,
+        )
+        .await?;
         Ok::<_, AppError>((guard, scratch, parquet, current))
     }
     .await;
