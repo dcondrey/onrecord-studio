@@ -1,9 +1,9 @@
 {
   "note": "Serious and critical axe-core violations accepted as of this run; regenerate with `npm run ui:check -- <run> --write-baseline` after fixing some.",
   "generatedFrom": {
-    "label": "27008dec-202610081454",
-    "gitHead": "27008dec",
-    "generatedAt": "2026-10-08T14:54:02.970Z",
+    "label": "43e2196d-202610081555",
+    "gitHead": "43e2196d",
+    "generatedAt": "2026-10-08T15:55:32.313Z",
     "data": "real",
     "browser": "bundled chromium 156.0.8078.4",
     "axeVersion": "4.14.0",
@@ -94,38 +94,5 @@
     "story-ranked-leads",
     "story-tab-all-findings"
   ],
-  "violations": {
-    "compare": {
-      "scrollable-region-focusable": {
-        "impact": "serious",
-        "targets": [
-          {
-            "target": ".overflow-x-auto",
-            "states": [
-              "loading"
-            ],
-            "widths": [
-              1024
-            ]
-          }
-        ]
-      }
-    },
-    "my-requests-detail": {
-      "color-contrast": {
-        "impact": "serious",
-        "targets": [
-          {
-            "target": "time[datetime=\"2026-08-04T17:00:00.000Z\"]",
-            "states": [
-              "populated"
-            ],
-            "widths": [
-              1024
-            ]
-          }
-        ]
-      }
-    }
-  }
+  "violations": {}
 }
