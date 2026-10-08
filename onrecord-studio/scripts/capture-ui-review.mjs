@@ -344,6 +344,10 @@ async function settle(page) {
   }
   await page.evaluate(async () => {
     await document.fonts.ready;
+    // A theme switch or resize starts colour and geometry transitions; capturing before they end
+    // records a mixed frame (old geometry beside new labels, half-faded text) that axe then scores.
+    const finite = document.getAnimations().filter((animation) => animation.effect?.getTiming().iterations !== Infinity);
+    await Promise.race([Promise.allSettled(finite.map((animation) => animation.finished)), new Promise((resolve) => setTimeout(resolve, 2_000))]);
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   });
   return settled;
