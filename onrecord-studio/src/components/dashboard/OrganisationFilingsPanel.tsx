@@ -435,21 +435,24 @@ const centsText = (cents: bigint) => {
 function PaymentBars({ lines }: { lines: PublicMoneyLine[] }) {
   const payments = lines.filter((line) => PAYMENT_ROLES.has(line.role));
   if (!payments.length) return null;
-  const groups = new Map<string, { fiscalYear: string; dataset: string; cents: bigint; rows: number; unread: number }>();
+  const groups = new Map<string, { fiscalYear: string; dataset: string; cents: bigint; read: number; rows: number; unread: number }>();
   for (const line of payments) {
     if (line.fiscalYear === null) continue;
     const key = `${line.fiscalYear}\u0000${line.datasetName}`;
-    const group = groups.get(key) ?? { fiscalYear: line.fiscalYear, dataset: line.datasetName, cents: 0n, rows: 0, unread: 0 };
+    const group = groups.get(key) ?? { fiscalYear: line.fiscalYear, dataset: line.datasetName, cents: 0n, read: 0, rows: 0, unread: 0 };
     const cents = line.amount === null ? null : toCents(line.amount);
     if (cents === null) group.unread += line.rows;
-    else group.cents += cents;
+    else {
+      group.cents += cents;
+      group.read += line.rows;
+    }
     group.rows += line.rows;
     groups.set(key, group);
   }
   const ordered = [...groups.values()].sort((a, b) => a.fiscalYear.localeCompare(b.fiscalYear) || a.dataset.localeCompare(b.dataset));
   const datasets = new Set(ordered.map((group) => group.dataset));
   const undated = payments.filter((line) => line.fiscalYear === null);
-  const largest = ordered.reduce<typeof ordered[number] | null>((best, group) => (best === null || group.cents > best.cents ? group : best), null);
+  const largest = ordered.filter((group) => group.read > 0).reduce<typeof ordered[number] | null>((best, group) => (best === null || group.cents > best.cents ? group : best), null);
   const rows: BarTableRow[] = ordered.map((group) => {
     const amount = formatCurrencyString(centsText(group.cents));
     const label = datasets.size > 1 ? `${group.fiscalYear} · ${group.dataset}` : group.fiscalYear;
@@ -459,7 +462,8 @@ function PaymentBars({ lines }: { lines: PublicMoneyLine[] }) {
       label: `${label}: ${amount} over ${group.rows} rows${group.unread ? `; ${group.unread} rows with an unreadable amount not summed` : ''}`,
       header: <span className="viz-num text-fg">{label}</span>,
       cells: {
-        amount: { value: measured(Number(centsText(group.cents))), text: amount, tooltip: { rows: [{ key: 'amount', value: amount, label: 'paid' }, { key: 'rows', value: String(group.rows), label: 'rows' }], note: group.dataset } },
+        // A year whose every amount is unreadable has no sum: a slot, never $0.
+        amount: group.read === 0 ? { value: absent('not-recorded', 'No amount in this year could be read'), text: 'not summed' } : { value: measured(Number(centsText(group.cents))), text: amount, tooltip: { rows: [{ key: 'amount', value: amount, label: 'paid' }, { key: 'rows', value: String(group.rows), label: 'rows' }], note: group.dataset } },
         ...(ordered.some((other) => other.unread) ? { unread: { value: measured(group.unread), text: group.unread ? `${group.unread} not summed` : '0' } } : {}),
       },
     };
@@ -482,7 +486,7 @@ function PaymentBars({ lines }: { lines: PublicMoneyLine[] }) {
       twin={{
         caption: 'Payments by city fiscal year',
         columns: [{ key: 'year', label: 'City fiscal year' }, { key: 'dataset', label: 'Table' }, { key: 'amount', label: 'Paid', align: 'end' }, { key: 'rows', label: 'Rows', align: 'end' }],
-        rows: ordered.map((group) => ({ year: group.fiscalYear, dataset: group.dataset, amount: formatCurrencyString(centsText(group.cents)), rows: group.rows })),
+        rows: ordered.map((group) => ({ year: group.fiscalYear, dataset: group.dataset, amount: group.read === 0 ? absent('not-recorded', 'no amount could be read') : formatCurrencyString(centsText(group.cents)), rows: group.rows })),
       }}
       footer={undated.length > 0 && <p className="text-caption text-muted">{`Undated: ${undated.map((line) => `${line.datasetName}, ${line.rows} rows${line.amount === null ? '' : `, ${decimalMoney(line.amount)}`}`).join('; ')}.`}</p>}
     />

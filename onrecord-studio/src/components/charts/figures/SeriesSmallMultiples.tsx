@@ -1,7 +1,7 @@
 import { useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { VIZ, type MarkRole } from '../core/claim';
 import { formatValue, type ValueKind } from '../core/format';
-import { measureText } from '../core/layout';
+import { measureText, placeLabels } from '../core/layout';
 import { isValue, type Measured } from '../core/nulls';
 import { scaleLinear, type ContinuousScale } from '../core/scale';
 import { TICK_CLASS, defaultTickCount } from '../frame/Axis';
@@ -237,7 +237,15 @@ export default function SeriesSmallMultiples(props: SeriesSmallMultiplesProps) {
                     )}
                   </g>
                 )}
-                {panel.lines.map((line) => {
+                {(() => {
+                  // End labels of two lines that finish close together are pushed apart, never stacked.
+                  const lastOf = (line: SeriesLine) => {
+                    for (let i = line.values.length - 1; i >= 0; i--) { const v = line.values[i]; if (isValue(v)) return y(v.value); }
+                    return null;
+                  };
+                  const anchored = panel.lines.flatMap((line) => { const at = lastOf(line); return at === null ? [] : [{ key: line.key, anchor: at, width: 12 }]; });
+                  const placed = new Map(placeLabels(anchored, TITLE_HEIGHT, TITLE_HEIGHT + PANEL_HEIGHT, 2).map((label) => [label.key, label.pos + 6]));
+                  return panel.lines.map((line) => {
                   const points: LinePoint[] = line.values.map((value, i) => ({ key: slots[i].key, x: i, y: value, incomplete: line.incomplete?.has(i) }));
                   return (
                     <LineSeries
@@ -248,11 +256,13 @@ export default function SeriesSmallMultiples(props: SeriesSmallMultiplesProps) {
                       role={line.role}
                       markers="observed"
                       label={panel.lines.length > 1 ? line.label : undefined}
+                      labelY={panel.lines.length > 1 ? placed.get(line.key) : undefined}
                       opacity={legendFocus.opacityFor(line.key)}
                       motionKey={`${panel.key}:${line.key}`}
                     />
                   );
-                })}
+                  });
+                })()}
                 {bracketHere && fromValue && toValue && isValue(fromValue) && isValue(toValue) && (() => {
                   const x0 = x(bracketHere.from);
                   const x1 = x(bracketHere.to);
