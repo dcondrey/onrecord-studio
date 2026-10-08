@@ -1,4 +1,4 @@
-import { createContext, useContext, useId, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useId, useSyncExternalStore, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useDialogFocus } from '../licensing/useDialogFocus';
 import { cn } from '../../utils/cn';
@@ -14,6 +14,28 @@ const WIDTH: Record<DialogSize, string> = {
 };
 
 const DialogContext = createContext<{ titleId: string; size: DialogSize; onClose: () => void } | null>(null);
+
+// Open dialogs, oldest first. WKWebView composites every blurred layer separately, so only the
+// topmost dialog is glass; the ones beneath it go opaque.
+let openDialogs: string[] = [];
+const stackListeners = new Set<() => void>();
+
+function subscribeToStack(listener: () => void) {
+  stackListeners.add(listener);
+  return () => stackListeners.delete(listener);
+}
+
+function useIsTopDialog(id: string) {
+  useEffect(() => {
+    openDialogs = [...openDialogs, id];
+    stackListeners.forEach((listener) => listener());
+    return () => {
+      openDialogs = openDialogs.filter((open) => open !== id);
+      stackListeners.forEach((listener) => listener());
+    };
+  }, [id]);
+  return useSyncExternalStore(subscribeToStack, () => openDialogs.length === 0 || openDialogs[openDialogs.length - 1] === id);
+}
 
 function useDialogContext() {
   const context = useContext(DialogContext);
@@ -42,6 +64,7 @@ export default function Dialog({ onClose, label, size = 'md', placement = 'cente
   const titleId = useId();
   const { ref, onKeyDown, onOverlayMouseDown } = useDialogFocus(onClose);
   const sheet = placement === 'sheet-right';
+  const isTop = useIsTopDialog(titleId);
   return createPortal(
     <div
       className={cn('motion-fade fixed inset-0 grid bg-scrim', sheet ? 'z-sheet justify-items-end' : 'z-dialog place-items-center p-4')}
@@ -55,11 +78,12 @@ export default function Dialog({ onClose, label, size = 'md', placement = 'cente
         aria-modal="true"
         aria-label={label}
         aria-labelledby={label ? undefined : titleId}
+        data-stacked={isTop ? undefined : ''}
         className={cn(
-          'flex w-full flex-col overflow-hidden border-line bg-surface text-fg shadow-dialog outline-none',
+          'glass flex w-full flex-col overflow-hidden text-fg shadow-dialog outline-none',
           sheet
-            ? 'motion-slide-in h-full max-w-[28rem] rounded-l-2xl border-y border-l'
-            : cn('motion-pop max-h-[calc(100vh-4rem)] rounded-2xl border', WIDTH[size]),
+            ? 'motion-slide-in h-full max-w-[28rem] rounded-l-2xl border-r-0'
+            : cn('motion-pop max-h-[calc(100vh-4rem)] rounded-2xl', WIDTH[size]),
           className,
         )}
       >
