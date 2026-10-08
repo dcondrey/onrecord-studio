@@ -25,6 +25,11 @@ export type AxisProps = AxisSource & {
   line?: boolean;
 };
 
+/** A few ticks: about one per 80px, never fewer than 2 or more than 10. */
+export function defaultTickCount(length: number): number {
+  return Math.max(2, Math.min(10, Math.floor(length / 80)));
+}
+
 function timeLabel(tick: TimeTick, fiscalYearStartMonth: number | undefined): string {
   switch (tick.unit) {
     case 'year':
@@ -44,13 +49,13 @@ function timeLabel(tick: TimeTick, fiscalYearStartMonth: number | undefined): st
 
 function ticksOf(props: AxisProps, length: number): AxisTick[] {
   if ('scale' in props) {
-    const values = props.scale.ticks(props.tickCount ?? Math.max(2, Math.floor(length / 72)));
+    const values = props.scale.ticks(props.tickCount ?? defaultTickCount(length));
     const step = values.length > 1 ? values[1] - values[0] : tickStep(props.scale.domain[0], props.scale.domain[1], 5);
     return values.map((v) => ({ at: props.scale(v), label: formatTick(v, props.kind, step) }));
   }
   if ('time' in props) {
     const fy = props.time.fiscalYearStartMonth;
-    return props.time.ticks(props.tickTarget ?? Math.max(2, Math.floor(length / 80))).map((tick) => ({
+    return props.time.ticks(props.tickTarget ?? defaultTickCount(length)).map((tick) => ({
       at: props.time(tick.at),
       label: timeLabel(tick, fy),
       // A fiscal-year label's tooltip spells out its months: 'FY24' is 'Jul 2023 to Jun 2024'.

@@ -1,5 +1,6 @@
 import { VIZ } from '../core/claim';
 import type { ContinuousScale } from '../core/scale';
+import { defaultTickCount } from './Axis';
 
 /**
  * Solid 1px gridlines at the scale's ticks, never dashed. `vertical` draws lines across x (for a
@@ -13,7 +14,7 @@ export function Grid({ scale, extent, vertical = false, tickCount }: {
   tickCount?: number;
 }) {
   const length = Math.abs(scale.range[1] - scale.range[0]);
-  const ticks = scale.ticks(tickCount ?? Math.max(2, Math.floor(length / 72)));
+  const ticks = scale.ticks(tickCount ?? defaultTickCount(length));
   const style = { stroke: VIZ.grid, strokeWidth: 1, shapeRendering: 'crispEdges' as const };
   return (
     <g aria-hidden="true">
