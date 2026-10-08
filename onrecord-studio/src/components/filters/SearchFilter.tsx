@@ -7,6 +7,9 @@ import { searchQueryId, searchRecordText, type SearchRecordInput } from '../../u
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { compileToLegacyQuery, interpretNaturalLanguage, parseQualifierQuery, serializeQualifierQuery } from '../../query';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
+import { displayError } from '../../utils/errorMessage';
+import { SearchField, Select } from '../ui/Field';
+import { buttonClass } from '../ui/Button';
 
 export default function SearchFilter() {
   const activePortalKey = useAppStore((state) => state.activePortalKey);
@@ -19,6 +22,9 @@ export default function SearchFilter() {
   const setFilteredResults = useAppStore((state) => state.setFilteredResults);
   const error = useAppStore((state) => state.searchError);
   const setSearchError = useAppStore((state) => state.setSearchError);
+  const setSearchStatus = useAppStore((state) => state.setSearchStatus);
+  // Until a query has answered, a count is unknown, not zero.
+  const countKnown = useAppStore((state) => state.searchStatus === 'ready');
   // The exact number of matches, not the number of rows loaded so far.
   const resultCount = useAppStore((state) => state.filteredResultsTotal);
   const retainedCount = useAppStore((state) => state.filteredResults.length);
@@ -64,6 +70,7 @@ export default function SearchFilter() {
     const timer = window.setTimeout(async () => {
       setIsSearching(true);
       setSearchError(null);
+      setSearchStatus('pending');
       try {
         const args: SearchPageArgs = {
           searchTerm: compiledQuery.searchTerm,
@@ -94,14 +101,14 @@ export default function SearchFilter() {
         if (requestGate.isCurrent(request)) {
           // Keep the last successful result set. Clearing it turns a transport/query failure into
           // the false finding "no matches" and makes the visible filters look responsible.
-          setSearchError(String(reason));
+          setSearchError(displayError(reason).message);
         }
       } finally {
         if (requestGate.isCurrent(request)) setIsSearching(false);
       }
     }, 220);
     return () => window.clearTimeout(timer);
-  }, [activePortalKey, compiledQuery, evidenceRefreshRequests, inputValue, requestGate, selectedAgencyId, selectedPolicyDeviation, selectedStatus, setFilteredResults, setSearchError]);
+  }, [activePortalKey, compiledQuery, evidenceRefreshRequests, inputValue, requestGate, selectedAgencyId, selectedPolicyDeviation, selectedStatus, setFilteredResults, setSearchError, setSearchStatus]);
 
   const updateTerm = (value: string) => {
     setInputValue(value);
@@ -176,53 +183,47 @@ export default function SearchFilter() {
   return (
     <section aria-label="Evidence search" className="shrink-0 px-5 py-3 lg:px-6">
       <div className="app-panel flex flex-wrap items-center gap-2 p-2">
-        <div className="relative min-w-[240px] flex-1">
-          <label htmlFor="evidence-search" className="sr-only">Search requests and extracted documents</label>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" /><path strokeLinecap="round" d="m20 20-4-4" />
-          </svg>
-          <input
-            id="evidence-search"
-            type="search"
-            value={inputValue}
-            onChange={(event) => updateTerm(event.target.value)}
-            placeholder="Search request metadata and extracted text"
-            className="focus-ring h-10 w-full rounded-xl border border-transparent bg-canvas/70 pl-9 pr-10 text-label text-fg transition placeholder:text-muted focus:border-highlight/60"
-          />
-          {isSearching && <span className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin rounded-full border-2 border-line-strong border-t-indigo-400" aria-label="Searching" />}
-        </div>
+        <SearchField
+          id="evidence-search"
+          aria-label="Search requests and extracted documents"
+          value={inputValue}
+          onChange={(event) => updateTerm(event.target.value)}
+          placeholder="Search requests and document text"
+          wrapperClassName="min-w-[15rem] flex-1"
+          trailing={isSearching ? <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-line-strong border-t-accent" role="status" aria-label="Searching" /> : null}
+        />
         <AgencySelector />
-        <label>
-          <span className="sr-only">Request status</span>
-          <select
-            value={selectedStatus ?? ''}
-            onChange={(event) => setSearchFilters(inputValue, selectedAgencyId, event.target.value || null, selectedPolicyDeviation)}
-            className="focus-ring h-10 rounded-xl border border-control bg-canvas/70 px-3 text-label text-fg-secondary transition focus:border-highlight/60"
-          >
-            <option value="">All statuses</option>
-            <option value="open">Open</option>
-            <option value="closed">Closed</option>
-            <option value="referred">Referred</option>
-          </select>
-        </label>
-        {hasFilters && (
-          <button type="button" onClick={clear} className="focus-ring h-10 rounded-xl border border-control px-3 text-label font-medium text-muted transition hover:border-control hover:text-fg">
-            Clear
-          </button>
-        )}
-        <div className="ml-auto hidden shrink-0 border-l border-line px-2 text-right sm:block">
-          <div className="font-mono text-label font-semibold text-fg-secondary">{isSearching ? '—' : formatMatchCount(resultCount)}</div>
-          <div className="text-caption uppercase tracking-wider text-muted">matches</div>
+        <Select
+          aria-label="Request status"
+          value={selectedStatus ?? ''}
+          onChange={(event) => setSearchFilters(inputValue, selectedAgencyId, event.target.value || null, selectedPolicyDeviation)}
+          className="focus-ring w-36"
+        >
+          <option value="">All statuses</option>
+          <option value="open">Open</option>
+          <option value="closed">Closed</option>
+          <option value="referred">Referred</option>
+        </Select>
+        <button type="button" onClick={clear} aria-hidden={!hasFilters || undefined} tabIndex={hasFilters ? undefined : -1} className={buttonClass({ variant: 'ghost', className: `focus-ring ${hasFilters ? '' : 'invisible'}` })}>
+          Clear
+        </button>
+        <div className="ml-auto hidden shrink-0 border-l border-line px-3 text-right sm:block" aria-busy={!countKnown || undefined}>
+          <div className="text-heading tabular-nums text-fg">{isSearching || !countKnown ? '—' : formatMatchCount(resultCount)}</div>
+          <div className="text-overline uppercase text-muted">Matches</div>
         </div>
       </div>
-      <div className="mt-1.5 flex min-h-4 flex-wrap items-center gap-2 px-2 text-caption">
+      <div className="mt-1.5 flex min-h-6 flex-wrap items-center gap-2 px-2 text-caption">
         <button
           type="button"
-          aria-pressed={interpretPlainLanguage}
+          role="switch"
+          aria-checked={interpretPlainLanguage}
           onClick={() => setInterpretPlainLanguage((enabled) => !enabled)}
-          className={interpretPlainLanguage ? 'whitespace-nowrap rounded-full border border-highlight/30 bg-highlight/10 px-2 py-0.5 font-semibold text-highlight' : 'whitespace-nowrap rounded-full border border-control px-2 py-0.5 font-semibold text-muted hover:text-fg-secondary'}
+          className="focus-ring inline-flex h-6 items-center gap-2 whitespace-nowrap rounded-full px-1 font-medium text-fg-secondary"
         >
-          Plain-language interpretation {interpretPlainLanguage ? 'on' : 'off'}
+          <span aria-hidden="true" className={`relative h-4 w-7 rounded-full transition-colors ${interpretPlainLanguage ? 'bg-accent' : 'bg-line-strong'}`}>
+            <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-canvas transition-transform ${interpretPlainLanguage ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+          </span>
+          Plain-language search
         </button>
         {parsedQuery.filters.map((filter, index) => {
           const deferred = deferredFilterKeys.has(filterKey(filter));
@@ -241,20 +242,20 @@ export default function SearchFilter() {
           <span className="text-warning" title="Some query tokens need review">Query syntax needs review</span>
         )}
         {selectedPolicyDeviation && (
-          <button type="button" onClick={() => setSearchFilters(inputValue, selectedAgencyId, selectedStatus, null)} className="rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 font-semibold text-warning">
+          <button type="button" onClick={() => setSearchFilters(inputValue, selectedAgencyId, selectedStatus, null)} className="focus-ring inline-flex h-6 items-center rounded-full border border-warning/30 bg-warning/10 px-2 font-medium text-warning">
             {formatPolicy(selectedPolicyDeviation)} ×
           </button>
         )}
-        <button type="button" onClick={() => void copyRecord()} disabled={isSearching} className="whitespace-nowrap rounded-full border border-control px-2 py-0.5 font-semibold text-muted hover:text-fg-secondary">
+        <button type="button" onClick={() => void copyRecord()} disabled={isSearching} className="focus-ring inline-flex h-6 items-center whitespace-nowrap rounded-full border border-control px-2 font-medium text-fg-secondary hover:bg-raised disabled:opacity-50 ml-auto">
           Copy search record
         </button>
         {canWatch && (
-          <button type="button" onClick={() => void watchTerm()} title="Watches this text across all sources. The agency, status and policy filters are not part of a watch." className="rounded-full border border-control px-2 py-0.5 font-semibold text-muted hover:text-fg-secondary">
+          <button type="button" onClick={() => void watchTerm()} title="Watches this text across all sources. The agency, status and policy filters are not part of a watch." className="focus-ring inline-flex h-6 items-center whitespace-nowrap rounded-full border border-control px-2 font-medium text-fg-secondary hover:bg-raised disabled:opacity-50">
             Watch this text for changes
           </button>
         )}
         {canStand && (
-          <button type="button" onClick={() => void saveStanding()} disabled={isSearching} title="Saves this exact query, filters included. It re-runs whenever the corpus changes and records the corpus state each run saw." className="rounded-full border border-control px-2 py-0.5 font-semibold text-muted hover:text-fg-secondary">
+          <button type="button" onClick={() => void saveStanding()} disabled={isSearching} title="Saves this exact query, filters included. It re-runs whenever the corpus changes and records the corpus state each run saw." className="focus-ring inline-flex h-6 items-center whitespace-nowrap rounded-full border border-control px-2 font-medium text-fg-secondary hover:bg-raised disabled:opacity-50">
             Save as standing query
           </button>
         )}
@@ -265,11 +266,10 @@ export default function SearchFilter() {
           </span>
         )}
         {error && (
-          <span role="alert" className="truncate text-danger">
+          <span role="alert" className="basis-full text-danger">
             Search unavailable; {retainedCount > 0 ? `showing ${formatMatchCount(retainedCount)} results from the last successful query` : 'no result set is available'}: {error}
           </span>
         )}
-        {!error && parsedQuery.filters.length === 0 && <span className="text-muted">Search remains available while ingestion is active.</span>}
       </div>
     </section>
   );
