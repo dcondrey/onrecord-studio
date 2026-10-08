@@ -6,6 +6,30 @@ use super::{
     integrity::resynchronize_request_density_flags,
 };
 
+/// Defines `evidence(path)`: the files a purge of source `?1` unlinks. That is every path its
+/// documents hold or its pending retention receipts staged, minus any path another source still
+/// references, since content-addressed objects are shared by identical bytes.
+const SOURCE_EVIDENCE_PATHS: &str = "WITH candidates(path) AS (
+         SELECT local_path FROM documents
+         WHERE portal_subdomain = ?1 AND local_path IS NOT NULL
+         UNION
+         SELECT pending_path FROM data_retention_receipts
+         WHERE portal_key = ?1 AND state IN ('PREPARED', 'REFERENCED')
+     ),
+     evidence(path) AS (
+         SELECT path FROM candidates
+         WHERE NOT EXISTS (
+             SELECT 1 FROM documents other
+             WHERE other.local_path = candidates.path AND other.portal_subdomain <> ?1
+         )
+         AND NOT EXISTS (
+             SELECT 1 FROM data_retention_receipts other
+             WHERE other.pending_path = candidates.path
+               AND other.portal_key <> ?1
+               AND other.state IN ('PREPARED', 'REFERENCED')
+         )
+     )";
+
 impl DuckDbRepository {
     /// Discards a document row that guidance refused after extraction, before any extracted text
     /// was ever committed for it. Scoped to that narrow case: a document with no `documents_fts`
@@ -26,7 +50,7 @@ impl DuckDbRepository {
     ) -> Result<bool, AppError> {
         let document_id = i64::try_from(document_id).map_err(|error| {
             AppError::DataParsing(format!(
-                "Document identifier cannot be represented by SQLite: {error}"
+                "Document identifier cannot be represented by the core database: {error}"
             ))
         })?;
         let subdomain = subdomain.to_string();
@@ -119,14 +143,13 @@ impl DuckDbRepository {
 
     /// Counts what [`Self::purge_source`] would destroy, without destroying it.
     ///
-    /// Every predicate here is copied from the corresponding delete in `purge_source`, and
-    /// `purge_source_preview_matches_purge` proves the two agree by previewing and then purging
-    /// the same database. A confirmation dialog that names a count the purge does not honour is a
-    /// false statement about evidence, so the counts are not allowed to drift silently.
+    /// Every predicate here matches the corresponding delete in `purge_source`, and the evidence
+    /// files are counted from the very query the purge collects them with. A confirmation dialog
+    /// that names a count the purge does not honour is a false statement about evidence;
+    /// `a_source_purge_preview_counts_what_the_purge_removes` pins the two together.
     ///
-    /// The evidence-file count is the number of documents holding a `local_path`, which is what
-    /// the purge collects and unlinks. It is reported separately from the document count because
-    /// a document whose bytes were never retained still exists as a record.
+    /// The evidence-file count is reported separately from the document count because a document
+    /// whose bytes were never retained still exists as a record.
     pub async fn preview_source_purge(
         &self,
         source_key: &str,
@@ -150,15 +173,9 @@ impl DuckDbRepository {
                     "SELECT COUNT(*) FROM documents WHERE portal_subdomain = ?1",
                 )?,
                 request_count: count("SELECT COUNT(*) FROM requests WHERE portal_subdomain = ?1")?,
-                evidence_file_count: count(
-                    "SELECT COUNT(DISTINCT d.local_path) FROM documents d
-                     WHERE d.portal_subdomain = ?1 AND d.local_path IS NOT NULL
-                       AND NOT EXISTS (
-                           SELECT 1 FROM documents other
-                           WHERE other.local_path = d.local_path
-                             AND other.portal_subdomain <> ?1
-                       )",
-                )?,
+                evidence_file_count: count(&format!(
+                    "{SOURCE_EVIDENCE_PATHS} SELECT COUNT(*) FROM evidence"
+                ))?,
             })
         })
         .await
@@ -189,26 +206,7 @@ impl DuckDbRepository {
         })?;
         let local_paths = {
             let mut statement = transaction
-                .prepare(
-                    "WITH candidates(path) AS (
-                         SELECT local_path FROM documents
-                         WHERE portal_subdomain = ?1 AND local_path IS NOT NULL
-                         UNION
-                         SELECT pending_path FROM data_retention_receipts
-                         WHERE portal_key = ?1 AND state IN ('PREPARED', 'REFERENCED')
-                     )
-                     SELECT path FROM candidates
-                     WHERE NOT EXISTS (
-                         SELECT 1 FROM documents other
-                         WHERE other.local_path = candidates.path AND other.portal_subdomain <> ?1
-                     )
-                     AND NOT EXISTS (
-                         SELECT 1 FROM data_retention_receipts other
-                         WHERE other.pending_path = candidates.path
-                           AND other.portal_key <> ?1
-                           AND other.state IN ('PREPARED', 'REFERENCED')
-                     )",
-                )
+                .prepare(&format!("{SOURCE_EVIDENCE_PATHS} SELECT path FROM evidence"))
                 .map_err(|error| {
                     AppError::Storage(format!("Failed to prepare evidence path lookup: {error}"))
                 })?;

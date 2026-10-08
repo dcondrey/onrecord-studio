@@ -171,11 +171,11 @@ async fn purging_a_source_removes_the_portal_row_and_leaves_no_orphan() {
 
 /// The preview and the purge must count the same rows.
 ///
-/// They are separate SQL, so they can drift, and a confirmation dialog that names a count the
-/// purge does not honour tells the operator a false thing about the evidence they are about to
-/// destroy. This pins them together: whichever one is edited, the other has to follow.
+/// A confirmation dialog that names a count the purge does not honour tells the operator a false
+/// thing about the evidence they are about to destroy. Bytes a pending retention receipt staged
+/// are evidence files the purge unlinks too; a reclaimed receipt's are already gone.
 ///
-/// The fixture is deliberately asymmetric: 2 documents, 3 requests, 1 evidence file. Against a
+/// The fixture is deliberately asymmetric: 2 documents, 4 requests, 3 evidence files. Against a
 /// one-of-each fixture a preview that swapped the document and request predicates, or that
 /// returned the same count three times, would still pass.
 #[tokio::test]
@@ -183,7 +183,7 @@ async fn a_source_purge_preview_counts_what_the_purge_removes() {
     let repository = repository_with_document().await;
     {
         let connection = repository.conn.lock().await;
-        for extra_request in [REQUEST_ID + 1, REQUEST_ID + 2] {
+        for extra_request in [REQUEST_ID + 1, REQUEST_ID + 2, REQUEST_ID + 3] {
             connection
                 .execute(
                     "INSERT INTO requests (
@@ -199,6 +199,28 @@ async fn a_source_purge_preview_counts_what_the_purge_removes() {
                     ],
                 )
                 .expect("an additional request must insert");
+        }
+        for (receipt, state) in [
+            ("prepared", "PREPARED"),
+            ("referenced", "REFERENCED"),
+            ("reclaimed", "RECLAIMED"),
+        ] {
+            connection
+                .execute(
+                    "INSERT INTO data_retention_receipts VALUES (
+                        ?1, ?2, ?3, '/var/data/original', ?4,
+                        'https://example.test/doc', ?5, 10, ?6, '2026-08-24T12:05:00Z'
+                     )",
+                    params![
+                        receipt,
+                        PORTAL_SUBDOMAIN,
+                        DOCUMENT_ID + 1,
+                        format!("/var/data/pending/{receipt}"),
+                        RAW_FILE_SHA256,
+                        state,
+                    ],
+                )
+                .expect("a retention receipt must insert");
         }
         // No `local_path`: a document whose bytes were never retained is still a record the
         // purge destroys, and it must not be counted as an evidence file.
@@ -269,7 +291,7 @@ async fn a_source_purge_preview_counts_what_the_purge_removes() {
             preview.request_count,
             preview.evidence_file_count
         ),
-        (2, 3, 1),
+        (2, 4, 3),
         "the fixture must stay asymmetric, or the three assertions above stop discriminating"
     );
 }

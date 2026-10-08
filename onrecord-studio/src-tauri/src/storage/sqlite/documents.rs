@@ -90,7 +90,7 @@ impl DuckDbRepository {
         } = finalization;
         let document_id = i64::try_from(document_id).map_err(|error| {
             AppError::DataParsing(format!(
-                "Document identifier cannot be represented by SQLite: {error}"
+                "Document identifier cannot be represented by the core database: {error}"
             ))
         })?;
         let file_size = i64::try_from(raw_file_size).map_err(|error| {
@@ -991,7 +991,7 @@ impl DuckDbRepository {
     ) -> Result<Option<String>, AppError> {
         let request_id = i64::try_from(request_id).map_err(|error| {
             AppError::DataParsing(format!(
-                "Request identifier cannot be represented by SQLite: {error}"
+                "Request identifier cannot be represented by the core database: {error}"
             ))
         })?;
         let subdomain = subdomain.to_string();
