@@ -481,9 +481,9 @@ mod expansion_budget_tests {
         builder.into_inner().unwrap();
     }
 
-    /// A directory entry used to reach `continue` before any size accounting ran. Because tar
-    /// advances past a skipped entry by reading and discarding its declared size, one directory
-    /// claiming 8 GiB expanded a ~1 MB archive into gigabytes of decompression with no cap firing.
+    /// A skipped directory entry is still charged against the budget: tar advances past it by
+    /// reading and discarding its declared size, so an uncharged 8 GiB directory header expands a
+    /// tiny archive into gigabytes of decompression.
     #[test]
     fn a_directory_entry_cannot_declare_a_size_past_the_limit() {
         let directory = tempfile::tempdir().unwrap();
