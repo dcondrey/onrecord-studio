@@ -69,13 +69,16 @@ jobs:
         run: npm run ui:review -- "$RUNNER_TEMP/ui-review" --widths=1280 --states=top --concurrency=2
       - name: Accessibility regressions against ui-review/axe-baseline.json
         run: npm run ui:check -- "$RUNNER_TEMP/ui-review"
-      - uses: actions/upload-artifact@v4
+      - name: Upload the screenshots
+        # A convenience for review: a full artifact quota must not fail the accessibility gate.
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: ui-review
           path: ${{ runner.temp }}/ui-review
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 5
 
   rust:
     name: Rust ${{ matrix.os }}
