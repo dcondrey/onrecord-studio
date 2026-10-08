@@ -121,21 +121,26 @@ pub fn classify_pdf(signals: &PdfMetadataSignals) -> NonC2paProvenanceSignal {
             "PDF Info ModDate agrees with xmp:ModifyDate (both timestamp sources match).",
         );
     }
-    if info_dates_ordered && xmp_dates_ordered && signals.info_creation_date.is_some() {
-        // Both surfaces present, each internally consistent, but they don't corroborate each
-        // other. Rank as self-consistent, not corroborated.
+    // Self-consistency is a statement about a pair of dates; a lone date cannot be consistent or
+    // inconsistent with anything.
+    let info_pair_ordered = info_dates_ordered
+        && signals.info_creation_date.is_some()
+        && signals.info_mod_date.is_some();
+    let xmp_pair_ordered =
+        xmp_dates_ordered && signals.xmp_create_date.is_some() && signals.xmp_modify_date.is_some();
+    if info_pair_ordered && xmp_pair_ordered {
         return NonC2paProvenanceSignal::new(
             NonC2paRung::SelfConsistentMetadata,
             "Both PDF Info and XMP timestamps are internally consistent but do not agree with each other.",
         );
     }
-    if info_dates_ordered && signals.info_mod_date.is_some() {
+    if info_pair_ordered {
         return NonC2paProvenanceSignal::new(
             NonC2paRung::SelfConsistentMetadata,
             "PDF Info dictionary reports a CreationDate on or before its ModDate.",
         );
     }
-    if xmp_dates_ordered && signals.xmp_modify_date.is_some() {
+    if xmp_pair_ordered {
         return NonC2paProvenanceSignal::new(
             NonC2paRung::SelfConsistentMetadata,
             "PDF XMP metadata reports xmp:CreateDate on or before xmp:ModifyDate.",
@@ -211,6 +216,21 @@ mod tests {
                 },
                 NonC2paRung::MetadataPresentUncorroborated,
             ),
+            // A lone date is not a self-consistent pair.
+            (
+                PdfMetadataSignals {
+                    info_creation_date: Some(dt("2024-03-01T10:00:00Z")),
+                    ..Default::default()
+                },
+                NonC2paRung::MetadataPresentUncorroborated,
+            ),
+            (
+                PdfMetadataSignals {
+                    info_mod_date: Some(dt("2024-04-01T10:00:00Z")),
+                    ..Default::default()
+                },
+                NonC2paRung::MetadataPresentUncorroborated,
+            ),
             (
                 PdfMetadataSignals {
                     info_creation_date: Some(dt("2024-03-01T10:00:00Z")),
@@ -229,11 +249,18 @@ mod tests {
             ),
         ] {
             let classification = classify_pdf(&signals);
-            assert_eq!(classification.rung, rung);
+            assert_eq!(classification.rung, rung, "{signals:?}");
             assert_eq!(
                 classification.confidence_basis_points,
                 rung.confidence_basis_points()
             );
+            // The rationale names only the sources the document carries.
+            if rung != NonC2paRung::NoSignals
+                && signals.xmp_create_date.is_none()
+                && signals.xmp_modify_date.is_none()
+            {
+                assert!(!classification.rationale.contains("XMP"), "{signals:?}");
+            }
         }
     }
 
