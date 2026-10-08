@@ -5,7 +5,7 @@ import typescriptEslint from "typescript-eslint";
 export default typescriptEslint.config(
   {
     // public/pdfjs is pdf.js's own build output, copied in unchanged.
-    ignores: ["dist", "src-tauri/target", "public/pdfjs"],
+    ignores: ["dist", "src-tauri/target", "public/pdfjs", "scripts/ui-review-fixtures-real.mjs"],
   },
   eslint.configs.recommended,
   ...typescriptEslint.configs.recommended,
