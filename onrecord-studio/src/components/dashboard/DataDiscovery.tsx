@@ -36,7 +36,11 @@ export default function DataDiscovery({ schema, onInspect }: { schema: Analytica
   const loadSeries = async (finished: DiscoveryReport) => {
     const changes = finished.results.find((item) => item.query.id === 'changes')?.result;
     const groups = finished.results.find((item) => item.query.id === 'groups')?.result;
-    if (!changes?.truncated || !groups) return;
+    if (!changes?.truncated) return;
+    if (!groups) {
+      setSeries({ status: 'skipped', reason: 'Series not read: the groups check returned no result, so there is no group order to draw. See the rows below.' });
+      return;
+    }
     const order = groups.rows.map((row) => row[groups.columns.indexOf('group_value')]).slice(0, SERIES_PANEL_LIMIT);
     const token = seriesGate.begin();
     setSeries({ status: 'loading' });
@@ -82,6 +86,9 @@ export default function DataDiscovery({ schema, onInspect }: { schema: Analytica
       }
       if (version === runVersion.current) setProgress(cancelled.current ? 'Stopped after the current query. The report contains completed checks only.' : 'Analysis complete.');
       if (version === runVersion.current && !cancelled.current) void loadSeries(next);
+      else if (version === runVersion.current && next.results.some((item) => item.query.id === 'changes' && item.result?.truncated)) {
+        setSeries({ status: 'skipped', reason: 'Series not read: the run was stopped before whole series were read. See the rows below.' });
+      }
     } catch (reason) {
       if (version === runVersion.current) setError(String(reason));
     } finally {
@@ -162,7 +169,11 @@ export default function DataDiscovery({ schema, onInspect }: { schema: Analytica
 const SERIES_ROW_LIMIT = 2000;
 const GROUP_ROWS_SHOWN = 15;
 
-type SeriesState = { status: 'loading' } | { status: 'ready'; result: SqlQueryResult } | { status: 'error'; message: string };
+type SeriesState =
+  | { status: 'loading' }
+  | { status: 'ready'; result: SqlQueryResult }
+  | { status: 'error'; message: string }
+  | { status: 'skipped'; reason: string };
 
 function sourcesOf(plan: DiscoveryPlan): ChartSources {
   return {
@@ -332,7 +343,10 @@ function ChangesFigure({ changes, groups, series, plan, sources, onInspect }: {
     label: `${compact(largest.change, true)}${largest.changePercent === null ? '' : ` (${formatValue(largest.changePercent / 100, { kind: 'percent', signed: true, digits: 0 })})`} ${String(largest.from)}→${String(largest.to)}`,
   } : null;
 
-  const status = changes.rowCount === 0 ? 'empty' : changes.truncated && series?.status === 'error' ? 'error' : !model ? 'loading' : 'ready';
+  const skipped = changes.truncated && series?.status === 'skipped' ? series.reason : null;
+  const status = changes.rowCount === 0 || skipped ? 'empty' : changes.truncated && series?.status === 'error' ? 'error' : !model ? 'loading' : 'ready';
+  // The series result holds only the plotted groups; the groups check counts the rest.
+  const otherGroups = groups ? Math.max(0, groups.rowCount - (model?.groups.length ?? 0)) : model?.otherGroups ?? 0;
   const lines = (cells: readonly ({ observed: number | null; missingValues: number | null } | null)[], slotGap: (i: number) => boolean): SeriesLine => ({
     key: 'value',
     label: 'Observed value',
@@ -351,7 +365,7 @@ function ChangesFigure({ changes, groups, series, plan, sources, onInspect }: {
       summary={`${model?.groups.length ?? 0} groups drawn over ${model?.slots.filter((slot) => !slot.gap).length ?? 0} periods. Lines break where a period has no rows; hollow markers are periods with missing values.`}
       status={status}
       error={series?.status === 'error' ? series.message : null}
-      emptyText="No matching results for this check."
+      emptyText={skipped ?? 'No matching results for this check.'}
       slots={model?.slots ?? []}
       panels={(model?.groups ?? []).map((group) => {
         const line = lines(group.cells, (i) => model?.slots[i]?.gap ?? false);
@@ -394,7 +408,10 @@ function ChangesFigure({ changes, groups, series, plan, sources, onInspect }: {
           return { group: group.label, period: slot.gap ? slot.title ?? '' : slot.label, value: cell?.observed ?? absent('not-recorded', cell ? 'no reported values' : 'no rows in this period'), status: cell?.status ?? null };
         })),
       }}
-      footer={model && model.otherGroups > 0 ? <p className="text-caption text-muted">{`Other groups (${model.otherGroups}): see rows.`}</p> : changes.truncated && drawn?.truncated ? <p className="text-caption text-warning">{`The series query also reached its ${SERIES_ROW_LIMIT.toLocaleString('en-US')}-row limit; later periods may be missing from the panels.`}</p> : null}
+      footer={model && (otherGroups > 0 || (changes.truncated && drawn?.truncated)) ? <>
+        {otherGroups > 0 && <p className="text-caption text-muted">{`Other groups (${otherGroups.toLocaleString('en-US')}${groups?.truncated ? '+' : ''}): see rows.`}</p>}
+        {changes.truncated && drawn?.truncated && <p className="text-caption text-warning">{`The series query also reached its ${SERIES_ROW_LIMIT.toLocaleString('en-US')}-row limit; later periods may be missing from the panels.`}</p>}
+      </> : null}
       storageKey="discovery-changes"
     />
   );

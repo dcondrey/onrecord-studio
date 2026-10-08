@@ -337,13 +337,11 @@ export function storyHeadline(leads: readonly StoryLead[]): string {
  */
 function RankedLeads({ leads, allLeads, busy, renderDetail }: { leads: StoryLead[]; allLeads: readonly StoryLead[]; busy: boolean; renderDetail(lead: StoryLead): ReactNode }) {
   const [sortKey, setSortKey] = useState<string>(SCORE_KEY);
-  // Columns and scales come from every loaded lead, so filtering never adds, drops or rescales one.
-  // A factor name outside the ranker's closed set still gets its own column: it is never dropped.
+  // The seven factors always have their columns; scales come from every loaded lead, so filtering
+  // never rescales one. A factor name outside the ranker's closed set gets its own column after
+  // them: it is never dropped.
   const emitted = new Set(allLeads.flatMap((lead) => lead.publicInterest.factors.map((factor) => factor.name)));
-  const factorNames = [
-    ...FACTOR_ORDER.filter((name) => emitted.has(name)),
-    ...[...emitted].filter((name) => !(FACTOR_ORDER as readonly string[]).includes(name)),
-  ];
+  const factorNames = [...FACTOR_ORDER, ...[...emitted].filter((name) => !(FACTOR_ORDER as readonly string[]).includes(name))];
   const scoreMax = Math.max(1, ...allLeads.map((lead) => lead.publicInterest.totalBasisPoints));
   const factorMax = Math.max(FACTOR_SCALE_MAX_BP, ...allLeads.flatMap((lead) => lead.publicInterest.factors.map((factor) => factor.basisPoints)));
   const rank = new Map(leads.map((lead, index) => [lead.findingId, index + 1]));

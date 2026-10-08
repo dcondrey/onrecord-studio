@@ -162,7 +162,7 @@ function columnMin(column: BarTableColumn, rows: readonly BarTableRow[]): number
   return min;
 }
 
-function CellBar({ column, cell, min, max, motionKey }: { column: BarTableColumn; cell: BarTableCell; min: number; max: number; motionKey: string }) {
+function CellBar({ column, cell, min, max, motionKey, dimmed }: { column: BarTableColumn; cell: BarTableCell; min: number; max: number; motionKey: string; dimmed?: boolean }) {
   const width = column.barWidth ?? 48;
   // A negative value (a sum can be) draws left of the zero line, inside the same track.
   const x = scaleLinear([min, max > min ? max : min + 1], [0, width], { nice: false });
@@ -180,12 +180,31 @@ function CellBar({ column, cell, min, max, motionKey }: { column: BarTableColumn
   }
   const end = isValue(value) ? x(Math.max(0, value.value)) : 0;
   return (
-    <svg width={width + 1} height={SVG_HEIGHT} aria-hidden="true" className="block shrink-0 overflow-visible">
+    // A small sample dims its bars only: the value text keeps full contrast.
+    <svg width={width + 1} height={SVG_HEIGHT} aria-hidden="true" className="block shrink-0 overflow-visible" style={dimmed ? { opacity: 0.4 } : undefined} data-dimmed={dimmed || undefined}>
       <rect x={0} y={band.pos} width={width} height={BAR_HEIGHT} rx={2} style={{ fill: VIZ.track }} />
       {cell.remainder ? <HatchedSpan x0={end} x1={Math.min(width, end + x(cell.remainder))} /> : null}
       {mark}
     </svg>
   );
+}
+
+const VIEW_STORAGE_PREFIX = 'onrecord-chart-view:';
+
+function readView(key: string): 'chart' | 'table' {
+  try {
+    return globalThis.localStorage?.getItem(VIEW_STORAGE_PREFIX + key) === 'table' ? 'table' : 'chart';
+  } catch {
+    return 'chart';
+  }
+}
+
+function writeView(key: string, view: 'chart' | 'table') {
+  try {
+    globalThis.localStorage?.setItem(VIEW_STORAGE_PREFIX + key, view);
+  } catch {
+    // Storage unavailable: the choice lasts for this render only.
+  }
 }
 
 function ClaimTags({ claim }: { claim: BarTableProps['claim'] }) {
@@ -212,7 +231,7 @@ export default function BarTable(props: BarTableProps) {
   const motion = useChartMotion();
   const tooltip = useTooltip();
   const drillDown = useDrillDown();
-  const [view, setView] = useState<'chart' | 'table'>('chart');
+  const [view, setView] = useState<'chart' | 'table'>(() => readView(title));
   const showsData = status === 'ready' || status === 'stale';
   const frameRef = useRef<HTMLElement>(null);
   const { width } = useChartSize(frameRef, { fallbackWidth: 1024 });
@@ -373,12 +392,11 @@ export default function BarTable(props: BarTableProps) {
                             cell?.active && drill?.mode === 'cell' && 'cursor-pointer',
                             (drill?.mode === 'row' || (!drill && props.onRowActivate)) && 'cursor-pointer',
                             cellOpen && 'bg-raised/60',
-                            row.dimmed && 'opacity-40',
                           )}
                         >
                           {cell ? (
                             <span className={cn('flex', props.layout === 'stacked' ? 'flex-col-reverse items-start gap-1' : 'items-center gap-1.5')}>
-                              <CellBar column={column} cell={cell} min={mins[j]} max={maxes.get(row.group?.key ?? '')?.[j] ?? 0} motionKey={`${row.key}:${column.key}`} />
+                              <CellBar dimmed={row.dimmed} column={column} cell={cell} min={mins[j]} max={maxes.get(row.group?.key ?? '')?.[j] ?? 0} motionKey={`${row.key}:${column.key}`} />
                               <span className={cn('viz-num whitespace-nowrap text-caption', isValue(cell.value) ? 'text-fg-secondary' : 'text-muted', cellOpen && 'font-semibold text-fg')}>{cell.text}</span>
                             </span>
                           ) : (
@@ -421,7 +439,11 @@ export default function BarTable(props: BarTableProps) {
             <ClaimTags claim={claim} />
           </div>
           {showsData && (
-            <Button size="sm" variant="ghost" aria-pressed={view === 'table'} onClick={() => setView(view === 'chart' ? 'table' : 'chart')}>
+            <Button size="sm" variant="ghost" aria-pressed={view === 'table'} onClick={() => {
+              const next = view === 'chart' ? 'table' : 'chart';
+              setView(next);
+              writeView(title, next);
+            }}>
               {props.twinLabel ?? 'View as table'}
             </Button>
           )}

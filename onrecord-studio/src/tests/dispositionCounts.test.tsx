@@ -100,7 +100,8 @@ describe('DispositionCounts', () => {
     expect(cells[6].querySelector('path')).toBeNull();
     expect(cells[0].querySelector('[data-absence="excluded"]')).toBeNull();
     expect(screen.getAllByText('not a disposition')).toHaveLength(2);
-    expect(cells[0].className).toContain('opacity-40');
+    expect(cells[0].querySelector('svg')?.getAttribute('data-dimmed')).toBe('true');
+    expect(cells[0].className).not.toContain('opacity');
     expect(screen.getByText('Small sample')).toBeTruthy();
     expect(screen.getByText(/Every department has fewer than 5 requests/)).toBeTruthy();
   });

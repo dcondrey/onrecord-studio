@@ -63,6 +63,23 @@ describe('discovery series', () => {
     expect(screen.getByRole('img', { name: /^Bravo: 2 periods/ })).toBeTruthy();
   });
 
+  it('says why a truncated series was not read instead of loading forever', async () => {
+    bridge.invoke.mockImplementation((_name: string, { sql }: { sql: string }) => {
+      if (sql.includes(SERIES_ORDER)) return Promise.resolve(result(CHANGE_COLUMNS, seriesRows('Alpha')));
+      if (sql.includes('record_share_percent')) return Promise.reject(new Error('groups failed'));
+      if (sql.includes('comparison_status')) return Promise.resolve(result(CHANGE_COLUMNS, seriesRows('Alpha').slice(1), true));
+      return Promise.resolve(result(['source_rows'], [[22]]));
+    });
+    render(<DataDiscovery schema={fixture.schema as AnalyticalSchema} onInspect={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Discovery groups'), { target: { value: 'group' } });
+    fireEvent.change(screen.getByLabelText('Discovery time field'), { target: { value: 'year' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Discover patterns' }));
+    await screen.findByText('Analysis complete.');
+    expect(await screen.findByText(/Series not read: the groups check returned no result/)).toBeTruthy();
+    expect(bridge.invoke.mock.calls.some(([, args]) => (args as { sql: string }).sql.includes(SERIES_ORDER))).toBe(false);
+    expect(screen.queryByText('Loading…')).toBeNull();
+  });
+
   it('breaks a series at periods no group has rows for instead of joining across them', () => {
     const rows = [
       ['A', 2022, 5, 0, 5, null, null, null, null, 'No baseline', null, null],
