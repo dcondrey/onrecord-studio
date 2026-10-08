@@ -2,6 +2,7 @@ use super::sqlite::DuckDbRepository;
 use crate::{
     analysis::review,
     error::AppError,
+    integrity::is_sha256_hex,
     types::{review::*, *},
 };
 use duckdb::params;
@@ -56,7 +57,7 @@ fn list_payloads<T: serde::de::DeserializeOwned>(
 fn current_evidence(conn: &duckdb::Connection, e: &ResearchEvidence) -> Result<bool, AppError> {
     if let (Some(portal), Some(document)) = (&e.portal_key, e.document_id) {
         let current:bool=conn.query_row("SELECT EXISTS(SELECT 1 FROM documents d JOIN portals p ON p.subdomain=d.portal_subdomain JOIN documents_fts f ON f.document_id=d.id AND f.portal_subdomain=d.portal_subdomain WHERE d.portal_subdomain=?1 AND d.id=?2 AND d.raw_file_sha256=?3 AND lower(trim(d.visibility))='public' AND d.extraction_status IN ('SEARCHABLE','SALVAGED') AND p.lifecycle_state <> 'REMOVED')",params![portal,document,e.source_sha256],|r|r.get(0)).map_err(err)?;
-        if !current || e.source_sha256.len() != 64 {
+        if !current || !is_sha256_hex(&e.source_sha256) {
             return Ok(false);
         }
         if e.sql.is_none() {

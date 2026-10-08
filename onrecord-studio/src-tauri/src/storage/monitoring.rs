@@ -1,7 +1,7 @@
 use crate::{
     analysis::monitoring::{changed_facts, service_comparisons, significant_facts},
     error::AppError,
-    integrity::sha256_hex,
+    integrity::{is_sha256_hex, sha256_hex},
     storage::sqlite::DuckDbRepository,
     types::monitoring::*,
 };
@@ -314,7 +314,7 @@ impl DuckDbRepository {
         source_sha256: String,
         links: Vec<String>,
     ) -> Result<(), AppError> {
-        if !public_url(&source_url) || source_sha256.len() != 64 {
+        if !public_url(&source_url) || !is_sha256_hex(&source_sha256) {
             return Ok(());
         }
         let mut links = links
