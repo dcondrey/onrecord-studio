@@ -660,7 +660,7 @@ fn findings_are_identical_with_and_without_a_profile() {
 
 #[test]
 fn nothing_that_produces_findings_reads_the_profile() {
-    fn scan(directory: &std::path::Path, hits: &mut Vec<String>) {
+    fn scan(directory: &std::path::Path, hits: &mut Vec<std::path::PathBuf>) {
         for entry in std::fs::read_dir(directory).unwrap() {
             let path = entry.unwrap().path();
             if path.is_dir() {
@@ -669,7 +669,7 @@ fn nothing_that_produces_findings_reads_the_profile() {
                 let source = std::fs::read_to_string(&path).unwrap();
                 let production = source.split("#[cfg(test)]").next().unwrap_or("");
                 if production.contains("crate::profile") {
-                    hits.push(path.display().to_string());
+                    hits.push(path);
                 }
             }
         }
@@ -679,6 +679,7 @@ fn nothing_that_produces_findings_reads_the_profile() {
     for directory in ["analysis", "storage"] {
         scan(&root.join(directory), &mut hits);
     }
-    hits.retain(|path| !path.contains("analysis/artifacts"));
+    let artifacts = root.join("analysis").join("artifacts");
+    hits.retain(|path| !path.starts_with(&artifacts));
     assert!(hits.is_empty(), "these read the profile: {hits:?}");
 }
