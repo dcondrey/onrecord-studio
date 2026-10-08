@@ -104,9 +104,9 @@ describe('StatutoryDeadlineAppeal mount', () => {
   });
 
   it('is absent without a statutory violation flag', async () => {
-    bridge.flags = ['SUSPICIOUSLY_FAST_CLOSURE'];
+    bridge.flags = ['STATUTORY_EXTENSION_DEFECTIVE'];
     mountLayout();
-    await screen.findByText('Generate administrative appeal draft');
+    await screen.findByRole('button', { name: 'Draft appeal' });
     expect(screen.queryByRole('button', { name: 'Draft statutory deadline appeal' })).toBeNull();
   });
 
@@ -114,8 +114,15 @@ describe('StatutoryDeadlineAppeal mount', () => {
     bridge.tauri = false;
     bridge.flags = ['STATUTORY_LATENCY_VIOLATION'];
     mountLayout();
-    await screen.findByText('Generate administrative appeal draft');
+    await screen.findByRole('button', { name: 'Draft appeal' });
     expect(screen.queryByRole('button', { name: 'Draft statutory deadline appeal' })).toBeNull();
+  });
+
+  it('offers no appeal for a statistical fast-closure flag alone', async () => {
+    bridge.flags = ['SUSPICIOUSLY_FAST_CLOSURE'];
+    mountLayout();
+    await screen.findByText('Unusually fast closure (pattern)');
+    expect(screen.queryAllByRole('button').filter((button) => /appeal/i.test(button.textContent ?? ''))).toHaveLength(0);
   });
 });
 
