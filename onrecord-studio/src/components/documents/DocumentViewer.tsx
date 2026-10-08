@@ -9,6 +9,7 @@ import { findPassageInText } from './annotationLogic';
 import { ANNOTATION_LIMITS } from '../../types';
 import UnredactorPanel from './UnredactorPanel';
 import ReconstructionPanel from './ReconstructionPanel';
+import { formatInstant } from '../objects/labels';
 import RedactionInferencePanel from './RedactionInferencePanel';
 
 // pdf.js loads only when a reader opens the page view.
@@ -808,25 +809,6 @@ function badgeForRecord(record: ProvenanceVerificationRecord): { label: string; 
   return badge ?? { ...UNRECOGNIZED_BADGE, detail: `${UNRECOGNIZED_BADGE.detail} Reported: ${String(record.provenanceConfidence)}.` };
 }
 
-// When a check ran is part of what the log attests, so the exact instant has to stay recoverable
-// while the visible text stays readable. The local-time rendering is what an investigator reads;
-// the raw ISO string -- offset and sub-second precision intact -- is kept verbatim on `dateTime`
-// and on the tooltip. A value that will not parse is shown as it was recorded rather than as
-// "Invalid Date", which would hide a malformed timestamp instead of showing it.
-function formatVerifiedAt(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    timeZoneName: 'short',
-  });
-}
-
 // The append-only log is the artifact an investigator cites: that this document was checked, when,
 // and what the check said at that time. It is read on demand rather than on mount because it is
 // evidence about the past, not the header's current state.
@@ -849,7 +831,7 @@ function VerificationHistoryPanel({ records, isLoading, error }: { records: Prov
           return (
             <li key={record.verificationId} className="rounded-lg border border-line bg-canvas/70 px-3 py-2">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <time dateTime={record.verifiedAt} title={record.verifiedAt} className="font-mono text-caption text-muted">{formatVerifiedAt(record.verifiedAt)}</time>
+                <time dateTime={record.verifiedAt} title={record.verifiedAt} className="font-mono text-caption text-muted">{formatInstant(record.verifiedAt)}</time>
                 <span title={badge.detail} className={`rounded-full border px-2 py-0.5 text-caption ${badge.className}`}>{badge.label}</span>
                 {record.signatureVerification === 'INVALID' && <span className="rounded-full border border-danger/30 bg-danger/10 px-2 py-0.5 text-caption font-semibold text-danger">Signature invalid</span>}
                 {record.signatureVerification === 'VALID' && <span className="rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-caption font-medium text-success">Signature valid</span>}
