@@ -3,8 +3,9 @@ import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
 import { openHelp } from '../help/helpEvents';
-import type { SeriesGapReport, StandingQueryFilters, StandingQueryOutcome, StandingQuerySummary } from '../../types/standingSearch';
+import type { SeriesGap, SeriesGapReport, StandingQueryFilters, StandingQueryOutcome, StandingQuerySummary } from '../../types/standingSearch';
 import { describeCountBasis, describeGap, describeRun, formatFacetCount } from '../../utils/standingSearch';
+import type { AgencyPerformanceProfile } from '../../types';
 import MethodNote from '../ui/MethodNote';
 import Panel, { PanelHeader } from '../ui/Panel';
 import Button from '../ui/Button';
@@ -17,7 +18,12 @@ import BarTable, { type BarTableRow } from '../charts/figures/BarTable';
 import ChartFrame from '../charts/frame/ChartFrame';
 import { Axis } from '../charts/frame/Axis';
 import { Bar } from '../charts/marks/Bar';
-import { AbsentSlot } from '../charts/marks/shared';
+import { AbsentSlot, LABEL_CLASS, MarkGroup, MUTED_LABEL_CLASS } from '../charts/marks/shared';
+import { TooltipContent } from '../charts/frame/Tooltip';
+import { useTooltip } from '../charts/hooks/useTooltip';
+import { useRovingFocus } from '../charts/hooks/useRovingFocus';
+import { measureText } from '../charts/core/layout';
+import { VIZ } from '../charts/core/claim';
 import { absent, measured } from '../charts/core/nulls';
 import { scaleBand, scaleLinear } from '../charts/core/scale';
 import { formatValue } from '../charts/core/format';
@@ -111,6 +117,25 @@ export default function StandingSearchPanel() {
     setWorkspaceView('evidence');
   };
 
+  // A facet value narrows the saved query's own filters in Evidence, when Evidence can filter by it.
+  const profiles = useAppStore((state) => state.agencyProfiles);
+  const facetFilter = (summary: StandingQuerySummary) => (dimension: string, value: string): (() => void) | null => {
+    const filters = summary.query.filters;
+    const apply = (portalKey: string | null, agencyId: number | null, status: string | null) => () => {
+      setActivePortal(portalKey);
+      setSearchFilters(filters.searchTerm, agencyId, status, filters.policyDeviation);
+      setWorkspaceView('evidence');
+    };
+    if (!value) return null;
+    if (dimension === 'status') return apply(filters.portalKey, filters.agencyId, value);
+    if (dimension === 'portal') return apply(value, filters.agencyId, filters.status);
+    if (dimension === 'agency') {
+      const agency = agencyNamed(profiles, value, filters.portalKey);
+      return agency ? apply(agency.portalSubdomain, agency.agencyId, filters.status) : null;
+    }
+    return null;
+  };
+
   return (
     <Panel aria-label="Standing searches">
       <PanelHeader
@@ -143,7 +168,7 @@ export default function StandingSearchPanel() {
                 </span>
               </div>
               {summary.lastRun ? (
-                <RunView run={summary.lastRun} />
+                <RunView run={summary.lastRun} filter={facetFilter(summary)} />
               ) : (
                 <p className="mt-1 text-caption text-muted">Never run.</p>
               )}
@@ -166,12 +191,7 @@ export default function StandingSearchPanel() {
             {gaps.seriesCount === 0 ? 'No labeled series with three or more numbers has been read from the corpus.' : `No short gaps in ${gaps.seriesCount} series.`}
           </p>
         ) : (
-          <ul className="mt-2 space-y-1 text-body text-fg-secondary">
-            {gaps.gaps.map((gap) => (
-              <li key={`${gap.label}:${gap.prefix}:${gap.fromNumber}`}>{describeGap(gap)}</li>
-            ))}
-            {gaps.truncated && <li className="text-muted">More gaps exist than are listed.</li>}
-          </ul>
+          <div className="mt-3"><SeriesGapLines report={gaps} /></div>
         )}
       </div>
       </div>
@@ -192,13 +212,25 @@ function matchHeadline(run: Run): string {
 }
 
 /** Status, department and source breakdowns: each value's bar is proportional within its facet. */
-function FacetBars({ run }: { run: Run }) {
+type FacetFilter = (dimension: string, value: string) => (() => void) | null;
+
+/** The one profile with this department name in the query's source, or null when none or several. */
+function agencyNamed(profiles: readonly AgencyPerformanceProfile[], name: string, portalKey: string | null) {
+  const found = profiles.filter((profile) => profile.agencyName === name && (portalKey === null || profile.portalSubdomain === portalKey));
+  return found.length === 1 ? found[0] : null;
+}
+
+function FacetBars({ run, filter }: { run: Run; filter: FacetFilter }) {
   const basis = run.result.countBasis;
   const estimated = basis.basis !== 'EXACT';
   const facets = run.result.facets.filter((facet) => facet.dimension !== 'year');
+  const actions = new Map<string, () => void>();
   const rows: BarTableRow[] = facets.flatMap((facet) => facet.values.map((value) => {
     const label = value.value || '(none)';
     const text = formatFacetCount(value.count, basis);
+    const action = filter(facet.dimension, value.value);
+    if (action) actions.set(`${facet.dimension}\u0000${value.value}`, action);
+    const filterNote = action ? 'Enter or click: open these matches in Evidence.' : 'Evidence cannot filter by this value.';
     return {
       key: `${facet.dimension}\u0000${value.value}`,
       name: label,
@@ -210,7 +242,7 @@ function FacetBars({ run }: { run: Run }) {
           value: measured(value.count),
           text,
           approximate: estimated,
-          tooltip: { rows: [{ key: 'count', value: text, label: 'matching requests' }], note: estimated ? describeCountBasis(basis) : undefined },
+          tooltip: { rows: [{ key: 'count', value: text, label: 'matching requests' }], note: estimated ? `${describeCountBasis(basis)}. ${filterNote}` : filterNote },
         },
       },
     };
@@ -224,8 +256,9 @@ function FacetBars({ run }: { run: Run }) {
       status={rows.length === 0 ? 'empty' : 'ready'}
       emptyText="This run recorded no breakdown."
       rowHeader="Value"
-      columns={[{ key: 'count', label: estimated ? 'Requests (estimated)' : 'Requests', scale: 'own-max', barWidth: 80 }]}
+      columns={[{ key: 'count', label: estimated ? 'Requests (estimated)' : 'Requests', short: estimated ? 'Requests ≈' : undefined, scale: 'own-max', barWidth: 80 }]}
       rows={rows}
+      onRowActivate={(key) => actions.get(key)?.()}
       twin={{
         caption: 'Facet counts',
         columns: [{ key: 'facet', label: 'Facet' }, { key: 'value', label: 'Value' }, { key: 'count', label: 'Requests', align: 'end' }],
@@ -239,34 +272,47 @@ function FacetBars({ run }: { run: Run }) {
   );
 }
 
-/** The 'Year filed' facet over its continuous year range: a year with no listed count is a slot. */
+/**
+ * The 'Year filed' facet over its continuous year range. With an exact, untruncated facet every
+ * year in the match set is listed, so an unlisted year is a measured zero; with a truncated or
+ * estimated facet it is a 'none listed' slot. Labels sit on the endpoints, the largest year and the
+ * hovered or focused column; every value is in the tooltip and the table.
+ */
 function YearColumns({ run }: { run: Run }) {
   const basis = run.result.countBasis;
   const estimated = basis.basis !== 'EXACT';
   const facet = run.result.facets.find((candidate) => candidate.dimension === 'year');
-  // A run that did not break matches down by year has no year figure to draw.
-  if (!facet) return null;
-  const counts = new Map(facet.values.flatMap((value) => (/^\d{4}$/.test(value.value) ? [[Number(value.value), value.count] as const] : [])));
-  const unplaced = facet.values.filter((value) => !/^\d{4}$/.test(value.value));
+  const tooltip = useTooltip();
+  const [hot, setHot] = useState<number | null>(null);
+  const counts = new Map((facet?.values ?? []).flatMap((value) => (/^\d{4}$/.test(value.value) ? [[Number(value.value), value.count] as const] : [])));
   const listed = [...counts.keys()];
   const [first, last] = listed.length ? [Math.min(...listed), Math.max(...listed)] : [0, -1];
-  const years = last - first + 1 <= MAX_YEAR_COLUMNS ? Array.from({ length: Math.max(0, last - first + 1) }, (_, i) => first + i) : listed.sort((a, b) => a - b);
-  const none = years.filter((year) => !counts.has(year));
-  const reason = facet.truncated ? 'No count listed for this year; the facet lists only its largest values' : 'No matching request lists this year';
+  const years = last - first + 1 <= MAX_YEAR_COLUMNS ? Array.from({ length: Math.max(0, last - first + 1) }, (_, i) => first + i) : [...listed].sort((a, b) => a - b);
+  const roving = useRovingFocus({ shape: { rows: years.length }, onActivate: () => {}, onEscape: tooltip.hide });
+  // A run that did not break matches down by year has no year figure to draw.
+  if (!facet) return null;
+  const complete = !estimated && !facet.truncated;
+  const unplaced = facet.values.filter((value) => !/^\d{4}$/.test(value.value));
+  const unlisted = years.filter((year) => !counts.has(year));
+  const reason = facet.truncated ? 'No count listed for this year; the facet lists only its largest values' : 'No count listed for this estimated breakdown';
+  const countOf = (year: number) => counts.get(year) ?? (complete ? 0 : undefined);
+  const textOf = (year: number) => { const count = countOf(year); return count === undefined ? 'none listed' : formatFacetCount(count, basis); };
+  const peak = years.reduce<number | null>((best, year) => (best === null || (countOf(year) ?? -1) > (countOf(best) ?? -1) ? year : best), null);
   return (
     <ChartFrame
       title="Year filed"
-      headline={years.length ? `Matches filed ${first}–${last}${none.length ? `; ${none.length} ${none.length === 1 ? 'year' : 'years'} with none listed` : ''}.` : null}
+      headline={years.length ? `Matches filed ${first}–${last}${unlisted.length ? `; ${unlisted.length} ${unlisted.length === 1 ? 'year' : 'years'} with ${complete ? 'no matches' : 'none listed'}` : ''}.` : null}
       sources={{ ...RUN_SOURCES, note: describeCountBasis(basis) }}
-      summary={`${years.length} years from ${first} to ${last}. ${none.length ? `None listed in ${none.join(', ')}.` : ''}${unplaced.length ? ` ${unplaced.length} values are not a year and are listed in the table.` : ''}`}
+      summary={`${years.length} years from ${first} to ${last}. ${unlisted.length ? `${complete ? 'No matches' : 'None listed'} in ${unlisted.join(', ')}.` : ''}${unplaced.length ? ` ${unplaced.length} values are not a year and are listed in the table.` : ''}`}
       status={years.length ? 'ready' : 'empty'}
       emptyText="This run recorded no year breakdown."
       minHeight={140}
+      interactive={{ roledescription: 'column chart' }}
       table={{
         caption: 'Matches by year filed',
         columns: [{ key: 'year', label: 'Year filed' }, { key: 'count', label: 'Requests', align: 'end' }],
         rows: [
-          ...years.map((year) => ({ year: String(year), count: counts.has(year) ? formatFacetCount(counts.get(year) ?? 0, basis) : absent('not-recorded', reason) })),
+          ...years.map((year) => ({ year: String(year), count: countOf(year) === undefined ? absent('not-recorded', reason) : textOf(year) })),
           ...unplaced.map((value) => ({ year: value.value || '(none)', count: formatFacetCount(value.count, basis) })),
         ],
       }}
@@ -274,21 +320,51 @@ function YearColumns({ run }: { run: Run }) {
       {({ width, height }) => {
         const band = scaleBand(years.map(String), [0, width]);
         const y = scaleLinear([0, Math.max(1, ...counts.values())], [height - 22, 14], { nice: false });
+        // Direct labels: the hovered or focused column first, then the peak and both ends, never touching.
+        const placed: [number, number][] = [];
+        const labelled = new Set<number>();
+        for (const year of [hot === null ? null : years[hot], peak, years[0], years[years.length - 1]]) {
+          if (year === null || year === undefined || labelled.has(year) || countOf(year) === undefined) continue;
+          const mid = band(String(year)) + band.bandwidth / 2;
+          const half = measureText(textOf(year)) / 2 + 3;
+          if (placed.some(([a, b]) => mid - half < b && mid + half > a)) continue;
+          placed.push([mid - half, mid + half]);
+          labelled.add(year);
+        }
         return (
           <g>
             <Axis band={band} orient="bottom" offset={height - 22} format={(key) => (years.length > 12 ? `’${key.slice(2)}` : key)} />
-            {years.map((year) => {
+            {years.map((year, index) => {
               const pos = band(String(year));
-              const count = counts.get(year);
-              return count === undefined
-                ? <AbsentSlot key={year} absence={absent('not-recorded', reason)} box={{ x: pos, y: 14, width: band.bandwidth, height: height - 36 }} text="none listed" />
-                : (
-                  <g key={year}>
-                    <Bar orient="vertical" band={{ pos, thickness: band.bandwidth }} value={measured(count)} scale={y} role={estimated ? 'comparison' : 'default'} motionKey={`year:${year}`} />
-                    <text x={pos + band.bandwidth / 2} y={y(count) - 4} textAnchor="middle" className="viz-num fill-fg-secondary text-[11px]">{formatFacetCount(count, basis)}</text>
-                  </g>
-                );
+              const count = countOf(year);
+              const box = { x: pos, y: 14, width: band.bandwidth, height: height - 36 };
+              const name = `${year}: ${count === undefined ? `none listed. ${reason}` : `${textOf(year)} matching ${count === 1 ? 'request' : 'requests'}`}. Evidence search has no year filter.`;
+              const showAt = (at: { clientX: number; clientY: number } | DOMRect) => tooltip.show(<TooltipContent title={`Filed ${year}`} rows={count === undefined ? [] : [{ key: 'count', value: textOf(year), label: 'matching requests' }]} note={count === undefined ? reason : estimated ? describeCountBasis(basis) : undefined} />, at);
+              return (
+                <MarkGroup
+                  key={year}
+                  box={box}
+                  interaction={{
+                    name,
+                    item: roving.getItemProps(index),
+                    onPointerMove: (event) => { setHot(index); showAt({ clientX: event.clientX, clientY: event.clientY }); },
+                    onPointerLeave: () => { setHot(null); tooltip.hide(); },
+                    onFocusMark: (rect) => { setHot(index); showAt(rect); },
+                    onBlurMark: () => { setHot(null); tooltip.hide(); },
+                  }}
+                >
+                  {count === undefined
+                    ? <AbsentSlot absence={absent('not-recorded', reason)} box={box} text="none listed" />
+                    : count === 0
+                      ? <line x1={pos} x2={pos + band.bandwidth} y1={y(0) - 0.75} y2={y(0) - 0.75} style={{ stroke: VIZ.mark, strokeWidth: 1.5 }} />
+                      : <Bar orient="vertical" band={{ pos, thickness: band.bandwidth }} value={measured(count)} scale={y} role={estimated ? 'comparison' : 'default'} motionKey={`year:${year}`} />}
+                  {labelled.has(year) && count !== undefined && (
+                    <text x={pos + band.bandwidth / 2} y={y(count) - 4} textAnchor="middle" className={LABEL_CLASS}>{textOf(year)}</text>
+                  )}
+                </MarkGroup>
+              );
             })}
+            {tooltip.node}
           </g>
         );
       }}
@@ -296,7 +372,104 @@ function YearColumns({ run }: { run: Run }) {
   );
 }
 
-function RunView({ run }: { run: StandingQuerySummary['lastRun'] & object }) {
+const GAP_ROW = 46;
+
+/**
+ * One row per numbered series: a neutral number line from the first gap's documented neighbour to
+ * the last one's. Solid ticks are the documented members either side of each gap; a hollow bracket
+ * spans the missing numbers. The line between gaps makes no claim that those numbers are present.
+ */
+function SeriesGapLines({ report }: { report: SeriesGapReport }) {
+  const tooltip = useTooltip();
+  const series = [...new Map(report.gaps.map((gap) => [`${gap.label}\u0000${gap.prefix}`, report.gaps.filter((other) => other.label === gap.label && other.prefix === gap.prefix)])).entries()];
+  const flat = series.flatMap(([, gaps]) => gaps);
+  const roving = useRovingFocus({ shape: { rows: flat.length }, onActivate: () => {}, onEscape: tooltip.hide });
+  const missing = flat.reduce((sum, gap) => sum + gap.toNumber - gap.fromNumber + 1, 0);
+  const pad = (gap: SeriesGap, n: number) => `${gap.prefix}${String(n).padStart(gap.width, '0')}`;
+  const range = (gap: SeriesGap) => (gap.fromNumber === gap.toNumber ? pad(gap, gap.fromNumber) : `${pad(gap, gap.fromNumber)} to ${pad(gap, gap.toNumber)}`);
+  return (
+    <ChartFrame
+      title="Gaps in numbered series"
+      headline={`${missing.toLocaleString('en-US')} ${missing === 1 ? 'number' : 'numbers'} missing across ${flat.length} ${flat.length === 1 ? 'gap' : 'gaps'} in ${report.seriesCount} series${report.truncated ? ' (more gaps exist than are listed)' : ''}.`}
+      sources={{ tables: ['corpus_entities', 'corpus_entity_mentions'], note: 'Gaps in numbering are a lead to request, not evidence of withholding' }}
+      summary={flat.map(describeGap).join(' ')}
+      status="ready"
+      minHeight={GAP_ROW}
+      plotHeight={() => series.length * GAP_ROW}
+      interactive={{ roledescription: 'number lines' }}
+      legend={[
+        { key: 'member', label: 'documented number (either side of a gap)', swatch: 'rect', tone: 'ink' },
+        { key: 'gap', label: 'missing numbers', swatch: 'hollow' },
+      ]}
+      table={{
+        caption: report.truncated ? 'Series gaps (more exist than are listed)' : 'Series gaps',
+        columns: [{ key: 'series', label: 'Series' }, { key: 'missing', label: 'Missing' }, { key: 'count', label: 'Numbers', align: 'end' }, { key: 'before', label: 'Before (documents)' }, { key: 'after', label: 'After (documents)' }],
+        rows: flat.map((gap) => ({ series: `${gap.label} ${gap.prefix}`.trim(), missing: range(gap), count: gap.toNumber - gap.fromNumber + 1, before: `${gap.before.displayValue} (${gap.before.documentCount})`, after: `${gap.after.displayValue} (${gap.after.documentCount})` })),
+      }}
+    >
+      {({ width }) => {
+        let index = 0;
+        return (
+          <g>
+            {series.map(([key, gaps], row) => {
+              const lo = Math.min(...gaps.map((gap) => gap.fromNumber - 1));
+              const hi = Math.max(...gaps.map((gap) => gap.toNumber + 1));
+              const x = scaleLinear([lo - 0.5, hi + 0.5], [8, width - 8], { nice: false, zero: false });
+              const top = row * GAP_ROW;
+              const lineY = top + 30;
+              const labels: [number, number][] = [];
+              return (
+                <g key={key}>
+                  <text x={0} y={top + 12} className="fill-fg text-[12px] font-medium">{`${gaps[0].label} ${gaps[0].prefix}`.trim()}<tspan className={MUTED_LABEL_CLASS}>{` · series of ${gaps[0].seriesMemberCount}`}</tspan></text>
+                  <line x1={x(lo)} x2={x(hi)} y1={lineY + 0.5} y2={lineY + 0.5} style={{ stroke: VIZ.grid, strokeWidth: 1 }} aria-hidden="true" />
+                  <text x={x(lo)} y={lineY + 14} className={MUTED_LABEL_CLASS} aria-hidden="true">{gaps.find((gap) => gap.fromNumber - 1 === lo)?.before.displayValue}</text>
+                  <text x={x(hi)} y={lineY + 14} textAnchor="end" className={MUTED_LABEL_CLASS} aria-hidden="true">{gaps.find((gap) => gap.toNumber + 1 === hi)?.after.displayValue}</text>
+                  {gaps.map((gap) => {
+                    const i = index++;
+                    const x0 = x(gap.fromNumber - 0.5);
+                    const x1 = Math.max(x(gap.toNumber + 0.5), x0 + 6);
+                    const count = gap.toNumber - gap.fromNumber + 1;
+                    const text = `${count} missing`;
+                    const mid = (x0 + x1) / 2;
+                    const half = measureText(text) / 2 + 3;
+                    const showLabel = !labels.some(([a, b]) => mid - half < b && mid + half > a);
+                    if (showLabel) labels.push([mid - half, mid + half]);
+                    const show = (at: { clientX: number; clientY: number } | DOMRect) => tooltip.show(
+                      <TooltipContent title={`${gap.label} ${range(gap)}`} rows={[
+                        { key: 'before', value: gap.before.displayValue, label: `before (${gap.before.documentCount} documents)` },
+                        { key: 'after', value: gap.after.displayValue, label: `after (${gap.after.documentCount} documents)` },
+                      ]} note="A lead to request, not evidence of withholding." />, at);
+                    return (
+                      <MarkGroup
+                        key={`${gap.fromNumber}`}
+                        box={{ x: x0, y: lineY - 6, width: x1 - x0, height: 12 }}
+                        interaction={{
+                          name: `${gap.label} ${range(gap)} missing between ${gap.before.displayValue} and ${gap.after.displayValue}`,
+                          item: roving.getItemProps(i),
+                          onPointerMove: (event) => show({ clientX: event.clientX, clientY: event.clientY }),
+                          onPointerLeave: tooltip.hide,
+                          onFocusMark: show,
+                          onBlurMark: tooltip.hide,
+                        }}
+                      >
+                        {[x(gap.fromNumber - 1), x(gap.toNumber + 1)].map((at) => <line key={at} x1={at} x2={at} y1={lineY - 6} y2={lineY + 6} style={{ stroke: VIZ.ink, strokeWidth: 2 }} />)}
+                        <rect x={x0} y={lineY - 5} width={x1 - x0} height={10} rx={2} style={{ fill: VIZ.surface, stroke: VIZ.ink, strokeWidth: 1.25 }} />
+                        {showLabel && <text x={mid} y={lineY - 9} textAnchor="middle" className={LABEL_CLASS}>{text}</text>}
+                      </MarkGroup>
+                    );
+                  })}
+                </g>
+              );
+            })}
+            {tooltip.node}
+          </g>
+        );
+      }}
+    </ChartFrame>
+  );
+}
+
+function RunView({ run, filter }: { run: StandingQuerySummary['lastRun'] & object; filter: FacetFilter }) {
   const basis = run.result.countBasis;
   return (
     <div className="mt-2 space-y-2 text-fg-secondary">
@@ -306,7 +479,7 @@ function RunView({ run }: { run: StandingQuerySummary['lastRun'] & object }) {
       </p>
       <p className="text-caption text-muted">Breakdowns below are {describeCountBasis(basis)}.</p>
       <div className="grid gap-4 lg:grid-cols-2">
-        <FacetBars run={run} />
+        <FacetBars run={run} filter={filter} />
         <YearColumns run={run} />
       </div>
       {run.result.clusters.length > 0 && (
