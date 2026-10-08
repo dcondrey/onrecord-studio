@@ -1,26 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
-import { invokeCommand } from '../../ipc';
+import { formatNativeError, invokeCommand } from '../../ipc';
 import { useAppStore } from '../../store/useAppStore';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
-import { ShapeGlyph, type GlyphShape } from '../ui/shapeGlyph';
 import { FindingEvidence } from '../ui/EvidenceBasis';
-import type { Finding, FindingCitation, FindingSeverity } from '../../types';
+import type { Finding, FindingCitation } from '../../types';
+import SeverityGlyph from './SeverityGlyph';
+
+// The detectors may record an ingest's findings moments before the overlay opens, so "new" reaches
+// this far back from the moment it opened.
+const RECENT_WINDOW_MS = 15 * 60 * 1000;
 
 /**
- * The panel that opens automatically after every ingest. It shows the newest findings that
- * arrived while the user was doing nothing, ranked by severity, so a user who added a source
- * and walked away comes back to "here is what looks wrong in what you just added" instead of
- * a chime and a log line.
- *
- * "New" here means `discoveredAt` after the moment this component's overlay opened, not since
- * some persistent watermark: the intent is to surface *this ingest's* work, not the whole
- * backlog. The full backlog lives in FindingsInbox below.
+ * Opens after every ingest with the newest findings, ranked by severity. "New" means discovered
+ * within the window before this overlay opened, not since a persistent watermark: it surfaces this
+ * ingest's work, not the backlog, which lives in the findings inbox.
  */
-// The brief is opened by App.tsx immediately after refresh_findings, but the detectors may have
-// discovered the ingested rows moments before the overlay itself opened. Widen the window to the
-// last 15 minutes so a ChangeFeed-scale ingest doesn't render "no new findings" when the corpus
-// obviously grew.
-const RECENT_WINDOW_MS = 15 * 60 * 1000;
+const windowStart = (openedAt: number) => Math.max(0, openedAt - RECENT_WINDOW_MS);
 
 export default function PostIngestBrief() {
   const open = useAppStore((state) => state.postIngestBriefOpen);
@@ -53,7 +48,7 @@ export default function PostIngestBrief() {
     setError(null);
     // Filtered at the source: the backend ranks by severity before it limits, so without the
     // cutoff a new low-severity finding could sit behind forty older ones and never arrive.
-    const discoveredAfter = new Date(Math.max(0, openedAt - RECENT_WINDOW_MS)).toISOString();
+    const discoveredAfter = new Date(windowStart(openedAt)).toISOString();
     invokeCommand('list_findings', { filter: { discoveredAfter }, limit: 40 })
       .then((rows) => {
         if (!gate.isCurrent(request)) return;
@@ -61,7 +56,7 @@ export default function PostIngestBrief() {
       })
       .catch((reason) => {
         if (!gate.isCurrent(request)) return;
-        setError(String(reason));
+        setError(formatNativeError(reason));
       })
       .finally(() => {
         if (gate.isCurrent(request)) setIsLoading(false);
@@ -75,12 +70,11 @@ export default function PostIngestBrief() {
 
   if (!open) return null;
 
-  const cutoff = openedAt ?? 0;
-  const cutoffWithWindow = Math.max(0, cutoff - RECENT_WINDOW_MS);
+  const cutoff = windowStart(openedAt ?? 0);
   const notable = findings
     .filter((finding) => {
       const discovered = Date.parse(finding.discoveredAt);
-      return Number.isFinite(discovered) && discovered >= cutoffWithWindow;
+      return Number.isFinite(discovered) && discovered >= cutoff;
     })
     .slice(0, 10);
 
@@ -150,7 +144,7 @@ export default function PostIngestBrief() {
                   aria-label={`Open finding: ${finding.headline}`}
                   className="focus-ring group flex w-full items-start gap-3 rounded-lg text-left transition hover:bg-accent/5"
                 >
-                  <PostIngestSeverityGlyph severity={finding.severity} />
+                  <SeverityGlyph severity={finding.severity} className="h-6 w-6 rounded-lg bg-surface/70" />
                   <span className="min-w-0 flex-1">
                     <span className="block text-label font-semibold text-fg">
                       {finding.headline}
@@ -168,31 +162,4 @@ export default function PostIngestBrief() {
       </div>
     </div>
   );
-}
-
-function PostIngestSeverityGlyph({ severity }: { severity: FindingSeverity }) {
-  const [shape, tone] = severityGlyph(severity);
-  return (
-    <span
-      aria-hidden="true"
-      className={`grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-surface/70 ${tone}`}
-    >
-      <svg viewBox="-6 -6 12 12" className="h-3 w-3">
-        <ShapeGlyph shape={shape} cx={0} cy={0} radius={4.5} fill="currentColor" />
-      </svg>
-    </span>
-  );
-}
-
-function severityGlyph(severity: FindingSeverity): [GlyphShape, string] {
-  switch (severity) {
-    case 'CRITICAL':
-      return ['diamond', 'text-danger'];
-    case 'SERIOUS':
-      return ['triangle', 'text-warning'];
-    case 'NOTABLE':
-      return ['circle', 'text-accent'];
-    case 'INFO':
-      return ['ring', 'text-muted'];
-  }
 }
