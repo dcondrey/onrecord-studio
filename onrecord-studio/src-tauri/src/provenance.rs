@@ -647,43 +647,36 @@ mod tests {
         }
     }
 
+    /// Each level is earned only by what the check observed: a validated signature raises an
+    /// intact file, an invalid manifest never lowers it, and an unreadable file or a missing
+    /// digest is reported as such rather than as a weaker match.
     #[test]
-    fn validation_raises_confidence_only_above_local_integrity() {
-        assert_eq!(
-            classify_confidence(true, true, true, true, Some(ManifestValidation::Trusted)),
-            ProvenanceConfidence::TrustedChainOfCustody
-        );
-        assert_eq!(
-            classify_confidence(true, true, true, true, Some(ManifestValidation::Valid)),
-            ProvenanceConfidence::VerifiedSignature
-        );
-        // An invalid manifest produces a finding, but does not make an intact file less intact.
-        assert_eq!(
-            classify_confidence(true, true, true, true, Some(ManifestValidation::Invalid)),
-            ProvenanceConfidence::LocalDigestMatch
-        );
-        assert_eq!(
-            classify_confidence(true, true, true, false, None),
-            ProvenanceConfidence::LocalDigestMatch
-        );
-    }
-
-    #[test]
-    fn absent_evidence_and_absent_records_are_distinguished() {
-        assert_eq!(
-            classify_confidence(false, true, false, true, Some(ManifestValidation::Valid)),
-            ProvenanceConfidence::EvidenceFileUnavailable,
-            "an unreadable file cannot be validated no matter what was recorded for it"
-        );
-        // No digest recorded, but a manifest is on file: claims exist, nothing was confirmed.
-        assert_eq!(
-            classify_confidence(true, false, false, true, Some(ManifestValidation::Invalid)),
-            ProvenanceConfidence::RecordedClaimOnly
-        );
-        assert_eq!(
-            classify_confidence(true, false, false, false, None),
-            ProvenanceConfidence::NoRecordedDigest
-        );
+    fn each_confidence_level_is_earned_by_what_was_observed() {
+        use ManifestValidation::{Invalid, Trusted, Valid};
+        use ProvenanceConfidence::*;
+        // (file present, digest recorded, hash matches, manifest present, validation, expected)
+        for (file, recorded, matches, manifest, validation, expected) in [
+            (true, true, true, true, Some(Trusted), TrustedChainOfCustody),
+            (true, true, true, true, Some(Valid), VerifiedSignature),
+            (true, true, true, true, Some(Invalid), LocalDigestMatch),
+            (true, true, true, false, None, LocalDigestMatch),
+            (
+                false,
+                true,
+                false,
+                true,
+                Some(Valid),
+                EvidenceFileUnavailable,
+            ),
+            (true, false, false, true, Some(Invalid), RecordedClaimOnly),
+            (true, false, false, false, None, NoRecordedDigest),
+        ] {
+            assert_eq!(
+                classify_confidence(file, recorded, matches, manifest, validation),
+                expected,
+                "{file} {recorded} {matches} {manifest} {validation:?}"
+            );
+        }
     }
 
     #[test]
