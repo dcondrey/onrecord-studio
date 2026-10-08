@@ -3,6 +3,7 @@ import { isLegalClaimKind } from '../../types/findings';
 
 /** `SCREAMING_SNAKE` enum value as a sentence-case phrase. */
 export function enumLabel(value: string): string {
+  if (value === 'CO_OCCURRENCE') return 'Co-occurrence';
   const words = value.toLowerCase().split('_').join(' ');
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
@@ -37,9 +38,11 @@ export function confidenceLabel(confidence: FindingConfidence): string {
 
 export function formatShortDate(value: string): string {
   const date = new Date(value);
+  // A bare calendar date parses as UTC midnight; read it in UTC so it is not shown as the day before.
+  const dateOnly = value.length === 10 && !value.includes('T');
   return Number.isNaN(date.valueOf())
     ? value
-    : new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
+    : new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: dateOnly ? 'UTC' : undefined }).format(date);
 }
 
 /**

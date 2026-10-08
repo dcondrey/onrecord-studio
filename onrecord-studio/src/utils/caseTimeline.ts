@@ -78,7 +78,7 @@ export function caseItems(cases: CaseworkCase[]): CaseTimeline {
       const { citationIds, fixedLanes = [], ...rest } = item;
       if (rest.at === NO_DATE) return;
       const citations = cited(citationIds, record.evidence);
-      items.push({ ...rest, source: 'CASE', provenance: `${record.title}: ${basisOf(citations)}`, citations, lanes: laneIds(citationIds, ...fixedLanes) });
+      items.push({ ...rest, source: 'CASE', provenance: citations.length > 0 ? `${record.title}: ${basisOf(citations)}` : record.title, citations, lanes: laneIds(citationIds, ...fixedLanes) });
     };
 
     for (const request of record.requests) {

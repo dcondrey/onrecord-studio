@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildTimeline, type TimelineItem, type TimelineSource } from '../utils/timeline';
+import { buildTimeline, findingItems, type TimelineItem, type TimelineSource } from '../utils/timeline';
+import type { Finding } from '../types';
 
 const item = (id: string, source: TimelineSource, at: string, title = id): TimelineItem => ({
   id,
@@ -21,6 +22,17 @@ describe('buildTimeline', () => {
     item('c', 'WATCH', '2026-04-01T00:00:00Z'),
     item('bad', 'FINDING', 'not a date'),
   ];
+
+  it('states a counted statutory finding as a counted violation, never as a pattern signal', () => {
+    const base = { id: 'f', headline: 'h', explanation: 'e', sourceDetector: 'contract_ceiling', discoveredAt: '2026-10-07T13:00:00Z', lastSeenAt: '2026-10-07T13:00:00Z' };
+    const [counted, signal] = findingItems([
+      { ...base, kind: 'CONTRACT_CEILING_EXCEEDED' } as Finding,
+      { ...base, kind: 'EXTENSION_ABUSE' } as Finding,
+    ]);
+    expect(counted.provenance).toContain('Counted violation');
+    expect(counted.provenance).not.toContain('Pattern signal');
+    expect(signal.provenance).toContain('Pattern signal, not a legal claim');
+  });
 
   it('orders newest first, includes both bound days, and counts unreadable dates instead of placing them', () => {
     const view = buildTimeline(all, { sources: everything, from: '2026-03-02', to: '2026-03-31', text: '' });
