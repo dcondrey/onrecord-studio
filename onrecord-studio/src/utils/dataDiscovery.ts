@@ -35,6 +35,22 @@ export function discoveryDefaults(schema: AnalyticalSchema, snapshotId: string):
 }
 
 export function buildDiscoveryPlan(schema: AnalyticalSchema, selection: DiscoverySelection): DiscoveryPlan {
+  return planDiscovery(schema, selection, null);
+}
+
+/** Marks the series query's SQL; nothing else in a plan orders this way. */
+export const SERIES_ORDER = 'ORDER BY group_value NULLS LAST, discovery_period';
+
+/**
+ * Every period of the named groups, from the same scope as the 'changes' check: drawn when that
+ * check's top 100 rows (ordered by change) do not hold every group × period. The groups filter sits
+ * before LAG, which is partitioned by group, so the comparison statuses are unchanged by it.
+ */
+export function discoverySeriesSql(schema: AnalyticalSchema, selection: DiscoverySelection, groups: readonly unknown[]): string | null {
+  return planDiscovery(schema, selection, groups).queries.find((query) => query.id === 'changes')?.sql ?? null;
+}
+
+function planDiscovery(schema: AnalyticalSchema, selection: DiscoverySelection, seriesGroups: readonly unknown[] | null): DiscoveryPlan {
   const dataset = schema.datasets.find((item) => item.snapshotId === selection.snapshotId);
   if (!dataset) throw new Error('Choose an imported snapshot.');
   const columns = schema.columns.filter((item) => item.tableName === dataset.tableName);
@@ -105,13 +121,19 @@ export function buildDiscoveryPlan(schema: AnalyticalSchema, selection: Discover
 FROM analysis_groups ORDER BY ABS(observed_value) DESC NULLS LAST, group_value NULLS LAST`,
   });
   if (selection.period) {
+    const named = (seriesGroups ?? []).filter((group) => group !== null && group !== undefined).map((group) => literal(String(group)));
+    // IN never matches NULL, so a blank group is named separately.
+    const blank = (seriesGroups ?? []).some((group) => group === null || group === undefined);
+    const groupFilter = seriesGroups
+      ? ` AND (${[named.length ? `discovery_group IN (${named.join(', ')})` : '', blank ? 'discovery_group IS NULL' : ''].filter(Boolean).join(' OR ') || 'FALSE'})`
+      : '';
     const step = selection.periodMode === 'year_code' ? 'discovery_period - previous_period' : `DATE_DIFF('${selection.periodMode}', previous_period, discovery_period)`;
     queries.push({
       id: 'changes', title: 'Largest changes over time',
       method: 'Adjacent observed periods within the same group. Missing intervening periods and missing measurements suppress differences. A zero baseline suppresses percentage change. Partial period coverage and changing populations require review.',
       sql: `WITH analysis_scope AS (${base}), analysis_periods AS (
  SELECT discovery_group AS group_value, discovery_period, COUNT(*) AS source_rows, ${missing} AS missing_values, ${value} AS observed_value
- FROM analysis_scope WHERE discovery_period IS NOT NULL GROUP BY discovery_group, discovery_period
+ FROM analysis_scope WHERE discovery_period IS NOT NULL${groupFilter} GROUP BY discovery_group, discovery_period
 ), analysis_previous AS (
  SELECT *, LAG(discovery_period) OVER w AS previous_period, LAG(observed_value) OVER w AS previous_value,
  LAG(source_rows) OVER w AS previous_rows, LAG(missing_values) OVER w AS previous_missing_values
@@ -123,7 +145,7 @@ FROM analysis_groups ORDER BY ABS(observed_value) DESC NULLS LAST, group_value N
 )
 SELECT *, CASE WHEN comparison_status = 'Adjacent periods with reported values' THEN observed_value - previous_value END AS change,
  CASE WHEN comparison_status = 'Adjacent periods with reported values' THEN ROUND(100.0 * (observed_value - previous_value) / NULLIF(ABS(previous_value), 0), 2) END AS change_percent
-FROM analysis_changes ORDER BY ABS(change) DESC NULLS LAST, group_value NULLS LAST, discovery_period`,
+FROM analysis_changes ${seriesGroups ? SERIES_ORDER : 'ORDER BY ABS(change) DESC NULLS LAST, group_value NULLS LAST, discovery_period'}`,
     });
   }
   if (measure) queries.push({
@@ -175,4 +197,127 @@ export function discoveryFindings(report: DiscoveryReport): string[] {
   const outliers = report.results.find((item) => item.query.id === 'outliers')?.result;
   if (outliers?.rows.length) findings.push(`${String(outliers.rows[0][outliers.columns.indexOf('total_flagged_rows')])} source values fall outside their peer-group IQR fences. Review units and context before drawing conclusions.`);
   return findings;
+}
+
+export const SERIES_PANEL_LIMIT = 8;
+const MISSING_INTERVENING = 'Missing intervening periods';
+const ADJACENT = 'Adjacent periods with reported values';
+
+export interface SeriesCell {
+  observed: number | null;
+  sourceRows: number | null;
+  missingValues: number | null;
+  status: string | null;
+  change: number | null;
+  changePercent: number | null;
+}
+export interface DiscoverySeriesSlot { key: string; label: string; title?: string; gap: boolean }
+export interface DiscoverySeriesGroup { key: string; value: unknown; label: string; cells: (SeriesCell | null)[] }
+export interface DiscoverySeriesModel { slots: DiscoverySeriesSlot[]; groups: DiscoverySeriesGroup[]; otherGroups: number }
+
+/** A numeric cell as a number. SUM of a DECIMAL can arrive as a string; anything else is absent. */
+export const finiteCell = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+};
+export const groupLabel = (value: unknown) => (value === null || value === undefined ? '(blank in source)' : String(value));
+export const groupKey = (value: unknown) => (value === null || value === undefined ? '\u0000blank' : `v:${String(value)}`);
+const periodKey = (value: unknown) => String(value);
+
+function isoParts(value: unknown): [number, number, number] | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value));
+  return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : null;
+}
+
+/** Periods from `a` to `b` in the plan's unit (as the 'changes' check counts them), or null. */
+function periodStep(a: unknown, b: unknown, mode: DiscoverySelection['periodMode']): number | null {
+  if (mode === 'year_code') {
+    const [x, y] = [finiteCell(a), finiteCell(b)];
+    return x === null || y === null ? null : y - x;
+  }
+  const [x, y] = [isoParts(a), isoParts(b)];
+  if (!x || !y) return null;
+  if (mode === 'year') return y[0] - x[0];
+  if (mode === 'month') return (y[0] - x[0]) * 12 + y[1] - x[1];
+  return Math.round((Date.UTC(y[0], y[1] - 1, y[2]) - Date.UTC(x[0], x[1] - 1, x[2])) / 86_400_000);
+}
+
+/**
+ * One slot per period any plotted group observed, in period order. Where a group skips periods
+ * that no other group fills ('Missing intervening periods' with nothing between), a gap slot is
+ * inserted, so the line breaks there instead of joining the two periods. Groups follow
+ * `groupOrder` (the 'groups' check's order) and the first SERIES_PANEL_LIMIT are plotted.
+ */
+export function discoverySeriesModel(result: SqlQueryResult, groupOrder: readonly unknown[] | null, periodMode: DiscoverySelection['periodMode']): DiscoverySeriesModel {
+  const at = (name: string) => result.columns.indexOf(name);
+  const [g, p, prev, status] = [at('group_value'), at('discovery_period'), at('previous_period'), at('comparison_status')];
+  const groups = new Map<string, unknown>();
+  for (const row of result.rows) if (!groups.has(groupKey(row[g]))) groups.set(groupKey(row[g]), row[g]);
+  const named = new Set((groupOrder ?? []).map(groupKey));
+  const ordered = [
+    ...(groupOrder ?? []).filter((value) => groups.has(groupKey(value))),
+    ...[...groups.values()].filter((value) => !named.has(groupKey(value))),
+  ];
+  const plotted = ordered.slice(0, SERIES_PANEL_LIMIT);
+  const plottedKeys = new Set(plotted.map(groupKey));
+  const rows = result.rows.filter((row) => plottedKeys.has(groupKey(row[g])));
+
+  const numeric = rows.every((row) => finiteCell(row[p]) !== null);
+  const compare = (a: unknown, b: unknown) => (numeric ? Number(a) - Number(b) : String(a).localeCompare(String(b)));
+  const periods = [...new Map(rows.map((row) => [periodKey(row[p]), row[p]])).values()].sort(compare);
+  const gapsAfter = new Map<string, { from: unknown; to: unknown }>();
+  periods.forEach((period, i) => {
+    const next = periods[i + 1];
+    const step = next === undefined ? null : periodStep(period, next, periodMode);
+    if (step !== null && step > 1) gapsAfter.set(periodKey(period), { from: period, to: next });
+  });
+  // Periods the step cannot be read from fall back to the query's own verdict.
+  for (const row of rows) {
+    if (row[status] !== MISSING_INTERVENING || row[prev] === null || row[prev] === undefined) continue;
+    if (periodStep(row[prev], row[p], periodMode) !== null) continue;
+    const between = periods.some((period) => compare(period, row[prev]) > 0 && compare(period, row[p]) < 0);
+    if (!between) gapsAfter.set(periodKey(row[prev]), { from: row[prev], to: row[p] });
+  }
+  const slots: DiscoverySeriesSlot[] = [];
+  for (const period of periods) {
+    slots.push({ key: periodKey(period), label: periodKey(period), gap: false });
+    const gap = gapsAfter.get(periodKey(period));
+    if (gap) slots.push({ key: `gap:${periodKey(gap.from)}|${periodKey(gap.to)}`, label: '', title: `no rows between ${periodKey(gap.from)} and ${periodKey(gap.to)}`, gap: true });
+  }
+  const slotIndex = new Map(slots.map((slot, index) => [slot.key, index]));
+  const cell = (row: unknown[]): SeriesCell => ({
+    observed: finiteCell(row[at('observed_value')]),
+    sourceRows: finiteCell(row[at('source_rows')]),
+    missingValues: finiteCell(row[at('missing_values')]),
+    status: row[status] === null || row[status] === undefined ? null : String(row[status]),
+    change: finiteCell(row[at('change')]),
+    changePercent: finiteCell(row[at('change_percent')]),
+  });
+  return {
+    slots,
+    groups: plotted.map((value) => {
+      const cells: (SeriesCell | null)[] = slots.map(() => null);
+      for (const row of rows) {
+        const index = slotIndex.get(periodKey(row[p]));
+        if (groupKey(row[g]) === groupKey(value) && index !== undefined) cells[index] = cell(row);
+      }
+      return { key: groupKey(value), value, label: groupLabel(value), cells };
+    }),
+    otherGroups: ordered.length - plotted.length,
+  };
+}
+
+/** The largest adjacent change across every group: the 'changes' rows are ordered by |change|. */
+export function largestDiscoveryChange(changes: SqlQueryResult): { group: unknown; from: unknown; to: unknown; change: number; changePercent: number | null } | null {
+  const at = (name: string) => changes.columns.indexOf(name);
+  const row = changes.rows.find((candidate) => candidate[at('comparison_status')] === ADJACENT && finiteCell(candidate[at('change')]) !== null);
+  if (!row) return null;
+  return { group: row[at('group_value')], from: row[at('previous_period')], to: row[at('discovery_period')], change: finiteCell(row[at('change')]) ?? 0, changePercent: finiteCell(row[at('change_percent')]) };
+}
+
+/** Groups with any period whose predecessor is not adjacent: their changes are withheld there. */
+export function groupsWithMissingPeriods(changes: SqlQueryResult): number {
+  const at = (name: string) => changes.columns.indexOf(name);
+  return new Set(changes.rows.filter((row) => row[at('comparison_status')] === MISSING_INTERVENING).map((row) => groupKey(row[at('group_value')]))).size;
 }

@@ -98,6 +98,8 @@ export interface BarTableProps {
   onSort?(key: string): void;
   /** Expand in place: one row (`row`) or one cell's records (`cell`) at a time. */
   drill?: { mode: 'row' | 'cell'; render(rowKey: string, columnKey: string | null): ReactNode };
+  /** Without `drill`: a click or Enter on a row's cell (opening its records). */
+  onRowActivate?(rowKey: string): void;
   /** The 'View as table' body: a copyable twin, or the exact-values table this figure replaced. */
   twin: TwinTable | { node: ReactNode };
   twinLabel?: string;
@@ -142,16 +144,27 @@ function HatchedSpan({ x0, x1 }: { x0: number; x1: number }) {
   return <rect data-absence="excluded" x={x0 + 0.5} y={(SVG_HEIGHT - BAR_HEIGHT) / 2 + 0.5} width={x1 - x0 - 1} height={BAR_HEIGHT - 1} rx={2} style={{ fill: hatch, stroke: VIZ.baseline, strokeWidth: 1 }} />;
 }
 
-function CellBar({ column, cell, max, motionKey }: { column: BarTableColumn; cell: BarTableCell; max: number; motionKey: string }) {
+function columnMin(column: BarTableColumn, rows: readonly BarTableRow[]): number {
+  if (column.scale === 'own-0-100') return 0;
+  let min = 0;
+  for (const row of rows) {
+    const cell = row.cells[column.key];
+    if (cell && isValue(cell.value)) min = Math.min(min, cell.value.value);
+  }
+  return min;
+}
+
+function CellBar({ column, cell, min, max, motionKey }: { column: BarTableColumn; cell: BarTableCell; min: number; max: number; motionKey: string }) {
   const width = column.barWidth ?? 48;
-  const x = scaleLinear([0, max > 0 ? max : 1], [0, width], { nice: false });
+  // A negative value (a sum can be) draws left of the zero line, inside the same track.
+  const x = scaleLinear([min, max > min ? max : min + 1], [0, width], { nice: false });
   const band = { pos: (SVG_HEIGHT - BAR_HEIGHT) / 2, thickness: BAR_HEIGHT };
   const value = cell.value;
   let mark: ReactNode;
   if (!isValue(value)) {
     mark = <AbsentSlot absence={value} box={{ x: 0, y: band.pos, width, height: BAR_HEIGHT }} text="" />;
   } else if (value.value === 0) {
-    mark = <line x1={0.75} x2={0.75} y1={band.pos - 1} y2={band.pos + BAR_HEIGHT + 1} style={{ stroke: VIZ.mark, strokeWidth: 1.5 }} />;
+    mark = <line x1={x(0) + 0.75} x2={x(0) + 0.75} y1={band.pos - 1} y2={band.pos + BAR_HEIGHT + 1} style={{ stroke: VIZ.mark, strokeWidth: 1.5 }} />;
   } else if (column.hatched) {
     mark = <HatchedSpan x0={0} x1={x(value.value)} />;
   } else {
@@ -194,13 +207,18 @@ export default function BarTable(props: BarTableProps) {
   const [view, setView] = useState<'chart' | 'table'>('chart');
   const showsData = status === 'ready' || status === 'stale';
   const maxes = useMemo(() => columns.map((column) => columnMax(column, rows, props.sharedMax)), [columns, rows, props.sharedMax]);
+  const mins = useMemo(() => columns.map((column) => columnMin(column, rows)), [columns, rows]);
   const legend = [...(props.legend ?? []), ...absenceLegend(absenceStatesOf(rows, columns))];
 
   const keyOf = (rowKey: string, columnKey: string | null) => (drill?.mode === 'cell' && columnKey ? `${rowKey}\u0000${columnKey}` : rowKey);
   const activate = (i: number, j: number | undefined) => {
     const row = rows[i];
     const column = j === undefined ? null : columns[j];
-    if (!row || !drill) return;
+    if (!row) return;
+    if (!drill) {
+      props.onRowActivate?.(row.key);
+      return;
+    }
     if (drill.mode === 'cell') {
       if (!column || !row.cells[column.key]?.active) return;
       drillDown.toggle(keyOf(row.key, column.key));
@@ -311,14 +329,14 @@ export default function BarTable(props: BarTableProps) {
                           className={cn(
                             'px-2 py-2 align-middle outline-none focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
                             cell?.active && drill?.mode === 'cell' && 'cursor-pointer',
-                            drill?.mode === 'row' && 'cursor-pointer',
+                            (drill?.mode === 'row' || (!drill && props.onRowActivate)) && 'cursor-pointer',
                             cellOpen && 'bg-raised/60',
                             row.dimmed && 'opacity-40',
                           )}
                         >
                           {cell ? (
                             <span className={cn('flex', props.layout === 'stacked' ? 'flex-col-reverse items-start gap-1' : 'items-center gap-1.5')}>
-                              <CellBar column={column} cell={cell} max={maxes[j]} motionKey={`${row.key}:${column.key}`} />
+                              <CellBar column={column} cell={cell} min={mins[j]} max={maxes[j]} motionKey={`${row.key}:${column.key}`} />
                               <span className={cn('viz-num whitespace-nowrap text-caption', isValue(cell.value) ? 'text-fg-secondary' : 'text-muted', cellOpen && 'font-semibold text-fg')}>{cell.text}</span>
                             </span>
                           ) : (
