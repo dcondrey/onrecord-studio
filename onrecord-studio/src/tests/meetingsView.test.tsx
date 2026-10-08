@@ -39,7 +39,7 @@ describe('meetings view', () => {
     const second = deferred<MeetingCalendar>();
     bridge.invoke.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
     render(<MeetingsView />);
-    fireEvent.click(screen.getByRole('button', { name: 'Reading documents…' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Refreshing…' }));
     await act(async () => second.resolve(calendar([meeting('new', 'Planning Commission')])));
     await act(async () => first.resolve(calendar([meeting('old', 'Board of Supervisors')])));
     expect(screen.getByText('Planning Commission')).toBeTruthy();
@@ -81,9 +81,10 @@ describe('meetings view', () => {
     bridge.invoke.mockResolvedValue(calendar([posted, docket], { agendaFilesWithBothTimes: 1, under72HoursBeforeStart: 1, afterMeetingStart: 0 }));
     render(<MeetingsView />);
     const card = await screen.findByRole('article', { name: 'Privacy Advisory Board 2026-10-01' });
-    expect(card.textContent).toContain('Posted (per the file’s Last-Modified header): 2026-09-28 21:00 UTC · 71 h 59 min before the stated start');
+    expect(card.textContent).toContain('per the file’s Last-Modified header · 2 days 23 hours before the start');
+    expect(card.querySelector('time')?.getAttribute('dateTime')).toBe('2026-09-28T21:00:00Z');
     const docketCard = screen.getByRole('article', { name: 'Audit Committee 2026-10-08' });
-    expect(docketCard.textContent).toContain('Posted: not recorded (this host reports the time of the request as Last-Modified)');
+    expect(docketCard.textContent).toContain('Posting time not recorded: this host reports the time of the request as Last-Modified');
     expect(docketCard.textContent).not.toContain('UTC');
     expect(docketCard.textContent).toContain('2 fetches of this address returned different bytes');
     const counts = screen.getByLabelText('Posting time counts').textContent ?? '';

@@ -15,6 +15,12 @@ import type {
   SuggestionBasis,
   SuggestionReasonKind,
 } from '../../types';
+import PageHeader from '../ui/PageHeader';
+import EmptyState from '../ui/EmptyState';
+import InlineError from '../ui/InlineError';
+import Button from '../ui/Button';
+import { Field, Textarea } from '../ui/Field';
+import { openSourceConnector } from './sourceEvents';
 
 const SECTIONS: Array<{ timing: MeetingTiming; title: string }> = [
   { timing: 'UPCOMING', title: 'Upcoming' },
@@ -51,24 +57,51 @@ const CHANGE_TEXT: Record<AgendaItemChangeKind, string> = {
   TEXT_CHANGED: 'Text changed below the title',
 };
 
-/** Whole hours and minutes between the header time and the stated start; never rounded across the hour. */
+const plural = (count: number, unit: string) => `${count} ${unit}${count === 1 ? '' : 's'}`;
+
+/** The span between the header time and the stated start, in whole units; never rounded up. */
 function describeLeadTime(minutes: number): string {
   const size = Math.abs(minutes);
-  const span = `${Math.floor(size / 60)} h ${size % 60} min`;
-  return minutes < 0 ? `${span} after the stated start` : `${span} before the stated start`;
+  const days = Math.floor(size / 1440);
+  const hours = Math.floor((size % 1440) / 60);
+  const rest = size % 60;
+  const span = days > 0
+    ? [plural(days, 'day'), hours > 0 ? plural(hours, 'hour') : null].filter(Boolean).join(' ')
+    : [hours > 0 ? plural(hours, 'hour') : null, rest > 0 || hours === 0 ? plural(rest, 'minute') : null].filter(Boolean).join(' ');
+  return minutes < 0 ? `${span} after the start` : `${span} before the start`;
+}
+
+// A meeting date is a calendar date as the agenda states it, so it is formatted without a zone shift.
+const MEETING_DATE = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+const POSTED_AT = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+function formatMeetingDate(date: string): string {
+  const parsed = new Date(`${date}T00:00:00Z`);
+  return Number.isNaN(parsed.valueOf()) ? date : MEETING_DATE.format(parsed);
+}
+
+/** "14:00" as stated on the agenda, read as a wall-clock time. */
+function formatStatedTime(time: string): string {
+  const match = /^(\d{1,2}):(\d{2})/.exec(time);
+  if (!match) return time;
+  const hour = Number(match[1]);
+  return `${hour % 12 === 0 ? 12 : hour % 12}:${match[2]} ${hour < 12 ? 'AM' : 'PM'}`;
 }
 
 function Posting({ document }: { document: MeetingDocument }) {
   const { posting } = document;
+  const postedAt = posting.state === 'RECORDED' ? new Date(posting.lastModified) : null;
   return (
-    <div className="text-label text-muted">
+    <div className="mt-0.5 text-caption text-muted">
       {posting.state === 'RECORDED' ? (
-        <>
-          Posted (per the file’s Last-Modified header): {posting.lastModified.slice(0, 10)} {posting.lastModified.slice(11, 16)} UTC
+        <span title={`Last-Modified header: ${posting.lastModified.slice(0, 16).replace('T', ' ')} UTC`}>
+          Posted <time dateTime={posting.lastModified} className="tabular-nums">{postedAt && !Number.isNaN(postedAt.valueOf()) ? POSTED_AT.format(postedAt) : posting.lastModified}</time>, per the file’s Last-Modified header
           {document.minutesBeforeMeeting !== null && ` · ${describeLeadTime(document.minutesBeforeMeeting)}`}
-        </>
+        </span>
+      ) : posting.reason === 'NO_FETCH_RECORD' ? (
+        <>Posting time not recorded: this file was never fetched</>
       ) : (
-        <>Posted: not recorded ({ABSENCE_TEXT[posting.reason]})</>
+        <>Posting time not recorded: {ABSENCE_TEXT[posting.reason]}</>
       )}
       {document.differingFetches > 0 && (
         <div>
@@ -82,7 +115,7 @@ function Posting({ document }: { document: MeetingDocument }) {
 
 function Revision({ revision }: { revision: AgendaRevision }) {
   return (
-    <li className="rounded border border-line p-2 text-label text-fg-secondary">
+    <li className="py-2 text-body text-fg-secondary">
       <div>
         {revision.earlierLabel} → {revision.laterLabel}{' '}
         <span className="text-muted">
@@ -95,7 +128,7 @@ function Revision({ revision }: { revision: AgendaRevision }) {
         <ul className="mt-1 flex flex-col gap-1">
           {revision.changes.map((change) => (
             <li key={`${change.kind}:${change.item}`}>
-              <span className="font-semibold text-fg">{CHANGE_TEXT[change.kind]}: {change.item}</span>
+              <span className="font-medium text-fg">{CHANGE_TEXT[change.kind]}: {change.item}</span>
               {change.kind === 'REWORDED' ? (
                 <div>
                   <div>Earlier: “{change.before}”</div>
@@ -123,7 +156,7 @@ function Locator({ citation }: { citation: FindingCitation }) {
       ? `characters ${citation.characterStart}–${citation.characterEnd}`
       : 'character range not recorded';
   return (
-    <span className="text-label text-muted">
+    <span className="text-caption text-muted">
       {citation.label ?? `document ${citation.documentId}`} · {range}
     </span>
   );
@@ -131,7 +164,7 @@ function Locator({ citation }: { citation: FindingCitation }) {
 
 function Quote({ citation }: { citation: FindingCitation }) {
   return (
-    <blockquote className="mt-1 border-l-2 border-line-strong pl-2 text-label leading-relaxed text-fg-secondary">
+    <blockquote className="mt-1 border-l-2 border-line-strong pl-3 text-body text-fg-secondary">
       “{citation.quote ?? 'quote not recorded'}”
       <div><Locator citation={citation} /></div>
     </blockquote>
@@ -149,31 +182,26 @@ function SuggestionDetail({ suggestion, draft, onDraft }: { suggestion: MeetingS
     }
   };
   return (
-    <div className="mt-3 flex flex-col gap-3 rounded-lg border border-line p-3" aria-label={`Suggestion ${suggestion.agendaItem}`}>
+    <div className="mt-3 flex flex-col gap-3 rounded-lg bg-raised/60 p-3" aria-label={`Suggestion ${suggestion.agendaItem}`}>
       <ul className="flex flex-col gap-2">
         {suggestion.reasons.map((reason, index) => (
-          <li key={`${reason.kind}:${index}`} className="text-label text-fg-secondary">
-            <div className="flex flex-wrap gap-2 text-label font-semibold">
-              <span className="text-accent">{REASON_TEXT[reason.kind]}</span>
-              <span className="text-warning">Basis: {BASIS_TEXT[reason.basis]}</span>
+          <li key={`${reason.kind}:${index}`} className="text-body text-fg-secondary">
+            <div className="flex flex-wrap gap-2 text-caption font-medium">
+              <span className="text-fg">{REASON_TEXT[reason.kind]}</span>
+              <span className="text-muted">Basis: {BASIS_TEXT[reason.basis]}</span>
             </div>
             <p className="mt-1">{reason.reason}</p>
             <Quote citation={reason.citation} />
           </li>
         ))}
       </ul>
-      <label className="flex flex-col gap-1 text-label text-fg-secondary">
-        Public comment draft (edit before using; nothing is sent)
-        <textarea
-          className="min-h-[220px] rounded border border-control bg-transparent p-2 font-mono text-label text-fg"
-          value={draft}
-          onChange={(event) => onDraft(event.target.value)}
-        />
-      </label>
+      <Field label="Public comment draft (edit before using; nothing is sent)">
+        <Textarea className="min-h-[220px]" value={draft} onChange={(event) => onDraft(event.target.value)} />
+      </Field>
       <div className="flex items-center gap-2">
-        <button type="button" className="analysis-button" onClick={() => void copyDraft()}>Copy draft</button>
-        {copy === 'copied' && <span role="status" className="text-label text-success">Copied</span>}
-        {copy === 'blocked' && <span role="status" className="text-label text-warning">Copying was blocked by the system. Select the text above to copy it.</span>}
+        <Button size="sm" onClick={() => void copyDraft()}>Copy draft</Button>
+        {copy === 'copied' && <span role="status" className="text-caption text-success">Copied</span>}
+        {copy === 'blocked' && <span role="status" className="text-caption text-warning">Copying was blocked by the system. Select the text above to copy it.</span>}
       </div>
     </div>
   );
@@ -187,47 +215,49 @@ function MeetingCard({ meeting, selected, onSelect, drafts, onDraft }: {
   onDraft: (id: string, text: string) => void;
 }) {
   return (
-    <article className="rounded-xl border border-line-strong p-4" aria-label={`${meeting.body} ${meeting.date ?? 'date not recorded'}`}>
-      <div className="text-label leading-4 text-accent">
-        {meeting.date ?? 'Date not recorded'}
-        {meeting.date && (meeting.startTime ? ` · ${meeting.startTime} as the agenda states` : ' · start time not recorded')}
+    <article className="app-panel divide-y divide-line" aria-label={`${meeting.body} ${meeting.date ?? 'date not recorded'}`}>
+      <div className="p-4">
+        <p className="text-caption tabular-nums text-fg-secondary" title={meeting.startTime ? `${meeting.startTime} as stated on the agenda` : undefined}>
+          {meeting.date ? formatMeetingDate(meeting.date) : 'Date not recorded'}
+          {meeting.date && (meeting.startTime ? ` · ${formatStatedTime(meeting.startTime)}` : ' · start time not recorded')}
+        </p>
+        <h4 className="mt-1 text-heading text-fg">{meeting.body}</h4>
+        <p className="text-caption text-muted">{meeting.jurisdiction}</p>
+        {meeting.dateNote && <p className="mt-1 text-caption text-warning">{meeting.dateNote}</p>}
       </div>
-      <h4 className="mt-1 text-sm font-semibold text-fg">{meeting.body}</h4>
-      <div className="text-label text-muted">{meeting.jurisdiction}</div>
-      {meeting.dateNote && <p className="mt-1 text-label text-warning">{meeting.dateNote}</p>}
-      <ul className="mt-2 flex flex-col gap-2 text-label">
+      <ul className="flex flex-col gap-2 p-4 text-body">
         {meeting.documents.map((document) => (
-          <li key={`${document.portalKey}:${document.documentId}`} className="rounded border border-line px-2 py-0.5 text-fg-secondary">
+          <li key={`${document.portalKey}:${document.documentId}`} className="text-fg-secondary">
             {ROLE_TEXT[document.role]}:{' '}
-            {document.sourceUrl ? <a className="underline" href={document.sourceUrl} target="_blank" rel="noreferrer">{document.label}</a> : document.label}
+            {document.sourceUrl ? <a className="focus-ring rounded text-accent underline-offset-2 hover:underline" href={document.sourceUrl} target="_blank" rel="noreferrer">{document.label}<span className="sr-only"> (opens in browser)</span></a> : document.label}
             <Posting document={document} />
           </li>
         ))}
       </ul>
       {meeting.revisions.length > 0 && (
-        <div className="mt-3" aria-label="Agenda copies compared">
-          <div className="app-eyebrow">Agenda copies compared</div>
-          <ul className="mt-1 flex flex-col gap-2">
+        <div className="p-4" aria-label="Agenda copies compared">
+          <h5 className="text-body font-medium text-fg">Agenda copies compared</h5>
+          <ul className="mt-1 divide-y divide-line">
             {meeting.revisions.map((revision) => (
               <Revision key={`${revision.earlierDocumentId}:${revision.laterDocumentId}`} revision={revision} />
             ))}
           </ul>
         </div>
       )}
-      <div className="mt-2 text-label text-fg-secondary">
+      <div className="p-4 text-body text-fg-secondary">
         Comment deadline:{' '}
         {meeting.commentDeadlines.length === 0 ? <span className="text-muted">not recorded</span> : <Quote citation={meeting.commentDeadlines[0]} />}
       </div>
       {meeting.suggestions.length > 0 && (
-        <div className="mt-3">
-          <div className="app-eyebrow">Items to watch</div>
+        <div className="p-4">
+          <h5 className="text-body font-medium text-fg">Items to watch</h5>
           <ul className="mt-1 flex flex-col gap-1">
             {meeting.suggestions.map((suggestion) => (
               <li key={suggestion.id}>
                 <button
                   type="button"
                   aria-expanded={selected === suggestion.id}
-                  className="text-left text-label text-fg underline-offset-2 hover:underline"
+                  className="focus-ring rounded text-left text-body text-accent underline-offset-2 hover:underline"
                   onClick={() => onSelect(selected === suggestion.id ? null : suggestion.id)}
                 >
                   {suggestion.agendaItem}: {suggestion.title}
@@ -279,62 +309,75 @@ export default function MeetingsView() {
   }, [load, gate]);
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col overflow-y-auto p-5 lg:p-6">
-      <div className="app-eyebrow text-highlight">Meetings</div>
-      <h2 className="mt-1.5 text-[26px] font-semibold tracking-[-0.035em] text-fg">Public meetings in your records</h2>
-      <p className="mt-2 max-w-3xl text-label leading-relaxed text-muted">
-        Meetings, bodies and dates come only from agendas, minutes and videos already collected. Suggestions quote the agenda and
-        name what they rest on. They are leads to read, not conclusions about an item. Today counts as upcoming.
-      </p>
-      <p className="mt-2 max-w-3xl text-label leading-relaxed text-muted">
-        A posting time is the Last-Modified header the server sent with the file. It is the server’s statement about the file, not proof of
-        when the public could first read it, and no notice requirement is evaluated here.
-      </p>
-      {calendar && calendar.postingCounts.agendaFilesWithBothTimes > 0 && (
-        <p className="mt-2 max-w-3xl text-label leading-relaxed text-fg-secondary" aria-label="Posting time counts">
-          {calendar.postingCounts.under72HoursBeforeStart} of {calendar.postingCounts.agendaFilesWithBothTimes} agenda files with a recorded posting
-          time and a stated start time were posted less than 72 hours before the meeting, per the file’s Last-Modified header.
-          {calendar.postingCounts.afterMeetingStart > 0 && ` ${calendar.postingCounts.afterMeetingStart} carry a header later than the stated start.`}
-        </p>
-      )}
-      <div className="mt-3">
-        <button type="button" className="analysis-button" onClick={load}>
-          {loading ? 'Reading documents…' : 'Refresh'}
-        </button>
+    <main className="min-h-0 flex-1 overflow-y-auto">
+      <div className="mx-auto w-full max-w-content space-y-6 px-4 pb-10 pt-6 md:px-6">
+        <PageHeader
+          title="Public meetings in your records"
+          summary="Meetings, bodies and dates come only from agendas, minutes and videos already collected."
+          method={<>
+            Suggestions quote the agenda and name what they rest on. They are leads to read, not conclusions about an item. Today
+            counts as upcoming. A posting time is the Last-Modified header the server sent with the file: the server’s statement about
+            the file, not proof of when the public could first read it, and no notice requirement is evaluated here.
+          </>}
+          actions={<Button onClick={load}>{loading ? 'Refreshing…' : 'Refresh'}</Button>}
+        />
+        {calendar && calendar.postingCounts.agendaFilesWithBothTimes > 0 && (
+          <p className="max-w-prose text-body text-fg-secondary" aria-label="Posting time counts">
+            <span className="tabular-nums">{calendar.postingCounts.under72HoursBeforeStart} of {calendar.postingCounts.agendaFilesWithBothTimes}</span> agenda files with a recorded posting
+            time and a stated start time were posted less than 72 hours before the meeting, per the file’s Last-Modified header.
+            {calendar.postingCounts.afterMeetingStart > 0 && ` ${calendar.postingCounts.afterMeetingStart} carry a header later than the stated start.`}
+          </p>
+        )}
+        {error && <InlineError summary="Meetings couldn’t be read from your records." detail={error} onRetry={load} />}
+        {!calendar && !error && (
+          <div role="status" aria-busy="true" className="grid items-start gap-4 lg:grid-cols-2">
+            <span className="sr-only">Reading meeting documents</span>
+            {[0, 1].map((card) => (
+              <div key={card} aria-hidden="true" className="flex h-48 flex-col gap-3 rounded-xl border border-line bg-panel p-4">
+                <div className="skeleton h-3 w-40 rounded" /><div className="skeleton h-5 w-2/3 rounded" /><div className="skeleton h-3 w-1/3 rounded" />
+                <div className="mt-auto skeleton h-3 w-3/4 rounded" />
+              </div>
+            ))}
+          </div>
+        )}
+        {calendar && calendar.meetings.length === 0 && (
+          <EmptyState
+            icon="calendar"
+            title="No meetings yet"
+            body="Meetings appear when agendas, minutes or videos are collected."
+            actions={<Button variant="primary" onClick={openSourceConnector}>Add an agenda source</Button>}
+          />
+        )}
+        {calendar && SECTIONS.map(({ timing, title }) => {
+          const meetings = calendar.meetings.filter((meeting) => meeting.timing === timing);
+          if (meetings.length === 0) return null;
+          return (
+            <section key={timing} aria-label={`${title} meetings`}>
+              <h3 className="text-heading text-fg">{title}</h3>
+              <div className="mt-3 grid items-start gap-4 lg:grid-cols-2">
+                {meetings.map((meeting) => (
+                  <MeetingCard
+                    key={meeting.id}
+                    meeting={meeting}
+                    selected={selected}
+                    onSelect={setSelected}
+                    drafts={drafts}
+                    onDraft={(id, text) => setDrafts((current) => ({ ...current, [id]: text }))}
+                  />
+                ))}
+              </div>
+            </section>
+          );
+        })}
+        {calendar && calendar.limitations.length > 0 && (
+          <details className="group text-body text-muted">
+            <summary className="focus-ring cursor-pointer rounded">Limitations</summary>
+            <ul className="mt-1 list-disc pl-4">
+              {calendar.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}
+            </ul>
+          </details>
+        )}
       </div>
-      {error && <p role="alert" className="mt-3 text-label leading-4 text-warning">Meetings unavailable: {error}</p>}
-      {calendar && calendar.meetings.length === 0 && (
-        <p className="mt-4 text-label leading-4 text-muted">No agenda, minutes or meeting video has been collected yet.</p>
-      )}
-      {calendar && SECTIONS.map(({ timing, title }) => {
-        const meetings = calendar.meetings.filter((meeting) => meeting.timing === timing);
-        if (meetings.length === 0) return null;
-        return (
-          <section key={timing} aria-label={`${title} meetings`} className="mt-5">
-            <h3 className="text-sm font-semibold text-fg">{title}</h3>
-            <div className="mt-2 grid gap-3 lg:grid-cols-2">
-              {meetings.map((meeting) => (
-                <MeetingCard
-                  key={meeting.id}
-                  meeting={meeting}
-                  selected={selected}
-                  onSelect={setSelected}
-                  drafts={drafts}
-                  onDraft={(id, text) => setDrafts((current) => ({ ...current, [id]: text }))}
-                />
-              ))}
-            </div>
-          </section>
-        );
-      })}
-      {calendar && calendar.limitations.length > 0 && (
-        <details className="mt-5 text-label text-muted">
-          <summary>Limitations</summary>
-          <ul className="mt-1 list-disc pl-4">
-            {calendar.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}
-          </ul>
-        </details>
-      )}
     </main>
   );
 }
