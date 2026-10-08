@@ -3,9 +3,9 @@ import { invokeCommand, formatNativeError } from '../../ipc';
 import { useGatedLoad, type LoadState } from '../../hooks/useGatedLoad';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore, type InspectorTarget } from '../../store/useAppStore';
-import type { DeadlineAnalysis, DocumentProvenanceVerification, Finding, LegalComplianceFinding, StatutoryExtensionRecord } from '../../types';
+import type { PortalRequestDeadline, DocumentProvenanceVerification, Finding, LegalComplianceFinding, StatutoryExtensionRecord } from '../../types';
 import type { CaseworkCitation } from '../../types/casework';
-import ClockStrip, { portalClock } from '../charts/figures/ClockStrip';
+import ClockStrip, { portalClock, recordFromEngine } from '../charts/figures/ClockStrip';
 import { MiniClocks } from '../charts/figures/ClockStack';
 import DocumentMinimap, { type MinimapMark } from '../charts/figures/DocumentMinimap';
 import NeighbourBars from '../charts/figures/NeighbourBars';
@@ -248,7 +248,8 @@ function RequestLayer({ target }: { target: Target<'request'> }) {
     <div className="space-y-4">
       <ClockStrip
         data={portalClock({
-          record,
+          // The list row when this request is in the current results; otherwise the dates the engine read evaluated.
+          record: record ?? (clock.status === 'ready' ? recordFromEngine(clock.data.engine) : null),
           extension: clock.status === 'ready' ? clock.data.extension : null,
           engine: clock.status === 'ready' ? clock.data.engine : null,
           findings: clock.status === 'ready' ? clock.data.findings : [],
@@ -340,7 +341,7 @@ function CaseLayer({ target }: { target: Target<'case'> }) {
 interface ClockInputs {
   extension: StatutoryExtensionRecord | null;
   findings: LegalComplianceFinding[] | null;
-  engine: DeadlineAnalysis | null;
+  engine: PortalRequestDeadline | null;
 }
 
 /** A portal request's clock inputs. A failed or missing engine read leaves the recorded dates only. */

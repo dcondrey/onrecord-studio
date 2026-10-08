@@ -184,6 +184,12 @@ export interface DeadlineAnalysis {
   evidenceSummary: string;
 }
 
+/** A portal request's deadline analysis with the recorded closure it was evaluated from. */
+export interface PortalRequestDeadline extends DeadlineAnalysis {
+  status: string;
+  closedAt: string | null;
+}
+
 export interface RequestDeadline {
   claimId: string;
   model: DeadlineModel;

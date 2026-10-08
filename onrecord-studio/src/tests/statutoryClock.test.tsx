@@ -120,6 +120,51 @@ describe('statutory clock claim paint', () => {
     expect(pastDeadlinePaint(dismissed)).toBe('dismissed');
     const stored = portalClock({ record: null, extension: null, engine: analysis(), findings: [finding('OPEN')], observedAt: '2026-09-10T00:00:00Z' });
     expect(pastDeadlinePaint(stored)).toBe('counted');
+    // Re-evaluation writes RESOLVED_BY_NEW_EVIDENCE exactly when it no longer finds a violation.
+    const resolvedData = portalClock({ record: null, extension: null, engine: analysis(), findings: [finding('RESOLVED_BY_NEW_EVIDENCE')], observedAt: '2026-09-10T00:00:00Z' });
+    expect(pastDeadlinePaint(resolvedData)).toBe('resolved');
+    expect(resolvedData.headline).not.toContain('counted, exceeded');
+    const resolved = render(<ClockStrip data={resolvedData} storageKey="t3" />);
+    expect(pastSpans(resolved.container)).toEqual(['resolved']);
+    expect(resolved.container.textContent).toContain('resolved by new evidence: not counted');
+    expect(resolved.container.querySelector('[data-flag]')).toBeNull();
+    cleanup();
+    // A withdrawn finding with a larger variance never wins over a live one.
+    const mixed = portalClock({ record: null, extension: null, engine: analysis(), findings: [{ ...finding('RESOLVED_BY_NEW_EVIDENCE'), violationId: 'old', varianceDays: 40 }, finding('CONFIRMED')], observedAt: '2026-09-10T00:00:00Z' });
+    expect(mixed.model !== 'casework' && mixed.counted?.reviewStatus).toBe('CONFIRMED');
+  });
+
+  it('stops crimson at the stored variance and draws later days as not counted', () => {
+    // [x0, split, crimson end] from the rendered bar: inside path, then the counted path.
+    const spans = (container: HTMLElement) => {
+      const [inside, counted] = [...container.querySelectorAll('[data-clock-bar] > path')].map((node) => node.getAttribute('d') ?? '');
+      const num = (d: string, re: RegExp) => Number(re.exec(d)![1]);
+      return { x0: num(inside, /^M([\d.]+),/), split: num(counted, /^M([\d.]+),/) - 1, end: num(counted, /H([\d.]+)/) };
+    };
+    // Phase 1, still open: a 5-day variance measured on day 20 counts days 15-20; today is day 40.
+    const open = { createdAt: '2026-08-01T00:00:00Z', closedAt: null, status: 'open' };
+    const phase1 = render(<ClockStrip data={portalClock({ record: open, extension: null, engine: null, findings: [{ ...finding('OPEN'), varianceDays: 5, evaluatedAt: '2026-08-21T00:00:00Z' }], observedAt: '2026-09-10T00:00:00Z' })} storageKey="w1" />);
+    expect(pastSpans(phase1.container)).toEqual(['counted', 'uncounted']);
+    let s = spans(phase1.container);
+    expect(s.end - s.split).toBeCloseTo(((s.split - s.x0) / 15) * 5, 1);
+    cleanup();
+    // Phase 2, no determination: deadline day 10, 20 days stored, observed on day 40.
+    const phase2 = render(<ClockStrip data={portalClock({ record: open, extension: null, engine: analysis(), findings: [{ ...finding('OPEN'), varianceDays: 20 }], observedAt: '2026-09-10T00:00:00Z' })} storageKey="w2" />);
+    expect(pastSpans(phase2.container)).toEqual(['counted', 'uncounted']);
+    s = spans(phase2.container);
+    expect(s.end - s.split).toBeCloseTo(((s.split - s.x0) / 10) * 20, 1);
+    expect(phase2.container.textContent).toContain('Past the deadline (not counted)');
+  });
+
+  it('never calls a closure it did not load unrecorded', () => {
+    const engineOnly = portalClock({ record: null, extension: null, engine: analysis(), findings: [], observedAt: '2026-09-10T00:00:00Z' });
+    expect(engineOnly.headline).not.toContain('no closing date recorded');
+    expect(engineOnly.headline).toContain('closing date not loaded here');
+    const proxy = portalClock({ record: null, extension: null, engine: analysis({ determinationAt: '2026-08-20T00:00:00Z', determinationBasis: 'EARLIEST_RECORDED_ACTIVITY_PROXY', calendarDaysElapsed: 19 }), findings: [], observedAt: '2026-09-10T00:00:00Z' });
+    expect(proxy.headline).toContain('Earliest recorded activity (a proxy for the determination) on day 19');
+    // With no dates at all, a stored finding is still stated rather than dropped.
+    const noDates = portalClock({ record: null, extension: null, engine: null, findings: [finding('OPEN')], observedAt: '2026-09-10T00:00:00Z' });
+    expect(noDates.noClock).toContain('counted, exceeded by 30 days');
   });
 
   it('places a stored variance back from the instant it was measured to, never from today', () => {

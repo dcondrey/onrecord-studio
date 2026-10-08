@@ -180,12 +180,12 @@ pub async fn get_portal_request_deadline(
     portal_key: String,
     request_id: u64,
     repository: State<'_, DuckDbRepository>,
-) -> Result<crate::analysis::timeline::DeadlineAnalysis, AppError> {
+) -> Result<crate::analysis::timeline::PortalRequestDeadline, AppError> {
     let portal_key = validate_portal_key(&portal_key)?;
     let evidence = repository
         .load_legal_brief_evidence(request_id, portal_key)
         .await?;
-    crate::analysis::evaluate_statutory_compliance_with_determination_at(
+    let analysis = crate::analysis::evaluate_statutory_compliance_with_determination_at(
         request_id,
         &evidence.created_at,
         Some(&evidence.updated_at),
@@ -194,7 +194,12 @@ pub async fn get_portal_request_deadline(
         evidence.determination_source.as_deref(),
         evidence.extension.as_ref(),
         &chrono::Utc::now().to_rfc3339(),
-    )
+    )?;
+    Ok(crate::analysis::timeline::PortalRequestDeadline {
+        analysis,
+        status: evidence.status,
+        closed_at: evidence.closed_at,
+    })
 }
 
 #[tauri::command]

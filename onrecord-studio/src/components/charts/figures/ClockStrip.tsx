@@ -5,6 +5,7 @@ import type {
   ClaimedRequest,
   DeadlineAnalysis,
   LegalComplianceFinding,
+  PortalRequestDeadline,
   RequestDeadline,
   RequestFilingPlan,
   RequestSearchResult,
@@ -15,6 +16,7 @@ import ChartFrame from '../frame/ChartFrame';
 import { Axis } from '../frame/Axis';
 import { ReferenceBand } from '../frame/ReferenceLine';
 import type { ChartSources } from '../frame/SourceCaption';
+import type { TwinCell } from '../frame/TableTwin';
 import { TooltipContent } from '../frame/Tooltip';
 import type { LegendItem } from '../frame/Legend';
 import { paintFor, REFERENCE_PAINT, VIZ, type Claim } from '../core/claim';
@@ -98,12 +100,20 @@ export type ClockData =
   | (ClockBase & { model: 'tracker' | 'portal-recorded' | 'portal-engine'; counted: ClockCounted | null })
   | (ClockBase & { model: 'casework'; counted?: never });
 
-export type PastDeadlinePaint = 'counted' | 'dismissed' | 'uncounted';
+export type PastDeadlinePaint = 'counted' | 'dismissed' | 'resolved' | 'uncounted';
 
-/** How the span past a deadline is painted: crimson only for a live counted measure. */
+/** Review states under which a stored finding still stands as a counted violation. */
+const LIVE_REVIEW: ReadonlySet<ClockCounted['reviewStatus']> = new Set(['ASSERTED', 'OPEN', 'CONFIRMED']);
+
+/**
+ * How the span past a deadline is painted: crimson only for a live counted measure. A finding
+ * the reviewer dismissed, or one re-evaluation withdrew (RESOLVED_BY_NEW_EVIDENCE is written
+ * exactly when the evaluator no longer finds a violation), is drawn struck through, never counted.
+ */
 export function pastDeadlinePaint(data: ClockData): PastDeadlinePaint {
   if (data.model === 'casework' || !data.counted) return 'uncounted';
-  return data.counted.reviewStatus === 'DISMISSED' ? 'dismissed' : 'counted';
+  if (LIVE_REVIEW.has(data.counted.reviewStatus)) return 'counted';
+  return data.counted.reviewStatus === 'DISMISSED' ? 'dismissed' : 'resolved';
 }
 
 function dayOf(at: string, created: number): number {
@@ -244,16 +254,32 @@ export function trackerClock(claim: ClaimedRequest, deadline: RequestDeadline, k
   };
 }
 
-/** The stored finding that states this request's deadline result, preferring a live one. */
+/** The stored finding that states this request's deadline result; a withdrawn one never wins over a live one. */
 export function countedDeadlineFinding(findings: readonly LegalComplianceFinding[]): LegalComplianceFinding | null {
   const withVariance = findings.filter((finding) => finding.varianceDays !== null);
-  const live = withVariance.filter((finding) => finding.reviewStatus !== 'DISMISSED');
+  const live = withVariance.filter((finding) => LIVE_REVIEW.has(finding.reviewStatus));
   const pool = live.length > 0 ? live : withVariance;
   return pool.reduce<LegalComplianceFinding | null>((best, finding) => (best === null || (finding.varianceDays ?? 0) > (best.varianceDays ?? 0) ? finding : best), null);
 }
 
+type RecordDates = Pick<RequestSearchResult, 'createdAt' | 'closedAt' | 'status'>;
+
+/** The recorded dates the engine read evaluated from, for a surface that never loaded the request row. */
+export function recordFromEngine(engine: PortalRequestDeadline | null): RecordDates | null {
+  if (!engine || typeof engine.status !== 'string' || engine.closedAt === undefined) return null;
+  return { createdAt: engine.createdAt, closedAt: engine.closedAt, status: engine.status };
+}
+
+function findingClause(finding: LegalComplianceFinding): string {
+  const days = plural(finding.varianceDays ?? 0, 'day');
+  return LIVE_REVIEW.has(finding.reviewStatus)
+    ? `${finding.statuteCitation}: counted, exceeded by ${days} (${REVIEW_WORDS[finding.reviewStatus]}).`
+    : `${finding.statuteCitation}: a finding of ${days} over was ${REVIEW_WORDS[finding.reviewStatus]}; not counted.`;
+}
+
 export interface PortalClockInput {
-  record: Pick<RequestSearchResult, 'createdAt' | 'closedAt' | 'status'> | null;
+  /** The request's recorded dates; null when this surface did not load them. */
+  record: RecordDates | null;
   extension: StatutoryExtensionRecord | null;
   /** The engine's analysis (phase 2); null when the read command is unavailable. */
   engine: DeadlineAnalysis | null;
@@ -276,9 +302,12 @@ export function portalClock({ record, extension, engine, findings, observedAt }:
   const sources: ChartSources = { tables, note: [engine ? `deadline from the statute engine (${engine.statuteCitation})` : 'recorded dates only; no deadline drawn', findingNote].filter(Boolean).join('; ') };
   const base = { model: engine ? 'portal-engine' as const : 'portal-recorded' as const, counted, anomalies: engine ? anomalySentences(engine.anomalyMarkers) : [], sources, uncountedWord: 'not counted' as const };
   if (!createdAt) {
-    const sentence = 'Open this request in Evidence to see its recorded dates and clock.';
-    return { ...base, createdAt: observedAt, observedAt, deadline: null, determination: null, end: { at: observedAt, openLabel: null }, events: [], noClock: sentence, headline: 'No clock: this request\'s dates are not loaded here.', summary: sentence };
+    const stated = finding && finding.varianceDays !== null ? ` ${findingClause(finding)}` : '';
+    const sentence = `Open this request in Evidence to see its recorded dates and clock.${stated}`;
+    return { ...base, createdAt: observedAt, observedAt, deadline: null, determination: null, end: { at: observedAt, openLabel: null }, events: [], noClock: sentence, headline: `No clock: this request's dates are not loaded here.${stated}`, summary: sentence };
   }
+  // Without the request row, closure is unknown here, not absent from the record.
+  const closureLoaded = record !== null;
   const closedAt = record?.closedAt ?? null;
   const open = (record?.status ?? '').toLowerCase() !== 'closed';
   const events: ClockEvent[] = [
@@ -292,20 +321,24 @@ export function portalClock({ record, extension, engine, findings, observedAt }:
   const elapsed = closedAt ? calendarDaysBetween(createdAt, closedAt) : null;
   let headline = closedAt
     ? `Created ${shortDate(createdAt)}; closed ${shortDate(closedAt)} after ${plural(elapsed ?? 0, 'calendar day')}.`
-    : `Created ${shortDate(createdAt)}; no closing date recorded.`;
-  if (finding && finding.varianceDays !== null) headline += ` ${finding.statuteCitation}: exceeded by ${plural(finding.varianceDays, 'day')} (${REVIEW_WORDS[finding.reviewStatus]}).`;
+    : closureLoaded
+      ? `Created ${shortDate(createdAt)}; no closing date recorded.`
+      : `Created ${shortDate(createdAt)}; closing date not loaded here.`;
+  if (finding && finding.varianceDays !== null) headline += ` ${findingClause(finding)}`;
   const determination = engine ? engineDetermination(engine) : null;
   if (engine) {
-    headline += determination
-      ? ` Determination on day ${engine.calendarDaysElapsed}; ${engine.allowedCalendarDays} allowed.`
-      : ` No determination recorded by day ${engine.calendarDaysElapsed}; ${engine.allowedCalendarDays} allowed.`;
+    headline += !determination
+      ? ` No determination recorded by day ${engine.calendarDaysElapsed}; ${engine.allowedCalendarDays} allowed.`
+      : determination.basis === 'PROXY'
+        ? ` Earliest recorded activity (a proxy for the determination) on day ${engine.calendarDaysElapsed}; ${engine.allowedCalendarDays} allowed.`
+        : ` Determination on day ${engine.calendarDaysElapsed}; ${engine.allowedCalendarDays} allowed.`;
   }
   const endAt = engine
     ? determination?.at ?? engine.observedAt
     : closedAt ?? observedAt;
   const openLabel = engine
     ? determination ? null : 'no determination recorded'
-    : closedAt ? null : open ? 'open' : 'closing date not recorded';
+    : closedAt ? null : !closureLoaded ? 'closing date not loaded here' : open ? 'open' : 'closing date not recorded';
   return {
     ...base,
     createdAt,
@@ -347,15 +380,17 @@ export function caseworkClock(plan: RequestFilingPlan, productions: readonly { i
 
 /**
  * The elapsed bar of one clock: ink from day 0 to the deadline, then the span past it, crimson
- * only when counted, struck-through outline when the counted finding was dismissed, otherwise an
- * ink dashed outline. An open end stops in a chevron rather than a rounded data end.
+ * only when counted, struck-through outline when the counted finding was withdrawn, otherwise an
+ * ink dashed outline. Crimson stops at `countedEndDay` (deadline + the stored variance): days after
+ * the measure was taken are drawn as the uncounted outline. An open end stops in a chevron.
  */
-export function ClockBar({ x, y, thickness, endDay, deadlineDay, past, open }: {
+export function ClockBar({ x, y, thickness, endDay, deadlineDay, countedEndDay = null, past, open }: {
   x: ContinuousScale;
   y: number;
   thickness: number;
   endDay: number;
   deadlineDay: number | null;
+  countedEndDay?: number | null;
   past: PastDeadlinePaint;
   open: boolean;
 }) {
@@ -375,18 +410,26 @@ export function ClockBar({ x, y, thickness, endDay, deadlineDay, past, open }: {
   }
   const inside = `M${x0},${y}H${split - 1}V${y + thickness}H${x0}Z`;
   const pastStart = split + 1;
+  const outline = paintFor('descriptive', 'outline', 'primary');
+  const outlineSpan = (kind: PastDeadlinePaint, from: number) => (
+    <g data-past={kind}>
+      <rect x={from + 0.75} y={y + 0.75} width={Math.max(0, xe - from - 1.5)} height={thickness - 1.5} rx={1} style={{ fill: 'none', stroke: outline.stroke, strokeWidth: outline.strokeWidth, strokeDasharray: kind === 'uncounted' ? '3 2' : undefined }} />
+      {kind !== 'uncounted' && <line x1={from} x2={xe} y1={y + thickness / 2} y2={y + thickness / 2} style={{ stroke: VIZ.ink, strokeWidth: 1.5 }} />}
+    </g>
+  );
   let pastNode: ReactNode;
   if (past === 'counted') {
     const paint = paintFor('counted', 'fill');
-    pastNode = <path data-past="counted" d={open ? `M${pastStart},${y}H${xe}V${y + thickness}H${pastStart}Z` : hBarPath(pastStart, xe, y, thickness)} style={{ fill: paint.fill }} />;
-  } else {
-    const outline = paintFor('descriptive', 'outline', 'primary');
+    const xc = countedEndDay === null ? xe : Math.min(xe, Math.max(pastStart, x(countedEndDay)));
+    const tail = xe - xc > 1;
     pastNode = (
-      <g data-past={past}>
-        <rect x={pastStart + 0.75} y={y + 0.75} width={Math.max(0, xe - pastStart - 1.5)} height={thickness - 1.5} rx={1} style={{ fill: 'none', stroke: outline.stroke, strokeWidth: outline.strokeWidth, strokeDasharray: past === 'dismissed' ? undefined : '3 2' }} />
-        {past === 'dismissed' && <line x1={pastStart} x2={xe} y1={y + thickness / 2} y2={y + thickness / 2} style={{ stroke: VIZ.ink, strokeWidth: 1.5 }} />}
-      </g>
+      <>
+        <path data-past="counted" d={open || tail ? `M${pastStart},${y}H${xc}V${y + thickness}H${pastStart}Z` : hBarPath(pastStart, xe, y, thickness)} style={{ fill: paint.fill }} />
+        {tail && outlineSpan('uncounted', xc + 1)}
+      </>
     );
+  } else {
+    pastNode = outlineSpan(past, pastStart);
   }
   return (
     <g data-clock-bar="">
@@ -418,6 +461,8 @@ interface Plotted {
   effectiveDay: number | null;
   /** Where the past-deadline span starts: the engine's deadline, or closure − stored variance. */
   splitDay: number | null;
+  /** Where the crimson stops: the deadline plus the stored variance; null when not counted. */
+  countedEndDay: number | null;
   showToday: boolean;
   domain: [number, number];
 }
@@ -448,7 +493,14 @@ function plot(data: ClockData): Plotted {
   // Today matters only to a clock still running; a closed one is scaled to its own span.
   const showToday = data.end.openLabel !== null;
   const hi = Math.max(1, endDay, showToday ? observedDay : 0, effectiveDay ?? 0, ...eventDays);
-  return { created, endDay, observedDay, initialDay, effectiveDay, splitDay, showToday, domain: [lo, hi + (hi - lo) * 0.1] };
+  const variance = data.model !== 'casework' ? data.counted?.varianceDays ?? null : null;
+  const countedEndDay = pastDeadlinePaint(data) === 'counted' && splitDay !== null && variance !== null ? splitDay + variance : null;
+  return { created, endDay, observedDay, initialDay, effectiveDay, splitDay, countedEndDay, showToday, domain: [lo, hi + (hi - lo) * 0.1] };
+}
+
+/** Days drawn past the counted span (after the measure was taken); 0 when none are. */
+function uncountedTailDays(p: Plotted): number {
+  return p.countedEndDay !== null && p.splitDay !== null && p.endDay > p.splitDay ? Math.max(0, p.endDay - Math.max(p.splitDay, p.countedEndDay)) : 0;
 }
 
 function ClockPlot({ data, width, highlightedEvent, onEventHover, onEventActivate }: {
@@ -484,6 +536,7 @@ function ClockPlot({ data, width, highlightedEvent, onEventHover, onEventActivat
     10,
   );
   const directText = new Map(ordered.map((event) => [event.key, event.label]));
+  const directAnchor = new Map(ordered.map((event) => [event.key, x(dayOf(event.at, p.created))]));
 
   // Rule and band labels share one row, pushed apart so none overlaps.
   const notes: { key: string; anchor: number; text: string }[] = [];
@@ -491,6 +544,7 @@ function ClockPlot({ data, width, highlightedEvent, onEventHover, onEventActivat
   if (data.deadline?.extensionReason && p.effectiveDay !== null && p.initialDay !== null && p.effectiveDay > p.initialDay) {
     notes.push({ key: 'effective', anchor: x(p.effectiveDay), text: `extended to day ${data.deadline.allowedDays}` });
   }
+  if (p.showToday) notes.push({ key: 'today', anchor: x(p.observedDay), text: 'today' });
   const placedNotes = placeLabels(notes.map((note) => ({ key: note.key, anchor: note.anchor, width: measureText(note.text) })), 0, width);
 
   const variance = data.model !== 'casework' ? data.counted?.varianceDays ?? null : null;
@@ -500,7 +554,9 @@ function ClockPlot({ data, width, highlightedEvent, onEventHover, onEventActivat
       ? `Counted: exceeded by ${plural(variance ?? Math.round(p.endDay - p.splitDay), 'day')}`
       : past === 'dismissed'
         ? `exceeded by ${plural(variance ?? 0, 'day')} (finding dismissed)`
-        : `past the deadline (${data.uncountedWord})`;
+        : past === 'resolved'
+          ? `exceeded by ${plural(variance ?? 0, 'day')} (resolved by new evidence: not counted)`
+          : `past the deadline (${data.uncountedWord})`;
   } else if (data.end.openLabel) {
     endWords = data.end.openLabel;
   } else if (data.determination) {
@@ -522,8 +578,8 @@ function ClockPlot({ data, width, highlightedEvent, onEventHover, onEventActivat
       {data.deadline && p.effectiveDay !== null && p.initialDay !== null && p.effectiveDay > p.initialDay && (
         <line x1={Math.round(x(p.effectiveDay)) + 0.5} x2={Math.round(x(p.effectiveDay)) + 0.5} y1={RULE_TOP} y2={RULE_BOTTOM} data-reference="statute" style={{ stroke: rule.stroke, strokeWidth: rule.strokeWidth, shapeRendering: 'crispEdges' }} />
       )}
-      {p.showToday && <line x1={Math.round(x(p.observedDay)) + 0.5} x2={Math.round(x(p.observedDay)) + 0.5} y1={RULE_TOP} y2={AXIS_Y} data-reference="today" style={{ stroke: REFERENCE_PAINT.today.stroke, strokeWidth: 1, strokeDasharray: '2 2', shapeRendering: 'crispEdges' }} />}
-      <ClockBar x={x} y={BAR_Y} thickness={BAR_H} endDay={p.endDay} deadlineDay={p.splitDay} past={past} open={data.end.openLabel !== null} />
+      {p.showToday && <line x1={Math.round(x(p.observedDay)) + 0.5} x2={Math.round(x(p.observedDay)) + 0.5} y1={RULE_TOP} y2={RULE_BOTTOM} data-reference="today" style={{ stroke: REFERENCE_PAINT.today.stroke, strokeWidth: REFERENCE_PAINT.today.strokeWidth, shapeRendering: 'crispEdges' }} />}
+      <ClockBar x={x} y={BAR_Y} thickness={BAR_H} endDay={p.endDay} deadlineDay={p.splitDay} countedEndDay={p.countedEndDay} past={past} open={data.end.openLabel !== null} />
       {data.determination && (
         <Dot
           cx={x(dayOf(data.determination.at, p.created))}
@@ -577,9 +633,16 @@ function ClockPlot({ data, width, highlightedEvent, onEventHover, onEventActivat
           style={{ fill: 'none', stroke: VIZ.focus, strokeWidth: 2 }}
         />
       )}
-      {directLabels.map((label) => (
-        <text key={label.key} x={label.pos} y={LABEL_Y} dy="0.32em" className={MUTED_LABEL_CLASS}>{directText.get(label.key)}</text>
-      ))}
+      {directLabels.map((label) => {
+        const anchor = directAnchor.get(label.key) ?? label.pos;
+        const centre = label.pos + measureText(directText.get(label.key) ?? '') / 2;
+        return (
+          <g key={label.key}>
+            {label.leader && <line data-leader="" x1={centre} y1={LABEL_Y + 6} x2={anchor} y2={LANE_Y - 6} style={{ stroke: VIZ.baseline, strokeWidth: 1 }} />}
+            <text x={label.pos} y={LABEL_Y} dy="0.32em" className={MUTED_LABEL_CLASS}>{directText.get(label.key)}</text>
+          </g>
+        );
+      })}
       {placedNotes.map((label, index) => (
         <text key={label.key} x={label.pos} y={NOTE_Y} dy="0.32em" className="fill-fg-secondary text-[11px]">{notes[index].text}</text>
       ))}
@@ -597,14 +660,25 @@ function ClockPlot({ data, width, highlightedEvent, onEventHover, onEventActivat
   );
 }
 
-function legendFor(data: ClockData, past: PastDeadlinePaint, crossesDeadline: boolean): LegendItem[] {
+const PAST_LEGEND: Record<Exclude<PastDeadlinePaint, 'counted'>, (word: string) => string> = {
+  dismissed: () => 'Past the deadline, finding dismissed',
+  resolved: () => 'Past the deadline, finding resolved by new evidence (not counted)',
+  uncounted: (word) => `Past the deadline (${word})`,
+};
+
+function legendFor(data: ClockData, past: PastDeadlinePaint, crossesDeadline: boolean, tail: boolean, today: boolean): LegendItem[] {
   const items: LegendItem[] = [{ key: 'elapsed', label: 'Days elapsed', swatch: 'rect', tone: 'ink' }];
   if (data.deadline) items.push({ key: 'deadline', label: `Deadline (${data.deadline.citation})`, swatch: 'line', tone: 'ink' });
   if (data.deadline?.extensionReason) items.push({ key: 'extension', label: `Extension (${data.deadline.extensionReason.toLowerCase().replace(/_/g, ' ')})`, swatch: 'rect', tone: 'track' });
   if (crossesDeadline && past === 'counted') items.push({ key: 'counted', label: 'Counted violation', swatch: 'flag', tone: 'counted' });
-  if (crossesDeadline && past !== 'counted') items.push({ key: 'past', label: past === 'dismissed' ? 'Past the deadline, finding dismissed' : `Past the deadline (${data.uncountedWord})`, swatch: 'dashed-line', tone: 'ink' });
+  if (crossesDeadline && past !== 'counted') items.push({ key: 'past', label: PAST_LEGEND[past](data.uncountedWord), swatch: past === 'uncounted' ? 'dashed-line' : 'line', tone: 'ink' });
+  if (crossesDeadline && past === 'counted' && tail) items.push({ key: 'tail', label: 'Past the deadline (not counted)', swatch: 'dashed-line', tone: 'ink' });
+  if (data.determination?.basis === 'SOURCED') items.push({ key: 'sourced', label: 'Determination (sourced)', swatch: 'diamond', tone: crossesDeadline ? 'ink' : 'positive' });
+  if (data.determination?.basis === 'PROXY') items.push({ key: 'proxy', label: 'Earliest activity (proxy)', swatch: 'triangle', tone: 'ink' });
+  if (today) items.push({ key: 'today', label: 'Today', swatch: 'line', tone: 'mark' });
   if (data.events.some((event) => !event.hollow)) items.push({ key: 'filled', label: data.model === 'tracker' ? 'Confirmed from an email' : 'Recorded date', swatch: 'dot', tone: 'ink' });
-  if (data.events.some((event) => event.hollow)) items.push({ key: 'hollow', label: data.model === 'tracker' ? 'Entered by you' : 'Promised date', swatch: 'hollow', tone: 'ink' });
+  if (data.events.some((event) => event.hollow && event.shape !== 'diamond')) items.push({ key: 'hollow', label: data.model === 'tracker' ? 'Entered by you' : 'Promised date', swatch: 'hollow', tone: 'ink' });
+  if (data.events.some((event) => event.hollow && event.shape === 'diamond')) items.push({ key: 'promised', label: 'Promised date', swatch: 'hollow-diamond', tone: 'ink' });
   return items;
 }
 
@@ -624,15 +698,22 @@ export default function ClockStrip({ data, title = 'Statutory clock', storageKey
   const crosses = p !== null && p.splitDay !== null && p.endDay > p.splitDay;
   const claim: Claim = crosses && past === 'counted' ? 'counted' : 'descriptive';
   const created = parseDate(data.createdAt);
-  const rows = [...data.events]
+  const rows: Record<string, TwinCell>[] = [...data.events]
     .sort((a, b) => parseDate(a.at) - parseDate(b.at))
-    .map((event) => ({ what: event.label, day: Math.round(dayOf(event.at, created) * 10) / 10, date: formatDate(parseDate(event.at), 'hour'), basis: event.basisLabel }));
+    .map((event) => ({ what: event.label, day: Math.round(dayOf(event.at, created) * 10) / 10, past: null, date: formatDate(parseDate(event.at), 'hour'), basis: event.basisLabel }));
   if (data.deadline) {
-    rows.push({ what: `Initial deadline (${data.deadline.citation})`, day: Math.round(dayOf(data.deadline.initialAt, created)), date: shortDate(data.deadline.initialAt), basis: 'statute engine' });
-    if (data.deadline.effectiveAt !== data.deadline.initialAt) rows.push({ what: 'Effective deadline after extension', day: data.deadline.allowedDays, date: shortDate(data.deadline.effectiveAt), basis: 'statute engine' });
+    rows.push({ what: `Initial deadline (${data.deadline.citation})`, day: Math.round(dayOf(data.deadline.initialAt, created)), past: null, date: shortDate(data.deadline.initialAt), basis: 'statute engine' });
+    if (data.deadline.effectiveAt !== data.deadline.initialAt) rows.push({ what: 'Effective deadline after extension', day: data.deadline.allowedDays, past: null, date: shortDate(data.deadline.effectiveAt), basis: 'statute engine' });
   }
   if (data.model !== 'casework' && data.counted) {
-    rows.push({ what: `Stored finding: ${data.counted.citation}`, day: data.counted.varianceDays ?? 0, date: REVIEW_WORDS[data.counted.reviewStatus], basis: 'days past the deadline (counted measure)' });
+    const { varianceDays, reviewStatus } = data.counted;
+    rows.push({
+      what: `Stored finding: ${data.counted.citation}`,
+      day: null,
+      past: varianceDays ?? { state: 'not-recorded', reason: 'the finding stored no variance' },
+      date: REVIEW_WORDS[reviewStatus],
+      basis: LIVE_REVIEW.has(reviewStatus) ? 'stored finding (counted measure)' : 'stored finding, withdrawn (not counted)',
+    });
   }
   const frameStatus = status !== 'ready' ? status : data.noClock ? 'empty' : 'ready';
   return (
@@ -648,10 +729,10 @@ export default function ClockStrip({ data, title = 'Statutory clock', storageKey
         emptyText={data.noClock ?? undefined}
         table={{
           caption: `${title}: recorded dates`,
-          columns: [{ key: 'what', label: 'Date' }, { key: 'day', label: 'Day since submission', align: 'end' }, { key: 'date', label: 'When' }, { key: 'basis', label: 'Basis' }],
+          columns: [{ key: 'what', label: 'Date' }, { key: 'day', label: 'Day since submission', align: 'end' }, { key: 'past', label: 'Days past deadline', align: 'end' }, { key: 'date', label: 'When' }, { key: 'basis', label: 'Basis' }],
           rows,
         }}
-        legend={p ? legendFor(data, past, crosses) : undefined}
+        legend={p ? legendFor(data, past, crosses, uncountedTailDays(p) > 0, p.showToday) : undefined}
         minHeight={data.noClock ? 64 : HEIGHT}
         interactive={data.events.length > 0 ? { roledescription: 'statutory clock' } : undefined}
         storageKey={storageKey}
