@@ -3,7 +3,7 @@ import { useAppStore } from '../../store/useAppStore';
 import type { EvidenceLink, LeadDossier as LeadDossierData, StoryLead } from '../../types';
 import { isLegalClaimKind } from '../../types/findings';
 import { leadProse, tableLeadSources, type TableLeadSources } from '../../utils/tableLeadSources';
-import { scrollingAncestor, scrollWithin } from '../../utils/scrollWithin';
+import { landFocus, scrollingAncestor, scrollWithin } from '../../utils/scrollWithin';
 import AttentionFactors from '../charts/figures/AttentionFactors';
 import LeadFigure from '../charts/figures/LeadFigure';
 import { useDiscoveryController } from '../dashboard/AutomaticDiscoveryProvider';
@@ -16,6 +16,7 @@ import EvidenceChain from '../objects/EvidenceChain';
 import ObjectLink from '../objects/ObjectLink';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
+import DigestCopy from '../ui/DigestCopy';
 import Icon from '../ui/icons';
 import InlineError from '../ui/InlineError';
 import { keepIdentifiers, LeadByline, LeadKicker } from './LeadMeta';
@@ -54,19 +55,39 @@ export default function LeadDetail({ findingId, storyLead, position, compare, so
   // The stage's Draft action opens the context pane's drafts; the two panes share this switch.
   const [draft, setDraft] = useState<{ findingId: string; open: boolean }>({ findingId, open: false });
   const draftOpen = draft.findingId === findingId && draft.open;
+  // The finding whose Draft action is waiting for its drafts' controls to land on.
+  const landing = useRef<string | null>(null);
+  // Brings the drafts section to the top of the pane that scrolls it (the shared column below
+  // 1120px, the context pane above it, the page when stacked). With `land`, focus goes to its first
+  // control, or to its heading when no draft applies.
+  const showDraft = (land: boolean) => {
+    const section = document.getElementById(DRAFT_SECTION_ID);
+    if (!section) return;
+    const container = scrollingAncestor(section, false);
+    if (container) scrollWithin(container, section, 'start');
+    if (!land) return;
+    const target = section.querySelector<HTMLElement>('button:not(:disabled), input, select, textarea, a[href]') ?? section.querySelector<HTMLElement>('h3');
+    if (!target) return;
+    if (!target.matches('button, input, select, textarea, a[href]')) target.tabIndex = -1;
+    landFocus(target);
+  };
   const openDraft = () => {
+    landing.current = findingId;
     setDraft({ findingId, open: true });
+    // Already open, its controls are drawn: land now. Otherwise bring the section up while the
+    // drafts are asked for, and land once they settle (onDraftsSettled).
     requestAnimationFrame(() => {
-      const section = document.getElementById(DRAFT_SECTION_ID);
-      if (!section) return;
-      const container = scrollingAncestor(section);
-      if (container) scrollWithin(container, section, 'start');
-      // The drafts may still be asking which kinds apply; until a control exists, the section's
-      // heading takes focus so the reader lands where the drafts will appear.
-      const target = section.querySelector<HTMLElement>('button:not(:disabled), input, select, textarea, a[href]') ?? section.querySelector<HTMLElement>('h3');
-      if (target && !target.matches('button, input, select, textarea, a[href]')) target.tabIndex = -1;
-      target?.focus({ preventScroll: true });
+      if (landing.current !== findingId) return;
+      const ready = !!document.getElementById(DRAFT_SECTION_ID)?.querySelector('[data-drafts-settled]');
+      if (ready) landing.current = null;
+      showDraft(ready);
     });
+  };
+  const onDraftsSettled = () => {
+    if (landing.current !== findingId) return;
+    landing.current = null;
+    // The controls just rendered; the section has its full height on the next frame.
+    requestAnimationFrame(() => showDraft(true));
   };
   const headline = storyLead?.headline ?? ready?.dossier.finding.headline;
   return (
@@ -109,7 +130,8 @@ export default function LeadDetail({ findingId, storyLead, position, compare, so
             dossier={ready.dossier}
             onSelectFinding={onSelectFinding}
             draftOpen={draftOpen}
-            onOpenDraft={() => setDraft({ findingId, open: true })}
+            onOpenDraft={openDraft}
+            onDraftsSettled={onDraftsSettled}
           />
         )}
       </Pane>
@@ -163,8 +185,12 @@ function Stage({ dossier, figure, storyLead, rank, compare, source, onDraft, act
           <Button size="sm" onClick={inspectRecords}>Inspect records</Button>
           <Button size="sm" icon="filePlus" onClick={onDraft}>Draft records request</Button>
           {openQuery && <Button size="sm" icon="database" onClick={openQuery}>Open the query</Button>}
-          {actions ?? (briefing && <Button size="sm" variant="ghost" onClick={() => addBriefingEvidence(briefing)}>Add to briefing</Button>)}
-          {notice}
+          {/* The tertiary action keeps to the right edge, wrapped or not, so its padding never
+              misaligns it with the bordered buttons' left edge. */}
+          <span className="ml-auto flex flex-wrap items-center gap-2 empty:hidden">
+            {actions ?? (briefing && <Button size="sm" variant="ghost" onClick={() => addBriefingEvidence(briefing)}>Add to briefing</Button>)}
+            {notice}
+          </span>
         </div>
       </header>
 
@@ -257,11 +283,8 @@ function ComputedFrom({ sources, detector }: { sources: TableLeadSources; detect
             {table.parts === null ? <span className="min-w-0 break-words text-body text-fg-secondary">{table.line}</span> : (
               <span className="min-w-0">
                 <span className="block text-body font-medium text-fg">{table.parts.name}</span>
-                <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-caption text-muted">
-                  <span>Retrieved {table.parts.retrievedOn}</span>
-                  <span aria-hidden="true">·</span>
-                  <DigestCopy sha256={table.parts.sha256} />
-                </span>
+                <span className="mt-0.5 block text-caption text-muted">Retrieved {table.parts.retrievedOn}</span>
+                <DigestCopy sha256={table.parts.sha256} className="mt-0.5 text-caption text-muted" />
               </span>
             )}
           </li>
@@ -271,32 +294,10 @@ function ComputedFrom({ sources, detector }: { sources: TableLeadSources; detect
         <summary className="focus-ring inline-flex w-fit cursor-pointer list-none items-center gap-1.5 rounded text-caption text-fg-secondary hover:text-fg [&::-webkit-details-marker]:hidden">
           Show the query
         </summary>
-        <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md bg-raised/60 p-3 font-mono text-code text-fg-secondary">{sources.sql}</pre>
+        <pre tabIndex={0} role="region" aria-label="The query" className="focus-ring mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md bg-raised/60 p-3 font-mono text-code text-fg-secondary">{sources.sql}</pre>
       </details>
       <p className="mt-3 text-caption text-muted">Method <span className="font-mono text-fg-secondary">{detector}</span></p>
     </section>
-  );
-}
-
-function DigestCopy({ sha256 }: { sha256: string }) {
-  const [copied, setCopied] = useState<boolean | null>(null);
-  return (
-    <span className="inline-flex items-center gap-1">
-      <span className="font-mono text-code" title={`SHA-256 ${sha256}`}>SHA-256 {sha256.slice(0, 12)}…</span>
-      <Button
-        size="sm"
-        variant="ghost"
-        iconOnly
-        icon="clipboard"
-        className="h-6 w-6"
-        aria-label="Copy the full SHA-256 digest"
-        title={sha256}
-        onClick={() => {
-          void navigator.clipboard?.writeText(sha256).then(() => setCopied(true), () => setCopied(false));
-        }}
-      />
-      {copied !== null && <span role="status" className={copied ? 'text-success' : 'text-warning'}>{copied ? 'Copied' : 'Copying was blocked'}</span>}
-    </span>
   );
 }
 
@@ -339,11 +340,12 @@ function uniqueDocuments(evidence: readonly EvidenceLink[]) {
   return [...seen.values()];
 }
 
-function Context({ dossier, onSelectFinding, draftOpen, onOpenDraft }: {
+function Context({ dossier, onSelectFinding, draftOpen, onOpenDraft, onDraftsSettled }: {
   dossier: LeadDossierData;
   onSelectFinding?(id: string): boolean;
   draftOpen: boolean;
   onOpenDraft(): void;
+  onDraftsSettled(): void;
 }) {
   const { finding } = dossier;
   const sources = useMemo(() => tableLeadSources(finding.explanation), [finding.explanation]);
@@ -449,7 +451,7 @@ function Context({ dossier, onSelectFinding, draftOpen, onOpenDraft }: {
       </PaneSection>
 
       <PaneSection title="Draft from this lead" area="draft" id={DRAFT_SECTION_ID}>
-        {draftOpen ? <ArtifactDrafts key={finding.id} findingId={finding.id} /> : (
+        {draftOpen ? <ArtifactDrafts key={finding.id} findingId={finding.id} onSettled={onDraftsSettled} /> : (
           <Button size="sm" icon="filePlus" className="w-full justify-center" onClick={onOpenDraft}>Draft a request or appeal</Button>
         )}
       </PaneSection>
@@ -468,7 +470,7 @@ function TablesSection({ sources }: { sources: TableLeadSources }) {
               <span className="min-w-0">
                 <span className="block text-body font-medium text-fg [overflow-wrap:anywhere]">{table.parts.name}</span>
                 <span className="block text-caption text-muted">Retrieved {table.parts.retrievedOn}</span>
-                <span className="block break-all font-mono text-code text-muted">SHA-256 {table.parts.sha256}</span>
+                <DigestCopy sha256={table.parts.sha256} className="text-muted" />
               </span>
             )}
           </li>
@@ -476,7 +478,7 @@ function TablesSection({ sources }: { sources: TableLeadSources }) {
       </ul>
       <details className="mt-3">
         <summary className="focus-ring w-fit cursor-pointer rounded text-caption text-muted hover:text-fg">Show the query</summary>
-        <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md bg-raised/60 p-3 font-mono text-code text-fg-secondary">{sources.sql}</pre>
+        <pre tabIndex={0} role="region" aria-label="The query" className="focus-ring mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md bg-raised/60 p-3 font-mono text-code text-fg-secondary">{sources.sql}</pre>
       </details>
     </PaneSection>
   );

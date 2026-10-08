@@ -523,7 +523,8 @@ a[href] {
     @apply outline-none;
   }
 
-  .focus-ring:focus-visible {
+  .focus-ring:focus-visible,
+  .focus-ring[data-focus-landed]:focus {
     outline: 2px solid rgb(var(--focus));
     outline-offset: 2px;
   }
@@ -1148,9 +1149,11 @@ a[href] {
 }
 
 @container workbench (min-width: 720px) {
+  /* One row exactly as tall as the workbench: the panes scroll inside it, never past it. */
   .workbench-grid {
     height: 100%;
     grid-template-columns: 272px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
   }
   .workbench-nav {
     display: flex;
@@ -1159,9 +1162,10 @@ a[href] {
     flex-direction: column;
     gap: 12px;
   }
+  /* The queue takes whatever Watching leaves; its cards scroll inside it. */
   .workbench-queue {
-    flex: 1 1 auto;
-    min-height: 24rem;
+    flex: 1 1 0;
+    min-height: 0;
   }
   /* Open, Watching takes at most 45% of the navigator and scrolls inside itself. */
   .workbench-watch-open {

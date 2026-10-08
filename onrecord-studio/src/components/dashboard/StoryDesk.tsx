@@ -20,7 +20,7 @@ import { useRankedLeads } from '../../hooks/useRankedLeads';
 import Masthead from '../workbench/Masthead';
 import LeadCard from '../workbench/LeadCard';
 import LeadDetail from '../workbench/LeadDetail';
-import Workbench, { LeadQueue, Pane, useWorkbenchQueue } from '../workbench/Workbench';
+import Workbench, { LeadQueue, Pane, QueueSkeleton, useWorkbenchQueue } from '../workbench/Workbench';
 import { PendingDetail } from '../workbench/OverviewWorkbench';
 import EmptyState from '../ui/EmptyState';
 import ObjectLink from '../objects/ObjectLink';
@@ -328,18 +328,7 @@ function StoryWorkbench({ leads, total, busy, onAddToBriefing, notice }: {
           >
             <div aria-busy={busy || undefined}>
               {leads === null ? (
-                <div role="status" aria-busy="true" className="space-y-1 p-2">
-                  <span className="sr-only">Ranking leads…</span>
-                  {[0, 1, 2, 3].map((card) => (
-                    <div key={card} aria-hidden="true" className="rounded-lg px-3 py-2.5">
-                      <div className="flex h-5 items-center gap-1.5"><div className="skeleton h-3 w-6 rounded" /><div className="skeleton h-5 w-24 rounded-full" /></div>
-                      <div className="skeleton mt-1.5 h-4 w-full rounded" />
-                      <div className="skeleton mt-1 h-4 w-3/4 rounded" />
-                      <div className="skeleton mt-1.5 h-3 w-1/2 rounded" />
-                      <div className="skeleton mt-2.5 h-1.5 w-full rounded-full" />
-                    </div>
-                  ))}
-                </div>
+                <QueueSkeleton />
               ) : (
                 <LeadQueue label="Leads by attention score" items={items} selectedId={current?.findingId ?? null} onSelect={select} />
               )}

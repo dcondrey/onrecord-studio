@@ -57,7 +57,8 @@ export function LeadKicker({ kind, severity, className }: { kind: FindingKind; s
 
 /**
  * Source, first-seen date and the agency the lead is about (when the analytics profile names it),
- * separated by interpuncts; nothing is printed for a part the lead lacks.
+ * separated by interpuncts that wrap with the part they precede; nothing is printed for a part the
+ * lead lacks.
  */
 export function LeadByline({ source, firstSeen, portalKey, agencyId, className }: {
   source?: string;
@@ -68,15 +69,18 @@ export function LeadByline({ source, firstSeen, portalKey, agencyId, className }
 }) {
   const profile = useAppStore((state) => agencyId === null ? null : state.agencyProfiles.find((entry) => entry.agencyId === agencyId && entry.portalSubdomain === portalKey) ?? null);
   const parts = [
-    source && <span key="source">{source}</span>,
-    <span key="time">First seen <time dateTime={firstSeen} className="tabular-nums">{formatShortDate(firstSeen)}</time></span>,
-    profile && agencyId !== null && portalKey && (
-      <span key="agency">About <ObjectLink target={{ kind: 'agency', portalKey, agencyId, label: profile.agencyName }}>{profile.agencyName}</ObjectLink></span>
-    ),
-  ].filter(Boolean);
+    source && { key: 'source', content: source },
+    { key: 'time', content: <>First seen <time dateTime={firstSeen} className="tabular-nums">{formatShortDate(firstSeen)}</time></> },
+    profile && agencyId !== null && portalKey && {
+      key: 'agency',
+      content: <>About <ObjectLink target={{ kind: 'agency', portalKey, agencyId, label: profile.agencyName }}>{profile.agencyName}</ObjectLink></>,
+    },
+  ].filter((part) => !!part);
   return (
     <p className={cn('flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-caption text-muted', className)}>
-      {parts.flatMap((part, index) => (index === 0 ? [part] : [<span key={`dot-${index}`} aria-hidden="true">·</span>, part]))}
+      {parts.map((part, index) => (
+        <span key={part.key}>{index > 0 && <span aria-hidden="true" className="mr-1.5">·</span>}{part.content}</span>
+      ))}
     </p>
   );
 }

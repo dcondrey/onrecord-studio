@@ -4,12 +4,13 @@
 // for lead A that resolves after lead B is on the stage would replace B's evidence chain with A's,
 // or blank it: the stage must keep stating B.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { StoryLead } from '../types';
 
 const bridge = vi.hoisted(() => ({
   leads: [] as ((leads: unknown) => void)[],
   dossiers: new Map<string, (dossier: unknown) => void>(),
+  drafts: new Map<string, (availability: unknown) => void>(),
 }));
 
 vi.mock('../ipc', () => ({
@@ -17,6 +18,7 @@ vi.mock('../ipc', () => ({
   invokeCommand: (command: string, args?: { findingId?: string }) => {
     if (command === 'list_story_leads') return new Promise((resolve) => bridge.leads.push(resolve));
     if (command === 'build_lead_dossier') return new Promise((resolve) => bridge.dossiers.set(args?.findingId ?? '', resolve));
+    if (command === 'draft_availability_for_finding') return new Promise((resolve) => bridge.drafts.set(args?.findingId ?? '', resolve));
     return Promise.resolve([]);
   },
 }));
@@ -75,6 +77,7 @@ afterEach(() => {
   useAppStore.setState({ workbenchSelection: {} });
   bridge.leads = [];
   bridge.dossiers.clear();
+  bridge.drafts.clear();
 });
 
 describe('lead workbench', () => {
@@ -111,5 +114,28 @@ describe('lead workbench', () => {
     await waitFor(() => expect(bridge.dossiers.has('b')).toBe(true));
     expect(screen.getByRole('button', { name: /Second lead/ }).getAttribute('aria-current')).toBe('true');
     expect(screen.getByRole('button', { name: /First lead/ }).getAttribute('aria-current')).toBeNull();
+  });
+
+  // The stage's Draft action takes the reader to the drafts, and the drafts' buttons exist only
+  // once the backend says which apply: focus waits for them instead of landing on nothing.
+  it('lands the Draft action on the first draft control once the drafts that apply are known', async () => {
+    render(<StoryDesk />);
+    await waitFor(() => expect(bridge.leads).toHaveLength(1));
+    act(() => bridge.leads[0]([lead('a', 'First lead')]));
+    await waitFor(() => expect(bridge.dossiers.has('a')).toBe(true));
+    act(() => bridge.dossiers.get('a')!(dossier('a', 'Dossier of the first lead')));
+    const stage = await screen.findByRole('region', { name: 'Selected lead' });
+    const draft = within(stage).getByRole('button', { name: 'Draft records request' });
+    draft.focus();
+    fireEvent.click(draft);
+    await waitFor(() => expect(bridge.drafts.has('a')).toBe(true));
+    await act(() => new Promise((resolve) => requestAnimationFrame(resolve)));
+    expect(document.activeElement).toBe(draft);
+
+    act(() => bridge.drafts.get('a')!({ followup: true, appeal: true }));
+    const drafts = await screen.findByRole('region', { name: 'Drafted artifacts' });
+    const first = within(drafts).getByRole('button', { name: 'Draft records request' });
+    await waitFor(() => expect(document.activeElement).toBe(first));
+    expect(first.hasAttribute('data-focus-landed')).toBe(true);
   });
 });

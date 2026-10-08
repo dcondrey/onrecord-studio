@@ -1,7 +1,8 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { invokeCommand } from '../../ipc';
 import { useCaseScope } from '../../hooks/useCaseScope';
 import { useGatedLoad } from '../../hooks/useGatedLoad';
+import { useKeepInView } from '../../hooks/useKeepInView';
 import { useRankedLeads } from '../../hooks/useRankedLeads';
 import { nextUpcomingMeeting } from '../../hooks/useWorkspaceBadges';
 import { useAppStore } from '../../store/useAppStore';
@@ -18,7 +19,7 @@ import Icon, { type IconName } from '../ui/icons';
 import StatusDot from '../ui/statusDot';
 import LeadCard from './LeadCard';
 import LeadDetail, { ContextSkeleton, StageSkeleton } from './LeadDetail';
-import Workbench, { LeadQueue, Pane, THREE_COLUMNS_FROM, useWorkbenchQueue, useWorkbenchWidth } from './Workbench';
+import Workbench, { LeadQueue, Pane, QueueSkeleton, THREE_COLUMNS_FROM, useWorkbenchQueue, useWorkbenchWidth } from './Workbench';
 
 const MEETING_HORIZON_DAYS = 14;
 /** The deadline ledger's selection id; never a finding id, which is a hex digest. */
@@ -26,6 +27,8 @@ export const LEDGER_ID = 'ledger';
 const WATCHING_OPEN_KEY = 'overview.watching.open';
 /** The window height below which Watching starts folded, so the queue keeps four cards in view. */
 const WATCHING_OPEN_MIN_HEIGHT = 860;
+/** Watch changes read for the Watching row, newest first; a full page in the window is a floor. */
+const WATCH_CHANGE_PAGE = 20;
 
 /**
  * The overview as an investigation workbench: the ranked leads in the Since window and the watch
@@ -193,23 +196,6 @@ function StageWaiting({ text }: { text: string }) {
   );
 }
 
-function QueueSkeleton() {
-  return (
-    <div role="status" aria-busy="true" className="space-y-1 p-2">
-      <span className="sr-only">Ranking leads</span>
-      {[0, 1, 2, 3].map((card) => (
-        <div key={card} aria-hidden="true" className="rounded-lg px-3 py-2.5">
-          <div className="flex h-5 items-center gap-1.5"><div className="skeleton h-3 w-6 rounded" /><div className="skeleton h-5 w-24 rounded-full" /></div>
-          <div className="skeleton mt-1.5 h-4 w-full rounded" />
-          <div className="skeleton mt-1 h-4 w-3/4 rounded" />
-          <div className="skeleton mt-1.5 h-3 w-1/2 rounded" />
-          <div className="skeleton mt-2.5 h-1.5 w-full rounded-full" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
 interface LedgerTotals {
   misses: number;
   requests: number;
@@ -332,8 +318,11 @@ function WatchStatus({ ledger, ledgerSelected, onSelectLedger, onOpenFollowing }
     setChosen(!open);
     storeWatchingOpen(!open);
   };
+  // The ledger row drawn on the stage stays in view inside Watching's own scroller.
+  const body = useRef<HTMLDivElement>(null);
+  useKeepInView(body, '[aria-current="true"]', [ledgerSelected, open]);
   const calendar = useGatedLoad('calendar', () => invokeCommand('get_meeting_calendar', {}));
-  const changes = useGatedLoad(`changes:${findingsRefreshRequests}`, () => invokeCommand('list_watch_changes', { watchId: null, limit: 20 }));
+  const changes = useGatedLoad(`changes:${findingsRefreshRequests}`, () => invokeCommand('list_watch_changes', { watchId: null, limit: WATCH_CHANGE_PAGE }));
 
   const live = new Set(portals.map((saved) => saved.registration.portalKey));
   const running = runtimes.filter((runtime) => live.has(runtime.portal.portalKey));
@@ -349,6 +338,10 @@ function WatchStatus({ ledger, ledgerSelected, onSelectLedger, onOpenFollowing }
   const meeting = calendar.status === 'ready' ? nextUpcomingMeeting(calendar.data) : null;
   const upcoming = meeting && meeting.days <= MEETING_HORIZON_DAYS ? meeting : null;
   const recent = changes.status === 'ready' ? changes.data.filter((change) => !since || change.detectedAt > since) : [];
+  // The Following tab counts changes since each watch's last check; this counts the Since window,
+  // and says so, so the two figures never read as one count that disagrees with itself.
+  const recentCount = `${recent.length.toLocaleString()}${changes.status === 'ready' && recent.length >= WATCH_CHANGE_PAGE ? '+' : ''}`;
+  const recentWords = `${recentCount} watch change${recent.length === 1 ? '' : 's'}${since ? ` since ${formatShortDate(since)}` : ''}`;
   const state = [
     collecting > 0 && `${collecting} collecting`,
     paused > 0 && `${paused} paused`,
@@ -366,8 +359,8 @@ function WatchStatus({ ledger, ledgerSelected, onSelectLedger, onOpenFollowing }
     percent && <span key="percent" title={`${settled.toLocaleString()} of ${total.toLocaleString()} tasks settled`}>{percent}<span className="sr-only"> of collection tasks settled</span></span>,
     ledger && <span key="ledger" title={`${ledger.misses.toLocaleString()} counted deadline misses`}><span aria-hidden="true">§ {ledger.misses.toLocaleString()}</span><span className="sr-only">{ledger.misses.toLocaleString()} counted deadline misses</span></span>,
     changes.status === 'ready' && (
-      <span key="changes" className="inline-flex items-center gap-1" title={`${recent.length.toLocaleString()} watch change${recent.length === 1 ? '' : 's'}`}>
-        <Icon name="activity" size="xs" className="text-muted" /><span aria-hidden="true">{recent.length.toLocaleString()}</span><span className="sr-only">{recent.length.toLocaleString()} watch change{recent.length === 1 ? '' : 's'}</span>
+      <span key="changes" className="inline-flex items-center gap-1" title={recentWords}>
+        <Icon name="activity" size="xs" className="text-muted" /><span aria-hidden="true">{recentCount}</span><span className="sr-only">{recentWords}</span>
       </span>
     ),
   ].filter(Boolean);
@@ -390,7 +383,7 @@ function WatchStatus({ ledger, ledgerSelected, onSelectLedger, onOpenFollowing }
         </button>
       </h2>
       {open && (
-        <div id="watching-body" className="min-h-0 space-y-0.5 overflow-y-auto overscroll-contain border-t border-line p-2">
+        <div ref={body} id="watching-body" className="min-h-0 space-y-0.5 overflow-y-auto overscroll-contain border-t border-line p-2">
           <WatchRow
             icon="database"
             title={<><span>{sources}</span>{dot}</>}
@@ -426,8 +419,11 @@ function WatchStatus({ ledger, ledgerSelected, onSelectLedger, onOpenFollowing }
           )}
           <WatchRow
             icon="activity"
-            title={changes.status === 'ready' && recent.length > 0 ? `${recent.length.toLocaleString()} watch change${recent.length === 1 ? '' : 's'}` : 'Watch changes'}
-            figure={changes.status === 'failed' ? 'didn’t load' : recent.length === 0 && changes.status === 'ready' ? (since ? 'none in window' : 'none yet') : undefined}
+            title={changes.status === 'ready' && recent.length > 0 ? `${recentCount} watch change${recent.length === 1 ? '' : 's'}` : 'Watch changes'}
+            figure={changes.status === 'failed' ? 'didn’t load'
+              : changes.status !== 'ready' ? undefined
+                : recent.length === 0 ? (since ? `none since ${formatShortDate(since)}` : 'none yet')
+                  : since ? `since ${formatShortDate(since)}` : undefined}
             lines={recent[0] ? [`${recent[0].subject}: ${recent[0].oldValue ?? 'not in baseline'} → ${recent[0].newValue ?? 'no longer present'}`] : undefined}
             onClick={onOpenFollowing}
           />

@@ -152,7 +152,7 @@ export default function ChartFrame(props: ChartFrameProps) {
             <ClaimTags claim={claim} />
           </div>
           {showsData && (
-            <Button size="sm" variant="ghost" aria-pressed={view === 'table'} onClick={toggleView}>
+            <Button size="sm" variant="ghost" className="ml-auto" aria-pressed={view === 'table'} onClick={toggleView}>
               View as table
             </Button>
           )}

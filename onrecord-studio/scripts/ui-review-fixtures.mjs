@@ -153,9 +153,66 @@ Sincerely,
 Records Coordinator
 Environmental Services Department`;
 
+/**
+ * Each cited document's own extracted text, so a finding's passage is quoted from the file it
+ * names. A document not listed here is a response letter: the sample letter under its own request.
+ * @type {Record<number, string>}
+ */
+const DOCUMENT_TEXT = {
+  9001: `NOTICE OF INTENT TO REMOVE PROPERTY
+Imperial Avenue, 2900 block. Posted January 6, 2026 at 09:40.
+
+Property left on the public right of way will be removed no sooner than 72 hours after this notice is posted, consistent with San Diego Municipal Code section 63.0403.
+
+The set produced covers postings dated January 2 through March 31, 2026. No notice in the set is dated February 10, 11, 12 or 13, 2026.`,
+  9003: `Crew dispatch log, Environmental Services Department, January to March 2026 (times as entered, no zone recorded)
+
+2026-02-09 17:05 Notice posted, 2900 block Imperial Ave, crew 4.
+2026-02-12 06:10 Crew 4 on site, 2900 block Imperial Ave, removal begun.
+2026-02-12 05:20 Crew 2 on site, 3100 block Imperial Ave, removal begun before posted hours.
+2026-02-13 05:45 Crew 2 on site, 3300 block Imperial Ave, removal begun.`,
+  9012: `GOLDEN HALL STORAGE SERVICES, INVOICE REGISTER FY2025
+Agreement H-24-1180, authorized ceiling $1,250,000.00.
+
+Invoices 1 through 11 were paid between July 15, 2024 and June 30, 2025. Payments under Agreement H-24-1180 total $1,486,200.00 for FY2025, which is $236,200.00 above the authorized ceiling.
+
+No amendment to the agreement is attached to this register.`,
+  9013: `NOTICE OF EXTENSION, REQUEST 26-0418
+
+The City is extending the time to respond to your request by 14 days under Government Code section 7922.535(c). The extension is needed to search for and collect a voluminous amount of separate and distinct records.
+
+The production that followed consisted of three files totalling 61 pages.`,
+  9021: `date,site,capacity,occupied,open
+2025-11-03,20th & B,136,24,112
+2025-11-04,20th & B,136,31,105
+2025-11-05,20th & B,136,29,107`,
+  9041: `Fund 100000, accounts 512xxx, FY2024
+Adopted budget $51,800,000. Actual expenditures $61,200,000.
+Actual expenditures in fund 100000 accounts 512xxx were $61.2M against $51.8M adopted.`,
+  9061: `From: Outreach Coordinator, Homelessness Strategies and Solutions Department
+To: Provider operations staff
+Subject: Property storage and the 72-hour notice
+
+Please confirm which sites will receive storage referrals this week. The 72-hour notice must be posted before any property is bagged for storage, and crews should photograph each posting with a timestamp.`,
+  9062: `PRIVILEGE LOG, REQUEST 26-0615
+
+Item 4 withheld in full. The public interest served by not disclosing the records clearly outweighs the public interest served by disclosure. Gov. Code section 7922.000.
+
+Item 7 withheld in full. The public interest served by not disclosing the records clearly outweighs the public interest served by disclosure. Gov. Code section 7922.000.`,
+  9082: `COUNTY OF SAN DIEGO, HEALTH AND HUMAN SERVICES AGENCY
+
+The County has determined that the requested records are exempt from disclosure because the public interest served by not disclosing the records clearly outweighs the public interest served by disclosure, as provided in Government Code section 7922.000.`,
+  9051: `RETENTION SCHEDULE DP-3.33, BODY-WORN CAMERA RECORDINGS
+Recordings of enforcement contacts are retained for two years after the recording date. Recordings tagged as evidence are retained until the case is closed.`,
+};
+
+/** A document's extracted text: its own when listed, otherwise the letter under its request number. */
+const documentText = (/** @type {number} */ documentId) => DOCUMENT_TEXT[documentId]
+  ?? LETTER.replace('26-0412', String(documentRequest(documentId)).replace(/^(\d\d)(\d+)$/, '$1-$2'));
+
 /** @param {number} documentId @param {string} portalKey @param {number} offset @param {number} limit @returns {import('../src/types').DocumentTextChunk} */
 const textChunk = (documentId, portalKey, offset, limit) => {
-  const text = LETTER.replace('26-0412', String(documentRequest(documentId)).replace(/^(\d\d)(\d+)$/, '$1-$2'));
+  const text = documentText(documentId);
   const slice = text.slice(offset, offset + limit);
   return {
     documentId,
@@ -176,7 +233,7 @@ const textChunk = (documentId, portalKey, offset, limit) => {
  */
 const originalFrame = (documentId) => {
   const escape = (/** @type {string} */ line) => line.replace(/[\\()]/g, (c) => `\\${c}`).replace(/[^\x20-\x7e]/g, '-');
-  const lines = LETTER.split('\n').flatMap((line) => line.match(/.{1,92}(\s|$)/g) ?? ['']).slice(0, 52);
+  const lines = documentText(documentId).split('\n').flatMap((line) => line.match(/.{1,92}(\s|$)/g) ?? ['']).slice(0, 52);
   const content = `BT /F1 10 Tf 13 TL 60 740 Td ${lines.map((line) => `(${escape(line.trimEnd())}) '`).join(' ')} ET`;
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
@@ -203,15 +260,41 @@ const originalFrame = (documentId) => {
   return frame.buffer;
 };
 
-/** @param {number} documentId @param {number} start @param {number} end @param {string} label @returns {import('../src/types').FindingCitation} */
-const citation = (documentId, start, end, label) => ({
-  portalKey: request(documentRequest(documentId)).portalKey,
-  documentId,
-  characterStart: start,
-  characterEnd: end,
-  quote: LETTER.slice(start, end),
-  label,
+/**
+ * A citation of `quote` where it stands in the document's own text, so its offsets and its words agree.
+ * @param {number} documentId @param {string} quote @returns {import('../src/types').FindingCitation}
+ */
+const citation = (documentId, quote) => {
+  const start = documentText(documentId).indexOf(quote);
+  if (start < 0) throw new Error(`Document ${documentId} does not hold the cited passage "${quote.slice(0, 40)}"`);
+  return { portalKey: request(documentRequest(documentId)).portalKey, documentId, characterStart: start, characterEnd: start + quote.length, quote, label: documentName(documentId) };
+};
+
+/**
+ * A citation of the sample letter's characters `start` to `end`, under any document: the meeting
+ * fixtures' agenda spans.
+ * @param {number} documentId @param {number} start @param {number} end @param {string} label @returns {import('../src/types').FindingCitation}
+ */
+const letterCitation = (documentId, start, end, label) => ({
+  portalKey: request(documentRequest(documentId)).portalKey, documentId, characterStart: start, characterEnd: end, quote: LETTER.slice(start, end), label,
 });
+
+/** The passage each finding cites in its document, keyed on the finding id. */
+/** @type {Record<string, string>} */
+const CITED_PASSAGE = {
+  'f-policy-esd': 'The City of San Diego has completed its search for records responsive to your request dated March 31, 2026.',
+  'f-notice-shortfall': '2026-02-12 06:10 Crew 4 on site, 2900 block Imperial Ave, removal begun.',
+  'f-contract-ceiling': 'Payments under Agreement H-24-1180 total $1,486,200.00 for FY2025, which is $236,200.00 above the authorized ceiling.',
+  'f-boilerplate': 'The public interest served by not disclosing the records clearly outweighs the public interest served by disclosure.',
+  'f-absence': 'No notice in the set is dated February 10, 11, 12 or 13, 2026.',
+  'f-extension': 'The extension is needed to search for and collect a voluminous amount of separate and distinct records.',
+  'f-no-records': 'Please confirm which sites will receive storage referrals this week.',
+  'f-shared-language': 'the public interest served by not disclosing the records clearly outweighs the public interest served by disclosure',
+  'f-abatement-lead': '2026-02-12 05:20 Crew 2 on site, 3100 block Imperial Ave, removal begun before posted hours.',
+  'f-capacity-lead': '2025-11-03,20th & B,136,24,112',
+  'f-spending-lead': 'Actual expenditures in fund 100000 accounts 512xxx were $61.2M against $51.8M adopted.',
+  'f-dismissed': 'Recordings of enforcement contacts are retained for two years after the recording date.',
+};
 
 /** @param {string} id @param {import('../src/types').FindingKind} kind @param {import('../src/types').FindingSeverity} severity @param {number|null} bps @param {number} requestId @param {number|null} documentId @param {string} headline @param {string} explanation @param {number} hours @param {string} detector @param {boolean} [dismissed] @returns {import('../src/types').Finding} */
 const finding = (id, kind, severity, bps, requestId, documentId, headline, explanation, hours, detector, dismissed = false) => ({
@@ -222,7 +305,7 @@ const finding = (id, kind, severity, bps, requestId, documentId, headline, expla
   subject: { portalKey: request(requestId).portalKey, agencyId: request(requestId).agencyId, requestId, documentId, entityId: null },
   headline,
   explanation,
-  citations: documentId === null ? [] : [citation(documentId, 330, 510, documentName(documentId))],
+  citations: documentId === null ? [] : [citation(documentId, CITED_PASSAGE[id])],
   discoveredAt: iso(hours),
   lastSeenAt: iso(Math.max(1, hours - 6)),
   dismissedAt: dismissed ? iso(hours - 2) : null,
@@ -605,7 +688,7 @@ const CASE_CITATIONS = RESEARCH_EVIDENCE.map((e) => ({
 const leadFactors = (consequence, evidence, novelty, urgency) => [
   { label: 'Public consequence', score: consequence, maximum: 3, reason: consequence === 3 ? 'Finding concerns access to essential services or oversight; assess local impact before prioritizing.' : 'Finding concerns an allocation or public contract; verify materiality.' },
   { label: 'Evidence available', score: evidence, maximum: 3, reason: `${evidence} distinct cited source identities, capped at three. This counts available records, not independent corroboration or correctness.` },
-  { label: 'New lead', score: novelty, maximum: 2, reason: novelty === 2 ? 'No identical title and interpretation found in saved earlier dossiers; changed wording can affect this signal.' : 'Same title and interpretation appeared in an earlier dossier.' },
+  { label: 'Newly found', score: novelty, maximum: 2, reason: novelty === 2 ? 'No identical title and interpretation found in saved earlier dossiers; changed wording can affect this signal.' : 'Same title and interpretation appeared in an earlier dossier.' },
   { label: 'Decision urgency', score: urgency, maximum: 3, reason: urgency > 0 ? `A cited source also supports an agenda item dated ${day(-6)}; verify its relevance, latest agenda and participation deadline.` : 'No linked cited decision window in the next 14 days.' },
 ];
 
@@ -656,29 +739,29 @@ const CASES = [
 /** @type {import('../src/types').CalendarMeeting[]} */
 const MEETINGS = [
   {
-    id: 'm-council-1013', jurisdiction: 'City of San Diego', body: 'City Council', bodyCitation: citation(9002, 0, 17, 'Council agenda'),
-    date: day(-6), dateCitation: citation(9002, 0, 40, 'Agenda header'), dateNote: null, timing: 'UPCOMING', startTime: '10:00',
+    id: 'm-council-1013', jurisdiction: 'City of San Diego', body: 'City Council', bodyCitation: letterCitation(9002, 0, 17, 'Council agenda'),
+    date: day(-6), dateCitation: letterCitation(9002, 0, 40, 'Agenda header'), dateNote: null, timing: 'UPCOMING', startTime: '10:00',
     documents: [
       { role: 'AGENDA', portalKey: 'sd-council-agendas', documentId: 9101, label: 'Council agenda, October 13, 2026', sourceUrl: 'https://sandiego.hylandcloud.com/agenda-1013.pdf', posting: { state: 'RECORDED', lastModified: iso(70) }, minutesBeforeMeeting: 8460, differingFetches: 1 },
       { role: 'VIDEO', portalKey: 'sd-council-agendas', documentId: 9102, label: 'Council meeting video', sourceUrl: null, posting: { state: 'NOT_RECORDED', reason: 'NO_FETCH_RECORD' }, minutesBeforeMeeting: null, differingFetches: 0 },
     ],
     revisions: [{ earlierDocumentId: 9100, earlierLabel: 'Agenda (first posting)', laterDocumentId: 9101, laterLabel: 'Agenda (revised)', orderBasis: 'LAST_MODIFIED', changes: [{ kind: 'ADDED', item: 'Item 331', before: null, after: 'Ratification of shelter operations and property storage contracts' }, { kind: 'REWORDED', item: 'Item 204', before: 'Safe Sleeping Program update', after: 'Safe Sleeping Program update and site expansion' }], titlesNotCompared: [] }],
-    commentDeadlines: [citation(9002, 1500, 1600, 'eComment deadline')],
-    commentInstructions: [citation(9002, 1400, 1500, 'Comment instructions')],
+    commentDeadlines: [letterCitation(9002, 1500, 1600, 'eComment deadline')],
+    commentInstructions: [letterCitation(9002, 1400, 1500, 'Comment instructions')],
     suggestions: [{
-      id: 's-331', agendaItem: 'Item 331', title: 'Ratification of shelter operations and property storage contracts', itemCitation: citation(9002, 1200, 1300, 'Item 331'),
-      reasons: [{ kind: 'FINDING_SUBJECT', basis: 'COUNTED', reason: 'A stored finding counts payments above this contract\'s ceiling.', matched: 'H-24-1180', citation: citation(9012, 1100, 1200, 'Invoices'), findingId: 'f-contract-ceiling', gapKey: null, claimCheck: null }],
-      comment: { text: 'Released invoices show $1,486,200 paid under Agreement H-24-1180 against a $1,250,000 ceiling. Please explain the authority for the excess before ratifying.', bases: ['COUNTED'], deadline: citation(9002, 1500, 1600, 'eComment deadline'), instructions: [] },
+      id: 's-331', agendaItem: 'Item 331', title: 'Ratification of shelter operations and property storage contracts', itemCitation: letterCitation(9002, 1200, 1300, 'Item 331'),
+      reasons: [{ kind: 'FINDING_SUBJECT', basis: 'COUNTED', reason: 'A stored finding counts payments above this contract\'s ceiling.', matched: 'H-24-1180', citation: letterCitation(9012, 1100, 1200, 'Invoices'), findingId: 'f-contract-ceiling', gapKey: null, claimCheck: null }],
+      comment: { text: 'Released invoices show $1,486,200 paid under Agreement H-24-1180 against a $1,250,000 ceiling. Please explain the authority for the excess before ratifying.', bases: ['COUNTED'], deadline: letterCitation(9002, 1500, 1600, 'eComment deadline'), instructions: [] },
     }],
   },
   {
-    id: 'm-luh-1015', jurisdiction: 'City of San Diego', body: 'Land Use and Housing Committee', bodyCitation: citation(9002, 0, 17, 'LU&H agenda'),
+    id: 'm-luh-1015', jurisdiction: 'City of San Diego', body: 'Land Use and Housing Committee', bodyCitation: letterCitation(9002, 0, 17, 'LU&H agenda'),
     date: day(-8), dateCitation: null, dateNote: null, timing: 'UPCOMING', startTime: '13:00',
     documents: [{ role: 'AGENDA', portalKey: 'sd-council-agendas', documentId: 9104, label: 'LU&H agenda, October 15, 2026', sourceUrl: null, posting: { state: 'RECORDED', lastModified: iso(30) }, minutesBeforeMeeting: 9000, differingFetches: 0 }],
     revisions: [], commentDeadlines: [], commentInstructions: [], suggestions: [],
   },
   {
-    id: 'm-cpp-0924', jurisdiction: 'City of San Diego', body: 'Commission on Police Practices', bodyCitation: citation(9002, 0, 17, 'CPP agenda'),
+    id: 'm-cpp-0924', jurisdiction: 'City of San Diego', body: 'Commission on Police Practices', bodyCitation: letterCitation(9002, 0, 17, 'CPP agenda'),
     date: day(13), dateCitation: null, dateNote: null, timing: 'PAST', startTime: '18:00',
     documents: [
       { role: 'AGENDA', portalKey: 'sd-council-agendas', documentId: 9105, label: 'CPP agenda, September 24, 2026', sourceUrl: null, posting: { state: 'RECORDED', lastModified: iso(24 * 16) }, minutesBeforeMeeting: 4300, differingFetches: 0 },
@@ -985,8 +1068,11 @@ const full = {
       evidenceTruncated: false,
       related: FINDINGS.filter((x) => x.id !== f.id && x.subject.requestId === f.subject.requestId).map((x) => ({ id: x.id, kind: x.kind, headline: x.headline, severity: x.severity, confidence: x.confidence, basis: /** @type {const} */ ('SAME_REQUEST'), discoveredAt: x.discoveredAt })),
       relatedTruncated: false,
-      falsification: { statement: 'This lead is wrong if a notice or amendment dated before the removal exists but was not produced.', recordsToSeek: ['Posting photographs with timestamps', 'Amendment No. 4 to H-24-1180'] },
-      gaps: [{ gap: 'notComputed', portalKey: 'sandiego', documentId: 9003, reason: 'Spreadsheet times are local without a zone; not converted.' }],
+      falsification: FALSIFICATION[f.kind] ?? { statement: 'A record the release did not include accounts for what this finding counts.', recordsToSeek: ['the complete release for the request', 'the agency\'s index of responsive records'] },
+      // Gaps come from the finding's own cited documents (analysis/lead_dossier.rs); of these, only
+      // the dispatch log holds figures that can't be checked: its times carry no zone.
+      gaps: f.citations.filter((c) => c.documentId === 9003)
+        .map((c) => ({ gap: /** @type {const} */ ('notComputed'), portalKey: c.portalKey, documentId: c.documentId, reason: 'Spreadsheet times are local without a zone; not converted.' })),
       gapsTruncated: false,
       assembledAt: iso(0.1),
     };
@@ -1046,7 +1132,7 @@ const full = {
   hybrid_search: ({ query, limit }) => passageMatches(query).slice(0, Math.min(limit ?? 10, 8)).map((d, index) => ({
     stableId: `hs-${d.documentId}`, portalKey: d.portalKey, requestId: documentRequest(d.documentId), documentId: d.documentId, fileName: d.fileName, title: request(documentRequest(d.documentId)).title,
     agencyName: request(documentRequest(d.documentId)).agencyName, jurisdiction: 'San Diego', documentType: 'letter', publicationDate: day(30 + index), observationDate: null, effectiveDate: null,
-    characterStart: 330, characterEnd: 510, excerpt: `…${LETTER.slice(330, 480)}… (${query})`, lexicalRank: index + 1, semanticScore: 0.82 - index * 0.04, fusedScore: 0.9 - index * 0.05, retrievalStatus: 'HYBRID',
+    ...passageExcerpt(d.documentId, query), lexicalRank: index + 1, semanticScore: 0.82 - index * 0.04, fusedScore: 0.9 - index * 0.05, retrievalStatus: 'HYBRID',
   })),
   get_encampment_ordinance_report: () => ({
     nightHours: { sources: [{ snapshotId: 'snap-cfs-2025', displayName: 'Police calls for service 2025', sourceSha256: hex('snap-cfs-2025') }], firstActivity: iso(24 * 400), lastActivity: iso(24 * 30), sections: [{ section: '63.0403(a)(1)', activityType: 'Citation', activities: 1204, insideWindow: 980, atWindowBoundary: 41, outsideWindow: 160, timeNotRecorded: 23 }], listedActivities: [{ activityNumber: 'E25-118204', activityType: 'Citation', section: '63.0403(a)(1)', recordedAt: iso(24 * 200), atWindowBoundary: true, location: '1400 block Commercial St' }] },
@@ -1060,7 +1146,7 @@ const full = {
   fetch_published_pack_manifest: ({ pack }) => ({ pack, snapshots: true, packVersion: '2026.09.30', schemaVersion: '3', builtAt: iso(24 * 7), signerKeyId: 'onrecord-pack-2026', licenceId: 'ODC-By-1.0', licenceUrl: 'https://opendatacommons.org/licenses/by/1-0/', disclaimer: 'Republished City of San Diego open data. Check the source for corrections.', manifestSha256: hex('pack'), tables: [{ table: 'calls_for_service', files: [{ path: 'calls_for_service/2025.parquet', year: 2025, rows: 512_388, bytes: 21_044_100, partial: false, sourceUrl: DATASETS[1].sourceUri ?? '', retrievedAt: iso(24 * 7), datasetKind: 'CALLS_FOR_SERVICE', licence: null }], unchangedChecks: 4, lastCheckedAt: iso(24), changeRecords: 0 }] }),
   list_topic_packs: () => ({ topics: [{ id: 'encampments', title: 'Encampments and abatements', cues: ['encampment', 'abatement', '63.0403', 'unsafe camping'], documentTotal: 44, documents: [{ portalKey: 'sandiego', documentId: 9001, requestId: 26_0412, fileName: 'Abatement_Notices_Imperial_Ave_Q1-2026.pdf', matchedCues: ['abatement', '63.0403'], textCoverage: 'FULL' }], requestTotal: 6, requests: [{ portalKey: 'sandiego', requestId: 26_0412, title: REQUESTS[0].title, matchedCues: ['abatement'] }], findingTotal: 2, findings: [{ basis: 'COUNTED', anchorRequestId: 26_0412, finding: FINDINGS[1] }] }, { id: 'restrooms', title: 'Public restrooms', cues: ['restroom', 'comfort station'], documentTotal: 3, documents: [], requestTotal: 1, requests: [], findingTotal: 0, findings: [] }], documentsScanned: 1842, documentsPrefixOnly: 120, documentsFileNameOnly: 8, documentLimitReached: false, requestsScanned: 412, requestLimitReached: false, textPrefixCharacters: 20_000 }),
   list_starter_sets: () => ({ registryVersion: 4, sets: [{ id: 'homelessness', title: 'Homelessness accountability', summary: 'Sources for shelter capacity, abatements and spending.', entries: [{ id: 'sd-hssd', kind: 'SOURCE', title: 'Homelessness Strategies and Solutions', url: 'https://www.sandiego.gov/homelessness-strategies-and-solutions', what: 'Program reports and shelter dashboards', publisher: 'City of San Diego', termsNote: null, verifiedAsOf: day(20) }, { id: 'sd-nextrequest', kind: 'RECORD_REQUEST_TARGET', title: 'City of San Diego public records portal', url: 'https://sandiego.nextrequest.com', what: 'Released records and request status', publisher: 'City of San Diego', termsNote: null, verifiedAsOf: day(20) }] }] }),
-  run_intent_query: ({ utterance }) => ({ utterance, status: 'ANSWERED', plan: { kind: 'FINDINGS_FOR_AGENCY', agency: 'Environmental Services Department' }, summary: '4 stored findings name Environmental Services Department.', rows: FINDINGS.slice(0, 4).map((f) => ({ id: f.id, headline: f.headline, detail: f.explanation, basis: 'STORED_FINDING', basisStatement: 'A stored finding with its own citations.', relationshipKind: null, confidenceBasisPoints: f.confidence.kind === 'MEASURED' ? f.confidence.basisPoints : null, agencyName: 'Environmental Services Department', portalKeys: ['sandiego'], citations: f.citations, omittedCitationCount: 0, citationsUnavailableReason: null })), truncated: false, rowLimit: 25, notes: [], options: [] }),
+  run_intent_query: ({ utterance }) => ({ utterance, status: 'ANSWERED', plan: { kind: 'FINDINGS_FOR_AGENCY', agency: 'Environmental Services Department' }, summary: `${ESD_FINDINGS.length} stored findings name Environmental Services Department.`, rows: ESD_FINDINGS.map((f) => ({ id: f.id, headline: f.headline, detail: f.explanation, basis: 'STORED_FINDING', basisStatement: 'A stored finding with its own citations.', relationshipKind: null, confidenceBasisPoints: f.confidence.kind === 'MEASURED' ? f.confidence.basisPoints : null, agencyName: 'Environmental Services Department', portalKeys: ['sandiego'], citations: f.citations, omittedCitationCount: 0, citationsUnavailableReason: null })), truncated: false, rowLimit: 25, notes: [], options: [] }),
   get_meeting_calendar: () => ({ today: day(0), meetings: MEETINGS, postingCounts: { agendaFilesWithBothTimes: 3, under72HoursBeforeStart: 1, afterMeetingStart: 0 }, limitations: ['Posting times come from HTTP Last-Modified headers, not the Clerk\'s posting log.'] }),
   list_watches: () => WATCHES,
   list_watch_changes: ({ limit }) => WATCH_CHANGES.slice(0, limit),
@@ -1123,6 +1209,23 @@ function holdsWords(text, term) {
   return wordsOf(term).every((word) => words.has(word));
 }
 
+/** The undismissed findings about Environmental Services (agency 102): the palette question's answer. */
+const ESD_FINDINGS = FINDINGS.filter((f) => f.subject.agencyId === 102 && !f.dismissedAt);
+
+/** analysis/lead_dossier.rs `falsification_for`, for the kinds the fixtures hold. */
+/** @type {Partial<Record<import('../src/types').FindingKind, { statement: string, recordsToSeek: string[] }>>} */
+const FALSIFICATION = {
+  POLICY_VIOLATION_DETECTED: { statement: 'The counted deadline was met under a tolling or extension the record supports.', recordsToSeek: ['the extension or tolling notice', 'the date the request was received as recorded by the agency'] },
+  ENCAMPMENT_NOTICE_SHORTFALL: { statement: 'A longer notice was given by a route the recorded dates do not show.', recordsToSeek: ['the notice as posted, with its posting date', 'the cleanup log with its date'] },
+  CONTRACT_CEILING_EXCEEDED: { statement: 'An amendment raised the ceiling before the payments exceeded it.', recordsToSeek: ['the contract amendments with their approval dates', 'the payment register for the contract'] },
+  BOILERPLATE_DENIAL: { statement: 'The denial was tailored to this request and its stated grounds match the records withheld.', recordsToSeek: ['the withholding log naming each withheld record and its exemption', 'denials to comparable requests that differ in substance'] },
+  ABSENCE_OF_RECORDS: { statement: 'The records genuinely do not exist for the period requested.', recordsToSeek: ['the retention schedule for the record class', 'a later release or index listing the same class of record'] },
+  EXTENSION_ABUSE: { statement: 'Each extension cited a condition that existed for this request.', recordsToSeek: ['the extension notices with their stated grounds', 'the volume of records actually located'] },
+  NO_RECORDS_CONTRADICTED_BY_RELEASE: { statement: 'The later release covers a different request scope or a record created after the first response.', recordsToSeek: ['the creation dates of the later-released records', 'the scope stated in each request'] },
+  CROSS_CORPUS_SHARED_LANGUAGE: { statement: 'The shared language comes from a common template or statute, not coordination.', recordsToSeek: ['the template or model language both agencies used', 'the dates each agency adopted it'] },
+  ABATEMENT_LOG_LEAD: { statement: 'The notice was given earlier or by another route than the posting the log records, or the two rows are different events at one place.', recordsToSeek: ['the notices as posted, with their posting times', 'the abatement work orders and the stored-property log for the same places'] },
+};
+
 /**
  * The finding a command names, as the native side answers it: an id it does not hold is an error,
  * never another finding's record standing in for it.
@@ -1142,8 +1245,25 @@ function findingOrThrow(findings, findingId) {
 function passageMatches(query) {
   const words = query.toLowerCase().split(' ').filter(Boolean);
   if (words.length === 0) return [];
-  const text = LETTER.toLowerCase();
-  return DOCUMENTS.filter((d) => words.every((word) => text.includes(word) || d.fileName.toLowerCase().includes(word)));
+  return DOCUMENTS.filter((d) => {
+    const text = documentText(d.documentId).toLowerCase();
+    return words.every((word) => text.includes(word) || d.fileName.toLowerCase().includes(word));
+  });
+}
+
+/**
+ * The paragraph of a document that holds the query's first word found in it (else its first
+ * paragraph), with its offsets in the document's text.
+ * @param {number} documentId @param {string} query
+ */
+function passageExcerpt(documentId, query) {
+  const text = documentText(documentId);
+  const lowered = text.toLowerCase();
+  const at = query.toLowerCase().split(' ').filter(Boolean).map((word) => lowered.indexOf(word)).find((index) => index >= 0) ?? 0;
+  const start = text.lastIndexOf('\n\n', at) + 1 || 0;
+  const end = text.indexOf('\n\n', at) < 0 ? text.length : text.indexOf('\n\n', at);
+  const characterStart = text[start] === '\n' ? start + 1 : start;
+  return { characterStart, characterEnd: end, excerpt: text.slice(characterStart, end) };
 }
 
 /** @param {import('../src/types').Finding[]} findings @param {string} findingId @param {import('../src/types').ArtifactKind} kind @returns {import('../src/types').DraftedArtifact} */

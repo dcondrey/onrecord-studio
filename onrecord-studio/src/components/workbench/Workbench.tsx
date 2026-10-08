@@ -167,7 +167,7 @@ export function LeadQueue({ label, items, selectedId, onSelect }: {
 
   return (
     <>
-    <ol aria-label={label} className="space-y-1 p-2">
+    <ol aria-label={label} className="space-y-0.5 p-2">
       {shown.map((item, at) => (
         <li key={item.id}>
           <button
@@ -177,7 +177,7 @@ export function LeadQueue({ label, items, selectedId, onSelect }: {
             tabIndex={item.id === tabStop ? 0 : -1}
             onClick={() => onSelect(item.id)}
             onKeyDown={(event) => onKeyDown(event, at)}
-            className="lead-card focus-ring block w-full rounded-lg border border-transparent px-3 py-2.5 text-left hover:bg-raised/60"
+            className="lead-card focus-ring block w-full rounded-lg border border-transparent px-3 py-2 text-left hover:bg-raised/60"
           >
             {item.content}
           </button>
@@ -190,5 +190,21 @@ export function LeadQueue({ label, items, selectedId, onSelect }: {
       </div>
     )}
     </>
+  );
+}
+
+/** The queue while it is being ranked: four cards' shapes, laid out as LeadCard sets them. */
+export function QueueSkeleton() {
+  return (
+    <div role="status" aria-busy="true" className="space-y-0.5 p-2">
+      <span className="sr-only">Ranking leads</span>
+      {[0, 1, 2, 3].map((card) => (
+        <div key={card} aria-hidden="true" className="rounded-lg border border-transparent px-3 py-2">
+          <div className="flex h-5 items-center gap-1.5"><div className="skeleton h-3 w-6 rounded" /><div className="skeleton h-5 w-24 rounded-full" /></div>
+          <div className="mt-0.5 flex h-10 flex-col justify-center gap-1.5"><div className="skeleton h-3.5 w-full rounded" /><div className="skeleton h-3.5 w-3/4 rounded" /></div>
+          <div className="mt-1 flex h-4 items-center gap-1.5"><div className="skeleton h-3 w-14 rounded" /><div className="skeleton ml-1.5 h-1.5 flex-1 rounded-full" /><div className="skeleton h-3 w-5 rounded" /></div>
+        </div>
+      ))}
+    </div>
   );
 }

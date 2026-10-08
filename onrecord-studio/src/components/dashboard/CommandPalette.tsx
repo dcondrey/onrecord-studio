@@ -15,6 +15,7 @@ import { openHelp } from '../help/helpEvents';
 import { openSourceConnector } from './sourceEvents';
 import { OBJECT_ICONS } from '../objects/ObjectLink';
 import { useObjectSearch, type ObjectGroup } from './useObjectSearch';
+import { useKeepInView } from '../../hooks/useKeepInView';
 import { contrastCommandRegistry, motionCommandRegistry, scoreCommand, themeCommandRegistry, workspaceCommandRegistry } from '../../commands/registry';
 
 export const OPEN_COMMAND_PALETTE_EVENT = 'onrecord:open-command-palette';
@@ -608,9 +609,11 @@ export default function CommandPalette() {
     // closePalette and clearAnswer close over the gate and setters only, all stable.
   }, [answer, askError, asking, filteredActions, isOpen, mode, query, selectedIndex, setWorkspaceView]);
 
-  useEffect(() => {
-    document.getElementById(`command-${filteredActions[selectedIndex]?.id}`)?.scrollIntoView({ block: 'nearest' });
-  }, [filteredActions, selectedIndex]);
+  // Keeps the row Return would run in view, from the moment the list opens: the default selection
+  // can sit below the Leads and Questions groups.
+  const resultsScroller = useRef<HTMLDivElement>(null);
+  const showingList = isOpen && mode === 'commands' && !(asking || askError !== null || answer !== null);
+  useKeepInView(resultsScroller, '[role="option"][aria-selected="true"]', [filteredActions, selectedIndex, showingList]);
 
   if (!isOpen) return null;
 
@@ -696,7 +699,7 @@ export default function CommandPalette() {
           </p>
         )}
         {!answering && mode === 'commands' && (
-          <div className="max-h-[min(60vh,480px)] overflow-y-auto p-2">
+          <div ref={resultsScroller} className="max-h-[min(60vh,480px)] overflow-y-auto p-2">
             {noMatches && (
               <p className="px-3 pb-1 pt-3 text-heading text-fg-secondary">No matches for “{trimmedQuery}”</p>
             )}

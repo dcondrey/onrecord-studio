@@ -1,5 +1,6 @@
 import type { EvidenceBasis, IntentAnswer, IntentCitation, IntentOption, IntentRow, IntentStatus } from '../../types';
 import { useAppStore } from '../../store/useAppStore';
+import { clipPassage } from '../../utils/passage';
 import Badge from '../ui/Badge';
 
 const BASIS_LABEL: Record<EvidenceBasis, string> = {
@@ -26,25 +27,6 @@ const STATUS_LABEL: Record<IntentStatus, string> = {
 
 const QUOTE_LIMIT = 220;
 
-const SENTENCE_END = '.!?"”’)]';
-
-/**
- * Cuts at the last word boundary inside the limit so a quote never ends mid-word. A stored
- * excerpt can itself stop just after starting a new sentence ("…were located. T"); that dangling
- * fragment is dropped and marked as cut.
- */
-function trimQuote(quote: string): string {
-  const trimmed = quote.trim();
-  if (trimmed.length <= QUOTE_LIMIT) {
-    const lastSpace = trimmed.lastIndexOf(' ');
-    const dangling = lastSpace > 0 && SENTENCE_END.includes(trimmed[lastSpace - 1]) && trimmed.length - lastSpace - 1 <= 2;
-    return dangling ? `${trimmed.slice(0, lastSpace)} …` : trimmed;
-  }
-  const cut = trimmed.slice(0, QUOTE_LIMIT);
-  const boundary = cut.lastIndexOf(' ');
-  return `${(boundary > 0 ? cut.slice(0, boundary) : cut).replace(/[\s.,;:]+$/, '')}…`;
-}
-
 function citationOffsets(citation: IntentCitation): string | undefined {
   const parts: string[] = [];
   if (citation.documentId !== null) parts.push(`Document ${citation.documentId}`);
@@ -61,7 +43,7 @@ function Citation({ citation, sourceName }: { citation: IntentCitation; sourceNa
       {citation.label && <div className="text-caption text-muted">{citation.label}</div>}
       {citation.quote && (
         <blockquote className="mt-1 border-l-2 border-line-strong pl-2 text-body italic text-fg-secondary">
-          {trimQuote(citation.quote)}
+          {clipPassage(citation.quote, QUOTE_LIMIT)}
         </blockquote>
       )}
     </li>
