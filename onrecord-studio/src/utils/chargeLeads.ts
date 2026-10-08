@@ -1,6 +1,7 @@
 import type { AnalyticalDatasetSummary, AnalyticalSchema, SqlQueryResult } from '../types';
 import { quoteIdentifier, type DiscoveryQuery } from './dataDiscovery';
 import type { ServiceLead } from './serviceAccountability';
+import { numberOrNull, wholeNumber as shown, percent } from './leadRows';
 
 /** Arrest and citation logs as police departments release them to records requests: one row per
  * charge, several rows per arrest or citation. Found by the publisher's column names. */
@@ -62,9 +63,7 @@ FROM counted WHERE race IS NOT NULL GROUP BY race ORDER BY counted_activities DE
   return queries;
 }
 
-const count = (value: unknown): number => { const parsed = Number(value); return value == null || value === '' || !Number.isFinite(parsed) ? 0 : parsed; };
-const shown = (value: number) => Math.round(value).toLocaleString('en-US');
-const percent = (part: number, whole: number) => `${(100 * part / whole).toFixed(1)}%`;
+const count = (value: unknown): number => numberOrNull(value) ?? 0;
 const titled = (value: unknown) => String(value).toLowerCase().replace(/(^|[\s-])[a-z]/g, (letter) => letter.toUpperCase());
 
 export function chargeLeads(results: { query: DiscoveryQuery; result?: SqlQueryResult }[]): ServiceLead[] {

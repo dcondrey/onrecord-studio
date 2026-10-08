@@ -2,6 +2,7 @@ import type { AnalyticalDatasetSummary, AnalyticalSchema, SqlQueryResult } from 
 import { quoteIdentifier, type DiscoveryQuery } from './dataDiscovery';
 import { encampmentReportCoverage } from './capacityLeads';
 import { serviceRequestRoles, type ServiceLead } from './serviceAccountability';
+import { numberOrNull, wholeNumber as shown } from './leadRows';
 
 /** Encampment abatement logs as agencies release them: one table of notices posted and one of
  * abatements completed, each with a place and a time. Found by the publisher's column names. */
@@ -192,8 +193,7 @@ FROM paired`,
   }];
 }
 
-const count = (value: unknown): number => { const parsed = Number(value); return value == null || value === '' || !Number.isFinite(parsed) ? 0 : parsed; };
-const shown = (value: number) => Math.round(value).toLocaleString('en-US');
+const count = (value: unknown): number => numberOrNull(value) ?? 0;
 
 function repeatLeads(results: { query: DiscoveryQuery; result?: SqlQueryResult }[]): ServiceLead[] {
   const entry = results.find((item) => item.query.id === 'abatement_repeat_places');

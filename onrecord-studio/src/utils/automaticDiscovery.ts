@@ -11,6 +11,7 @@ import { callCompanions, callLeads, callQueries } from './callLeads';
 import { parkingLeads, parkingQueries } from './parkingLeads';
 import { housingCompanions, housingLeads, housingQueries } from './housingLeads';
 import { backlogChangeLeads, budgetTable, recurringServiceLeads, serviceAccountabilityLeads, serviceAccountabilityQueries, serviceCompanions, serviceRequestRoles, type LeadScope } from './serviceAccountability';
+import { numberOrNull as number, records } from './leadRows';
 
 export interface DiscoveryObservation {
   id: string;
@@ -38,13 +39,7 @@ export interface AutomaticProfile {
 
 const timeNames = /^(report_fy|fiscal_year|year|date|observed|observation_date|report_date|created_date|incident_date)$/;
 const dimensionNames = /^(city|jurisdiction|dept_name|department|agency|agency_name|program|program_name|community|district|zip|zip_code|status|category|type|budget_cycle|phase)$/;
-const number = (value: unknown): number | null => {
-  if (value == null || value === '') return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
 const display = (value: unknown) => value == null ? 'missing values' : String(value);
-const records = (result: SqlQueryResult) => result.rows.map((row) => Object.fromEntries(result.columns.map((name, i) => [name, row[i]])));
 
 export function snapshotFingerprint(schema: AnalyticalSchema, dataset: AnalyticalDatasetSummary): string {
   // A check that reads other tables is stale once those tables change, not only this one.

@@ -1,6 +1,7 @@
-import type { AnalyticalDatasetSummary, AnalyticalSchema, SqlQueryResult } from '../types';
+import type { AnalyticalDatasetSummary, AnalyticalSchema } from '../types';
 import { quoteIdentifier, type DiscoveryQuery } from './dataDiscovery';
 import { budgetTable, type ServiceLead } from './serviceAccountability';
+import { numberOrNull as count, wholeNumber as shown, percent, type QueryEntry as Entry, rowsOf, money } from './leadRows';
 
 /** The City's operating actuals file: the budget file's columns without `budget_cycle`. */
 const ACTUALS_COLUMNS = ['dept_name', 'report_fy', 'amount', 'account', 'account_number'];
@@ -209,25 +210,8 @@ export function spendingQueries(schema: AnalyticalSchema, dataset: AnalyticalDat
   return [...(budget ? [adoptedActualQuery(budget, dataset), overtimeQuery(budget, dataset)] : []), settlementQuery(dataset)];
 }
 
-const count = (value: unknown): number | null => {
-  if (value == null || value === '') return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
 const flag = (value: unknown) => value === true || value === 'true' || value === 1;
-const shown = (value: number) => Math.round(value).toLocaleString('en-US');
-const money = (value: number) => {
-  const size = Math.abs(value);
-  return `${value < 0 ? '-' : ''}$${size >= 1_000_000_000 ? `${(size / 1_000_000_000).toFixed(2)} billion` : size >= 1_000_000 ? `${(size / 1_000_000).toFixed(1)} million` : shown(size)}`;
-};
-const percent = (part: number, total: number) => `${(100 * part / total).toFixed(1)}%`;
-const records = (result: SqlQueryResult) => result.rows.map((row) => Object.fromEntries(result.columns.map((name, index) => [name, row[index]])));
-type Entry = { query: DiscoveryQuery; result?: SqlQueryResult };
 /** A result cut short by the row limit would give short counts, so it gives none. */
-const rowsOf = (results: Entry[], id: string) => {
-  const entry = results.find((item) => item.query.id === id);
-  return entry?.result?.rows.length && !entry.result.truncated ? { query: entry.query, rows: records(entry.result) } : null;
-};
 
 const belowAdopted = (adopted: number, actual: number) => adopted > 0 && (adopted - actual) * 100 >= BELOW_ADOPTED_PERCENT * adopted && adopted - actual >= BELOW_ADOPTED_DOLLARS;
 

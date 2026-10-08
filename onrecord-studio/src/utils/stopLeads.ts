@@ -1,6 +1,7 @@
 import type { AnalyticalDatasetSummary, AnalyticalSchema, CityDataset, SqlQueryResult } from '../types';
 import { quoteIdentifier, type DiscoveryQuery } from './dataDiscovery';
 import type { ServiceLead } from './serviceAccountability';
+import { numberOrNull as count, wholeNumber as shown, records, percent } from './leadRows';
 
 /** Police stop records (RIPA): one table of persons stopped, and companion tables keyed by the
  * same stop and person numbers. Tables are recognized by the publisher's column names. */
@@ -91,14 +92,6 @@ WHERE perceived = 'unhoused' AND basis IS NOT NULL GROUP BY basis ORDER BY perso
   return queries;
 }
 
-const count = (value: unknown): number | null => {
-  if (value == null || value === '') return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
-const shown = (value: number) => Math.round(value).toLocaleString('en-US');
-const percent = (part: number, whole: number) => `${(100 * part / whole).toFixed(1)}%`;
-const records = (result: SqlQueryResult) => result.rows.map((row) => Object.fromEntries(result.columns.map((name, i) => [name, row[i]])));
 const UNADJUSTED = 'Perception is the officer\'s entry, a person can have several results, and a difference in rates is not by itself a finding of unequal treatment.';
 
 export function stopLeads(results: { query: DiscoveryQuery; result?: SqlQueryResult }[]): ServiceLead[] {

@@ -1,5 +1,6 @@
 import type { AnalyticalColumnSummary, AnalyticalDatasetSummary, AnalyticalSchema, SqlQueryResult } from '../types';
 import { quoteIdentifier, type DiscoveryQuery } from './dataDiscovery';
+import { numberOrNull as count, wholeNumber as shown, records, money } from './leadRows';
 
 /** Columns of a service-request table (311-style reports), found by the publisher's own names. */
 export interface ServiceRequestRoles {
@@ -256,14 +257,6 @@ GROUP BY department, fiscal_year ORDER BY department, fiscal_year DESC`,
   return queries;
 }
 
-const count = (value: unknown): number | null => {
-  if (value == null || value === '') return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-};
-const shown = (value: number) => Math.round(value).toLocaleString('en-US');
-const records = (result: SqlQueryResult) => result.rows.map((row) => Object.fromEntries(result.columns.map((name, i) => [name, row[i]])));
-const money = (value: number) => Math.abs(value) >= 1_000_000 ? `$${(value / 1_000_000).toFixed(1)} million` : `$${shown(value)}`;
 const listed = (names: string[]) => names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)!}` : names[0];
 
 /** Who the publisher says handles the services named, and what the budget table adopts for them.

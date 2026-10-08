@@ -1,6 +1,7 @@
 import type { AnalyticalDatasetSummary, AnalyticalSchema, SqlQueryResult } from '../types';
 import { quoteIdentifier, type DiscoveryQuery } from './dataDiscovery';
 import type { ServiceLead } from './serviceAccountability';
+import { numberOrNull, wholeNumber as shown, records } from './leadRows';
 
 /** A city's agency-report export from its disclosure filing portal: one row per report on FPPC
  * Form 801, 802, 803 or 806. Found by the export's column names. */
@@ -45,9 +46,7 @@ FROM reports WHERE form = 'FPPC 803' GROUP BY official ORDER BY reports DESC, of
   }];
 }
 
-const count = (value: unknown): number => { const parsed = Number(value); return value == null || value === '' || !Number.isFinite(parsed) ? 0 : parsed; };
-const shown = (value: number) => Math.round(value).toLocaleString('en-US');
-const records = (result: SqlQueryResult) => result.rows.map((row) => Object.fromEntries(result.columns.map((name, index) => [name, row[index]])));
+const count = (value: unknown): number => numberOrNull(value) ?? 0;
 
 export function disclosureLeads(results: { query: DiscoveryQuery; result?: SqlQueryResult }[]): ServiceLead[] {
   const byOfficial = results.find((item) => item.query.id === 'disclosure_behested_by_official');
