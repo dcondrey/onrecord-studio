@@ -794,17 +794,6 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn rotate_signing_key_rejects_an_empty_reason() {
-        let directory = tempfile::tempdir().unwrap();
-        load_or_create_signing_key(directory.path()).await.unwrap();
-        assert!(
-            rotate_signing_key(directory.path(), directory.path(), "   ".to_string(), false)
-                .await
-                .is_err()
-        );
-    }
-
     /// Proves the atomic-activation design directly, not just its outcome: the archived copy
     /// (hard-linked, not renamed) holds exactly the old key's bytes, the active file now holds a
     /// *different* key that signs correctly, and — the case `rename`-based archival could get
@@ -927,90 +916,38 @@ mod tests {
         assert!(check_revocation("abcdef0124", &revocations).is_none());
     }
 
-    /// Proves the fix directly: returning the *first* matching entry instead of the worst one
-    /// would let `[RETIRED, COMPROMISED]` read as merely retired, silently hiding a real
-    /// compromise. Checked in both orderings since a naive `.find()` is order-sensitive.
+    /// Returning the first matching entry instead of the worst would let `[RETIRED, COMPROMISED]`
+    /// read as merely retired. Checked in both orders since a naive `.find()` is order-sensitive.
     #[test]
     fn check_revocation_returns_the_worst_severity_entry_regardless_of_order() {
-        let retired_then_compromised = SigningKeyRevocations {
-            schema_version: REVOCATION_LIST_SCHEMA.to_string(),
-            entries: vec![
-                revoked("key-a", REVOCATION_STATUS_RETIRED),
-                revoked("key-a", REVOCATION_STATUS_COMPROMISED),
-            ],
-        };
-        assert_eq!(
-            check_revocation("key-a", &retired_then_compromised)
-                .unwrap()
-                .status,
-            REVOCATION_STATUS_COMPROMISED
-        );
-
-        let compromised_then_retired = SigningKeyRevocations {
-            schema_version: REVOCATION_LIST_SCHEMA.to_string(),
-            entries: vec![
-                revoked("key-b", REVOCATION_STATUS_COMPROMISED),
-                revoked("key-b", REVOCATION_STATUS_RETIRED),
-            ],
-        };
-        assert_eq!(
-            check_revocation("key-b", &compromised_then_retired)
-                .unwrap()
-                .status,
-            REVOCATION_STATUS_COMPROMISED
-        );
+        for statuses in [
+            [REVOCATION_STATUS_RETIRED, REVOCATION_STATUS_COMPROMISED],
+            [REVOCATION_STATUS_COMPROMISED, REVOCATION_STATUS_RETIRED],
+        ] {
+            let revocations = SigningKeyRevocations {
+                schema_version: REVOCATION_LIST_SCHEMA.to_string(),
+                entries: statuses
+                    .iter()
+                    .map(|status| revoked("key-a", status))
+                    .collect(),
+            };
+            assert_eq!(
+                check_revocation("key-a", &revocations).unwrap().status,
+                REVOCATION_STATUS_COMPROMISED,
+                "{statuses:?}"
+            );
+        }
     }
 
     #[tokio::test]
-    async fn mark_key_compromised_escalates_an_already_retired_key() {
-        let directory = tempfile::tempdir().unwrap();
-        load_or_create_signing_key(directory.path()).await.unwrap();
-        let retired = rotate_signing_key(
-            directory.path(),
-            directory.path(),
-            "Routine.".to_string(),
-            false,
-        )
-        .await
-        .unwrap();
-
-        mark_key_compromised(
-            directory.path(),
-            directory.path(),
-            retired.retired_key_id.clone(),
-            "Found on a leaked backup.".to_string(),
-        )
-        .await
-        .unwrap();
-
-        let revocations = load_revocations(directory.path()).await.unwrap();
-        assert_eq!(
-            check_revocation(&retired.retired_key_id, &revocations)
-                .unwrap()
-                .status,
-            REVOCATION_STATUS_COMPROMISED
-        );
-    }
-
-    #[tokio::test]
-    async fn mark_key_compromised_rejects_an_unknown_key_id() {
+    async fn revocation_writes_refuse_an_empty_reason_or_an_unrecorded_key() {
         let directory = tempfile::tempdir().unwrap();
         load_or_create_signing_key(directory.path()).await.unwrap();
         assert!(
-            mark_key_compromised(directory.path(), directory.path(),
-                "never-recorded-key-id".to_string(),
-                "Reason.".to_string(),
-            )
-            .await
-            .is_err(),
-            "escalating a key this installation never recorded must fail, not silently invent an entry"
+            rotate_signing_key(directory.path(), directory.path(), "   ".to_string(), false)
+                .await
+                .is_err()
         );
-    }
-
-    #[tokio::test]
-    async fn mark_key_compromised_rejects_an_empty_reason() {
-        let directory = tempfile::tempdir().unwrap();
-        load_or_create_signing_key(directory.path()).await.unwrap();
         let retired = rotate_signing_key(
             directory.path(),
             directory.path(),
@@ -1027,10 +964,21 @@ mod tests {
         )
         .await
         .is_err());
+        assert!(
+            mark_key_compromised(
+                directory.path(),
+                directory.path(),
+                "never-recorded-key-id".to_string(),
+                "Reason.".to_string(),
+            )
+            .await
+            .is_err(),
+            "escalating a key this installation never recorded must fail, not invent an entry"
+        );
     }
 
     #[tokio::test]
-    async fn mark_key_compromised_is_idempotent_and_never_duplicates_the_entry() {
+    async fn mark_key_compromised_escalates_a_retired_key_once() {
         let directory = tempfile::tempdir().unwrap();
         load_or_create_signing_key(directory.path()).await.unwrap();
         let retired = rotate_signing_key(
@@ -1082,6 +1030,13 @@ mod tests {
                 .filter(|entry| entry.status == REVOCATION_STATUS_COMPROMISED)
                 .count(),
             1
+        );
+        assert_eq!(
+            check_revocation(&retired.retired_key_id, &revocations)
+                .unwrap()
+                .status,
+            REVOCATION_STATUS_COMPROMISED,
+            "escalation must turn an already-retired key into a compromised one"
         );
     }
 
@@ -1184,77 +1139,54 @@ mod tests {
         claim: String,
     }
 
+    /// Each tampering fails exactly its own check, and the pass/fail wrapper rejects all of them.
     #[test]
     fn each_of_the_three_checks_fails_independently_of_the_others() {
         let key = SigningKey::from_bytes(&[11_u8; 32]);
-        let package = sign_package(
-            Manifest {
-                claim: "unaltered".into(),
-            },
-            &key,
-        )
-        .unwrap();
-        let baseline = verify_package_detailed(&package);
-        assert!(baseline.all_passed());
-
-        // Editing the manifest field alone must fail only the manifest-consistency check.
-        let mut manifest_edited = package.clone();
-        manifest_edited.manifest.claim = "edited".into();
-        let checks = verify_package_detailed(&manifest_edited);
-        assert!(checks.canonical_bytes_hash_matches);
-        assert!(checks.signature_valid);
-        assert!(!checks.manifest_matches_canonical_bytes);
-
-        // Corrupting the recorded hash alone must fail only the hash check; the canonical bytes
-        // are untouched, so the signature over them still verifies and the manifest still matches.
-        let mut hash_corrupted = package.clone();
-        hash_corrupted.manifest_sha256 = "0".repeat(64);
-        let checks = verify_package_detailed(&hash_corrupted);
-        assert!(!checks.canonical_bytes_hash_matches);
-        assert!(checks.signature_valid);
-        assert!(checks.manifest_matches_canonical_bytes);
-
-        // Corrupting only the signature hex must fail only the signature check.
-        let mut signature_corrupted = package;
-        signature_corrupted.signature.signature_hex = "00".repeat(64);
-        let checks = verify_package_detailed(&signature_corrupted);
-        assert!(checks.canonical_bytes_hash_matches);
-        assert!(!checks.signature_valid);
-        assert!(checks.manifest_matches_canonical_bytes);
-    }
-
-    #[test]
-    fn a_signed_package_verifies_and_a_tampered_one_does_not() {
-        let key = SigningKey::from_bytes(&[7_u8; 32]);
-        let package = sign_package(
-            Manifest {
-                claim: "unaltered".into(),
-            },
-            &key,
-        )
-        .unwrap();
+        let signed = |claim: &str, key: &SigningKey| {
+            sign_package(
+                Manifest {
+                    claim: claim.into(),
+                },
+                key,
+            )
+            .unwrap()
+        };
+        let package = signed("unaltered", &key);
+        assert!(verify_package_detailed(&package).all_passed());
         verify_package(&package).expect("an untouched package must verify");
 
-        let mut tampered_manifest = package.clone();
-        tampered_manifest.manifest.claim = "altered after signing".into();
-        verify_package(&tampered_manifest)
-            .expect_err("editing the manifest field without the canonical bytes must be caught");
-
-        let mut tampered_bytes = package.clone();
-        tampered_bytes.manifest_canonical_base64 = sign_package(
-            Manifest {
-                claim: "altered after signing".into(),
-            },
+        let mut manifest_edited = package.clone();
+        manifest_edited.manifest.claim = "edited".into();
+        let mut hash_corrupted = package.clone();
+        hash_corrupted.manifest_sha256 = "0".repeat(64);
+        let mut signature_corrupted = package.clone();
+        signature_corrupted.signature.signature_hex = "00".repeat(64);
+        let mut foreign_bytes = package;
+        foreign_bytes.manifest_canonical_base64 = signed(
+            "altered after signing",
             &SigningKey::from_bytes(&[9_u8; 32]),
         )
-        .unwrap()
         .manifest_canonical_base64;
-        verify_package(&tampered_bytes)
-            .expect_err("canonical bytes signed by a different key must fail signature checks");
 
-        let mut tampered_signature = package;
-        tampered_signature.signature.signature_hex = "00".repeat(64);
-        verify_package(&tampered_signature)
-            .expect_err("a forged signature over unchanged bytes must still fail");
+        // Expected: (hash matches, signature valid, manifest matches).
+        for (name, tampered, expected) in [
+            ("manifest field", manifest_edited, (true, true, false)),
+            ("recorded hash", hash_corrupted, (false, true, true)),
+            ("signature", signature_corrupted, (true, false, true)),
+            ("canonical bytes", foreign_bytes, (false, false, false)),
+        ] {
+            let checks = verify_package_detailed(&tampered);
+            assert_eq!(
+                (
+                    checks.canonical_bytes_hash_matches,
+                    checks.signature_valid,
+                    checks.manifest_matches_canonical_bytes,
+                ),
+                expected,
+                "{name}"
+            );
+            assert!(verify_package(&tampered).is_err(), "{name}");
+        }
     }
 }
