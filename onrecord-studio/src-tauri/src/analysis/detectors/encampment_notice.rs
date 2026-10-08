@@ -30,7 +30,6 @@ use super::public_documents::{load_public_documents, PublicDocument};
 use super::text_shared::{load_agencies, split_units, Agency, AgencyIndex};
 use crate::{
     analysis::{
-        assertion_index::{extract_assertions, AssertionPredicate, AssertionValue},
         document_class::{classify, DocumentClass},
         finding::{
             finding_id, Finding, FindingCitation, FindingConfidence, FindingKind, FindingSeverity,
@@ -42,7 +41,7 @@ use crate::{
     ingestion::regional::source_jurisdiction,
     storage::{corpus::match_date, DuckDbRepository},
 };
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{NaiveDate, Utc};
 use duckdb::params;
 use std::collections::HashMap;
 
@@ -362,26 +361,6 @@ fn policy_duty(text: &str) -> Option<Period> {
         .min_by_key(|period| period.days)
 }
 
-fn stated_effective_date(text: &str) -> Option<NaiveDate> {
-    extract_assertions(text)
-        .into_iter()
-        .filter(|assertion| {
-            assertion.predicate == AssertionPredicate::EffectiveDate
-                && assertion.subject.starts_with("policy::")
-        })
-        .filter_map(|assertion| match assertion.value {
-            AssertionValue::Date(iso) => NaiveDate::parse_from_str(&iso, "%Y-%m-%d").ok(),
-            _ => None,
-        })
-        .max()
-}
-
-fn posted_date(value: &str) -> Option<NaiveDate> {
-    DateTime::parse_from_rfc3339(value.trim())
-        .ok()
-        .map(|time| time.with_timezone(&Utc).date_naive())
-}
-
 struct StatuteRow {
     statute_id: String,
     jurisdiction: String,
@@ -487,7 +466,7 @@ fn sources<'a>(
         if !has_phrase(&words(&document.text), ENCAMPMENT) {
             continue;
         }
-        let Some(posted) = posted_date(&document.created_at) else {
+        let Some(posted) = document.posted_date() else {
             continue;
         };
         let agency = agencies.get(&(document.portal_key.clone(), document.request_id));
@@ -495,7 +474,7 @@ fn sources<'a>(
             let (Some(agency), Some(duty)) = (agency, policy_duty(&document.text)) else {
                 continue;
             };
-            let stated = stated_effective_date(&document.text);
+            let stated = document.stated_effective_date();
             found.policies.push(PolicyDuty {
                 document,
                 agency_id: agency.id,
@@ -556,7 +535,7 @@ impl Duty<'_> {
         match self {
             Self::Policy(policy) => format!(
                 "'{}' (in force from {}) states: \"{}\".",
-                document_name(policy.document),
+                policy.document.name(),
                 policy.effective,
                 excerpt(&policy.document.text[policy.duty.span.0..policy.duty.span.1])
             ),
@@ -574,7 +553,7 @@ impl Duty<'_> {
         Some(match self {
             Self::Policy(policy) => format!(
                 "'{}' states no effective date, so the date it was posted ({}) is used.",
-                document_name(policy.document),
+                policy.document.name(),
                 policy.effective
             ),
             Self::Statute(statute) => format!(
@@ -661,7 +640,7 @@ fn finding(notice: &Notice, duty: &Duty, timed_by_upload: bool) -> Option<Findin
     let agency = notice
         .agency
         .map_or("The agency".to_string(), |agency| agency.name.clone());
-    let name = document_name(document);
+    let name = document.name();
     let mut caveats: Vec<String> = duty.effective_caveat().into_iter().collect();
     let effective_penalty = if duty.effective_stated() {
         0
@@ -807,13 +786,6 @@ fn citation(document: &PublicDocument, (start, end): Span, label: &str) -> Findi
         quote: Some(excerpt(&text[start..end])),
         label: Some(label.to_string()),
     }
-}
-
-fn document_name(document: &PublicDocument) -> String {
-    document
-        .file_name
-        .clone()
-        .unwrap_or_else(|| format!("document {}", document.document_id))
 }
 
 pub async fn run(repository: &DuckDbRepository) -> Result<Vec<Finding>, AppError> {

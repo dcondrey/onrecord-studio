@@ -252,10 +252,9 @@ async fn load_representative_citations(
                 };
                 out.push(FindingCitation {
                     portal_key,
-                    // Fall back to the request id when the request had no documents attached: a
-                    // request that closed with zero released documents is exactly the kind of
-                    // evidence this detector points at, and we should not silently drop it.
-                    document_id: doc_id.unwrap_or(request_id),
+                    // A request that closed with no released document is still evidence; its
+                    // label names the request.
+                    document_id: doc_id.unwrap_or(super::REQUEST_LEVEL_DOCUMENT_ID),
                     character_start: None,
                     character_end: None,
                     quote: None,

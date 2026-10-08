@@ -229,10 +229,9 @@ async fn load_representative_citations(
                 };
                 out.push(FindingCitation {
                     portal_key,
-                    // As with the just-in-time detector: fall back to request_id when no
-                    // released document is attached, so a request with zero visible documents
-                    // is not silently omitted.
-                    document_id: doc_id.unwrap_or(request_id),
+                    // A request that closed with no released document is still evidence; its
+                    // label names the request.
+                    document_id: doc_id.unwrap_or(super::REQUEST_LEVEL_DOCUMENT_ID),
                     character_start: None,
                     character_end: None,
                     quote: None,

@@ -1,6 +1,6 @@
 //! Actionable artifacts drafted from an autonomous [`Finding`].
 //!
-//! The findings inbox (Wave 1) surfaces observations. This module turns those observations into
+//! The findings inbox surfaces observations. This module turns those observations into
 //! drafts a user can send. A pattern or statistical finding (`is_legal_claim() == false`) yields
 //! only a narrowing records request aimed at the specific gap; it never accuses. Only a
 //! legal-claim finding, or a request whose statutory deadline the evaluator counts as exceeded
@@ -24,7 +24,10 @@ pub mod templates;
 
 use crate::profile::DisclosureContext;
 use crate::{
-    analysis::finding::{Finding, FindingCitation, FindingConfidence, FindingKind},
+    analysis::{
+        detectors::REQUEST_LEVEL_DOCUMENT_ID,
+        finding::{Finding, FindingCitation, FindingConfidence, FindingKind},
+    },
     integrity::sha256_hex,
 };
 use chrono::{DateTime, Utc};
@@ -283,12 +286,18 @@ const QUOTE_DISPLAY_CHARS: usize = 400;
 /// One bullet per citation: document, character range, quote. A range or quote the finding does
 /// not carry is said to be unrecorded rather than omitted, and a quote cut for length is marked.
 fn citation_line(cite: &FindingCitation) -> String {
-    let mut line = format!("- document {} on {}", cite.document_id, cite.portal_key);
+    let request_level = cite.document_id == REQUEST_LEVEL_DOCUMENT_ID;
+    let mut line = if request_level {
+        format!("- request record on {}", cite.portal_key)
+    } else {
+        format!("- document {} on {}", cite.document_id, cite.portal_key)
+    };
     if let Some(label) = cite.label.as_ref() {
         line.push_str(&format!(" ({label})"));
     }
     match (cite.character_start, cite.character_end) {
         (Some(start), Some(end)) => line.push_str(&format!(", characters {start}-{end}")),
+        _ if request_level => {}
         _ => line.push_str(", character range not recorded"),
     }
     if let Some(quote) = cite
@@ -307,8 +316,8 @@ fn citation_line(cite: &FindingCitation) -> String {
     line
 }
 
-/// The finding's citations as a bulletable list, or a placeholder when it carries none (Wave 1
-/// requires at least one, but a stored row may have lost them).
+/// The finding's citations as a bulletable list, or a placeholder when it carries none (a detector
+/// emits at least one, but a stored row may have lost them).
 pub(super) fn evidence_bullets(finding: &Finding) -> Vec<String> {
     if finding.citations.is_empty() {
         return vec!["- [ADD SPECIFIC EVIDENCE FROM YOUR RECORDS]".to_string()];
@@ -341,7 +350,9 @@ fn unknown_facts(finding: &Finding) -> Vec<String> {
         unknown.push("Your request number".to_string());
     }
     for cite in &finding.citations {
-        if cite.character_start.is_none() || cite.character_end.is_none() {
+        if cite.document_id != REQUEST_LEVEL_DOCUMENT_ID
+            && (cite.character_start.is_none() || cite.character_end.is_none())
+        {
             unknown.push(format!(
                 "Character range within document {}",
                 cite.document_id
@@ -537,30 +548,33 @@ mod tests {
         );
         assert_eq!(one, two);
         assert_eq!(one.len(), 20);
+        let appeal =
+            DraftedArtifact::build_id(ArtifactKind::Appeal, "abc123", "cpra_followup_v1", "US-CA");
+        assert_ne!(one, appeal);
     }
 
     #[test]
-    fn build_id_changes_when_kind_changes() {
-        let followup =
-            DraftedArtifact::build_id(ArtifactKind::FollowupRequest, "abc123", "cpra_v1", "US-CA");
-        let appeal = DraftedArtifact::build_id(ArtifactKind::Appeal, "abc123", "cpra_v1", "US-CA");
-        assert_ne!(followup, appeal);
-    }
-
-    #[test]
-    fn evidence_bullets_uses_citations_and_never_fabricates() {
-        let finding = sample_finding();
-        let bullets = evidence_bullets(&finding);
-        assert_eq!(bullets.len(), 1);
-        let line = &bullets[0];
-        assert!(line.contains("document 101 on test-portal"));
-        assert!(line.contains("PDF metadata"));
-        assert!(line.contains("ModDate 2025-01-01"));
-    }
-
-    #[test]
-    fn evidence_bullets_placeholder_when_no_citations() {
+    fn evidence_bullets_cite_only_what_the_finding_carries() {
         let mut finding = sample_finding();
+        finding.citations.push(FindingCitation {
+            portal_key: "test-portal".into(),
+            document_id: REQUEST_LEVEL_DOCUMENT_ID,
+            character_start: None,
+            character_end: None,
+            quote: None,
+            label: Some("Request 42".into()),
+        });
+        let bullets = evidence_bullets(&finding);
+        assert_eq!(bullets.len(), 2);
+        assert!(bullets[0].contains("document 101 on test-portal"));
+        assert!(bullets[0].contains("PDF metadata"));
+        assert!(bullets[0].contains("ModDate 2025-01-01"));
+        // A request-level citation names no document and has no range to be missing.
+        assert_eq!(bullets[1], "- request record on test-portal (Request 42)");
+        assert!(!unknown_facts(&finding)
+            .iter()
+            .any(|fact| fact.contains(&format!("document {REQUEST_LEVEL_DOCUMENT_ID}"))));
+
         finding.citations.clear();
         let bullets = evidence_bullets(&finding);
         assert_eq!(bullets.len(), 1);

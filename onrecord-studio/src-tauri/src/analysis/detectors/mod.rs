@@ -1,7 +1,7 @@
 //! Autonomous detector registry.
 //!
 //! Each detector is invoked by the `refresh_findings` command (fired on ingest completion and by
-//! explicit user request; no background heartbeat, per the current product decision). Detectors
+//! explicit user request; there is no background heartbeat). Detectors
 //! run sequentially against a shared repository; each is expected to be bounded (query with a
 //! limit, cap work by document count) so the refresh call stays responsive.
 //!
@@ -48,7 +48,19 @@ pub mod release_timing;
 pub mod response_time_claim;
 pub mod rolling_production;
 pub mod spending_cases;
-mod text_shared;
+pub(crate) mod text_shared;
+
+/// `FindingCitation::document_id` of a citation that names a request rather than a document.
+/// Stored document ids are portal-assigned or masked SHA-256 prefixes, so 0 names no document. A
+/// request id must never stand in: it would open whichever unrelated document shares the number.
+pub(crate) const REQUEST_LEVEL_DOCUMENT_ID: i64 = 0;
+
+/// An RFC 3339 instant from a stored timestamp column, in UTC.
+pub(super) fn parse_utc(value: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+    chrono::DateTime::parse_from_rfc3339(value.trim())
+        .ok()
+        .map(|instant| instant.with_timezone(&chrono::Utc))
+}
 
 /// Summary returned by [`refresh_all_findings`].
 #[derive(Debug, Clone, Default)]
@@ -243,14 +255,11 @@ mod tests {
 
     #[tokio::test]
     async fn refresh_all_findings_runs_registered_detectors_against_empty_corpus() {
-        // Runs each detector against an empty corpus. Every detector must be safe to call with
-        // no data present; this test guards that invariant.
+        // Every detector must run cleanly with no data present.
         let repo = fresh_repo().await;
         let summary = refresh_all_findings(&repo).await.expect("refresh runs");
-        assert!(
-            summary.detectors_run >= 1,
-            "at least held_back_response is registered"
-        );
+        assert!(summary.detectors_run >= 1);
+        assert_eq!(summary.detectors_failed, 0);
         assert_eq!(
             summary.findings_recorded, 0,
             "empty corpus yields no findings"

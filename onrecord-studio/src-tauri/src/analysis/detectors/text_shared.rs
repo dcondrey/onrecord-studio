@@ -20,7 +20,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 /// "No.") does not end a unit, so an abbreviated month stays with its date
 /// (`encampment_notice`'s need). `min_len`: a candidate unit whose trimmed length is below this is
 /// dropped (`response_time_claim` filters sub-12-character noise; pass `1` for "non-empty only").
-pub(super) fn split_units(
+pub(crate) fn split_units(
     text: &str,
     exclude_abbreviations: bool,
     min_len: usize,

@@ -12,6 +12,7 @@ use crate::types::{ClaimCheckOutcome, ClaimCheckScope, ClaimCheckView};
 use crate::{
     analysis::{
         assertion_index::AssertionValue,
+        detectors::text_shared::split_units,
         finding::{
             finding_id, Finding, FindingCitation, FindingConfidence, FindingKind, FindingSeverity,
             FindingSubject,
@@ -434,30 +435,7 @@ fn classify(sentence: &str, tokens: &[Word]) -> Option<ClaimKind> {
 /// Byte ranges of sentences. A period ends a sentence only before whitespace or end of text, so
 /// "$1.2 million" stays whole.
 fn sentences(text: &str) -> Vec<(usize, usize)> {
-    let mut ranges = Vec::new();
-    let mut start = 0usize;
-    let bytes = text.as_bytes();
-    let mut index = 0usize;
-    while index < bytes.len() {
-        let ends = match bytes[index] {
-            b'\n' | b';' | b'!' | b'?' => true,
-            b'.' => bytes
-                .get(index + 1)
-                .is_none_or(|next| next.is_ascii_whitespace()),
-            _ => false,
-        };
-        index += 1;
-        if ends {
-            if text[start..index].trim().len() >= 12 {
-                ranges.push((start, index));
-            }
-            start = index;
-        }
-    }
-    if text[start..].trim().len() >= 12 {
-        ranges.push((start, bytes.len()));
-    }
-    ranges
+    split_units(text, false, 12)
 }
 
 /// Whether `text` holds a `$` immediately followed by a digit.
@@ -1614,6 +1592,90 @@ pub fn to_finding(
     })
 }
 
+impl ClaimKind {
+    pub fn label(&self) -> String {
+        match self {
+            Self::BudgetBalance(BalanceState::Balanced) => "balanced budget".to_string(),
+            Self::BudgetBalance(BalanceState::Surplus(_)) => "surplus".to_string(),
+            Self::BudgetBalance(BalanceState::Deficit(_)) => "deficit".to_string(),
+            Self::WithinBudget(true) => "spending within budget".to_string(),
+            Self::WithinBudget(false) => "spending over budget".to_string(),
+            Self::Total { measure, .. } => format!("stated total, {}", measure.label()),
+            Self::PercentChange { measure, .. } => format!("percent change, {}", measure.label()),
+        }
+    }
+
+    fn basis_label(&self) -> Option<String> {
+        match self {
+            Self::BudgetBalance(_) => None,
+            Self::WithinBudget(_) => Some("adopted budget and actual expenditures".to_string()),
+            Self::Total { measure, .. } | Self::PercentChange { measure, .. } => {
+                Some(measure.label())
+            }
+        }
+    }
+}
+
+impl UnreconciledReason {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::NoMappedDataset => "no mapped dataset",
+            Self::AmbiguousScope => "ambiguous scope",
+            Self::MissingFiscalYear => "missing fiscal year",
+            Self::PartialOrRejectedRows => "partial or rejected rows",
+            Self::UnsupportedClaim => "unsupported claim",
+        }
+    }
+}
+
+/// The reader-facing form of one checked claim. Every outcome is carried, not only mismatches,
+/// so a reader can see what was checked and why a claim could not be bound.
+pub fn claim_check_view(claim: &QuantitativeClaim, evaluation: &ClaimEvaluation) -> ClaimCheckView {
+    let result = match evaluation {
+        ClaimEvaluation::Consistent {
+            query_ids,
+            observed,
+            band,
+            ..
+        } => ClaimCheckOutcome::Consistent {
+            observed: observed.clone(),
+            band: band.clone(),
+            query_ids: query_ids.clone(),
+        },
+        ClaimEvaluation::Mismatch {
+            query_ids,
+            claimed,
+            observed,
+            difference,
+            band,
+            ..
+        } => ClaimCheckOutcome::Mismatch {
+            claimed: claimed.clone(),
+            observed: observed.clone(),
+            difference: difference.clone(),
+            band: band.clone(),
+            query_ids: query_ids.clone(),
+        },
+        ClaimEvaluation::Unreconciled { reason, detail } => ClaimCheckOutcome::Unreconciled {
+            reason: reason.label().to_string(),
+            detail: detail.clone(),
+        },
+    };
+    ClaimCheckView {
+        claim_text: claim.source_text.chars().take(400).collect(),
+        kind_label: claim.kind.label(),
+        character_start: claim.char_start,
+        character_end: claim.char_end,
+        scope: ClaimCheckScope {
+            fiscal_year: claim.scope.fiscal_year,
+            fund: claim.scope.fund.clone(),
+            department: claim.scope.department.clone(),
+            basis: claim.kind.basis_label(),
+        },
+        result,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2080,51 +2142,31 @@ mod tests {
         (temp, repo)
     }
 
+    /// A directional claim against an exactly zero difference is false, never Consistent.
     #[tokio::test]
-    async fn a_flat_year_over_year_total_does_not_report_a_false_percent_change_as_consistent() {
+    async fn a_zero_difference_contradicts_a_directional_claim() {
         let (_temp, repo) = repository_with_boundary_cases().await;
         let mut evaluator = Evaluator::load(&repo).await.unwrap();
-        // Fund 100000's actual total (5xxx accounts only) is 120.03 in both FY 2022 and FY 2023: a
-        // flat total, so a claimed 5% increase is false even though `current - previous == 0`.
-        let claim = extract_claims(
-            "Total expenditures increased by 5% in fiscal year 2023 from the prior year in fund 100000.",
-        )
-        .remove(0);
-        let evaluation = evaluator.evaluate(&repo, "sandiego", &claim).await.unwrap();
-        assert!(
-            matches!(evaluation, ClaimEvaluation::Mismatch { ref observed, .. } if observed.contains("+0.00%")),
-            "a flat total falsely claimed as a 5% increase must not be Consistent: {evaluation:?}"
-        );
-    }
-
-    #[tokio::test]
-    async fn an_exact_budget_boundary_does_not_report_a_false_overspend_claim_as_consistent() {
-        let (_temp, repo) = repository_with_boundary_cases().await;
-        let mut evaluator = Evaluator::load(&repo).await.unwrap();
-        // Fund 200000: adopted budget 9000.00, actual 9000.00 exactly. A claim that spending
-        // exceeded the budget is false, even though actual - budget == 0.
-        let claim =
-            extract_claims("Spending exceeded the adopted budget in FY 2023 for fund 200000.")
-                .remove(0);
-        let evaluation = evaluator.evaluate(&repo, "sandiego", &claim).await.unwrap();
-        assert!(
-            matches!(evaluation, ClaimEvaluation::Mismatch { .. }),
-            "actual == budget exactly contradicts an 'exceeded budget' claim: {evaluation:?}"
-        );
-    }
-
-    #[tokio::test]
-    async fn a_zero_gap_does_not_report_a_false_deficit_claim_as_consistent() {
-        let (_temp, repo) = repository_with_boundary_cases().await;
-        let mut evaluator = Evaluator::load(&repo).await.unwrap();
-        // Fund 400000: revenue 1000.00 against actual 1000.00, an exactly balanced year. A bare
-        // "a deficit" claim is false, even though actual - revenue == 0.
-        let claim = extract_claims("Fund 400000 closed FY 2023 with a deficit.").remove(0);
-        let evaluation = evaluator.evaluate(&repo, "sandiego", &claim).await.unwrap();
-        assert!(
-            matches!(evaluation, ClaimEvaluation::Mismatch { .. }),
-            "a balanced year (gap == 0) contradicts a bare deficit claim: {evaluation:?}"
-        );
+        for (text, observed_needle) in [
+            // Fund 100000's 5xxx actuals are 120.03 in both FY 2022 and FY 2023.
+            (
+                "Total expenditures increased by 5% in fiscal year 2023 from the prior year in fund 100000.",
+                Some("+0.00%"),
+            ),
+            // Fund 200000: adopted budget 9000.00, actual 9000.00.
+            ("Spending exceeded the adopted budget in FY 2023 for fund 200000.", None),
+            // Fund 400000: revenue 1000.00 against actual 1000.00.
+            ("Fund 400000 closed FY 2023 with a deficit.", None),
+        ] {
+            let claim = extract_claims(text).remove(0);
+            let evaluation = evaluator.evaluate(&repo, "sandiego", &claim).await.unwrap();
+            let ClaimEvaluation::Mismatch { ref observed, .. } = evaluation else {
+                panic!("{text}: {evaluation:?}");
+            };
+            if let Some(needle) = observed_needle {
+                assert!(observed.contains(needle), "{text}: {observed}");
+            }
+        }
     }
 
     #[test]
@@ -2150,11 +2192,6 @@ mod tests {
         };
         assert_eq!(amount.hedge, Hedge::AtLeast);
     }
-}
-
-#[cfg(test)]
-mod fund_binding_tests {
-    use super::{normalized_tokens, tokens_match};
 
     #[test]
     fn a_stated_fund_binds_only_to_the_same_fund() {
@@ -2167,95 +2204,6 @@ mod fund_binding_tests {
         assert!(tokens_match(&number, "300000"));
         assert!(!tokens_match(&number, "3000001"));
     }
-}
-
-impl ClaimKind {
-    pub fn label(&self) -> String {
-        match self {
-            Self::BudgetBalance(BalanceState::Balanced) => "balanced budget".to_string(),
-            Self::BudgetBalance(BalanceState::Surplus(_)) => "surplus".to_string(),
-            Self::BudgetBalance(BalanceState::Deficit(_)) => "deficit".to_string(),
-            Self::WithinBudget(true) => "spending within budget".to_string(),
-            Self::WithinBudget(false) => "spending over budget".to_string(),
-            Self::Total { measure, .. } => format!("stated total, {}", measure.label()),
-            Self::PercentChange { measure, .. } => format!("percent change, {}", measure.label()),
-        }
-    }
-
-    fn basis_label(&self) -> Option<String> {
-        match self {
-            Self::BudgetBalance(_) => None,
-            Self::WithinBudget(_) => Some("adopted budget and actual expenditures".to_string()),
-            Self::Total { measure, .. } | Self::PercentChange { measure, .. } => {
-                Some(measure.label())
-            }
-        }
-    }
-}
-
-impl UnreconciledReason {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::NoMappedDataset => "no mapped dataset",
-            Self::AmbiguousScope => "ambiguous scope",
-            Self::MissingFiscalYear => "missing fiscal year",
-            Self::PartialOrRejectedRows => "partial or rejected rows",
-            Self::UnsupportedClaim => "unsupported claim",
-        }
-    }
-}
-
-/// The reader-facing form of one checked claim. Every outcome is carried, not only mismatches,
-/// so a reader can see what was checked and why a claim could not be bound.
-pub fn claim_check_view(claim: &QuantitativeClaim, evaluation: &ClaimEvaluation) -> ClaimCheckView {
-    let result = match evaluation {
-        ClaimEvaluation::Consistent {
-            query_ids,
-            observed,
-            band,
-            ..
-        } => ClaimCheckOutcome::Consistent {
-            observed: observed.clone(),
-            band: band.clone(),
-            query_ids: query_ids.clone(),
-        },
-        ClaimEvaluation::Mismatch {
-            query_ids,
-            claimed,
-            observed,
-            difference,
-            band,
-            ..
-        } => ClaimCheckOutcome::Mismatch {
-            claimed: claimed.clone(),
-            observed: observed.clone(),
-            difference: difference.clone(),
-            band: band.clone(),
-            query_ids: query_ids.clone(),
-        },
-        ClaimEvaluation::Unreconciled { reason, detail } => ClaimCheckOutcome::Unreconciled {
-            reason: reason.label().to_string(),
-            detail: detail.clone(),
-        },
-    };
-    ClaimCheckView {
-        claim_text: claim.source_text.chars().take(400).collect(),
-        kind_label: claim.kind.label(),
-        character_start: claim.char_start,
-        character_end: claim.char_end,
-        scope: ClaimCheckScope {
-            fiscal_year: claim.scope.fiscal_year,
-            fund: claim.scope.fund.clone(),
-            department: claim.scope.department.clone(),
-            basis: claim.kind.basis_label(),
-        },
-        result,
-    }
-}
-
-#[cfg(test)]
-mod claim_check_view_tests {
-    use super::*;
 
     #[test]
     fn every_outcome_is_carried_with_its_reason_or_figures() {

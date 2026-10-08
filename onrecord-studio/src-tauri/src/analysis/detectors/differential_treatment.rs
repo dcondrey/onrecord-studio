@@ -327,11 +327,6 @@ mod tests {
     }
 
     #[test]
-    fn empty_input_produces_no_findings() {
-        assert!(evaluate(&[]).is_empty());
-    }
-
-    #[test]
     fn single_attributed_class_produces_no_findings() {
         // An agency's only attributed class IS the population — no comparison possible.
         let rows = vec![class("journalist", 100, 0.5, 30.0, 0.9, 5.0)];

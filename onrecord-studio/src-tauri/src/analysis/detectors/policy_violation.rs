@@ -18,10 +18,10 @@
 //! Fee statements are not compared here: a fee in a response against a fee in a policy is one
 //! statement against another, which `contradictory_statement` already reports as such.
 
+use super::parse_utc;
 use super::public_documents::{load_public_documents, PublicDocument};
 use crate::{
     analysis::{
-        assertion_index::{extract_assertions, AssertionPredicate, AssertionValue},
         commitments::{extract_commitments, Commitment},
         document_class::{classify, DocumentClass},
         finding::{
@@ -33,7 +33,7 @@ use crate::{
     error::AppError,
     storage::DuckDbRepository,
 };
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, Utc};
 use duckdb::params;
 use std::collections::HashMap;
 
@@ -89,10 +89,13 @@ fn policies_in(documents: &[PublicDocument]) -> Vec<Policy<'_>> {
             if commitments.is_empty() {
                 return None;
             }
-            let stated = stated_effective_date(&document.text);
+            let stated = document
+                .stated_effective_date()
+                .and_then(|date| date.and_hms_opt(0, 0, 0))
+                .map(|start| start.and_utc());
             let takes_effect = match stated {
                 Some(date) => date,
-                None => parse_time(&document.created_at)?,
+                None => parse_utc(&document.created_at)?,
             };
             Some(Policy {
                 document,
@@ -223,7 +226,7 @@ async fn load_requests(repository: &DuckDbRepository) -> Result<Requests, AppErr
                     .map_err(
                     |error| AppError::Storage(format!("Failed to decode request row: {error}")),
                 )?;
-                let Some(created_at) = parse_time(&created) else {
+                let Some(created_at) = parse_utc(&created) else {
                     continue;
                 };
                 let measured_days =
@@ -332,27 +335,9 @@ fn measured_days(
     sourced: bool,
     extended: bool,
 ) -> Option<i64> {
-    let determined_at = parse_time(determined?)?;
+    let determined_at = parse_utc(determined?)?;
     (sourced && !extended && determined_at >= created_at)
         .then(|| (determined_at - created_at).num_days())
-}
-
-/// The latest effective date the policy states for itself. The latest is the conservative choice:
-/// a later start counts fewer requests.
-pub(super) fn stated_effective_date(text: &str) -> Option<DateTime<Utc>> {
-    extract_assertions(text)
-        .into_iter()
-        .filter(|assertion| {
-            assertion.predicate == AssertionPredicate::EffectiveDate
-                && assertion.subject.starts_with("policy::")
-        })
-        .filter_map(|assertion| match assertion.value {
-            AssertionValue::Date(iso) => NaiveDate::parse_from_str(&iso, "%Y-%m-%d").ok(),
-            _ => None,
-        })
-        .max()
-        .and_then(|date| date.and_hms_opt(0, 0, 0))
-        .map(|start| start.and_utc())
 }
 
 fn citation(document: &PublicDocument, commitment: &Commitment) -> FindingCitation {
@@ -378,15 +363,10 @@ fn policy_name(document: &PublicDocument) -> String {
         .unwrap_or_else(|| format!("document {}", document.document_id))
 }
 
-fn parse_time(value: &str) -> Option<DateTime<Utc>> {
-    DateTime::parse_from_rfc3339(value.trim())
-        .ok()
-        .map(|time| time.with_timezone(&Utc))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::NaiveDate;
 
     fn at(day: u32) -> DateTime<Utc> {
         NaiveDate::from_ymd_opt(2026, 3, day)

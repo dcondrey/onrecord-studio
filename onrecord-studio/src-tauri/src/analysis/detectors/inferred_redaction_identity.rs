@@ -769,12 +769,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn an_empty_corpus_yields_nothing() {
-        let repository = fresh_repo().await;
-        assert!(run(&repository).await.unwrap().is_empty());
-    }
-
-    #[tokio::test]
     async fn words_that_only_occur_nearby_are_not_a_match() {
         let repository = fresh_repo().await;
         {

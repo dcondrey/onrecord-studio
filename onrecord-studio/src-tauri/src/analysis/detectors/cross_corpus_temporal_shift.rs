@@ -341,7 +341,7 @@ fn evaluate_metric(
         if let Some((_, _, request_id)) = series.get(offset) {
             citations.push(FindingCitation {
                 portal_key: portal_key.to_string(),
-                document_id: 0, // request-level, not document-level; kept 0 per schema.
+                document_id: super::REQUEST_LEVEL_DOCUMENT_ID,
                 character_start: None,
                 character_end: None,
                 quote: None,

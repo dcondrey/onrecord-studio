@@ -285,10 +285,10 @@ fn evaluate(candidate: &Candidate, inspection: &Inspection) -> Option<Finding> {
          release cannot be explained by a same-cycle drafting pass. Consistent with a canned \
          document dropped in as the response.",
         request_id = candidate.request_id,
-        release = format_short(candidate.release_at),
+        release = candidate.release_at.format("%Y-%m-%d"),
         basis = candidate.release_basis.describe(),
         source = inspection.signal_source,
-        edit = format_short(edit),
+        edit = edit.format("%Y-%m-%d"),
         plural = if backdate_days == 1 { "" } else { "s" },
         rung_label = describe_rung(inspection.signal.rung),
         basis_points = inspection.signal.confidence_basis_points,
@@ -329,10 +329,6 @@ fn describe_rung(rung: NonC2paRung) -> &'static str {
         NonC2paRung::SelfConsistentMetadata => "internally self-consistent",
         NonC2paRung::CorroboratedAcrossFormats => "corroborated across independent sources",
     }
-}
-
-fn format_short(instant: DateTime<Utc>) -> String {
-    instant.format("%Y-%m-%d").to_string()
 }
 
 #[cfg(test)]

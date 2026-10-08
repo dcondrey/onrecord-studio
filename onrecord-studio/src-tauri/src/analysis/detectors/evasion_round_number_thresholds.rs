@@ -1,6 +1,6 @@
 //! Released document counts clustering suspiciously below round-number thresholds.
 //!
-//! Wave 2D's `absence_of_records` catches gaps in a self-labelled numeric sequence within one
+//! `absence_of_records` catches gaps in a self-labelled numeric sequence within one
 //! release. This detector operates one level up: an agency whose release counts across many
 //! requests cluster tightly at 9, 24, 49, 99, or 499 — never crossing the 10/25/50/100/500 line
 //! that would trigger a heavier review policy — is a pattern that survives sequence-gap scrutiny
@@ -11,9 +11,7 @@
 //! threshold with none above" — the reader interprets the intent.
 //!
 //! **Data source**: uses the corpus's per-request public document count. Does not require any
-//! agency-published threshold — the round-number heuristic is the signal. When Wave 2A's
-//! `assertion_index` gains a `review_trigger` extractor for agency policies stating specific
-//! thresholds, this detector can migrate off the heuristic to those extracted values.
+//! agency-published threshold — the round-number heuristic is the signal.
 
 use crate::{
     analysis::finding::{

@@ -714,12 +714,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn an_empty_corpus_yields_nothing() {
-        let repository = repository_with(&[]).await;
-        assert!(run(&repository).await.expect("run").is_empty());
-    }
-
-    #[tokio::test]
     async fn the_agency_and_the_baseline_each_need_their_minimum_of_releases() {
         let mut uploads = Vec::new();
         for (portal, agency_releases, baseline) in [
