@@ -19,7 +19,7 @@ export default function InlineError({ summary, detail, onRetry, className }: {
       </div>
       {detail && detail !== summary && (
         <details className="mt-2">
-          <summary className="text-caption text-muted">Technical details</summary>
+          <summary className="text-caption text-fg-secondary">Technical details</summary>
           <p className="mt-1 break-words font-mono text-code text-fg-secondary">{detail}</p>
         </details>
       )}
