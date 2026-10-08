@@ -45,6 +45,8 @@ pub struct DataPackTable {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct DataPackChange {
+    /// The change record's own path, as the manifest lists it.
+    pub path: String,
     /// The earlier snapshot's original, as the manifest lists it.
     pub previous: String,
     /// When the earlier snapshot was retrieved, RFC 3339; `None` when the manifest no longer
@@ -60,6 +62,55 @@ pub struct DataPackChange {
     pub changed: Option<u64>,
     /// More than half the records changed, so changed records are listed as removed and added.
     pub whole_records: bool,
+}
+
+/// Where an inspected pack is: a folder the user chose, or a published pack's kept manifest.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(
+    tag = "kind",
+    rename_all = "SCREAMING_SNAKE_CASE",
+    rename_all_fields = "camelCase"
+)]
+pub enum DataPackLocation {
+    Folder { path: String },
+    Published { pack: String, pack_version: String },
+}
+
+/// What one row of a change record says changed.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DataPackChangeKind {
+    Added,
+    Removed,
+    Changed,
+    ColumnAdded,
+    ColumnRemoved,
+}
+
+/// One row of a change record, as the publisher's cell text; a field the row does not carry is
+/// `None`, never an empty string.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DataPackChangeRow {
+    pub change: DataPackChangeKind,
+    pub publisher_record_id: Option<String>,
+    /// Which repeat of the publisher key, in file order, the row compares.
+    pub key_occurrence: Option<i64>,
+    pub field: Option<String>,
+    pub before: Option<String>,
+    pub after: Option<String>,
+    pub note: Option<String>,
+}
+
+/// A page of a change record's rows, in file order.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DataPackChangeRows {
+    pub path: String,
+    /// Rows in the whole record.
+    pub total: u64,
+    pub offset: u64,
+    pub rows: Vec<DataPackChangeRow>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

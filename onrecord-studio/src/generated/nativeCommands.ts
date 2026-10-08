@@ -50,6 +50,7 @@ export interface NativeCommandMap {
   fetch_city_dataset: { args: { dataset: Types.CityDataset; year?: number | null }; result: Types.AnalyticalImportResult };
   inspect_data_pack: { args: { path: string }; result: Types.DataPackSummary };
   import_data_pack_files: { args: { path: string; manifestSha256: string; files: string[] }; result: Types.DataPackImportOutcome[] };
+  read_data_pack_change_record: { args: { location: Types.DataPackLocation; manifestSha256: string; path: string; offset: number; limit: number }; result: Types.DataPackChangeRows };
   list_published_packs: { args: NoArgs; result: Types.PublishedPack[] };
   fetch_published_pack_manifest: { args: { pack: string }; result: Types.DataPackSummary };
   fetch_published_pack_files: { args: { pack: string; packVersion: string; manifestSha256: string; selection: Types.PublishedPackSelection[] }; result: Types.DataPackImportOutcome[] };

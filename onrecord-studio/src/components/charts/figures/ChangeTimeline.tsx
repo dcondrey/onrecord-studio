@@ -20,6 +20,10 @@ export interface ChangeTimelineProps {
   unchangedChecks: number;
   lastCheckedAt: string | null;
   storageKey?: string;
+  /** Opens a change record's rows; without it a pair is read-only. */
+  onOpen?(change: DataPackChange): void;
+  /** The path of the change record whose rows are open. */
+  openPath?: string | null;
 }
 
 const HEIGHT = 196;
@@ -80,7 +84,9 @@ export default function ChangeTimeline(props: ChangeTimelineProps) {
     .sort((a, b) => a.at - b.at || a.index - b.index);
   const unplaced = changes.length - placed.length;
   const checkedAt = lastCheckedAt ? parseDate(lastCheckedAt) : Number.NaN;
-  const roving = useRovingFocus({ shape: { rows: Math.max(1, placed.length) }, onActivate: () => {}, onEscape: tooltip.hide });
+  const { onOpen, openPath } = props;
+  const open = onOpen ? (i: number) => { const pair = placed[i]; if (pair) onOpen(pair.change); } : undefined;
+  const roving = useRovingFocus({ shape: { rows: Math.max(1, placed.length) }, onActivate: (i) => open?.(i), onEscape: tooltip.hide });
 
   const twinRows: Record<string, TwinCell>[] = changes.map((change) => ({
     pair: `${fileName(change.previous)} → ${fileName(change.current)}`,
@@ -167,7 +173,8 @@ export default function ChangeTimeline(props: ChangeTimelineProps) {
               <text x={LEFT} y={AXIS_Y - 20} className={MUTED_LABEL_CLASS}>removed ↓</text>
               {placed.map(({ change, at }, i) => {
                 const cx = x(at);
-                const name = `${day(change.previousRetrievedAt)} to ${day(change.currentRetrievedAt)}: ${change.added.toLocaleString('en-US')} added, ${change.removed.toLocaleString('en-US')} removed, ${change.changed === null ? `changed ${NOT_SEPARATED} (${NOT_SEPARATED_REASON})` : `${change.changed.toLocaleString('en-US')} changed`}.`;
+                const isOpen = openPath === change.path;
+                const name = `${day(change.previousRetrievedAt)} to ${day(change.currentRetrievedAt)}: ${change.added.toLocaleString('en-US')} added, ${change.removed.toLocaleString('en-US')} removed, ${change.changed === null ? `changed ${NOT_SEPARATED} (${NOT_SEPARATED_REASON})` : `${change.changed.toLocaleString('en-US')} changed`}.${open ? (isOpen ? ' Its rows are open below.' : ' Press Enter to open its rows.') : ''}`;
                 const tip = (
                   <TooltipContent
                     title={`${fileName(change.previous)} → ${fileName(change.current)}`}
@@ -198,8 +205,10 @@ export default function ChangeTimeline(props: ChangeTimelineProps) {
                       onPointerLeave: tooltip.hide,
                       onFocusMark: (box) => tooltip.show(tip, box),
                       onBlurMark: tooltip.hide,
+                      ...(open ? { onClick: () => open(i) } : {}),
                     }}
                   >
+                    {isOpen && <rect data-open-pair="" x={cx - column / 2 - 5} y={TOP - 6} width={column + 14} height={AXIS_Y - 24 - TOP} rx={3} style={{ fill: VIZ.track }} />}
                     {/* A measured zero is a zero-length tick; its '0' is the lane label, so Bar's own '0' is not drawn twice. */}
                     {change.added > 0 && <Bar orient="vertical" band={{ pos: cx - column / 2, thickness: column }} value={measured(change.added)} scale={y} motionKey={`added-${i}`} />}
                     {change.removed > 0 && <Bar orient="vertical" band={{ pos: cx - column / 2, thickness: column }} value={measured(-change.removed)} scale={y} motionKey={`removed-${i}`} />}

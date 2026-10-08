@@ -2,9 +2,12 @@ use crate::commands::validation::{required_text, validate_text};
 use crate::error::AppError;
 use crate::integrity::is_sha256_hex;
 use crate::packs::published::{self, PublishedPackRoot};
-use crate::packs::{import, pinned_pack_keys};
+use crate::packs::{import, pack_relative, pinned_pack_keys};
 use crate::storage::sqlite::DuckDbRepository;
-use crate::types::{DataPackImportOutcome, DataPackSummary, PublishedPack, PublishedPackSelection};
+use crate::types::{
+    DataPackChangeRows, DataPackImportOutcome, DataPackLocation, DataPackSummary, PublishedPack,
+    PublishedPackSelection,
+};
 use std::path::PathBuf;
 use tauri::State;
 
@@ -79,6 +82,49 @@ fn pack_directory(path: &str) -> Result<PathBuf, AppError> {
 #[tauri::command]
 pub async fn inspect_data_pack(path: String) -> Result<DataPackSummary, AppError> {
     import::inspect(pack_directory(&path)?, pinned_pack_keys()).await
+}
+
+/// A page of the change record `path` from the pack at `location`, while its manifest is still
+/// the one inspected (`manifest_sha256`).
+#[tauri::command]
+pub async fn read_data_pack_change_record(
+    location: DataPackLocation,
+    manifest_sha256: String,
+    path: String,
+    offset: u64,
+    limit: u64,
+    root: State<'_, PublishedPackRoot>,
+) -> Result<DataPackChangeRows, AppError> {
+    require_inspected(&manifest_sha256)?;
+    let record = required_text(&path, "Change record", 4096)?.to_owned();
+    let (kept, file) = match location {
+        DataPackLocation::Folder { path } => {
+            let directory = pack_directory(&path)?;
+            let file = import::listed_change_record(
+                directory.clone(),
+                manifest_sha256,
+                record.clone(),
+                pinned_pack_keys(),
+            )
+            .await?;
+            let relative = pack_relative(&file.path).ok_or_else(|| {
+                AppError::DataParsing(format!("{record} is a path outside the pack"))
+            })?;
+            (directory.join(relative), file)
+        }
+        DataPackLocation::Published { pack, pack_version } => {
+            published::change_record(
+                root.0.clone(),
+                required_text(&pack, "Data pack", 64)?,
+                required_text(&pack_version, "Data pack version", 64)?,
+                manifest_sha256,
+                record,
+                pinned_pack_keys(),
+            )
+            .await?
+        }
+    };
+    import::read_change_rows(kept, file, offset, limit).await
 }
 
 #[tauri::command]

@@ -65,6 +65,7 @@ export function MarkGroup({ interaction, box, ringRadius = 3, children }: { inte
       onPointerMove={interaction.onPointerMove}
       onPointerLeave={interaction.onPointerLeave}
       onClick={interaction.onClick}
+      style={interaction.onClick ? { cursor: 'pointer' } : undefined}
     >
       <rect x={hit.x} y={hit.y} width={hit.width} height={hit.height} fill="transparent" pointerEvents="all" />
       {children}

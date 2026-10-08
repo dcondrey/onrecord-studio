@@ -628,7 +628,7 @@ mod tests {
             .all(|row| row.6.as_deref() == Some(WHOLE_RECORDS_NOTE)));
 
         // Shown to the app, the whole-records pair has no changed count rather than a 0.
-        assert_eq!(most.exposed(None, None).changed, None);
-        assert_eq!(half.exposed(None, None).changed, Some(2));
+        assert_eq!(most.exposed("", None, None).changed, None);
+        assert_eq!(half.exposed("", None, None).changed, Some(2));
     }
 }

@@ -3,7 +3,7 @@ import { open as chooseFolder } from '@tauri-apps/plugin-dialog';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
-import type { AnalyticalDatasetSummary, DataPackFileSummary, DataPackImportOutcome, DataPackSummary, DataPackTable, PublishedPack, PublishedPackSelection } from '../../types';
+import type { AnalyticalDatasetSummary, DataPackChange, DataPackFileSummary, DataPackImportOutcome, DataPackLocation, DataPackSummary, DataPackTable, PublishedPack, PublishedPackSelection } from '../../types';
 import { profileObservations, recurringObservations } from '../../utils/automaticDiscovery';
 import { gapRequestInput, recordGaps, type RecordGap } from '../../utils/recordGaps';
 import { useAutomaticDiscovery } from './AutomaticDiscoveryProvider';
@@ -11,6 +11,7 @@ import Icon from '../ui/icons';
 import { formatValue } from '../charts/core/format';
 import { absent } from '../charts/core/nulls';
 import ChangeTimeline from '../charts/figures/ChangeTimeline';
+import ChangeRecordRows from './ChangeRecordRows';
 import StateGrid, { type StateGridCell, type StateGridRow } from '../charts/figures/StateGrid';
 import { seqStep } from '../charts/marks/HeatCell';
 
@@ -163,11 +164,25 @@ function snapshotHistory(table: DataPackTable): string | null {
 }
 
 /** The change timeline when the manifest reports its change records; the summary line otherwise. */
-function SnapshotHistory({ table, pack }: { table: DataPackTable; pack: string }) {
+function SnapshotHistory({ table, summary, location }: { table: DataPackTable; summary: DataPackSummary; location: DataPackLocation }) {
+  const [open, setOpen] = useState<DataPackChange | null>(null);
   // A manifest summary from before change records were reported carries no `changes` at all.
   const changes: DataPackTable['changes'] | undefined = table.changes;
   if (Array.isArray(changes) && (changes.length > 0 || table.unchangedChecks > 0)) {
-    return <ChangeTimeline table={table.table} changes={changes} unchangedChecks={table.unchangedChecks} lastCheckedAt={table.lastCheckedAt} storageKey={`pack-changes:${pack}:${table.table}`} />;
+    return (
+      <>
+        <ChangeTimeline
+          table={table.table}
+          changes={changes}
+          unchangedChecks={table.unchangedChecks}
+          lastCheckedAt={table.lastCheckedAt}
+          storageKey={`pack-changes:${summary.pack}:${table.table}`}
+          onOpen={(change) => setOpen((current) => (current?.path === change.path ? null : change))}
+          openPath={open?.path ?? null}
+        />
+        {open && <ChangeRecordRows key={`${summary.manifestSha256}:${open.path}`} location={location} manifestSha256={summary.manifestSha256} change={open} onClose={() => setOpen(null)} />}
+      </>
+    );
   }
   const history = snapshotHistory(table);
   return history ? <p className="text-muted">{history}</p> : null;
@@ -493,7 +508,7 @@ function PublishedPacks({ onImported }: { onImported?: () => void }) {
           {summary.tables.map((table) => (
             <fieldset key={table.table} className="space-y-1">
               <legend className="font-semibold text-fg">{table.table}</legend>
-              <SnapshotHistory table={table} pack={summary.pack} />
+              <SnapshotHistory table={table} summary={summary} location={{ kind: 'PUBLISHED', pack: summary.pack, packVersion: summary.packVersion }} />
               {choices.filter((choice) => choice.table === table.table).map((choice) => (
                 <label key={choice.key} className="flex items-center gap-2 text-fg-secondary">
                   <input type="checkbox" disabled={!importable(choice)} checked={selected.has(choice.key)} onChange={() => toggle(choice.key)} />
@@ -572,7 +587,7 @@ export default function DataPackImport({ onImported }: { onImported?: () => void
           {summary.tables.map((table) => (
             <fieldset key={table.table} className="space-y-1">
               <legend className="font-semibold text-fg">{table.table}</legend>
-              <SnapshotHistory table={table} pack={summary.pack} />
+              <SnapshotHistory table={table} summary={summary} location={{ kind: 'FOLDER', path: folder }} />
               {table.files.map((file) => (
                 <label key={file.path} className="flex items-center gap-2 text-fg-secondary">
                   <input type="checkbox" disabled={file.datasetKind === null} checked={selected.has(file.path)} onChange={() => toggle(file.path)} />

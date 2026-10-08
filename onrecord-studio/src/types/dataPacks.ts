@@ -37,6 +37,8 @@ export interface DataPackTable {
 
 /** One change record between two retrievals of a table's publisher file. */
 export interface DataPackChange {
+  /** The change record's own path, as the manifest lists it. */
+  path: string;
   previous: string;
   /** `null` when the manifest no longer lists the earlier original. */
   previousRetrievedAt: string | null;
@@ -47,6 +49,33 @@ export interface DataPackChange {
   /** `null` when `wholeRecords`: changed records were listed as removed and added, not separated. */
   changed: number | null;
   wholeRecords: boolean;
+}
+
+/** Where an inspected pack is: a chosen folder, or a published pack's kept manifest. */
+export type DataPackLocation =
+  | { kind: 'FOLDER'; path: string }
+  | { kind: 'PUBLISHED'; pack: string; packVersion: string };
+
+export type DataPackChangeKind = 'added' | 'removed' | 'changed' | 'column_added' | 'column_removed';
+
+/** One row of a change record, as the publisher's cell text; `null` where the row carries none. */
+export interface DataPackChangeRow {
+  change: DataPackChangeKind;
+  publisherRecordId: string | null;
+  /** Which repeat of the publisher key, in file order, the row compares. */
+  keyOccurrence: number | null;
+  field: string | null;
+  before: string | null;
+  after: string | null;
+  note: string | null;
+}
+
+/** A page of a change record's rows, in file order. */
+export interface DataPackChangeRows {
+  path: string;
+  total: number;
+  offset: number;
+  rows: DataPackChangeRow[];
 }
 
 export interface DataPackFileSummary {
