@@ -6,8 +6,8 @@ import { severityGlyph } from './findingSeverity';
 import type { Finding } from '../../types';
 
 /**
- * Cross-corpus findings panel: the four Wave 8 patterns that span jurisdictions, agencies, and
- * time. Displays as its own section below the ranked FindingsInbox because their subject
+ * Cross-corpus findings panel: the four detector patterns that span jurisdictions, agencies,
+ * and time. Displays as its own section below the ranked FindingsInbox because their subject
  * anchors (jurisdiction pairs, change-points) don't fit the inbox's severity-first ranking as
  * cleanly as a per-request finding does.
  *

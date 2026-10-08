@@ -171,9 +171,6 @@ export default function CommandPalette() {
       perform: () => window.requestAnimationFrame(() => openHelp()),
     },
     {
-      // Opens the subject dossier for a name the user types. The prompt is the native window
-      // one — the palette itself is a keyboard-first surface, and a full inline text step here
-      // would drift into Tier 5's intent-router territory, which is out of Wave 2E's scope.
       id: 'open-subject-dossier',
       label: 'Open subject dossier…',
       detail: 'Stitch findings, entity graph, and provenance for one person, agency or record',

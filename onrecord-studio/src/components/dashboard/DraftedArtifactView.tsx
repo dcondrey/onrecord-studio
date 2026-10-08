@@ -22,7 +22,7 @@ export function confidenceLabel(confidence: FindingConfidence): string {
 }
 
 /** The text that leaves the app: the edited body, then the disclosure the body cannot remove. */
-export function outgoingText(body: string, disclosure: string | null): string {
+function outgoingText(body: string, disclosure: string | null): string {
   return disclosure === null
     ? body
     : `${body.trimEnd()}\n\n---\nDisclosure: ${disclosure}\n`;
