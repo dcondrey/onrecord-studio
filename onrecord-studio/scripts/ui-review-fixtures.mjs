@@ -2,6 +2,8 @@
 // Invented San Diego sample data for the UI review harness (scripts/capture-ui-review.mjs). Every
 // person, vendor, request number, quote and digest below is fabricated for screenshots; public
 // bodies keep their real names so the views read as they would for a San Diego investigator.
+// Under `--data=real` the surfaces the San Diego packs hold are answered from
+// scripts/ui-review-fixtures-real.mjs instead (see `realHandlers`).
 // Type-check against the IPC contract with:
 //   npx tsc --noEmit --allowJs --checkJs --strict --module esnext --moduleResolution bundler \
 //     --target es2022 --skipLibCheck scripts/ui-review-fixtures.mjs
@@ -247,8 +249,8 @@ const FINDINGS = [
   finding('f-dismissed', 'REGENERATED_RESPONSE', 'INFO', 5100, 26_0602, 9051, 'Retention schedule PDF regenerated two days after the request was closed', 'Producer metadata changed; text is identical. Dismissed as an administrative re-export.', 70, 'regeneration', true),
 ];
 
-/** @param {import('../src/types').FindingsFilter | null | undefined} filter */
-const filterFindings = (filter) => FINDINGS.filter((f) =>
+/** @param {import('../src/types').FindingsFilter | null | undefined} filter @param {import('../src/types').Finding[]} [findings] */
+const filterFindings = (filter, findings = FINDINGS) => findings.filter((f) =>
   (filter?.includeDismissed || f.dismissedAt === null)
   && (!filter?.id || f.id === filter.id)
   && (!filter?.portalKey || f.subject.portalKey === filter.portalKey)
@@ -699,7 +701,7 @@ const full = {
   run_data_maintenance: () => ({ policy: { enabled: true, autoImport: true, autoRefresh: true, refreshHours: 24, retentionMode: 'ORIGINALS', retainedFileBudgetBytes: 20_000_000_000 }, effectiveAt: iso(24 * 3), retainedFileBytes: 6_420_118_004, referencedDocuments: 12, reclaimedFileBytes: 0, events: [] }),
   list_registry_snapshots: () => [{ registry: 'CSLB_LICENSE_MASTER', identifierKind: 'CONTRACTOR_LICENSE', sourcePath: '/Users/reporter/Downloads/MasterLicenseData.csv', fileSha256: hex('cslb'), importedAt: iso(24 * 15), recordCount: 301_442, skippedRowCount: 18 }],
   list_published_packs: () => [{ pack: 'san-diego-city', repositoryUrl: 'https://huggingface.co/datasets/onrecord/san-diego-city' }],
-  fetch_published_pack_manifest: ({ pack }) => ({ pack, snapshots: true, packVersion: '2026.09.30', schemaVersion: '3', builtAt: iso(24 * 7), signerKeyId: 'onrecord-pack-2026', licenceId: 'ODC-By-1.0', licenceUrl: 'https://opendatacommons.org/licenses/by/1-0/', disclaimer: 'Republished City of San Diego open data. Check the source for corrections.', manifestSha256: hex('pack'), tables: [{ table: 'calls_for_service', files: [{ path: 'calls_for_service/2025.parquet', year: 2025, rows: 512_388, bytes: 21_044_100, partial: false, sourceUrl: DATASETS[1].sourceUri ?? '', retrievedAt: iso(24 * 7), datasetKind: 'CALLS_FOR_SERVICE' }], unchangedChecks: 4, lastCheckedAt: iso(24), changeRecords: 0 }] }),
+  fetch_published_pack_manifest: ({ pack }) => ({ pack, snapshots: true, packVersion: '2026.09.30', schemaVersion: '3', builtAt: iso(24 * 7), signerKeyId: 'onrecord-pack-2026', licenceId: 'ODC-By-1.0', licenceUrl: 'https://opendatacommons.org/licenses/by/1-0/', disclaimer: 'Republished City of San Diego open data. Check the source for corrections.', manifestSha256: hex('pack'), tables: [{ table: 'calls_for_service', files: [{ path: 'calls_for_service/2025.parquet', year: 2025, rows: 512_388, bytes: 21_044_100, partial: false, sourceUrl: DATASETS[1].sourceUri ?? '', retrievedAt: iso(24 * 7), datasetKind: 'CALLS_FOR_SERVICE', licence: null }], unchangedChecks: 4, lastCheckedAt: iso(24), changeRecords: 0 }] }),
   list_topic_packs: () => ({ topics: [{ id: 'encampments', title: 'Encampments and abatements', cues: ['encampment', 'abatement', '63.0403', 'unsafe camping'], documentTotal: 44, documents: [{ portalKey: 'sandiego', documentId: 9001, requestId: 26_0412, fileName: 'Abatement_Notices_Imperial_Ave_Q1-2026.pdf', matchedCues: ['abatement', '63.0403'], textCoverage: 'FULL' }], requestTotal: 6, requests: [{ portalKey: 'sandiego', requestId: 26_0412, title: REQUESTS[0].title, matchedCues: ['abatement'] }], findingTotal: 2, findings: [{ basis: 'COUNTED', anchorRequestId: 26_0412, finding: FINDINGS[1] }] }, { id: 'restrooms', title: 'Public restrooms', cues: ['restroom', 'comfort station'], documentTotal: 3, documents: [], requestTotal: 1, requests: [], findingTotal: 0, findings: [] }], documentsScanned: 1842, documentsPrefixOnly: 120, documentsFileNameOnly: 8, documentLimitReached: false, requestsScanned: 412, requestLimitReached: false, textPrefixCharacters: 20_000 }),
   list_starter_sets: () => ({ registryVersion: 4, sets: [{ id: 'homelessness', title: 'Homelessness accountability', summary: 'Sources for shelter capacity, abatements and spending.', entries: [{ id: 'sd-hssd', kind: 'SOURCE', title: 'Homelessness Strategies and Solutions', url: 'https://www.sandiego.gov/homelessness-strategies-and-solutions', what: 'Program reports and shelter dashboards', publisher: 'City of San Diego', termsNote: null, verifiedAsOf: day(20) }, { id: 'sd-nextrequest', kind: 'RECORD_REQUEST_TARGET', title: 'City of San Diego public records portal', url: 'https://sandiego.nextrequest.com', what: 'Released records and request status', publisher: 'City of San Diego', termsNote: null, verifiedAsOf: day(20) }] }] }),
   run_intent_query: ({ utterance }) => ({ utterance, status: 'ANSWERED', plan: { kind: 'FINDINGS_FOR_AGENCY', agency: 'Environmental Services Department' }, summary: '4 stored findings name Environmental Services Department.', rows: FINDINGS.slice(0, 4).map((f) => ({ id: f.id, headline: f.headline, detail: f.explanation, basis: 'STORED_FINDING', basisStatement: 'A stored finding with its own citations.', relationshipKind: null, confidenceBasisPoints: f.confidence.kind === 'MEASURED' ? f.confidence.basisPoints : null, agencyName: 'Environmental Services Department', portalKeys: ['sandiego'], citations: f.citations, omittedCitationCount: 0, citationsUnavailableReason: null })), truncated: false, rowLimit: 25, notes: [], options: [] }),
@@ -813,13 +815,104 @@ const collectionPlan = {
   get_collection_plan: () => ({ sources: PORTALS.slice(0, 3).map((p, index) => ({ portalKey: p.portalKey, displayName: p.displayName, canonicalUrl: p.canonicalUrl, sourceKind: p.sourceKind, hasUnfinishedWork: index < 2, subject: index === 0 ? 'encampment abatement' : null })) }),
 };
 
+// ---- Real data (`--data=real`) --------------------------------------------------------------
+// The packs hold City tables, not records requests, documents or casework, so those stay
+// invented; what follows replaces every surface the packs can answer with the generated
+// scripts/ui-review-fixtures-real.mjs, and gives the invented requests text of realistic length.
+
+/** Request descriptions as requesters write them: uneven length, lists, dates, statute citations. */
+/** @type {Record<number, string>} */
+const REQUEST_TEXT = {
+  [26_0412]: 'Pursuant to the California Public Records Act (Gov. Code § 7920.000 et seq.), I request copies of every 72-hour notice of abatement posted along Imperial Avenue between 16th Street and 32nd Street from January 1, 2026 through March 31, 2026, together with:\n1. photographs of each posted notice, with their metadata;\n2. the crew dispatch log entries for each removal operation at those locations;\n3. any property storage receipts issued on those dates.\nIf any portion is withheld, please cite the specific exemption for each record and produce the remainder.',
+  [26_0418]: 'All contracts, amendments, change orders and invoices for the operator of the Golden Hall bridge shelter for fiscal year 2025, including attachments and exhibits that set compensation or a not-to-exceed amount.',
+  [26_0533]: 'Records sufficient to show the number of citations and custodial arrests made under SDMC § 63.0403 (Unsafe Camping Ordinance), by police beat and by month, from July 1, 2025 to the date of your search. A database export is acceptable; I am not requesting names or other personal identifiers. Please also produce the field codes or data dictionary needed to read the export.',
+  [26_0540]: 'Nightly capacity and occupancy reports for the Safe Sleeping Program sites at 20th & B and Rose Canyon.',
+  [26_0561]: 'Cleaning, service and closure logs for the public restrooms in East Village (including the comfort station at 14th and Imperial) and Balboa Park, January through June 2026. Where a restroom was closed, please include the stated reason and the dates it reopened. I would prefer spreadsheets if the logs are kept electronically.',
+  [26_0577]: 'Budget-to-actual reports for homelessness programs by fund and account for FY2024.',
+  [26_0602]: 'The retention schedule that applies to body-worn camera footage recorded during encampment removal operations, and the audit trail showing any footage deleted or reclassified between July 2025 and February 2026. This request does not seek the footage itself.',
+  [26_0615]: 'Emails and text messages between the City Attorney\'s Office or the Homelessness Strategies and Solutions Department and any contracted outreach provider that discuss property storage, the 72-hour notice, or "bag and tag" procedures, from September 1, 2025 to January 31, 2026. Suggested search terms: "storage", "72 hour", "bag and tag", "property", "notice". Please produce on a rolling basis rather than waiting until the search is complete; if the request is overly broad, contact me to narrow it before denying it.',
+  [26_0688]: 'Closure codes and crew dispatch notes for Get It Done encampment reports closed in 2025.',
+  [26_0701]: 'Referral outcome summaries for coordinated outreach in the Downtown Clean & Safe area, quarter two of 2026, including counts of referrals made, accepted, and resulting in a shelter bed. Aggregate counts are sufficient.',
+  [7_311]: 'Behavioral health bed availability reports the County provided to the City of San Diego during 2025, and any cover emails transmitting them.',
+  [7_355]: 'Records showing the number of people released from San Diego Central Jail between 10 p.m. and 6 a.m. in 2025 without transportation arranged, by month. If the Sheriff\'s Department does not track transportation at release, please say so in writing rather than reporting that no records exist.',
+};
+const LEAD_KINDS = new Set(['SERVICE_REPORT_LEAD', 'POLICE_STOP_LEAD', 'ABATEMENT_LOG_LEAD', 'CHARGE_LOG_LEAD', 'DISCLOSURE_FILING_LEAD', 'CAPACITY_COMPARISON_LEAD', 'SPENDING_RECORD_LEAD', 'POLICE_CALL_LEAD', 'PARKING_CITATION_LEAD', 'HOUSING_APPROVAL_LEAD']);
+
+/**
+ * analysis/story_desk.rs `lead_for` for a table lead: no citations or subject, unassessed, so only
+ * money named in its text, recurrence among its detector's siblings and freshness contribute.
+ * @param {import('../src/types').Finding} finding @param {import('../src/types').Finding[]} live @returns {import('../src/types').StoryLead}
+ */
+function tableStoryLead(finding, live) {
+  /** @type {import('../src/types').InterestFactor[]} */
+  const factors = [];
+  const amounts = [...`${finding.headline} ${finding.explanation}`.matchAll(/\$([\d,]+(?:\.\d+)?)(\s+(?:million|billion))?/g)]
+    .map(([, figure, scale]) => Number(figure.replace(/,/g, '')) * (scale?.includes('billion') ? 1e9 : scale?.includes('million') ? 1e6 : 1));
+  const largest = Math.max(0, ...amounts);
+  const money = largest >= 1_000_000 ? 2500 : largest >= 100_000 ? 1600 : largest >= 10_000 ? 800 : 0;
+  if (money) factors.push({ name: 'money at stake', basisPoints: money, evidence: `largest figure named: ${largest.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}` });
+  const siblings = live.filter((other) => other.id !== finding.id && other.sourceDetector === finding.sourceDetector && other.subject.portalKey === finding.subject.portalKey).length;
+  if (siblings) factors.push({ name: 'recurrence', basisPoints: Math.min(1000, 200 * siblings), evidence: `${siblings} other undismissed finding${siblings === 1 ? '' : 's'} from ${finding.sourceDetector} for the same source` });
+  factors.push({ name: 'evidence strength', basisPoints: 0, evidence: 'confidence unassessed' }, { name: 'freshness', basisPoints: 400, evidence: 'seen within the last 7 days' });
+  return {
+    findingId: finding.id, kind: finding.kind, headline: finding.headline, severity: finding.severity, confidence: finding.confidence, subject: finding.subject, portalKey: finding.subject.portalKey,
+    publicInterest: { totalBasisPoints: factors.reduce((sum, factor) => sum + factor.basisPoints, 0), factors }, relatedFindingIds: [], firstSeenAt: finding.discoveredAt, lastSeenAt: finding.lastSeenAt,
+  };
+}
+
+/**
+ * @typedef {{ SCHEMA: import('../src/types').AnalyticalSchema, SQL: Record<string, { columns: string[], rows: unknown[][], elapsedMs: number, provenance: string[] } | { error: string }>,
+ *   LEAD_FINDINGS: import('../src/types').Finding[], PACKS: import('../src/types').DataPackSummary[], FINANCE: { datasets: import('../src/types').FinancialWorkspace['datasets'], fiscalYears: number[], funds: string[], departments: string[] },
+ *   PAYEES: import('../src/types').OrganisationPayee[], BLOCKS: { address: string, reports: number }[] }} RealData
+ */
+/** @param {RealData} real @returns {Handlers} */
+function realHandlers(real) {
+  const findings = [...FINDINGS.filter((f) => !LEAD_KINDS.has(f.kind)), ...real.LEAD_FINDINGS];
+  const live = findings.filter((f) => !f.dismissedAt);
+  const storyLeads = [...STORY_LEADS.filter((lead) => !LEAD_KINDS.has(lead.kind)), ...real.LEAD_FINDINGS.map((f) => tableStoryLead(f, live))]
+    .sort((a, b) => b.publicInterest.totalBasisPoints - a.publicInterest.totalBasisPoints || a.findingId.localeCompare(b.findingId));
+  const requests = REQUESTS.map((r) => ({ ...r, descriptionPreview: REQUEST_TEXT[r.requestId] ?? r.descriptionPreview }));
+  const matches = (/** @type {string} */ term) => (/** @type {import('../src/types').RequestSearchResult} */ r) => !term || r.title.toLowerCase().includes(term) || r.descriptionPreview.toLowerCase().includes(term);
+  const latestYear = real.FINANCE.fiscalYears.length ? real.FINANCE.fiscalYears[real.FINANCE.fiscalYears.length - 1] : null;
+  return {
+    get_analytical_schema: () => real.SCHEMA,
+    run_analytical_sql: ({ sql, limit }) => {
+      const entry = real.SQL[sql];
+      if (!entry) throw { errorType: 'UI_REVIEW_SQL_MISS', message: `The real-data fixtures hold no result for this SQL; rebuild with --harvest. ${sql.slice(0, 200)}` };
+      if ('error' in entry) throw { errorType: 'DATA_PARSING', message: entry.error };
+      const cap = limit ?? 500;
+      return { columns: entry.columns, rows: entry.rows.slice(0, cap), rowCount: Math.min(entry.rows.length, cap), truncated: entry.rows.length > cap, elapsedMs: entry.elapsedMs, provenance: entry.provenance };
+    },
+    refresh_findings: () => ({ detectorsRun: 28, findingsRecorded: findings.length, staleCleared: 0 }),
+    list_findings: ({ filter, limit }) => filterFindings(filter, findings).slice(0, limit ?? 500),
+    count_findings: ({ filter }) => filterFindings(filter, findings).length,
+    list_story_leads: ({ limit }) => storyLeads.slice(0, limit ?? 50),
+    build_lead_dossier: (args) => {
+      const dossier = /** @type {NonNullable<Handlers['build_lead_dossier']>} */ (full.build_lead_dossier)(args);
+      const lead = real.LEAD_FINDINGS.find((f) => f.id === args.findingId);
+      return lead ? { ...dossier, finding: lead, evidence: [], related: [], gaps: [] } : dossier;
+    },
+    query_audit_records_page: ({ searchTerm, portalKey, agencyId, pageSize }) => {
+      const records = requests.filter((r) => matches(searchTerm.trim().toLowerCase())(r) && (!portalKey || r.portalKey === portalKey) && (agencyId == null || r.agencyId === agencyId));
+      return { records: records.slice(0, pageSize), nextCursor: null, total: records.length };
+    },
+    count_audit_records: ({ searchTerm }) => ({ total: requests.filter(matches((searchTerm ?? '').trim().toLowerCase())).length }),
+    get_cross_agency_correlations: () => CORRELATIONS.map((c, index) => ({ ...c, neighborhoodBlock: real.BLOCKS[index]?.address ?? c.neighborhoodBlock })),
+    list_published_packs: () => real.PACKS.map((p) => ({ pack: p.pack, repositoryUrl: `https://huggingface.co/datasets/Writerslogic/onrecord-${p.pack}` })),
+    fetch_published_pack_manifest: ({ pack }) => real.PACKS.find((p) => p.pack === pack) ?? real.PACKS[0],
+    get_financial_workspace: () => ({ datasets: real.FINANCE.datasets, mappings: [], defaultScope: { fiscalYear: latestYear, fund: null, department: null }, roles: ['BUDGET', 'ACTUALS', 'CONTRACTS', 'PAYMENTS'], fields: ['amount', 'fund', 'department'], requirements: { BUDGET: ['amount', 'fund'] }, warnings: [], fiscalYears: real.FINANCE.fiscalYears, funds: real.FINANCE.funds, departments: real.FINANCE.departments }),
+    list_organisation_payees: () => real.PAYEES,
+  };
+}
+
 /**
  * @param {{ mode?: 'full' | 'empty', license?: keyof typeof LICENSE_VARIANTS | null, collectionPlan?: boolean }} scenario
+ * @param {RealData | null} [real] the generated real-data module, when the scenario asks for it
  * @returns {Record<string, (args: any) => unknown>}
  */
-export function createHandlers(scenario) {
+export function createHandlers(scenario, real = null) {
   /** @type {Handlers} */
-  const merged = { ...full, ...(scenario.mode === 'empty' ? empty : {}), ...(scenario.collectionPlan ? collectionPlan : {}) };
+  const merged = { ...full, ...(real ? realHandlers(real) : {}), ...(scenario.mode === 'empty' ? empty : {}), ...(scenario.collectionPlan ? collectionPlan : {}) };
   if (scenario.license) {
     const status = { ...LICENSE, ...LICENSE_VARIANTS[scenario.license] };
     merged.get_license_status = () => status;
