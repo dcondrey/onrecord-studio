@@ -6,6 +6,10 @@ import { useStarterRunStore, type StarterEntryStatus } from '../../store/useStar
 import type { StarterEntry, StarterSetsReport } from '../../types';
 import { entriesToAdd, entryHost, entryIsSaved } from '../../utils/starterSets';
 import MethodNote from '../ui/MethodNote';
+import Time from '../ui/Time';
+import Button from '../ui/Button';
+import InlineError from '../ui/InlineError';
+import Skeleton from '../ui/Skeleton';
 
 /**
  * One-click bundles of public San Diego sources. Choosing a set fetches nothing: it opens a
@@ -36,14 +40,14 @@ export default function StarterSets() {
     return registryGate.invalidate;
   }, [registryGate]);
 
-  if (error) return <div role="alert" className="text-label leading-4 text-danger">Starter sets unavailable: {error}</div>;
-  if (!report) return <div role="status" className="text-label leading-4 text-muted">Loading starter sets…</div>;
+  if (error) return <InlineError summary="Starter sets couldn’t be read." detail={error} />;
+  if (!report) return <Skeleton variant="lines" lines={3} label="Loading starter sets" />;
 
   return (
     <section aria-label="Starter sets" className="space-y-3">
       <div>
-        <h3 className="text-sm font-semibold text-fg">Starter sets</h3>
-        <div className="mt-1 max-w-3xl text-label leading-relaxed text-muted">
+        <h3 className="text-heading text-fg">Starter sets</h3>
+        <div className="mt-1 max-w-prose text-body text-muted">
           Bundles of public San Diego sources and records portals. Nothing is fetched until you confirm a set.{' '}
           <MethodNote>
             A source that does not load is listed as unavailable with the reason, not as an empty source. Registry version{' '}
@@ -51,47 +55,42 @@ export default function StarterSets() {
           </MethodNote>
         </div>
       </div>
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         {report.sets.map((set) => {
           const pending = entriesToAdd(set, portals);
           return (
-            <article key={set.id} aria-label={set.title} className="app-panel flex flex-col p-4">
-              <h4 className="text-sm font-semibold text-fg">{set.title}</h4>
-              <p className="mt-1 text-label leading-relaxed text-muted">{set.summary}</p>
-              <ul className="mt-3 space-y-2 text-label leading-4 text-fg-secondary">
+            <article key={set.id} aria-label={set.title} className="flex flex-col rounded-lg border border-line p-4">
+              <h4 className="text-body font-medium text-fg">{set.title}</h4>
+              <p className="mt-1 text-body text-muted">{set.summary}</p>
+              <ul className="mt-3 space-y-3 text-caption text-fg-secondary">
                 {set.entries.map((entry) => (
                   <EntryRow key={entry.id} entry={entry} saved={entryIsSaved(entry, portals)} status={statuses[entry.id]} />
                 ))}
               </ul>
-              <div className="mt-4">
+              <div className="mt-auto pt-4">
                 {confirmingId === set.id ? (
-                  <div role="group" aria-label={`Confirm ${set.title}`} className="space-y-2 rounded-lg border border-accent/30 p-3 text-label leading-4 text-fg-secondary">
+                  <div role="group" aria-label={`Confirm ${set.title}`} className="space-y-3 rounded-lg bg-raised/60 p-3 text-body text-fg-secondary">
                     <p>
                       This contacts {[...new Set(pending.map(entryHost))].join(', ')} and downloads their public pages
                       and linked files, one source at a time.
                     </p>
                     <div className="flex gap-2">
-                      <button type="button" onClick={() => { setConfirmingId(null); void useStarterRunStore.getState().run(set, pending); }} className="primary-action focus-ring rounded-lg px-3 py-2 text-label leading-4 font-semibold text-white">
+                      <Button variant="primary" onClick={() => { setConfirmingId(null); void useStarterRunStore.getState().run(set, pending); }}>
                         Fetch {pending.length} source{pending.length === 1 ? '' : 's'}
-                      </button>
-                      <button type="button" onClick={() => setConfirmingId(null)} className="secondary-action focus-ring rounded-lg border px-3 py-2 text-label leading-4 text-fg-secondary">Cancel</button>
+                      </Button>
+                      <Button variant="ghost" onClick={() => setConfirmingId(null)}>Cancel</Button>
                     </div>
                   </div>
                 ) : runningId === set.id ? (
-                  <button type="button" onClick={() => useStarterRunStore.getState().cancel()} className="secondary-action focus-ring rounded-lg border px-3 py-2 text-label leading-4 text-fg-secondary">
+                  <Button onClick={() => useStarterRunStore.getState().cancel()}>
                     Adding… stop after the current source
-                  </button>
+                  </Button>
                 ) : pending.length === 0 ? (
-                  <span className="text-label leading-4 text-muted">Every source in this set is already in your library.</span>
+                  <span className="text-caption text-muted">Every source in this set is already in your library.</span>
                 ) : (
-                  <button
-                    type="button"
-                    disabled={runningId !== null}
-                    onClick={() => setConfirmingId(set.id)}
-                    className="secondary-action focus-ring rounded-lg border px-3 py-2 text-label leading-4 font-semibold text-fg disabled:opacity-50"
-                  >
+                  <Button disabled={runningId !== null} onClick={() => setConfirmingId(set.id)}>
                     {`Add ${pending.length} source${pending.length === 1 ? '' : 's'}…`}
-                  </button>
+                  </Button>
                 )}
               </div>
             </article>
@@ -106,14 +105,14 @@ function EntryRow({ entry, saved, status }: { entry: StarterEntry; saved: boolea
   return (
     <li>
       <div className="flex flex-wrap items-baseline gap-x-2">
-        <a href={entry.url} target="_blank" rel="noreferrer" className="font-semibold text-accent">{entry.title}</a>
+        <a href={entry.url} target="_blank" rel="noreferrer" className="focus-ring rounded text-body font-medium text-accent underline-offset-2 hover:underline">{entry.title}<span className="sr-only"> (opens in browser)</span></a>
         <span className="text-muted">{entry.kind === 'RECORD_REQUEST_TARGET' ? 'Records request portal' : 'Source'}</span>
         {status === 'adding' ? <span className="text-muted">Adding…</span>
           : status?.state === 'started' && saved ? <span className="text-success">Started</span>
           : status?.state === 'unavailable' ? <span role="alert" className="text-warning">Unavailable: {status.reason}</span>
           : saved ? <span className="text-muted">In your library</span> : null}
       </div>
-      <div className="text-muted">{entry.what} {entry.publisher}. Verified {entry.verifiedAsOf}.</div>
+      <div className="text-muted">{entry.what} {entry.publisher}. Verified <Time value={entry.verifiedAsOf} className="whitespace-nowrap" />.</div>
       <div className="text-muted">{entry.termsNote ?? 'No reuse terms were found; check the publisher before redistributing.'}</div>
     </li>
   );

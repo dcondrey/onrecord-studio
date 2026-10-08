@@ -4,6 +4,14 @@ import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
 import type { DimensionResult, WatchChange, WatchDimension, WatchKind, WatchSummary } from '../../types';
 import MethodNote from '../ui/MethodNote';
+import Panel, { PanelHeader } from '../ui/Panel';
+import Button from '../ui/Button';
+import InlineError from '../ui/InlineError';
+import Skeleton from '../ui/Skeleton';
+import Time from '../ui/Time';
+import { Field, Input, Select } from '../ui/Field';
+import { formatShortDate } from '../objects/labels';
+import { cn } from '../../utils/cn';
 
 const KIND_LABELS: Record<WatchKind, string> = {
   AGENCY: 'Agency',
@@ -53,14 +61,14 @@ export function describeDimension(result: DimensionResult): { text: string; tone
     case 'NOT_MEASURED':
       return { text: `No data this run: ${result.reason ?? 'the dimension could not be observed'}`, tone: 'missing' };
     case 'BASELINE_RECORDED':
-      return { text: `Baseline recorded${result.observedAsOf ? ` ${result.observedAsOf}` : ''}; nothing to compare yet`, tone: 'quiet' };
+      return { text: `Baseline recorded${result.observedAsOf ? ` ${formatShortDate(result.observedAsOf)}` : ''}; nothing to compare yet`, tone: 'quiet' };
     case 'CHANGED':
       return {
-        text: `${result.changeCount} ${result.changeCount === 1 ? 'change' : 'changes'} since ${result.baselineAsOf ?? 'the baseline'}`,
+        text: `${result.changeCount} ${result.changeCount === 1 ? 'change' : 'changes'} since ${result.baselineAsOf ? formatShortDate(result.baselineAsOf) : 'the baseline'}`,
         tone: 'changed',
       };
     case 'UNCHANGED':
-      return { text: `Observed, no change since ${result.baselineAsOf ?? 'the baseline'}`, tone: 'quiet' };
+      return { text: `Observed, no change since ${result.baselineAsOf ? formatShortDate(result.baselineAsOf) : 'the baseline'}`, tone: 'quiet' };
   }
 }
 
@@ -153,75 +161,63 @@ export default function WatchlistPanel() {
   const selected = summaries.find((summary) => summary.watch.id === selectedId) ?? null;
 
   return (
-    <section aria-label="Watchlist" className="app-panel space-y-3 p-4 text-label text-fg-secondary">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <div className="app-eyebrow">Watchlist</div>
-          <h3 className="mt-1 text-sm font-semibold text-fg">What changed for the things you follow</h3>
-        </div>
-        <button type="button" className="analysis-button" disabled={busy || summaries.length === 0} onClick={() => void sync(selectedId, true)}>
-          {busy ? 'Checking…' : 'Check now'}
-        </button>
-      </div>
-      <div className="text-muted">
-        Checks the records already stored here; nothing is fetched.{' '}
-        <MethodNote>
-          The first check of a watch records a baseline and reports no changes. A dimension with no data in a run says so and is
-          never shown as unchanged.
-        </MethodNote>
-      </div>
-      {error && (
-        <p role="alert" className="text-danger">
-          Watchlist: {error}
-        </p>
-      )}
+    <Panel aria-label="Watchlist">
+      <PanelHeader
+        title="Watchlist"
+        description={<>
+          Checks the records already stored here; nothing is fetched.{' '}
+          <MethodNote>
+            The first check of a watch records a baseline and reports no changes. A dimension with no data in a run says so and is
+            never shown as unchanged.
+          </MethodNote>
+        </>}
+        actions={<Button disabled={busy || summaries.length === 0} onClick={() => void sync(selectedId, true)}>{busy ? 'Checking…' : 'Check now'}</Button>}
+      />
+      <div className="space-y-4 p-5 text-body text-fg-secondary">
+      {error && <InlineError summary="The watchlist couldn’t be updated." detail={error} />}
       <form
-        className="flex flex-wrap items-end gap-2"
+        className="grid items-end gap-3 sm:grid-cols-[12rem_minmax(0,1fr)_auto]"
         onSubmit={(event) => {
           event.preventDefault();
           void add();
         }}
       >
-        <label className="flex flex-col gap-1">
-          <span className="analysis-label">Watch</span>
-          <select className="analysis-input" value={kind} onChange={(event) => setKind(event.target.value as WatchKind)}>
+        <Field label="Watch">
+          <Select value={kind} onChange={(event) => setKind(event.target.value as WatchKind)}>
             {(Object.keys(KIND_LABELS) as WatchKind[]).map((value) => (
               <option key={value} value={value}>
                 {KIND_LABELS[value]}
               </option>
             ))}
-          </select>
-        </label>
-        <label className="flex min-w-[14rem] flex-1 flex-col gap-1">
-          <span className="analysis-label">Target</span>
-          <input className="analysis-input" value={target} onChange={(event) => setTarget(event.target.value)} placeholder={KIND_HINTS[kind]} maxLength={200} />
-        </label>
-        <button type="submit" className="analysis-button" disabled={!target.trim()}>
-          Add to watchlist
-        </button>
+          </Select>
+        </Field>
+        <Field label="Name or identifier">
+          <Input value={target} onChange={(event) => setTarget(event.target.value)} placeholder={KIND_HINTS[kind]} maxLength={200} />
+        </Field>
+        <Button type="submit" disabled={!target.trim()}>Add to watchlist</Button>
       </form>
 
-      {!loaded && !error && <p role="status">Reading the watchlist…</p>}
+      {!loaded && !error && <Skeleton variant="lines" lines={3} label="Reading the watchlist" />}
       {loaded && summaries.length === 0 && <p className="text-muted">Nothing is being watched yet.</p>}
       <ul className="space-y-2">
         {summaries.map(({ watch, lastCheckedAt, lastDimensions }) => (
-          <li key={watch.id} className={`rounded-lg border p-2 ${watch.id === selectedId ? 'border-accent/60' : 'border-line'}`}>
+          <li key={watch.id} className={cn('rounded-lg border p-3', watch.id === selectedId ? 'border-accent/30 bg-accent/5' : 'border-line')}>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <button type="button" className="text-left font-semibold text-fg" aria-pressed={watch.id === selectedId} onClick={() => setSelectedId(watch.id === selectedId ? null : watch.id)}>
-                {watch.label} <span className="font-normal text-muted">({KIND_LABELS[watch.kind]})</span>
+              <button type="button" className="focus-ring rounded text-left font-medium text-fg hover:underline" aria-pressed={watch.id === selectedId} onClick={() => setSelectedId(watch.id === selectedId ? null : watch.id)}>
+                {watch.label} <span className="font-normal text-muted">· {KIND_LABELS[watch.kind]}</span>
               </button>
-              <button type="button" className="analysis-button" aria-label={`Stop watching ${watch.label}`} onClick={() => void remove(watch.id)}>
+              <Button size="sm" variant="ghost" aria-label={`Stop watching ${watch.label}`} onClick={() => void remove(watch.id)}>
                 Remove
-              </button>
+              </Button>
             </div>
-            <p className="mt-1 text-muted">{lastCheckedAt ? `Last checked ${lastCheckedAt}` : 'Not checked yet'}</p>
+            <p className="mt-1 text-caption text-muted">{lastCheckedAt ? <>Last checked <Time value={lastCheckedAt} format={formatShortDate} className="whitespace-nowrap" /></> : 'Not checked yet'}</p>
             {lastDimensions.length > 0 && (
-              <ul className="mt-1 space-y-0.5">
+              <ul className="mt-2 space-y-0.5 text-caption">
                 {lastDimensions.map((result) => {
                   const { text, tone } = describeDimension(result);
                   return (
-                    <li key={result.dimension} className={tone === 'missing' ? 'text-warning' : tone === 'changed' ? 'text-accent' : 'text-muted'}>
-                      <span className="font-semibold">{DIMENSION_LABELS[result.dimension]}:</span> {text}
+                    <li key={result.dimension} className={tone === 'missing' ? 'text-warning' : tone === 'changed' ? 'text-fg' : 'text-muted'}>
+                      <span className="font-medium">{DIMENSION_LABELS[result.dimension]}:</span> {text}
                     </li>
                   );
                 })}
@@ -233,32 +229,33 @@ export default function WatchlistPanel() {
 
       {loaded && (
         <div aria-label="Recorded changes">
-          <h4 className="analysis-label">{selected ? `Changes for ${selected.watch.label}` : 'Changes across all watches'}</h4>
+          <h4 className="text-body font-medium text-fg">{selected ? `Changes for ${selected.watch.label}` : 'Changes across all watches'}</h4>
           {changes.length === 0 ? (
             <p className="mt-1 text-muted">No changes recorded. This lists only changes that were detected; see each watch above for what a check could and could not observe.</p>
           ) : (
             <ul className="mt-1 space-y-2">
               {changes.map((change) => (
-                <li key={change.id} className="rounded-lg border border-line p-2">
-                  <div className="font-semibold text-fg">{CHANGE_LABELS[change.changeKind] ?? change.changeKind}</div>
+                <li key={change.id} className="rounded-lg border border-line p-3">
+                  <div className="font-medium text-fg">{CHANGE_LABELS[change.changeKind] ?? change.changeKind}</div>
                   <div className="text-muted">{change.subject}</div>
                   <dl className="mt-1 grid gap-0.5 sm:grid-cols-2">
                     <div>
-                      <dt className="analysis-label">Before{change.oldAsOf ? `, as of ${change.oldAsOf}` : ''}</dt>
+                      <dt className="text-caption text-muted">Before{change.oldAsOf ? `, as of ${formatShortDate(change.oldAsOf)}` : ''}</dt>
                       <dd>{change.oldValue ?? 'Not present at the baseline'}</dd>
                     </div>
                     <div>
-                      <dt className="analysis-label">Now, as of {change.newAsOf}</dt>
+                      <dt className="text-caption text-muted">Now, as of {formatShortDate(change.newAsOf)}</dt>
                       <dd>{change.newValue ?? 'Not present now'}</dd>
                     </div>
                   </dl>
-                  <p className="mt-1 text-muted">Basis: {change.basis}</p>
+                  <p className="mt-1 text-caption text-muted">Basis: {change.basis}</p>
                 </li>
               ))}
             </ul>
           )}
         </div>
       )}
-    </section>
+      </div>
+    </Panel>
   );
 }
