@@ -3,7 +3,10 @@ import { isTauri } from '@tauri-apps/api/core';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { CollectionPlanSource } from '../../types';
-import DialogBackdrop from '../ui/DialogBackdrop';
+import Badge from '../ui/Badge';
+import Button from '../ui/Button';
+import Dialog, { DialogBody, DialogFooter, DialogHeader } from '../ui/Dialog';
+import { Field, Input } from '../ui/Field';
 import { guidanceForSubject } from '../../utils/sourceGuidance';
 
 /** The subject most of the plan's sources were last collected for, to start the field from. */
@@ -119,83 +122,70 @@ export default function CollectionPlanDialog() {
 
   if (!open || !sources) return null;
   return (
-    <DialogBackdrop labelledBy="collection-plan-title" onClose={close} className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm">
-      <div className="app-panel flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden shadow-2xl shadow-black/40">
-        <div className="border-b border-line p-4">
-          <div className="app-eyebrow">Collection</div>
-          <h2 id="collection-plan-title" className="mt-1 text-sm font-semibold text-fg">What should this session collect?</h2>
-          <p className="mt-1 text-label leading-relaxed text-muted">
-            Nothing is downloaded until you start.
-            {unfinishedCount > 0 && ` ${unfinishedCount} source${unfinishedCount === 1 ? ' has' : 's have'} unfinished work from last time and ${unfinishedCount === 1 ? 'is' : 'are'} preselected.`}
-          </p>
-        </div>
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
-          <label className="block text-label font-medium text-fg-secondary">
-            Subject
-            <input
-              type="text"
-              value={subject}
-              maxLength={200}
-              onChange={(event) => setSubject(event.target.value)}
-              placeholder="e.g. encampment, safe parking"
-              className="focus-ring mt-1.5 h-10 w-full rounded-xl border border-control bg-canvas px-3 text-label text-fg"
-            />
-            <span className="mt-1 block font-normal text-muted">
-              Separate searches with commas (encampment, safe parking). Records portals run each search. Websites and data catalogs are walked, and a file is downloaded when its link, name or page title matches a search by its words or, using the on-device language model, by meaning. Leave empty to collect everything.
-            </span>
-          </label>
-          <fieldset>
-            <legend className="text-label font-medium text-fg-secondary">Sources</legend>
-            <ul className="mt-2 space-y-1">
-              {sources.map((source) => (
-                <li key={source.portalKey}>
-                  <label className="flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-raised/60">
-                    <input type="checkbox" className="mt-0.5" checked={selected.has(source.portalKey)} onChange={() => toggle(source.portalKey)} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-label font-medium text-fg">{source.displayName}</span>
-                      <span className="block truncate text-caption text-muted">
-                        {source.sourceKind === 'NEXT_REQUEST' ? 'Records request portal' : 'Website'} · {source.canonicalUrl}
-                        {source.hasUnfinishedWork && ' · unfinished'}
-                      </span>
+    <Dialog onClose={close} size="md">
+      <DialogHeader
+        title="What should this session collect?"
+        description={<>
+          Nothing is downloaded until you start.
+          {unfinishedCount > 0 && ` ${unfinishedCount} source${unfinishedCount === 1 ? ' has' : 's have'} unfinished work from last time and ${unfinishedCount === 1 ? 'is' : 'are'} preselected.`}
+        </>}
+      />
+      <DialogBody className="space-y-5">
+        <Field label="Subject" help="Separate searches with commas. Leave empty to collect everything.">
+          <Input
+            type="text"
+            value={subject}
+            maxLength={200}
+            onChange={(event) => setSubject(event.target.value)}
+            placeholder="e.g. encampment, safe parking"
+          />
+        </Field>
+        <fieldset>
+          <legend className="text-control text-fg-secondary">Sources</legend>
+          <ul className="mt-2 space-y-1">
+            {sources.map((source) => (
+              <li key={source.portalKey}>
+                <label className="flex cursor-pointer items-start gap-2.5 rounded-lg px-2 py-1.5 hover:bg-raised/60">
+                  <input type="checkbox" className="mt-0.5 accent-[rgb(var(--accent))]" checked={selected.has(source.portalKey)} onChange={() => toggle(source.portalKey)} />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-2">
+                      <span className="truncate text-control text-fg">{source.displayName}</span>
+                      {source.hasUnfinishedWork && <Badge tone="warning" className="shrink-0">Unfinished</Badge>}
                     </span>
-                  </label>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-3">
-              <label className="block text-label font-medium text-fg-secondary">
-                Add a source
-                <div className="mt-1.5 flex gap-2">
-                  <input
-                    type="url"
-                    value={newUrl}
-                    onChange={(event) => setNewUrl(event.target.value)}
-                    placeholder="https://city.nextrequest.com or a public records page"
-                    className="focus-ring h-10 min-w-0 flex-1 rounded-xl border border-control bg-canvas px-3 text-label text-fg"
-                  />
-                  <button type="button" onClick={addSource} disabled={adding || !newUrl.trim()} className="secondary-action focus-ring shrink-0 rounded-lg border px-3 py-2 text-label leading-4 text-fg-secondary disabled:opacity-50">
-                    {adding ? 'Adding…' : 'Add and collect'}
-                  </button>
-                </div>
-              </label>
-              {added.length > 0 && <p role="status" className="mt-1 text-label text-success">Collecting from {added.join(', ')}.</p>}
-              {addError && <p role="alert" className="mt-1 text-label leading-4 text-danger">{addError}</p>}
-            </div>
-          </fieldset>
-          {error && <p role="alert" className="text-label leading-4 text-danger">{error}</p>}
+                    <span className="block truncate text-caption text-muted" title={source.canonicalUrl}>
+                      {source.sourceKind === 'NEXT_REQUEST' ? 'Records request portal' : 'Website'} · {source.canonicalUrl}
+                    </span>
+                  </span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        </fieldset>
+        <div>
+          <div className="flex items-end gap-2">
+            <Field label="Add a source" className="min-w-0 flex-1">
+              <Input
+                type="url"
+                value={newUrl}
+                onChange={(event) => setNewUrl(event.target.value)}
+                placeholder="Portal or page URL"
+              />
+            </Field>
+            <Button onClick={addSource} disabled={adding || !newUrl.trim()} className="shrink-0">
+              {adding ? 'Adding…' : 'Add and collect'}
+            </Button>
+          </div>
+          {added.length > 0 && <p role="status" className="mt-1.5 text-caption text-success">Collecting from {added.join(', ')}.</p>}
+          {addError && <p role="alert" className="mt-1.5 text-caption text-danger">{addError}</p>}
         </div>
-        <div className="flex justify-end gap-2 border-t border-line p-4">
-          <button type="button" onClick={close} className="secondary-action focus-ring rounded-lg border px-3 py-2 text-label leading-4 text-fg-secondary">{added.length > 0 ? "Done" : "Not now"}</button>
-          <button
-            type="button"
-            onClick={start}
-            disabled={pending || selected.size === 0}
-            className="primary-action focus-ring rounded-lg px-3 py-2 text-label leading-4 font-semibold text-white disabled:opacity-50"
-          >
-            {pending ? 'Starting…' : `Start collecting from ${selected.size} source${selected.size === 1 ? '' : 's'}`}
-          </button>
-        </div>
-      </div>
-    </DialogBackdrop>
+        {error && <p role="alert" className="text-body text-danger">{error}</p>}
+      </DialogBody>
+      <DialogFooter>
+        <Button variant="ghost" onClick={close}>{added.length > 0 ? 'Done' : 'Not now'}</Button>
+        <Button variant="primary" onClick={start} disabled={pending || selected.size === 0}>
+          {pending ? 'Starting…' : `Start collecting from ${selected.size} source${selected.size === 1 ? '' : 's'}`}
+        </Button>
+      </DialogFooter>
+    </Dialog>
   );
 }
