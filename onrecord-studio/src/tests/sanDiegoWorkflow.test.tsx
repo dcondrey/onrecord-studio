@@ -131,20 +131,20 @@ describe('San Diego research workflow', () => {
     render(<App />);
     await openRequest();
     fireEvent.click(screen.getByRole('button', { name: /policy.txt.*Searchable text/ }));
-    await screen.findByRole('dialog', { name: 'Document policy.txt' });
+    await screen.findByRole('dialog', { name: 'policy.txt' });
     bridge.hasNewDocument = true;
     act(() => bridge.listeners.get('ingestion-telemetry')!({ payload: {
       protocolVersion: 1, sequence: '1', type: 'documentCompleted', payload: { portalKey: 'sandiego', documentId: 2, bytesSaved: 50 },
     } }));
     await waitFor(() => expect(screen.getByText('new-response.txt')).toBeTruthy(), { timeout: 2000 });
-    expect(screen.getByRole('dialog', { name: 'Document policy.txt' })).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'policy.txt' })).toBeTruthy();
   });
 
   it('shows the final chunk after paging and permits returning to the previous chunk', async () => {
     render(<App />);
     await openRequest();
     fireEvent.click(screen.getByRole('button', { name: /policy.txt.*Searchable text/ }));
-    await screen.findByRole('dialog', { name: 'Document policy.txt' });
+    await screen.findByRole('dialog', { name: 'policy.txt' });
     fireEvent.click(screen.getByRole('button', { name: 'Next text page' }));
     fireEvent.click(screen.getByRole('button', { name: 'Next chunk' }));
     expect(await screen.findByText('FINAL CHUNK: review and retention')).toBeTruthy();
@@ -157,6 +157,6 @@ describe('San Diego research workflow', () => {
     render(<App />);
     expect(await screen.findByText('FINAL CHUNK: review and retention')).toBeTruthy();
     expect(useAppStore.getState().workspaceView).toBe('evidence');
-    expect(screen.getByRole('dialog', { name: 'Document policy.txt' })).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'policy.txt' })).toBeTruthy();
   });
 });

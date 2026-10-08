@@ -58,7 +58,7 @@ describe('workspace initialization states', () => {
     drawer.open = true;
     fireEvent(drawer, new Event('toggle'));
     expect(await screen.findByText('Start with the local record.')).toBeTruthy();
-    expect(screen.queryByText('Saved sources unavailable')).toBeNull();
+    expect(screen.queryByText('Your saved sources didn’t load')).toBeNull();
   });
 
   it('shows an unavailable state instead of first-run onboarding after a load failure', () => {
@@ -68,7 +68,7 @@ describe('workspace initialization states', () => {
     });
     render(<OverviewDashboard />);
 
-    expect(screen.getByText('Saved sources unavailable')).toBeTruthy();
+    expect(screen.getByText('Your saved sources didn’t load')).toBeTruthy();
     expect(screen.getByText('source catalog unavailable')).toBeTruthy();
     expect(screen.queryAllByText('Not yet in your library')).toHaveLength(0);
   });
