@@ -468,7 +468,7 @@ pub fn classify_entity_hint(context: &str) -> CandidateKind {
 /// The context with its redaction markers removed, as search text.
 fn build_search_query(context: &str) -> String {
     let mut cleaned = context.to_string();
-    for span in bracketed_markers(context) {
+    for span in scan_redaction_spans(context) {
         cleaned.replace_range(span.start..span.end, &" ".repeat(span.end - span.start));
     }
     cleaned
@@ -929,9 +929,9 @@ mod tests {
                 "________"
             ]
         );
-        // A marker found in any case is also kept out of the search text.
+        // Every scanned marker, in any case, is kept out of the search text.
         assert_eq!(
-            build_search_query("Signed by [withheld] and [REDACTED] ██ today"),
+            build_search_query("Signed by [withheld] (b)(6) and [REDACTED] ________ ██ today"),
             "Signed by and today"
         );
     }
