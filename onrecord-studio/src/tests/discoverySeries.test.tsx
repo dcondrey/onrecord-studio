@@ -8,6 +8,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import type { AnalyticalSchema, SqlQueryResult } from '../types';
 import fixture from '../../src-tauri/tests/fixtures/discovery.json';
 import { discoverySeriesModel, SERIES_ORDER } from '../utils/dataDiscovery';
+import SeriesSmallMultiples, { slotPositions } from '../components/charts/figures/SeriesSmallMultiples';
+import { measured } from '../components/charts/core/nulls';
 
 const bridge = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock('../store/useAppStore', () => ({ useAppStore: { getState: () => ({}) } }));
@@ -91,5 +93,38 @@ describe('discovery series', () => {
     // 2023 is B's, so A is absent there; 2024 is no one's, so a gap slot stands between 2023 and 2025.
     expect(model.slots.map((slot) => (slot.gap ? 'gap' : slot.label))).toEqual(['2022', '2023', 'gap', '2025']);
     expect(model.groups[0].cells.map((cell) => cell?.observed ?? null)).toEqual([5, null, null, 9]);
+  });
+
+  it('gives a hole the width of the periods it spans and names DATE periods by their mode', () => {
+    const rows = [
+      ['A', '2015-01-01', 5, 0, 5, null, null, null, null, 'No baseline', null, null],
+      ['A', '2016-01-01', 6, 0, 6, '2015-01-01', 5, 5, 0, 'Adjacent periods with reported values', 1, 20],
+      ['A', '2021-01-01', 9, 0, 9, '2016-01-01', 6, 6, 0, 'Missing intervening periods', null, null],
+    ];
+    const model = discoverySeriesModel(result(CHANGE_COLUMNS, rows), ['A'], 'year');
+    expect(model.slots.map((slot) => slot.label)).toEqual(['2015', '2016', '', '2021']);
+    expect(model.slots.find((slot) => slot.gap)?.title).toBe('no rows between 2016 and 2021');
+    // 2015→2016 is one year, 2016→2021 five: the x distances keep that ratio.
+    const xs = slotPositions(model.slots, 0, 600);
+    expect((xs[3] - xs[1]) / (xs[1] - xs[0])).toBeCloseTo(5);
+    const monthly = discoverySeriesModel(result(CHANGE_COLUMNS, [['A', '2024-01-01', 1, 0, 1, null, null, null, null, 'No baseline', null, null]]), ['A'], 'month');
+    expect(monthly.slots[0].label).toBe('Jan 2024');
+  });
+
+  it('shows the value tooltip when a panel is stepped from the keyboard, not only on pointer hover', () => {
+    render(
+      <SeriesSmallMultiples
+        title="Series" headline={null} sources={{ tables: ['t'] }} summary="s" status="ready" kind="count" yScale="shared"
+        slots={[{ key: 'a', label: '2023' }, { key: 'b', label: '2024' }]}
+        panels={[{ key: 'p', title: 'Panel', lines: [{ key: 'v', label: 'Value', role: 'primary', values: [measured(3), measured(7)] }], summary: 'Panel summary' }]}
+        describe={(_, slot) => ({ rows: [{ key: 'v', value: slot === 0 ? 'three' : 'seven', label: 'observed' }] })}
+        table={{ caption: 'c', columns: [], rows: [] }}
+      />,
+    );
+    const panel = screen.getByRole('img', { name: 'Panel summary' });
+    fireEvent.focus(panel);
+    expect(screen.getByText('seven')).toBeTruthy();
+    fireEvent.keyDown(panel, { key: 'ArrowLeft' });
+    expect(screen.getByText('three')).toBeTruthy();
   });
 });

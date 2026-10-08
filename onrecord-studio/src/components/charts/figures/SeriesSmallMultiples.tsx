@@ -24,6 +24,11 @@ export interface SeriesSlot {
   label: string;
   /** Spelled out in the tooltip ('no rows between 2020 and 2022'). */
   title?: string;
+  /**
+   * The slot's place on a period scale (periods since the first). When every slot has one, x
+   * follows it, so a gap is as wide as the periods it spans.
+   */
+  position?: number;
 }
 
 export interface SeriesLine {
@@ -97,6 +102,50 @@ function columnsFor(width: number, panels: number): number {
   return Math.max(1, Math.min(fit, panels));
 }
 
+/** Each slot's x: by `position` when every slot has one, else evenly spaced. */
+export function slotPositions(slots: readonly SeriesSlot[], x0: number, x1: number): number[] {
+  if (slots.length === 1) return [(x0 + x1) / 2];
+  const positioned = slots.every((slot) => slot.position !== undefined);
+  const first = positioned ? slots[0].position ?? 0 : 0;
+  const span = positioned ? (slots[slots.length - 1].position ?? 0) - first : slots.length - 1;
+  return slots.map((slot, i) => x0 + (((positioned ? (slot.position ?? 0) - first : i) / (span || 1)) * (x1 - x0)));
+}
+
+/**
+ * The slots that get a tick label: the `priority` pair (the bracket's from and to; turned away
+ * from each other when centred labels would touch), both ends where they do not collide,
+ * then as many others as fit. A gap slot (empty label) is never labelled.
+ */
+export function labelledSlots(slots: readonly SeriesSlot[], xs: readonly number[], priority: readonly number[]): { index: number; anchor: 'start' | 'middle' | 'end' }[] {
+  const last = slots.length - 1;
+  const anchors = new Map<number, 'start' | 'middle' | 'end'>();
+  const anchorOf = (i: number) => anchors.get(i) ?? (slots.length === 1 ? 'middle' : i === 0 ? 'start' : i === last ? 'end' : 'middle');
+  const extent = (i: number): [number, number] => {
+    const w = measureText(slots[i].label);
+    const anchor = anchorOf(i);
+    return anchor === 'start' ? [xs[i], xs[i] + w] : anchor === 'end' ? [xs[i] - w, xs[i]] : [xs[i] - w / 2, xs[i] + w / 2];
+  };
+  const apart = (i: number, j: number) => { const [a0, a1] = extent(i); const [b0, b1] = extent(j); return a1 + 8 <= b0 || b1 + 8 <= a0; };
+  const chosen: number[] = [];
+  const valid = (i: number) => i >= 0 && i <= last && Boolean(slots[i].label) && !chosen.includes(i);
+  const pair = priority.filter(valid);
+  if (pair.length === 2 && !apart(pair[0], pair[1])) {
+    // Each label turns away from its partner; an end slot keeps its inward anchor so it never
+    // runs past the panel.
+    const [a, b] = [Math.min(...pair), Math.max(...pair)];
+    if (a !== 0) anchors.set(a, 'end');
+    if (b !== last) anchors.set(b, 'start');
+    // Still touching beside an end slot: the end label stays, and the bracket's own label names
+    // the other period.
+    if (!apart(a, b)) pair.splice(pair.indexOf(b === last ? a : b), 1);
+  }
+  chosen.push(...new Set(pair));
+  for (const i of [0, last, ...slots.map((_, index) => index)]) {
+    if (valid(i) && chosen.every((j) => apart(i, j))) chosen.push(i);
+  }
+  return chosen.sort((a, b) => a - b).map((index) => ({ index, anchor: anchorOf(index) }));
+}
+
 function extentOf(values: Iterable<Measured>): [number, number] | null {
   let lo = Infinity;
   let hi = -Infinity;
@@ -163,8 +212,9 @@ export default function SeriesSmallMultiples(props: SeriesSmallMultiplesProps) {
           const panelWidth = (width - (cols - 1) * GAP_X) / cols;
           // Direct end labels need room past the last point; a single line has none.
           const right = Math.max(RIGHT, ...panels.filter((panel) => panel.lines.length > 1).flatMap((panel) => panel.lines.map((line) => measureText(line.label) + 16)));
-          const xs = slots.map((_, i) => (slots.length === 1 ? LEFT + (panelWidth - LEFT - right) / 2 : LEFT + (i * (panelWidth - LEFT - right)) / (slots.length - 1)));
+          const xs = slotPositions(slots, LEFT, panelWidth - right);
           const x = (i: number) => xs[i];
+          const tickSlots = labelledSlots(slots, xs, bracket ? [bracket.from, bracket.to] : []);
           const yOf = (extent: [number, number] | null): ContinuousScale => scaleLinear(extent ?? [0, 1], [TITLE_HEIGHT + PANEL_HEIGHT, TITLE_HEIGHT + 6], { zero });
           const shared = yOf(sharedExtent);
           return panels.map((panel, index) => {
@@ -176,6 +226,17 @@ export default function SeriesSmallMultiples(props: SeriesSmallMultiplesProps) {
             const showTooltip = (slot: number, at: { clientX: number; clientY: number } | DOMRect) => {
               const described = props.describe(panel.key, slot);
               tooltip.show(<TooltipContent title={`${panel.title} · ${slots[slot].title ?? slots[slot].label}`} rows={described.rows} note={described.note} />, at);
+            };
+            // A keyboard step anchors the tooltip to the crosshair: the slot's column in this panel.
+            const showAtSlot = (target: SVGGElement, slot: number) => {
+              const svg = target.ownerSVGElement?.getBoundingClientRect();
+              const ox = (svg?.left ?? 0) + left + x(slot);
+              const oy = (svg?.top ?? 0) + top + TITLE_HEIGHT;
+              showTooltip(slot, { x: ox, y: oy, left: ox, top: oy, right: ox + 1, bottom: oy + PANEL_HEIGHT, width: 1, height: PANEL_HEIGHT, toJSON: () => null } as DOMRect);
+            };
+            const lastObserved = () => {
+              for (let i = slots.length - 1; i >= 0; i--) if (panel.lines.some((line) => { const value = line.values[i]; return value !== undefined && isValue(value); })) return i;
+              return slots.length - 1;
             };
             const onPointerMove = (event: PointerEvent<SVGGElement>) => {
               const box = event.currentTarget.getBoundingClientRect();
@@ -190,6 +251,7 @@ export default function SeriesSmallMultiples(props: SeriesSmallMultiplesProps) {
                 const next = activeSlot === null ? (event.key === 'ArrowRight' ? 0 : slots.length - 1) : activeSlot + (event.key === 'ArrowRight' ? 1 : -1);
                 const clamped = Math.max(0, Math.min(slots.length - 1, next));
                 setActive(clamped);
+                showAtSlot(event.currentTarget, clamped);
                 announce(panel, clamped);
               } else if (event.key === 'Enter' && props.onPanelActivate) {
                 event.preventDefault();
@@ -212,6 +274,13 @@ export default function SeriesSmallMultiples(props: SeriesSmallMultiplesProps) {
                 aria-label={panel.summary}
                 className="viz-focusable outline-none"
                 onKeyDown={onKeyDown}
+                onFocus={(event) => {
+                  if (slots.length === 0) return;
+                  const slot = activeSlot ?? lastObserved();
+                  setActive(slot);
+                  showAtSlot(event.currentTarget, slot);
+                  announce(panel, slot);
+                }}
                 onBlur={() => tooltip.hide()}
               >
                 <rect className="viz-focus-ring" x={-4} y={-2} width={panelWidth + 8} height={TITLE_HEIGHT + PANEL_HEIGHT + AXIS_HEIGHT + 4} rx={6} style={{ fill: 'none', stroke: VIZ.focus, strokeWidth: 2 }} />
@@ -226,13 +295,13 @@ export default function SeriesSmallMultiples(props: SeriesSmallMultiplesProps) {
                     <text x={LEFT - 6} y={y(tick)} dy="0.32em" textAnchor="end" className={TICK_CLASS}>{formatValue(tick, { kind, compact: true, digits: step < 1 ? 1 : undefined })}</text>
                   </g>
                 ))}
-                {[0, slots.length - 1].filter((i, at, all) => i >= 0 && all.indexOf(i) === at).map((i) => (
-                  <text key={i} aria-hidden="true" x={x(i)} y={TITLE_HEIGHT + PANEL_HEIGHT + 14} textAnchor={slots.length === 1 ? 'middle' : i === 0 ? 'start' : 'end'} className={TICK_CLASS}>{slots[i].label}</text>
+                {tickSlots.map(({ index: i, anchor }) => (
+                  <text key={i} aria-hidden="true" data-tick={slots[i].key} x={x(i)} y={TITLE_HEIGHT + PANEL_HEIGHT + 14} textAnchor={anchor} className={TICK_CLASS}>{slots[i].label}</text>
                 ))}
                 {activeSlot !== null && (
                   <g aria-hidden="true">
                     <line x1={x(activeSlot)} x2={x(activeSlot)} y1={TITLE_HEIGHT + 2} y2={TITLE_HEIGHT + PANEL_HEIGHT} style={{ stroke: VIZ.baseline, strokeWidth: 1 }} />
-                    {activeSlot !== 0 && activeSlot !== slots.length - 1 && measureText(slots[activeSlot].label) < panelWidth / 3 && (
+                    {!tickSlots.some((tick) => tick.index === activeSlot) && measureText(slots[activeSlot].label) < panelWidth / 3 && (
                       <text x={x(activeSlot)} y={TITLE_HEIGHT + PANEL_HEIGHT + 14} textAnchor="middle" className={TICK_CLASS}>{slots[activeSlot].label}</text>
                     )}
                   </g>

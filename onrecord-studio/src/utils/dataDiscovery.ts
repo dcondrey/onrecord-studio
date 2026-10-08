@@ -1,4 +1,5 @@
 import type { AnalyticalColumnSummary, AnalyticalDatasetSummary, AnalyticalSchema, SqlQueryResult } from '../types';
+import { formatDate } from '../components/charts/core/format';
 
 export interface DiscoveryFilter { column: string; operator: 'equals' | 'contains' | 'missing'; value: string }
 export interface DiscoverySelection {
@@ -211,7 +212,7 @@ export interface SeriesCell {
   change: number | null;
   changePercent: number | null;
 }
-export interface DiscoverySeriesSlot { key: string; label: string; title?: string; gap: boolean }
+export interface DiscoverySeriesSlot { key: string; label: string; title?: string; gap: boolean; position?: number }
 export interface DiscoverySeriesGroup { key: string; value: unknown; label: string; cells: (SeriesCell | null)[] }
 export interface DiscoverySeriesModel { slots: DiscoverySeriesSlot[]; groups: DiscoverySeriesGroup[]; otherGroups: number }
 
@@ -228,6 +229,19 @@ const periodKey = (value: unknown) => String(value);
 function isoParts(value: unknown): [number, number, number] | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value));
   return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : null;
+}
+
+/**
+ * A period as a reader names it: a DATE period arrives as 'YYYY-MM-DD' (DATE_TRUNC to its unit),
+ * so year mode reads '2024', month mode 'Jan 2024', day mode 'Jan 1, 2024'. A year code keeps its
+ * source convention.
+ */
+export function formatPeriod(value: unknown, mode: DiscoverySelection['periodMode']): string {
+  if (value === null || value === undefined) return '(no period)';
+  if (mode === 'year_code') return String(value);
+  const parts = isoParts(value);
+  if (!parts) return String(value);
+  return formatDate(Date.UTC(parts[0], parts[1] - 1, parts[2]), mode);
 }
 
 /** Periods from `a` to `b` in the plan's unit (as the 'changes' check counts them), or null. */
@@ -279,12 +293,25 @@ export function discoverySeriesModel(result: SqlQueryResult, groupOrder: readonl
     const between = periods.some((period) => compare(period, row[prev]) > 0 && compare(period, row[p]) < 0);
     if (!between) gapsAfter.set(periodKey(row[prev]), { from: row[prev], to: row[p] });
   }
+  // Where every period's distance from the first can be counted, x follows it: a five-period hole
+  // is five periods wide, not one slot.
+  const offsets = periods.map((period) => periodStep(periods[0], period, periodMode));
+  const positioned = offsets.every((offset) => offset !== null);
   const slots: DiscoverySeriesSlot[] = [];
-  for (const period of periods) {
-    slots.push({ key: periodKey(period), label: periodKey(period), gap: false });
+  periods.forEach((period, i) => {
+    const position = positioned ? offsets[i] ?? undefined : undefined;
+    slots.push({ key: periodKey(period), label: formatPeriod(period, periodMode), gap: false, position });
     const gap = gapsAfter.get(periodKey(period));
-    if (gap) slots.push({ key: `gap:${periodKey(gap.from)}|${periodKey(gap.to)}`, label: '', title: `no rows between ${periodKey(gap.from)} and ${periodKey(gap.to)}`, gap: true });
-  }
+    if (!gap) return;
+    const next = positioned ? periodStep(periods[0], gap.to, periodMode) : null;
+    slots.push({
+      key: `gap:${periodKey(gap.from)}|${periodKey(gap.to)}`,
+      label: '',
+      title: `no rows between ${formatPeriod(gap.from, periodMode)} and ${formatPeriod(gap.to, periodMode)}`,
+      gap: true,
+      position: position !== undefined && next !== null ? (position + next) / 2 : undefined,
+    });
+  });
   const slotIndex = new Map(slots.map((slot, index) => [slot.key, index]));
   const cell = (row: unknown[]): SeriesCell => ({
     observed: finiteCell(row[at('observed_value')]),

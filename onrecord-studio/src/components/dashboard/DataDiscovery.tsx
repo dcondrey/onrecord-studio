@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { AnalyticalSchema, SqlQueryResult } from '../../types';
-import { buildDiscoveryPlan, discoveryDefaults, discoveryDrilldown, discoveryFindings, discoverySeriesModel, discoverySeriesSql, finiteCell,
+import { buildDiscoveryPlan, discoveryDefaults, discoveryDrilldown, discoveryFindings, discoverySeriesModel, discoverySeriesSql, finiteCell, formatPeriod,
   groupKey, groupLabel, groupsWithMissingPeriods, isNumericColumn, largestDiscoveryChange, SERIES_PANEL_LIMIT,
   type DiscoveryFilter, type DiscoveryPlan, type DiscoveryReport, type DiscoverySelection } from '../../utils/dataDiscovery';
 import { useDiscoveryController } from './AutomaticDiscoveryProvider';
@@ -158,7 +158,8 @@ export default function DataDiscovery({ schema, onInspect }: { schema: Analytica
         {result && query.id === 'groups' && <div className="mt-3" style={stale ? { opacity: 0.5 } : undefined}><GroupsFigure result={result} plan={report.plan} sources={sourcesOf(report.plan)} onInspect={onInspect} /></div>}
         {result && query.id === 'quality' && <div className="mt-3" style={stale ? { opacity: 0.5 } : undefined}><QualityFigure result={result} sources={sourcesOf(report.plan)} /></div>}
         {result && query.id === 'changes' && <div className="mt-3" style={stale ? { opacity: 0.5 } : undefined}><ChangesFigure changes={result} groups={report.results.find((item) => item.query.id === 'groups')?.result} series={series} plan={report.plan} sources={sourcesOf(report.plan)} onInspect={onInspect} /></div>}
-        {result && (query.id === 'changes'
+        {/* The figure replaces the quality and changes tables: their raw rows stay one click away. */}
+        {result && (query.id === 'changes' || query.id === 'quality'
           ? <details className="mt-2"><summary className="cursor-pointer text-fg-secondary">Rows</summary><DiscoveryTable result={result} /></details>
           : <DiscoveryTable result={result} onRow={query.id === 'groups' ? (row) => onInspect(discoveryDrilldown(report.plan, row[result.columns.indexOf('group_value')])) : undefined} />)}
       </details>)}
@@ -271,7 +272,7 @@ function QualityFigure({ result, sources }: { result: SqlQueryResult; sources: C
       key: name,
       name,
       label: `${name}: ${reported === null ? 'no rows in scope' : `${formatValue(reported, { kind: 'percent', digits: 0 })} reported, ${exact(missing)} of ${exact(total)} missing`}`,
-      header: <span className="flex flex-wrap items-baseline gap-x-2"><span className="font-mono text-code text-fg">{name}</span><span className="text-caption text-muted">{String(row[at('logical_type')])}</span></span>,
+      header: <span className="flex min-w-0 items-baseline gap-x-2 whitespace-nowrap"><span className="truncate font-mono text-code text-fg" title={name}>{name}</span><span className="text-caption text-muted">{String(row[at('logical_type')])}</span></span>,
       cells: {
         reported: reported === null
           ? { value: absent('not-recorded', 'No rows in scope'), text: 'no rows' }
@@ -295,6 +296,7 @@ function QualityFigure({ result, sources }: { result: SqlQueryResult; sources: C
       summary={`${measuredRows.length} columns, sorted by missing share. Filled is the reported share; the hatched remainder is the missing share.`}
       status={result.rowCount === 0 ? 'empty' : 'ready'}
       rowHeader="Column"
+      dense
       columns={[{ key: 'reported', label: 'Reported', note: 'hatched: missing', scale: 'own-0-100', barWidth: 120 }]}
       hatchLabel="Missing share"
       rows={rows}
@@ -327,7 +329,7 @@ function ChangesFigure({ changes, groups, series, plan, sources, onInspect }: {
   if (largest) {
     const rise = largest.change >= 0;
     const pct = largest.changePercent === null ? '' : ` (${formatValue(largest.changePercent / 100, { kind: 'percent', signed: true, digits: 0 })})`;
-    headline = `Largest change: ${groupLabel(largest.group)} ${rise ? 'rose' : 'fell'} ${compact(Math.abs(largest.change))}${pct} from ${String(largest.from)} to ${String(largest.to)}`;
+    headline = `Largest change: ${groupLabel(largest.group)} ${rise ? 'rose' : 'fell'} ${compact(Math.abs(largest.change))}${pct} from ${formatPeriod(largest.from, plan.selection.periodMode)} to ${formatPeriod(largest.to, plan.selection.periodMode)}`;
   } else {
     headline = 'No group has two adjacent periods with reported values to compare';
   }
@@ -340,7 +342,7 @@ function ChangesFigure({ changes, groups, series, plan, sources, onInspect }: {
     lineKey: 'value',
     from: model.slots.findIndex((slot) => slot.key === String(largest.from)),
     to: model.slots.findIndex((slot) => slot.key === String(largest.to)),
-    label: `${compact(largest.change, true)}${largest.changePercent === null ? '' : ` (${formatValue(largest.changePercent / 100, { kind: 'percent', signed: true, digits: 0 })})`} ${String(largest.from)}→${String(largest.to)}`,
+    label: `${compact(largest.change, true)}${largest.changePercent === null ? '' : ` (${formatValue(largest.changePercent / 100, { kind: 'percent', signed: true, digits: 0 })})`} ${formatPeriod(largest.from, plan.selection.periodMode)}→${formatPeriod(largest.to, plan.selection.periodMode)}`,
   } : null;
 
   const skipped = changes.truncated && series?.status === 'skipped' ? series.reason : null;
