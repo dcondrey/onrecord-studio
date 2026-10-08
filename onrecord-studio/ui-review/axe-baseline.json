@@ -1,9 +1,9 @@
 {
   "note": "Serious and critical axe-core violations accepted as of this run; regenerate with `npm run ui:check -- <run> --write-baseline` after fixing some.",
   "generatedFrom": {
-    "label": "c0b7f76b-202610081440",
-    "gitHead": "c0b7f76b",
-    "generatedAt": "2026-10-08T14:40:26.402Z",
+    "label": "27008dec-202610081454",
+    "gitHead": "27008dec",
+    "generatedAt": "2026-10-08T14:54:02.970Z",
     "data": "real",
     "browser": "bundled chromium 156.0.8078.4",
     "axeVersion": "4.14.0",
@@ -119,49 +119,6 @@
             "target": "time[datetime=\"2026-08-04T17:00:00.000Z\"]",
             "states": [
               "populated"
-            ],
-            "widths": [
-              1024
-            ]
-          }
-        ]
-      }
-    },
-    "story": {
-      "color-contrast": {
-        "impact": "serious",
-        "targets": [
-          {
-            "target": "button[aria-current=\"true\"] > .px-2.gap-2.h-8 > .text-body.truncate.font-medium",
-            "states": [
-              "loading"
-            ],
-            "widths": [
-              1024
-            ]
-          },
-          {
-            "target": "button[title=\"City Council agendas\"] > .px-2.gap-2.h-8 > .text-body.truncate.font-medium",
-            "states": [
-              "loading"
-            ],
-            "widths": [
-              1024
-            ]
-          },
-          {
-            "target": "button[title=\"County of San Diego\"] > .px-2.gap-2.h-8 > .text-body.truncate.font-medium",
-            "states": [
-              "loading"
-            ],
-            "widths": [
-              1024
-            ]
-          },
-          {
-            "target": "button[title=\"San Diego Housing Commission\"] > .px-2.gap-2.h-8 > .text-body.truncate.font-medium",
-            "states": [
-              "loading"
             ],
             "widths": [
               1024
