@@ -18,19 +18,6 @@ fn now() -> String {
     Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true)
 }
 
-async fn on_store<T, F>(
-    store: &Arc<TrackerStore>,
-    task: &'static str,
-    operation: F,
-) -> Result<T, AppError>
-where
-    T: Send + 'static,
-    F: FnOnce(&TrackerStore) -> Result<T, AppError> + Send + 'static,
-{
-    let store = Arc::clone(store);
-    blocking::spawn(task, move || operation(&store)).await?
-}
-
 async fn registered_portal_keys(repository: &DuckDbRepository) -> Result<Vec<String>, AppError> {
     Ok(repository
         .list_portal_registrations()
@@ -44,7 +31,7 @@ async fn registered_portal_keys(repository: &DuckDbRepository) -> Result<Vec<Str
 pub async fn list_claimed_requests(
     store: State<'_, Arc<TrackerStore>>,
 ) -> Result<Vec<ClaimedRequest>, AppError> {
-    on_store(&store, "Tracker read", |store| Ok(store.load()?.claims)).await
+    blocking::on_shared(&store, "Tracker read", |store| Ok(store.load()?.claims)).await
 }
 
 #[tauri::command]
@@ -54,7 +41,7 @@ pub async fn claim_request(
     repository: State<'_, DuckDbRepository>,
 ) -> Result<ClaimedRequest, AppError> {
     let portals = registered_portal_keys(&repository).await?;
-    on_store(&store, "Tracker claim", move |store| {
+    blocking::on_shared(&store, "Tracker claim", move |store| {
         store.update(|document| tracker::claim_request(document, input, &portals, &now()))
     })
     .await
@@ -67,7 +54,7 @@ pub async fn update_claimed_request(
     repository: State<'_, DuckDbRepository>,
 ) -> Result<ClaimedRequest, AppError> {
     let portals = registered_portal_keys(&repository).await?;
-    on_store(&store, "Tracker update", move |store| {
+    blocking::on_shared(&store, "Tracker update", move |store| {
         store.update(|document| tracker::update_claim(document, input, &portals))
     })
     .await
@@ -78,7 +65,7 @@ pub async fn remove_claimed_request(
     claim_id: String,
     store: State<'_, Arc<TrackerStore>>,
 ) -> Result<(), AppError> {
-    on_store(&store, "Tracker removal", move |store| {
+    blocking::on_shared(&store, "Tracker removal", move |store| {
         store.update(|document| tracker::remove_claim(document, &claim_id))
     })
     .await
@@ -89,7 +76,7 @@ pub async fn add_timeline_event(
     input: AddTimelineEventInput,
     store: State<'_, Arc<TrackerStore>>,
 ) -> Result<TimelineEvent, AppError> {
-    on_store(&store, "Tracker event", move |store| {
+    blocking::on_shared(&store, "Tracker event", move |store| {
         store.update(|document| tracker::add_event(document, input, &now()))
     })
     .await
@@ -100,7 +87,7 @@ pub async fn remove_timeline_event(
     input: RemoveTimelineEventInput,
     store: State<'_, Arc<TrackerStore>>,
 ) -> Result<(), AppError> {
-    on_store(&store, "Tracker event removal", move |store| {
+    blocking::on_shared(&store, "Tracker event removal", move |store| {
         store.update(|document| tracker::remove_event(document, &input.claim_id, &input.event_id))
     })
     .await
@@ -111,7 +98,7 @@ pub async fn confirm_suggested_event(
     input: ConfirmSuggestedEventInput,
     store: State<'_, Arc<TrackerStore>>,
 ) -> Result<TimelineEvent, AppError> {
-    on_store(&store, "Tracker confirmation", move |store| {
+    blocking::on_shared(&store, "Tracker confirmation", move |store| {
         store.update(|document| tracker::confirm_suggestion(document, input, &now()))
     })
     .await
@@ -122,7 +109,7 @@ pub async fn reject_suggested_event(
     input: RejectSuggestedEventInput,
     store: State<'_, Arc<TrackerStore>>,
 ) -> Result<(), AppError> {
-    on_store(&store, "Tracker rejection", move |store| {
+    blocking::on_shared(&store, "Tracker rejection", move |store| {
         store.update(|document| {
             tracker::reject_suggestion(document, &input.claim_id, &input.suggestion_id)
         })
@@ -148,7 +135,7 @@ pub async fn import_request_emails(
         read.push(events::read_email_file(path).await);
     }
     let claim_id = input.claim_id;
-    on_store(&store, "Tracker email import", move |store| {
+    blocking::on_shared(&store, "Tracker email import", move |store| {
         store.update(|document| {
             let stamp = now();
             let mut files = Vec::with_capacity(read.len());
@@ -180,7 +167,7 @@ pub async fn get_request_deadline(
     claim_id: String,
     store: State<'_, Arc<TrackerStore>>,
 ) -> Result<RequestDeadline, AppError> {
-    on_store(&store, "Tracker deadline", move |store| {
+    blocking::on_shared(&store, "Tracker deadline", move |store| {
         let document = store.load()?;
         let claim = document
             .claims

@@ -29,19 +29,6 @@ const MAXIMUM_PACKAGE_BYTES: usize = 8 * 1024 * 1024;
 const DEFAULT_PAGE: usize = 10;
 const DEFAULT_LEDGER_PAGE: usize = 25;
 
-async fn on_ledger<T, F>(
-    store: &Arc<LedgerStore>,
-    task: &'static str,
-    operation: F,
-) -> Result<T, AppError>
-where
-    T: Send + 'static,
-    F: FnOnce(&LedgerStore) -> Result<T, AppError> + Send + 'static,
-{
-    let store = Arc::clone(store);
-    blocking::spawn(task, move || operation(&store)).await?
-}
-
 fn page_size(limit: Option<usize>, default: usize) -> Result<usize, AppError> {
     let limit = limit.unwrap_or(default);
     if limit == 0 || limit > MAXIMUM_PAGE {
@@ -116,7 +103,7 @@ pub async fn list_resolution_candidates(
     store: State<'_, Arc<LedgerStore>>,
 ) -> Result<ResolutionCandidatePage, AppError> {
     let limit = page_size(limit, DEFAULT_PAGE)?;
-    let document = on_ledger(&store, "Resolution ledger read", LedgerStore::load).await?;
+    let document = blocking::on_shared(&store, "Resolution ledger read", LedgerStore::load).await?;
     let ledger_head = document.head().to_string();
     let settled = replay(&document.entries(), &PresentEntities::new());
     let scan = index.resolution_scan().await?;
@@ -241,7 +228,7 @@ pub async fn record_resolution_judgment(
         supersedes: input.supersedes,
         evidence,
     };
-    on_ledger(&store, "Resolution ledger write", move |store| {
+    blocking::on_shared(&store, "Resolution ledger write", move |store| {
         let link =
             store.update(|document| resolution::record_judgment(document, judgment, Utc::now()))?;
         Ok(ResolutionLedgerItem {
@@ -336,7 +323,7 @@ pub async fn list_resolution_ledger(
                 .ok_or_else(|| resolution::invalid("the page cursor is not valid"))
         })
         .transpose()?;
-    on_ledger(&store, "Resolution ledger read", move |store| {
+    blocking::on_shared(&store, "Resolution ledger read", move |store| {
         let document = store.load()?;
         let entries = document.entries();
         let current = replay(&entries, &PresentEntities::new());
@@ -442,7 +429,7 @@ pub async fn get_resolution_clusters(
     else {
         return Ok(None);
     };
-    let document = on_ledger(&store, "Resolution ledger read", LedgerStore::load).await?;
+    let document = blocking::on_shared(&store, "Resolution ledger read", LedgerStore::load).await?;
     let entries = document.entries();
     let mut keys: Vec<ResolutionKey> = entries
         .iter()
@@ -522,7 +509,7 @@ pub async fn export_resolution_ledger(
     store: State<'_, Arc<LedgerStore>>,
     key_directory: State<'_, crate::integrity::SigningKeyDirectory>,
 ) -> Result<String, AppError> {
-    let document = on_ledger(&store, "Resolution ledger read", LedgerStore::load).await?;
+    let document = blocking::on_shared(&store, "Resolution ledger read", LedgerStore::load).await?;
     let package = ResolutionPackage {
         schema: resolution::PACKAGE_SCHEMA.to_string(),
         exported_at: Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),
@@ -614,7 +601,7 @@ pub async fn preview_resolution_import(
 ) -> Result<ResolutionImportPreview, AppError> {
     let (package, signer) = verify_package(&payload, &report_directory).await?;
     let packet_sha256 = sha256_hex(payload.as_bytes());
-    on_ledger(&store, "Resolution import preview", move |store| {
+    blocking::on_shared(&store, "Resolution import preview", move |store| {
         let document = store.load()?;
         let plan = plan_import(&document, &package.entries)?;
         let before = replay(&document.entries(), &PresentEntities::new());
@@ -654,7 +641,7 @@ pub async fn import_resolution_ledger(
         ));
     }
     let (package, signer) = verify_package(&payload, &report_directory).await?;
-    on_ledger(&store, "Resolution import", move |store| {
+    blocking::on_shared(&store, "Resolution import", move |store| {
         store.update(|document| {
             let plan = plan_import(document, &package.entries)?;
             apply_import(document, &plan, &signer)?;

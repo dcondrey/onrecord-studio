@@ -32,8 +32,7 @@ pub async fn get_local_contributor_identity(
 pub async fn list_trusted_contributors(
     store: State<'_, Arc<ContributorStore>>,
 ) -> Result<Vec<TrustedContributor>, AppError> {
-    let store = Arc::clone(&store);
-    blocking::spawn("Contributor list", move || store.list()).await?
+    blocking::on_shared(&store, "Contributor list", ContributorStore::list).await
 }
 
 #[tauri::command]
@@ -42,8 +41,10 @@ pub async fn trust_contributor(
     label: String,
     store: State<'_, Arc<ContributorStore>>,
 ) -> Result<TrustedContributor, AppError> {
-    let store = Arc::clone(&store);
-    blocking::spawn("Contributor trust", move || store.trust(&key_id, &label)).await?
+    blocking::on_shared(&store, "Contributor trust", move |store| {
+        store.trust(&key_id, &label)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -51,8 +52,10 @@ pub async fn untrust_contributor(
     key_id: String,
     store: State<'_, Arc<ContributorStore>>,
 ) -> Result<(), AppError> {
-    let store = Arc::clone(&store);
-    blocking::spawn("Contributor removal", move || store.untrust(&key_id)).await?
+    blocking::on_shared(&store, "Contributor removal", move |store| {
+        store.untrust(&key_id)
+    })
+    .await
 }
 
 #[tauri::command]

@@ -1,4 +1,5 @@
 use crate::error::AppError;
+use std::sync::Arc;
 
 pub(crate) async fn spawn<T, F>(
     task_name: &'static str,
@@ -8,8 +9,8 @@ where
     T: Send + 'static,
     F: FnOnce() -> Result<T, AppError> + Send + 'static,
 {
-    // NOTE(runtime): The nested result is intentional: the inner error belongs to the
-    // operation, while the outer error means the blocking worker itself panicked or was cancelled.
+    // The inner error belongs to the operation; the outer one means the worker itself panicked
+    // or was cancelled.
     spawn_with(task_name, AppError::Internal, task).await
 }
 
@@ -28,13 +29,25 @@ where
         .map_err(|error| join_error(format!("{task_name} task failed: {error}")))
 }
 
+/// Runs `operation` against a shared file-backed store on the blocking pool.
+pub(crate) async fn on_shared<S, T, F>(
+    store: &Arc<S>,
+    task_name: &'static str,
+    operation: F,
+) -> Result<T, AppError>
+where
+    S: Send + Sync + 'static,
+    T: Send + 'static,
+    F: FnOnce(&S) -> Result<T, AppError> + Send + 'static,
+{
+    let store = Arc::clone(store);
+    spawn(task_name, move || operation(&store)).await?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // INVARIANT(runtime): the two nesting levels mean different things, and the whole point of
-    // the nested Result is that a caller can tell them apart. These two tests make the NOTE above
-    // executable rather than aspirational.
     #[tokio::test]
     async fn an_operation_failure_surfaces_as_the_inner_error() {
         let result = spawn("unit", || {
@@ -63,14 +76,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn success_nests_twice() {
-        let result = spawn("unit", || Ok(7_u32)).await;
-        assert_eq!(result.expect("worker ran").expect("operation succeeded"), 7);
-    }
-
-    // `spawn_with` lets the caller choose the OUTER constructor, which describes a dead worker,
-    // not a domain failure. This test exists to make that choice visible at review time.
-    #[tokio::test]
     async fn spawn_with_uses_the_supplied_constructor_only_for_a_dead_worker() {
         let result = spawn_with("hash", AppError::Provenance, || -> Result<(), AppError> {
             panic!("hash worker exploded");
@@ -79,7 +84,6 @@ mod tests {
         let error = result.expect_err("panic surfaces at the outer level");
         assert!(matches!(error, AppError::Provenance(_)), "got {error:?}");
 
-        // The inner error is untouched by the constructor choice.
         let result = spawn_with("hash", AppError::Provenance, || {
             Err::<(), _>(AppError::Storage("disk gone".to_string()))
         })

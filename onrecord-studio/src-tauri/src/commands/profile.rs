@@ -29,22 +29,9 @@ fn state_of(profile: Option<UserProfile>) -> ProfileState {
     }
 }
 
-async fn on_store<T, F>(
-    store: &Arc<ProfileStore>,
-    task: &'static str,
-    operation: F,
-) -> Result<T, AppError>
-where
-    T: Send + 'static,
-    F: FnOnce(&ProfileStore) -> Result<T, AppError> + Send + 'static,
-{
-    let store = Arc::clone(store);
-    blocking::spawn(task, move || operation(&store)).await?
-}
-
 #[tauri::command]
 pub async fn get_profile(store: State<'_, Arc<ProfileStore>>) -> Result<ProfileState, AppError> {
-    on_store(&store, "Profile read", |store| store.load().map(state_of)).await
+    blocking::on_shared(&store, "Profile read", |store| store.load().map(state_of)).await
 }
 
 #[tauri::command]
@@ -52,7 +39,7 @@ pub async fn save_profile(
     input: ProfileInput,
     store: State<'_, Arc<ProfileStore>>,
 ) -> Result<ProfileState, AppError> {
-    on_store(&store, "Profile save", move |store| {
+    blocking::on_shared(&store, "Profile save", move |store| {
         store
             .update(|current| profile::apply_input(current, input))
             .map(Some)
@@ -65,7 +52,7 @@ pub async fn save_profile(
 pub async fn delete_profile(
     store: State<'_, Arc<ProfileStore>>,
 ) -> Result<ProfileDeletionOutcome, AppError> {
-    on_store(&store, "Profile delete", |store| store.delete()).await
+    blocking::on_shared(&store, "Profile delete", |store| store.delete()).await
 }
 
 const MAXIMUM_AGENCIES_SEARCHED: i64 = 5_000;
@@ -142,7 +129,7 @@ pub async fn list_affiliation_matches(
     repository: State<'_, DuckDbRepository>,
     corpus: State<'_, CorpusIndex>,
 ) -> Result<AffiliationMatchList, AppError> {
-    let profile = on_store(&store, "Profile read", |store| store.load()).await?;
+    let profile = blocking::on_shared(&store, "Profile read", |store| store.load()).await?;
     let limitations = LIMITATIONS.iter().map(|text| (*text).to_string()).collect();
     let Some(profile) = profile else {
         return Ok(AffiliationMatchList {
@@ -201,7 +188,7 @@ async fn decide(
     input: AffiliationMatchDecisionInput,
     decision: MatchDecisionKind,
 ) -> Result<ProfileState, AppError> {
-    on_store(store, "Profile match decision", move |store| {
+    blocking::on_shared(store, "Profile match decision", move |store| {
         store
             .update(|current| {
                 let current = current.ok_or_else(|| {
@@ -236,7 +223,7 @@ pub(crate) async fn resolve_disclosure(
     repository: &DuckDbRepository,
     corpus: &CorpusIndex,
 ) -> Result<AffiliationDisclosure, AppError> {
-    let profile = on_store(store, "Profile read", |store| store.load()).await?;
+    let profile = blocking::on_shared(store, "Profile read", |store| store.load()).await?;
     let own = match profile
         .as_ref()
         .filter(|profile| !profile.match_decisions.is_empty())
