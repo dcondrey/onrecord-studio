@@ -13,6 +13,7 @@ import { severityLabel } from '../objects/labels';
 import { useAppStore } from '../../store/useAppStore';
 import { useInspectFinding } from '../../hooks/useInspectFinding';
 import type { AgencyPerformanceProfile, Finding, FindingCitation, FindingSeverity } from '../../types';
+import { isLegalClaimKind } from '../../types/findings';
 import type { GlyphShape } from '../ui/shapeGlyph';
 import StateGrid, { type StateGridCell, type StateGridRow } from '../charts/figures/StateGrid';
 import { seqStep } from '../charts/marks/HeatCell';
@@ -56,12 +57,14 @@ export function severityMatrix(findings: readonly Finding[], profiles: readonly 
   const keys = [...groups.keys()].sort((a, b) => (a === NO_AGENCY ? 1 : b === NO_AGENCY ? -1 : total(b) - total(a) || groups.get(a)!.label.localeCompare(groups.get(b)!.label)));
   const maxCell = Math.max(0, ...keys.flatMap((key) => SEVERITIES.map((level) => groups.get(key)!.counts[level].length)));
   const maxTotal = Math.max(0, ...keys.map(total));
+  const counted = (list: readonly Finding[]) => list.filter((finding) => isLegalClaimKind(finding.kind)).length;
   const rows: StateGridRow[] = keys.map((key) => {
     const { label, counts } = groups.get(key)!;
+    const rowCounted = SEVERITIES.reduce((sum, level) => sum + counted(counts[level]), 0);
     return {
       key,
       label,
-      trailing: { text: total(key).toLocaleString('en-US'), value: total(key), max: maxTotal },
+      trailing: { text: `${total(key).toLocaleString('en-US')}${rowCounted > 0 ? ` · ${rowCounted} counted` : ''}`, value: total(key), max: maxTotal },
       cells: SEVERITIES.map((level): StateGridCell => {
         const cell = counts[level];
         const name = `${label}, ${severityLabel(level).toLowerCase()}: ${cell.length} ${cell.length === 1 ? 'finding' : 'findings'}.`;
@@ -69,10 +72,18 @@ export function severityMatrix(findings: readonly Finding[], profiles: readonly 
         const kinds = [...cell.reduce((tally, finding) => tally.set(finding.kind, (tally.get(finding.kind) ?? 0) + 1), new Map<string, number>())]
           .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
           .slice(0, 3);
+        const legal = counted(cell);
+        const legalNote = legal > 0 ? ` ${legal} ${legal === 1 ? 'is a counted legal claim' : 'are counted legal claims'}.` : '';
         return {
           kind: 'count', value: cell.length, step: seqStep(cell.length, maxCell), glyph: SEVERITY_SHAPE[level], text: cell.length.toLocaleString('en-US'), actionable: true,
-          name: `${name} Press Enter to list them.`,
-          tip: { rows: kinds.map(([kind, count]) => ({ key: kind, value: count.toLocaleString('en-US'), label: kind.replace(/_/g, ' ').toLowerCase() })), note: 'Most frequent kinds in this cell.' },
+          name: `${name}${legalNote} Press Enter to list them.`,
+          tip: {
+            rows: [
+              ...(legal > 0 ? [{ key: 'counted', value: legal.toLocaleString('en-US'), label: 'counted legal claims', swatch: 'flag' as const, tone: 'counted' as const }] : []),
+              ...kinds.map(([kind, count]) => ({ key: kind, value: count.toLocaleString('en-US'), label: kind.replace(/_/g, ' ').toLowerCase() })),
+            ],
+            note: 'Most frequent kinds in this cell.',
+          },
         };
       }),
     };
@@ -359,13 +370,14 @@ export default function FindingsInbox() {
           title="Findings by agency and severity"
           storageKey="findings-severity-agency"
           headline={matrix.headline}
-          sources={{ tables: ['findings'], note: 'agency names from agency profiles; severity is the detector’s rating, not a legal finding' }}
+          sources={{ tables: ['findings'], note: 'agency names from agency profiles; severity ranks reading order and does not say whether a finding is a counted legal claim (Total names those)' }}
           summary={`${lensedFindings.length} findings across ${matrix.rows.length} rows. Activate a cell to filter the list to that agency and severity, or a column header for the severity alone.`}
           status="ready"
           rowHeader="Agency"
           trailingHeader="Total"
           columns={SEVERITIES.map((level) => ({ key: level, label: severityLabel(level), glyph: SEVERITY_SHAPE[level] }))}
           rows={matrix.rows}
+          pressedColumn={agencyFilter === null && severityFilter ? SEVERITIES.indexOf(severityFilter) : null}
           selected={(() => {
             const row = agencyFilter === null ? -1 : matrix.keys.indexOf(agencyFilter);
             return row >= 0 && severityFilter ? [{ row, col: SEVERITIES.indexOf(severityFilter) }] : [];
