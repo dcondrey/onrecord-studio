@@ -34,6 +34,8 @@ const bridge = vi.hoisted(() => ({
 vi.mock('@tauri-apps/api/core', () => ({
   isTauri: () => false,
   invoke: (command: string, args: { utterance?: string; limit?: number }) => {
+    // The palette's top-leads read on open is not part of the intent router under test.
+    if (command === 'list_story_leads') return Promise.resolve([]);
     bridge.invoked.push({ command, args });
     if (command !== 'run_intent_query') return Promise.resolve(null);
     return new Promise((resolve, reject) => {
