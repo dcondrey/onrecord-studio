@@ -123,11 +123,12 @@ export default function StoryDesk() {
   );
 
   const hasLeads = state.status === 'READY' && state.leads.length > 0;
-  const showRefresh = mode === 'all' || state.status !== 'READY' || state.leads.length > 0;
+  // While the load has failed, the error's own Try again is the one retry on screen.
+  const showRefresh = mode === 'all' || state.status === 'PENDING' || hasLeads;
 
   return (
     <main className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto w-full max-w-content space-y-6 px-4 pb-10 pt-6 md:px-6">
+      <div className="mx-auto w-full max-w-6xl space-y-6 px-4 pb-10 pt-6 md:px-6">
         <PageHeader
           title="What the records point to"
           summary="Findings ranked by what the records show, with every claim one click from its source."
@@ -146,13 +147,14 @@ export default function StoryDesk() {
               panelId={() => 'story-desk-panel'}
               options={[{ value: 'ranked', label: 'Ranked leads' }, { value: 'all', label: 'All findings' }]}
             />
-            {mode === 'ranked' && hasLeads && <SinceControl />}
+            {mode === 'ranked' && (hasLeads || state.status === 'PENDING') && <SinceControl disabled={state.status === 'PENDING'} />}
             {showRefresh && (
               <Button
+                className="min-w-[7rem]"
                 disabled={mode === 'ranked' && (refreshing || state.status === 'PENDING')}
                 onClick={mode === 'ranked' ? load : requestFindingsRefresh}
               >
-                {mode === 'ranked' && refreshing ? 'Refreshing…' : 'Refresh'}
+                {mode === 'ranked' && state.status === 'PENDING' ? 'Loading…' : mode === 'ranked' && refreshing ? 'Refreshing…' : 'Refresh'}
               </Button>
             )}
           </>}
@@ -268,7 +270,7 @@ export default function StoryDesk() {
                     <Button size="sm" onClick={() => openLeadDossier(lead.findingId)} aria-label={`Open evidence chain: ${lead.headline}`}>
                       Open evidence chain
                     </Button>
-                    <Button size="sm" onClick={() => inspect(lead)}>Inspect records</Button>
+                    <Button size="sm" variant="ghost" onClick={() => inspect(lead)}>Inspect records</Button>
                     <Button size="sm" variant="ghost" onClick={() => void addToBriefing(lead)}>Add to briefing</Button>
                     {lead.relatedFindingIds.length > 0 && (
                       <span className="text-caption tabular-nums text-muted">

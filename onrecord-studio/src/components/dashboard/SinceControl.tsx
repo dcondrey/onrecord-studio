@@ -11,7 +11,7 @@ const LABELS: Record<Exclude<SincePreset, 'lastOpened'>, string> = {
 };
 
 /** Chooses how far back "new" reaches for the attention feed and the story desk. */
-export default function SinceControl() {
+export default function SinceControl({ disabled = false }: { disabled?: boolean } = {}) {
   const preset = useAppStore((state) => state.sincePreset);
   const previousOpenAt = useAppStore((state) => state.previousOpenAt);
   const setSincePreset = useAppStore((state) => state.setSincePreset);
@@ -21,6 +21,7 @@ export default function SinceControl() {
       aria-label="Show findings since"
       value={preset}
       onChange={(event) => setSincePreset(event.target.value as SincePreset)}
+      disabled={disabled}
       className="w-auto tabular-nums"
     >
       <option value="lastOpened">{lastOpenedLabel}</option>
