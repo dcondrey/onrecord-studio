@@ -280,6 +280,19 @@ export default function ClockStack({ found, onOpenRequest }: { found: CaseworkCa
 
 const MINI_ROW = 22;
 
+/** The words after a mini clock's bar: elapsed of allowed, and its state. */
+function miniEndText(request: CaseworkRequest): string {
+  const plan = request.filingPlan;
+  if (!plan) return '';
+  const received = isClosed(request) || request.productions.some((production) => production.receivedAt);
+  return [
+    `${plan.calendarDaysElapsed}/${plan.allowedCalendarDays} d`,
+    plan.deadlinePassedWithoutRecordedResponse ? 'modelled' : null,
+    received ? 'received' : null,
+    dueConflict(request) ? '≠ recorded due' : null,
+  ].filter(Boolean).join(' · ');
+}
+
 export function miniClocksHeadline(found: CaseworkCase): string {
   const total = found.requests.length;
   const open = found.requests.filter((request) => !isClosed(request)).length;
@@ -294,7 +307,8 @@ function MiniPlot({ found, width, onOpen }: { found: CaseworkCase; width: number
   const roving = useRovingFocus({ shape: { rows: Math.max(1, requests.length) }, onActivate: onOpen, onEscape: tooltip.hide });
   const labelColumn = Math.min(130, Math.round(width * 0.36));
   const max = Math.max(1, ...requests.map((request) => request.filingPlan ? Math.max(request.filingPlan.allowedCalendarDays, request.filingPlan.calendarDaysElapsed) : 0));
-  const x = scaleLinear([0, max * 1.08], [labelColumn + 8, width - 64], { zero: true });
+  const endRoom = Math.max(40, ...requests.map((request) => measureText(miniEndText(request)))) + 26;
+  const x = scaleLinear([0, max * 1.08], [labelColumn + 8, Math.max(labelColumn + 48, width - endRoom)], { zero: true });
   const axisY = requests.length * MINI_ROW + 6;
   return (
     <g>
@@ -307,7 +321,6 @@ function MiniPlot({ found, width, onOpen }: { found: CaseworkCase; width: number
           ? `${label}: ${plan.calendarDaysElapsed} of ${plan.allowedCalendarDays} allowed days elapsed as of ${day(plan.evaluatedAt)}${plan.deadlinePassedWithoutRecordedResponse ? ', past the modelled date' : ''}${received ? ', production received' : ''}.`
           : `${label}: ${noClockWords(request)}.`;
         const tip = <TooltipContent title={label} rows={plan ? [{ key: 'e', value: `${plan.calendarDaysElapsed} of ${plan.allowedCalendarDays}`, label: `days, as of ${day(plan.evaluatedAt)}` }, { key: 'f', value: day(plan.filedOn), label: 'filed' }, { key: 'd', value: day(plan.determinationDueOn), label: 'due (modelled)' }] : []} note={request.custodian || undefined} />;
-        const conflict = dueConflict(request);
         return (
           <MarkGroup
             key={request.id}
@@ -329,7 +342,7 @@ function MiniPlot({ found, width, onOpen }: { found: CaseworkCase; width: number
                 <ClockBar x={x} y={cy - 3} thickness={6} endDay={plan.calendarDaysElapsed} deadlineDay={plan.deadlinePassedWithoutRecordedResponse ? plan.allowedCalendarDays : null} past="uncounted" open={plan.measuredTo === null} />
                 {received && <Dot cx={x(plan.calendarDaysElapsed) + (plan.measuredTo === null ? 14 : 6)} cy={cy} r={3} role="positive" title="Production received" />}
                 <text x={x(plan.calendarDaysElapsed) + (plan.measuredTo === null ? 14 : 6) + (received ? 8 : 0)} y={cy} dy="0.32em" className="viz-num fill-fg-secondary text-[11px]">
-                  {`${plan.calendarDaysElapsed}/${plan.allowedCalendarDays} d${plan.deadlinePassedWithoutRecordedResponse ? ' modelled' : ''}${received ? ' received' : ''}${conflict ? ' ≠' : ''}`}
+                  {miniEndText(request)}
                 </text>
               </>
             ) : (

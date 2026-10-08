@@ -40,6 +40,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 import MainLayout from '../components/dashboard/MainLayout';
 import ClockStrip, { caseworkClock, pastDeadlinePaint, portalClock, trackerClock } from '../components/charts/figures/ClockStrip';
+import ClockStack from '../components/charts/figures/ClockStack';
 import { KIND_LABELS } from '../components/tracker/MyRequestsPanel';
 import { useAppStore } from '../store/useAppStore';
 import type { ClaimedRequest, DeadlineAnalysis, LegalComplianceFinding, RequestDeadline, RequestFilingPlan, RequestSearchResult } from '../types';
@@ -128,6 +129,23 @@ describe('statutory clock claim paint', () => {
     expect(pastSpans(container)).toEqual(['uncounted']);
     expect(container.textContent).toContain('past the deadline (modelled)');
     expect(container.textContent).not.toContain('Counted');
+  });
+
+  it('stacks casework clocks as modelled and lists an unfiled request without a bar', () => {
+    const base = {
+      id: 'r1', title: 'Amendments', custodian: 'Purchasing', gap: '', resolves: '', draft: '', state: 'SUBMITTED', expectedRecordTypes: [], expectedFields: [],
+      expectedPeriod: '', submittedAt: '2026-08-01', responseDue: null, externalReference: '', productions: [], unresolvedOmissions: [], followUpDraft: '',
+      citationIds: [], compiledDraft: '', filingPlan: plan,
+    };
+    const found = {
+      id: 'case', reportId: 'r', topic: '', title: 'Case', owner: '', disposition: 'OPEN', revision: 1, createdAt: '', updatedAt: '', questions: [],
+      requests: [base, { ...base, id: 'r2', title: 'Unfiled', submittedAt: null, filingPlan: null }], decisions: [], commitments: [], evidence: [], notes: '',
+    };
+    const { container } = render(<ClockStack found={found} onOpenRequest={() => undefined} />);
+    expect(pastSpans(container)).toEqual(['uncounted']);
+    expect(container.textContent).toContain('modelled: past due, no recorded response');
+    expect(container.textContent).toContain('not filed: no clock');
+    expect(container.querySelectorAll('[data-clock-bar]')).toHaveLength(1);
   });
 
   it('draws no axis or bar when the tracker has no clock', () => {

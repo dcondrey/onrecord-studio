@@ -19,7 +19,7 @@ import { TooltipContent } from '../frame/Tooltip';
 import type { LegendItem } from '../frame/Legend';
 import { paintFor, REFERENCE_PAINT, VIZ, type Claim } from '../core/claim';
 import { formatDate } from '../core/format';
-import { measureText, placeLabels } from '../core/layout';
+import { LABEL_FONT, measureText, placeLabels } from '../core/layout';
 import { parseDate, scaleLinear, type ContinuousScale } from '../core/scale';
 import { useRovingFocus } from '../hooks/useRovingFocus';
 import { useTooltip } from '../hooks/useTooltip';
@@ -295,8 +295,8 @@ export function portalClock({ record, extension, engine, findings, observedAt }:
   const determination = engine ? engineDetermination(engine) : null;
   if (engine) {
     headline += determination
-      ? ` Determination on day ${engine.calendarDaysElapsed} of ${engine.allowedCalendarDays}.`
-      : ` No determination recorded; day ${engine.calendarDaysElapsed} of ${engine.allowedCalendarDays}.`;
+      ? ` Determination on day ${engine.calendarDaysElapsed}; ${engine.allowedCalendarDays} allowed.`
+      : ` No determination recorded by day ${engine.calendarDaysElapsed}; ${engine.allowedCalendarDays} allowed.`;
   }
   const endAt = engine
     ? determination?.at ?? engine.observedAt
@@ -467,6 +467,7 @@ function ClockPlot({ data, width, highlightedEvent, onEventHover, onEventActivat
     ordered.filter((event) => event.direct).map((event) => ({ key: event.key, anchor: x(dayOf(event.at, p.created)), width: measureText(event.label) })),
     0,
     width,
+    10,
   );
   const directText = new Map(ordered.map((event) => [event.key, event.label]));
 
@@ -486,14 +487,13 @@ function ClockPlot({ data, width, highlightedEvent, onEventHover, onEventActivat
       : past === 'dismissed'
         ? `exceeded by ${plural(variance ?? 0, 'day')} (finding dismissed)`
         : `past the deadline (${data.uncountedWord})`;
-    if (data.end.openLabel && past !== 'counted') endWords = `${endWords}; ${data.end.openLabel}`;
   } else if (data.end.openLabel) {
     endWords = data.end.openLabel;
   } else if (data.determination) {
     endWords = `determination day ${data.determination.elapsedDays ?? Math.round(p.endDay)} (${data.determination.basis === 'SOURCED' ? 'sourced' : 'proxy'})`;
   }
   const flagged = past === 'counted' && endWords !== null && endWords.startsWith('Counted');
-  const endWidth = endWords ? measureText(endWords) : 0;
+  const endWidth = endWords ? measureText(endWords, flagged ? `600 ${LABEL_FONT}` : LABEL_FONT) + 6 : 0;
   const endX = Math.min(width - endWidth - 2, Math.max(flagged ? 16 : 2, x(p.endDay) - endWidth / 2));
   const rule = REFERENCE_PAINT.statute;
 
