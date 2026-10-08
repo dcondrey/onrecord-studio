@@ -35,7 +35,7 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
   const addDisabled = isDiscovering || syncCapacityReached || (activeIsSyncing && !portalUrlDraft.trim());
 
   return (
-    <form onSubmit={(event) => void startSync(event)} className="source-composer flex min-w-0 flex-1 flex-wrap items-center gap-1 p-1">
+    <form onSubmit={(event) => void startSync(event)} className="source-composer flex min-w-0 flex-1 items-center gap-1 p-1">
       <Select
         aria-label="Built-in source connector"
         title={selectedSource.description}

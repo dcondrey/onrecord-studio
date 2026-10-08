@@ -467,9 +467,8 @@ function CollapsibleSection({ title, children }: { title: string; children: Reac
   const [everOpened, setEverOpened] = useState(false);
   return (
     <details className="group app-panel" onToggle={(event) => { if (event.currentTarget.open) setEverOpened(true); }}>
-      <summary className="focus-ring flex h-14 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-5 text-heading text-fg [&::-webkit-details-marker]:hidden">
+      <summary className="focus-ring flex h-14 cursor-pointer list-none items-center gap-2 rounded-xl px-5 text-heading text-fg [&::-webkit-details-marker]:hidden">
         {title}
-        <Icon name="chevron" size="xs" className="text-muted transition-transform duration-base group-open:rotate-90" />
       </summary>
       {everOpened && <div className="border-t border-line p-5">{children}</div>}
     </details>

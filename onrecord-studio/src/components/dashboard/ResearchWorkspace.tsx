@@ -17,7 +17,6 @@ import { INVESTIGATION_TOPICS } from "../../utils/investigations";
 import { useAppStore } from "../../store/useAppStore";
 import { useLatestRequestGate } from "../../hooks/useLatestRequestGate";
 import { minimumResearchCalls, researchBudgetMessage } from "../../utils/researchReadiness";
-import Icon from "../ui/icons";
 import Button from "../ui/Button";
 import Badge from "../ui/Badge";
 import { Select } from "../ui/Field";
@@ -159,9 +158,8 @@ export default function ResearchWorkspace({ onReview }: { onReview?: (reportId: 
       </div>
     )}
     <details ref={controlsRef} className="group app-panel" open={!status || status.reports.length === 0}>
-      <summary className="focus-ring flex h-14 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-5 text-heading text-fg [&::-webkit-details-marker]:hidden">
+      <summary className="focus-ring flex h-14 cursor-pointer list-none items-center gap-2 rounded-xl px-5 text-heading text-fg [&::-webkit-details-marker]:hidden">
         Research controls and saved dossiers
-        <Icon name="chevron" size="xs" className="text-muted transition-transform duration-base group-open:rotate-90" />
       </summary>
       <div className="space-y-5 border-t border-line p-5">
         <div className="grid grid-cols-1 items-center gap-x-3 gap-y-3 sm:grid-cols-[max-content_minmax(0,28rem)_auto]">
@@ -202,9 +200,8 @@ export default function ResearchWorkspace({ onReview }: { onReview?: (reportId: 
     </details>
     {status && (
       <details className="group app-panel">
-        <summary className="focus-ring flex h-14 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-5 text-heading text-fg [&::-webkit-details-marker]:hidden">
+        <summary className="focus-ring flex h-14 cursor-pointer list-none items-center gap-2 rounded-xl px-5 text-heading text-fg [&::-webkit-details-marker]:hidden">
           Collection coverage and source issues
-          <Icon name="chevron" size="xs" className="text-muted transition-transform duration-base group-open:rotate-90" />
         </summary>
         <div className="border-t border-line p-5 text-body">
           {status.sources.length === 0 ? (

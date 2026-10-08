@@ -11,7 +11,6 @@ import FamilyBadge, { ClaimBasisBadge } from '../ui/FamilyBadge';
 import SegmentedControl from '../ui/SegmentedControl';
 import Button from '../ui/Button';
 import InlineError from '../ui/InlineError';
-import Icon from '../ui/icons';
 import SeverityGlyph from './SeverityGlyph';
 import { findingToBriefingEvidence } from './BriefingWorkspace';
 import FindingsInbox from './FindingsInbox';
@@ -334,7 +333,6 @@ function LeadDraftToggle({ findingId }: { findingId: string }) {
         }}
         className="focus-ring inline-flex cursor-pointer list-none select-none items-center gap-1.5 rounded text-body text-fg-secondary hover:text-fg [&::-webkit-details-marker]:hidden"
       >
-        <Icon name="chevron" size="xs" className="text-muted transition-transform duration-base group-open:rotate-90" />
         Draft a records request or appeal
       </summary>
       {open && <div className="mt-3"><ArtifactDrafts findingId={findingId} /></div>}

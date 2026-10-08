@@ -14,7 +14,6 @@ import InvestigationEvaluationPanel from './InvestigationEvaluationPanel';
 import PackageVerifier from './PackageVerifier';
 import { Field, Select } from '../ui/Field';
 import InlineError from '../ui/InlineError';
-import Icon from '../ui/icons';
 
 const tabs = ['Cases and follow-through', 'Spending and outcomes', 'Coverage and changes', 'Evidence review', 'Organization filings'] as const;
 type Tab = typeof tabs[number];
@@ -115,7 +114,6 @@ export default function ProfessionalWorkbench({ initialReportId = '', initialTab
         {reportId ? <EvidenceReviewPanel reportId={reportId} /> : <p className="text-body text-muted">Evidence review needs a saved investigation. Research creates one from collected public records.</p>}
         <details className="group border-t border-line pt-4" onToggle={(event) => { if (event.currentTarget.open) setAssessmentOpened(true); }}>
           <summary className="focus-ring flex cursor-pointer list-none items-center gap-2 rounded text-body font-medium text-fg [&::-webkit-details-marker]:hidden">
-            <Icon name="chevron" size="xs" className="text-muted transition-transform duration-base group-open:rotate-90" />
             Assess usefulness
           </summary>
           {assessmentOpened && <div className="mt-4"><InvestigationEvaluationPanel /></div>}

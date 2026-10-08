@@ -171,9 +171,8 @@ function ToolDrawer({ label, children }: { label: string; children: ReactNode })
   const [everOpened, setEverOpened] = useState(false);
   return (
     <details className="group" onToggle={(event) => { if (event.currentTarget.open) setEverOpened(true); }}>
-      <summary className="focus-ring flex h-12 cursor-pointer list-none items-center justify-between gap-3 rounded text-body font-medium text-fg [&::-webkit-details-marker]:hidden">
+      <summary className="focus-ring flex h-12 cursor-pointer list-none items-center gap-2 rounded text-body font-medium text-fg [&::-webkit-details-marker]:hidden">
         {label}
-        <Icon name="chevron" size="xs" className="text-muted transition-transform duration-base group-open:rotate-90" />
       </summary>
       {everOpened && <div className="pb-5 pt-1">{children}</div>}
     </details>
