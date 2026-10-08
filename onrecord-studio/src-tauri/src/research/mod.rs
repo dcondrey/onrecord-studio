@@ -238,14 +238,6 @@ async fn retrieve_meetings(
     }
 }
 
-pub async fn investigate(
-    repository: &DuckDbRepository,
-    topic_id: &str,
-    force: bool,
-) -> Result<(), AppError> {
-    investigate_with_collection(repository, None, topic_id, force).await
-}
-
 pub async fn investigate_with_collection(
     repository: &DuckDbRepository,
     manager: Option<&Arc<QueueManager>>,
@@ -343,7 +335,7 @@ pub async fn investigate_with_collection(
                 None,
             )
             .await?;
-        let context = json!({"today":chrono::Local::now().format("%Y-%m-%d").to_string(),"currentTimestampUtc":chrono::Utc::now().to_rfc3339(),"topic":topic,"objective":objective,"meetingCandidates":agenda_context,"evidence":evidence::model_evidence(&evidence,&agenda_pins),"analyticalCatalog":catalog,"priorQuestions":questions,"previousInvestigation":previous,"investigationLog":log});
+        let context = json!({"today":today(),"currentTimestampUtc":chrono::Utc::now().to_rfc3339(),"topic":topic,"objective":objective,"meetingCandidates":agenda_context,"evidence":evidence::model_evidence(&evidence,&agenda_pins),"analyticalCatalog":catalog,"priorQuestions":questions,"previousInvestigation":previous,"investigationLog":log});
         let reply = model::complete(repository,&policy,
             "Continue the existing case: examine prior unresolved questions and next tests, acknowledge in-progress or completed user actions, and avoid proposing an identical completed request. Prior reports are leads, not evidence: re-retrieve their sources before relying on a claim. Form 1–5 precise research questions arising from these records. Select up to 4 new phrase searches, 3 deeper document reads using an existing evidenceId and characterOffset, and 3 executable SQL queries. Build on prior results; seek disconfirming evidence. First inspect actual dimension values and keys; then reconcile costs, outcomes, and periods, using full outer joins to expose missing counterparts. Qualify many-to-many joins before aggregation; never add summary rows to components. Query only the supplied schema. With no tables, queries must be empty. Schema names are exact. In City budget data expense accounts start with 5; report_fy can be a two-digit code. Prefer unresolved program/contract-specific questions and comparisons over generic counts. Return empty tool arrays when no further tool would improve the case.",
             &context, model::planner_schema()).await?;
@@ -357,7 +349,7 @@ pub async fn investigate_with_collection(
         if round == 1 && pursue_sources {
             discovery_attempted = true;
             ensure_enabled(repository).await?;
-            let context = json!({"today":chrono::Local::now().format("%Y-%m-%d").to_string(),"topic":topic,"questions":questions,"knownSources":evidence.iter().filter_map(|e|e.source_url.as_ref()).collect::<Vec<_>>(),"instruction":"Find the strongest missing primary evidence needed to test these questions before recommending that a person request it. Prefer an executed agreement, payment/monitoring report, audit follow-up or actual outcome record over another general overview. Avoid the known sources."});
+            let context = json!({"today":today(),"topic":topic,"questions":questions,"knownSources":evidence.iter().filter_map(|e|e.source_url.as_ref()).collect::<Vec<_>>(),"instruction":"Find the strongest missing primary evidence needed to test these questions before recommending that a person request it. Prefer an executed agreement, payment/monitoring report, audit follow-up or actual outcome record over another general overview. Avoid the known sources."});
             repository
                 .research_phase(
                     "Looking for available primary records before drafting requests",
@@ -404,7 +396,7 @@ pub async fn investigate_with_collection(
             None,
         )
         .await?;
-    let context = json!({"today":chrono::Local::now().format("%Y-%m-%d").to_string(),"currentTimestampUtc":chrono::Utc::now().to_rfc3339(),"topic":topic,"objective":objective,"meetingCandidates":agenda_context,"evidence":evidence::model_evidence(&evidence,&agenda_pins),"questions":questions,"investigationLog":log});
+    let context = json!({"today":today(),"currentTimestampUtc":chrono::Utc::now().to_rfc3339(),"topic":topic,"objective":objective,"meetingCandidates":agenda_context,"evidence":evidence::model_evidence(&evidence,&agenda_pins),"questions":questions,"investigationLog":log});
     let mut draft = model::complete(repository,&policy,
         "Prefer the 3–5 strongest investigative leads, with concise exact quotations and specific requests. Avoid padding. Produce an investigative dossier with at most 8 useful findings, 8 further questions, 6 precise public-records request drafts, and 6 dated meeting actions. Prioritize cross-record discoveries, changing or incompatible claims, unreconciled costs, and documented promises that can be followed through. For each request name the custodian, gap, records/fields and time range, and how obtaining them would resolve a particular question. Before proposing a public-records request, check the in-run acquisition log. Do not ask the user to request a record already located at a public URL and queued for collection; disclose that pending acquisition instead. Request existing records not found through the available acquisition, not that an agency create analysis; do not request personal identifiers. Keep findings distinct from the excerpts themselves. Return no generic data-quality findings unless they prevent a specific consequential comparison. Include exact citations; counterEvidence is empty if none was located, not a claim none exists.",
         &context,model::synthesis_schema()).await?;
@@ -426,7 +418,7 @@ pub async fn investigate_with_collection(
     pinned.extend(agenda_pins.iter().cloned());
     pinned.sort();
     pinned.dedup();
-    let challenge_context = json!({"today":chrono::Local::now().format("%Y-%m-%d").to_string(),"draft":draft.value,"meetingCandidates":agenda_context,"evidence":evidence::model_evidence(&evidence,&pinned),"analyticalCatalog":catalog,"investigationLog":log});
+    let challenge_context = json!({"today":today(),"draft":draft.value,"meetingCandidates":agenda_context,"evidence":evidence::model_evidence(&evidence,&pinned),"analyticalCatalog":catalog,"investigationLog":log});
     let challenge = model::complete(repository,&policy,
         "You are independently testing this draft, not rewriting it yet. Identify the most consequential alternative explanation or unsupported link in each strong finding. Select up to 4 searches, 3 document reads and 3 SQL tests that could DISPROVE it: revised authority or offsetting accounts, contradictory audit follow-up, executed contract versus proposed award, actual outcomes versus capacity, and the relevant historical period. Search short distinctive terms and quoted titles; reread surrounding context where a quotation is incomplete. Do not repeat identical successful searches or queries. Do not fill tool quotas. Questions must identify a discriminating test and what result would change the finding. Empty tools mean the available local evidence cannot resolve it, not that the draft is verified.",
         &challenge_context,model::planner_schema()).await?;
@@ -447,7 +439,7 @@ pub async fn investigate_with_collection(
     let draft_validation = serde_json::from_value::<ResearchSynthesis>(draft.value.clone())
         .map(|report| evidence::validation_issues(&report, &evidence))
         .unwrap_or_else(|error| vec![format!("Draft schema: {error}")]);
-    let critique_context = json!({"validationIssues":draft_validation,"today":chrono::Local::now().format("%Y-%m-%d").to_string(),"currentTimestampUtc":chrono::Utc::now().to_rfc3339(),"draft":draft.value,"meetingCandidates":agenda_context,"evidence":evidence::model_evidence(&evidence,&pinned),"challengeQuestions":challenge.questions,"toolOutcomes":tool_outcomes,"investigationLog":log});
+    let critique_context = json!({"validationIssues":draft_validation,"today":today(),"currentTimestampUtc":chrono::Utc::now().to_rfc3339(),"draft":draft.value,"meetingCandidates":agenda_context,"evidence":evidence::model_evidence(&evidence,&pinned),"challengeQuestions":challenge.questions,"toolOutcomes":tool_outcomes,"investigationLog":log});
     repository
         .research_phase("Reviewing findings against challenge results", None)
         .await?;
@@ -665,6 +657,36 @@ fn case_memory(status: &ResearchStatus, topic: &str) -> serde_json::Value {
     })).collect::<Vec<_>>())
 }
 
+fn today() -> String {
+    chrono::Local::now().format("%Y-%m-%d").to_string()
+}
+
+fn source_collection_allowed(policy: &ResearchPolicy) -> bool {
+    policy.enabled && policy.auto_collect && policy.discover_sources
+}
+
+/// At most two automatic collections occupy the shared ingestion pools, so one long archive does
+/// not block every other source family.
+async fn collection_capacity_full(manager: &QueueManager) -> Result<bool, AppError> {
+    let running = manager
+        .runtime_snapshots()
+        .await?
+        .iter()
+        .filter(|r| r.is_running)
+        .count();
+    Ok(running >= manager.max_active_portals().min(2))
+}
+
+fn is_saved(saved: &[SavedSource], url: &str) -> bool {
+    saved
+        .iter()
+        .any(|s| s.registration.canonical_url.trim_end_matches('/') == url.trim_end_matches('/'))
+}
+
+fn is_attested(reply: &model::ModelReply, url: &str) -> bool {
+    trusted_discovery_url(url) && reply.searched_urls.iter().any(|searched| searched == url)
+}
+
 async fn ensure_enabled(repository: &DuckDbRepository) -> Result<(), AppError> {
     if !repository.research_policy().await?.enabled {
         return Err(AppError::DataParsing(
@@ -708,10 +730,7 @@ fn attested_candidates(reply: &model::ModelReply) -> Vec<ResearchSourceStatus> {
         .flatten()
         .filter_map(|item| {
             let url = item["url"].as_str()?;
-            if !trusted_discovery_url(url)
-                || !reply.searched_urls.iter().any(|verified| verified == url)
-                || !seen.insert(url.trim_end_matches('/').to_string())
-            {
+            if !is_attested(reply, url) || !seen.insert(url.trim_end_matches('/').to_string()) {
                 return None;
             }
             Some(ResearchSourceStatus {
@@ -749,9 +768,7 @@ async fn acquire_gap_sources(
     let saved = repository.list_portal_registrations().await?;
     let mut candidates = Vec::new();
     for source in attested_candidates(reply) {
-        if saved.iter().any(|s| {
-            s.registration.canonical_url.trim_end_matches('/') == source.url.trim_end_matches('/')
-        }) {
+        if is_saved(&saved, &source.url) {
             continue;
         }
         if !repository.research_source_due(&source.url).await? {
@@ -762,34 +779,19 @@ async fn acquire_gap_sources(
     }
     let mut completed = 0;
     for mut source in candidates.into_iter().take(2) {
-        let current = repository.research_policy().await?;
-        if !current.enabled || !current.auto_collect || !current.discover_sources {
+        if !source_collection_allowed(&repository.research_policy().await?) {
             break;
         }
         let idle_deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);
-        while manager
-            .runtime_snapshots()
-            .await?
-            .iter()
-            .filter(|r| r.is_running)
-            .count()
-            >= manager.max_active_portals().min(2)
+        while collection_capacity_full(manager).await?
             && tokio::time::Instant::now() < idle_deadline
         {
-            let current = repository.research_policy().await?;
-            if !current.enabled || !current.auto_collect || !current.discover_sources {
+            if !source_collection_allowed(&repository.research_policy().await?) {
                 return Ok(completed);
             }
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
-        if manager
-            .runtime_snapshots()
-            .await?
-            .iter()
-            .filter(|r| r.is_running)
-            .count()
-            >= manager.max_active_portals().min(2)
-        {
+        if collection_capacity_full(manager).await? {
             log.push("In-run acquisition deferred: automatic collection capacity is occupied. Verified URLs remain queued, not cited as evidence.".into());
             break;
         }
@@ -831,8 +833,7 @@ async fn acquire_gap_sources(
             .await?;
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(90);
         loop {
-            let current = repository.research_policy().await?;
-            if !current.enabled || !current.auto_collect || !current.discover_sources {
+            if !source_collection_allowed(&repository.research_policy().await?) {
                 return Ok(completed);
             }
             let running = manager
@@ -870,10 +871,9 @@ async fn discover_followup_sources(
     repository
         .research_phase("Finding new primary sources for unresolved questions", None)
         .await?;
-    let context = json!({"today":chrono::Local::now().format("%Y-%m-%d").to_string(),"currentTimestampUtc":chrono::Utc::now().to_rfc3339(),"topic":report.topic,"questions":report.synthesis.questions,"missingRecords":report.synthesis.requests,"knownSources":report.evidence.iter().filter_map(|e| e.source_url.as_ref()).collect::<Vec<_>>()});
+    let context = json!({"today":today(),"currentTimestampUtc":chrono::Utc::now().to_rfc3339(),"topic":report.topic,"questions":report.synthesis.questions,"missingRecords":report.synthesis.requests,"knownSources":report.evidence.iter().filter_map(|e| e.source_url.as_ref()).collect::<Vec<_>>()});
     let result = model::discover(repository, policy, &context).await?;
-    let current = repository.research_policy().await?;
-    if !current.enabled || !current.auto_collect || !current.discover_sources {
+    if !source_collection_allowed(&repository.research_policy().await?) {
         return Ok(());
     }
     for item in result.value["sources"]
@@ -889,10 +889,7 @@ async fn discover_followup_sources(
         ) else {
             continue;
         };
-        if !trusted_discovery_url(url)
-            || !result.searched_urls.iter().any(|searched| searched == url)
-            || !repository.research_source_due(url).await?
-        {
+        if !is_attested(&result, url) || !repository.research_source_due(url).await? {
             continue;
         }
         repository
@@ -914,9 +911,7 @@ async fn discover_followup_sources(
     Ok(())
 }
 
-// At most two automatic collections occupy the shared ingestion pools, so one long
-// archive does not block every other source family. Existing resource limits still apply.
-// Saved sources (including paused/removed ones) are never re-created by this scheduler.
+/// Saved sources (including paused/removed ones) are never re-created by the scheduler.
 pub const SOURCES: &[(&str, &str)] = &[
     ("FY2026 third-quarter financial monitoring and homelessness outcomes", "https://www.sandiego.gov/sites/default/files/2026-05/fy2026-third-quarter-budget-monitoring-report.pdf"),
     ("Housing Commission shelter agreements and performance packets", "https://sdhc.org/governance-legislative-affairs/sdhc-board-of-commissioners/meetings/"),
@@ -948,16 +943,7 @@ pub async fn collect_one(
         return Ok(());
     };
     let policy = repository.research_policy().await?;
-    if !policy.auto_collect
-        || !policy.enabled
-        || manager
-            .runtime_snapshots()
-            .await?
-            .iter()
-            .filter(|r| r.is_running)
-            .count()
-            >= manager.max_active_portals().min(2)
-    {
+    if !policy.auto_collect || !policy.enabled || collection_capacity_full(manager).await? {
         return Ok(());
     }
     let saved = repository.list_portal_registrations().await?;
@@ -969,9 +955,7 @@ pub async fn collect_one(
             .map(|(label, url)| (label.to_string(), url.to_string())),
     );
     for (label, url) in &sources {
-        if saved.iter().any(|s| {
-            s.registration.canonical_url.trim_end_matches('/') == url.trim_end_matches('/')
-        }) {
+        if is_saved(&saved, url) {
             continue;
         }
         if !repository.research_source_due(url).await? {

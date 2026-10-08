@@ -104,8 +104,8 @@ impl DuckDbRepository {
             parameters.extend(term_patterns.clone());
             let scores = (0..term_patterns.len()).map(|i| format!("CASE WHEN regexp_matches(f.extracted_text, ?{}, 'i') THEN 1 ELSE 0 END", i+3)).collect::<Vec<_>>().join(" + ");
             let minimum = query.terms.len().clamp(1, 3);
-            // Keep exact matches, but also find terms separated by headings, PDF line wraps,
-            // other words, or the quoted-query syntax previously passed literally to contains().
+            // Keep exact matches, but also find terms separated by headings, PDF line wraps or
+            // other words.
             let sql = format!("WITH candidates AS (
               SELECT d.portal_subdomain,d.request_id,d.id,COALESCE(d.file_name,'Document') AS label,
                 d.download_url,COALESCE(d.raw_file_sha256,'') AS digest,f.extracted_text,p.base_url,d.updated_at,
