@@ -232,13 +232,6 @@ fn schedule_l(schedule: Node) -> Result<Vec<ScheduleLTransaction>, AppError> {
     Ok(transactions)
 }
 
-/// The return type the return's own header declares, for example `990` or `990EZ`.
-pub fn declared_return_type(xml: &str) -> Result<Option<String>, AppError> {
-    let document = parse(xml)?;
-    Ok(child(document.root_element(), "ReturnHeader")
-        .and_then(|header| text(header, "ReturnTypeCd")))
-}
-
 fn parse(xml: &str) -> Result<Document<'_>, AppError> {
     Document::parse(xml.trim_start_matches('\u{feff}'))
         .map_err(|error| invalid(format!("The return is not well-formed XML: {error}")))
@@ -251,8 +244,12 @@ pub fn parse_form_990(xml: &str) -> Result<Form990Statement, AppError> {
     let header =
         child(root, "ReturnHeader").ok_or_else(|| invalid("The return has no ReturnHeader"))?;
     let data = child(root, "ReturnData").ok_or_else(|| invalid("The return has no ReturnData"))?;
-    let form = child(data, "IRS990")
-        .ok_or_else(|| invalid("The return carries no Form 990 (IRS990 element)"))?;
+    let form = child(data, "IRS990").ok_or_else(|| match text(header, "ReturnTypeCd") {
+        Some(declared) => invalid(format!(
+            "The return declares type {declared} and carries no Form 990 (IRS990 element)"
+        )),
+        None => invalid("The return carries no Form 990 (IRS990 element)"),
+    })?;
     let filer = child(header, "Filer");
     let part_vii = children(form, "Form990PartVIISectionAGrp")
         .map(person)
@@ -399,8 +396,8 @@ mod tests {
     #[test]
     fn refuses_a_return_without_a_form_990_and_an_unrecognised_answer() {
         let ez = "<Return xmlns=\"http://www.irs.gov/efile\"><ReturnHeader><ReturnTypeCd>990EZ</ReturnTypeCd></ReturnHeader><ReturnData><IRS990EZ/></ReturnData></Return>";
-        assert_eq!(declared_return_type(ez).unwrap().as_deref(), Some("990EZ"));
-        assert!(parse_form_990(ez).is_err());
+        let refusal = parse_form_990(ez).unwrap_err().to_string();
+        assert!(refusal.contains("990EZ"), "{refusal}");
         let odd = "\u{feff}<Return><ReturnHeader/><ReturnData><IRS990><MaterialDiversionOrMisuseInd>maybe</MaterialDiversionOrMisuseInd></IRS990></ReturnData></Return>";
         assert!(parse_form_990(odd).is_err());
     }
