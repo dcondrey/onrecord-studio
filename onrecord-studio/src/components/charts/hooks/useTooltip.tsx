@@ -46,9 +46,10 @@ export function useTooltip() {
 
   useEffect(() => cancel, []);
 
-  // A fixed tooltip would detach from its mark when anything scrolls, so it closes instead.
+  // A pointer tooltip would detach from the pointer when anything scrolls, so it closes instead. A
+  // focus tooltip stays: moving focus can itself scroll the mark into view, and blur closes it.
   useEffect(() => {
-    if (!shown) return;
+    if (!shown || 'width' in shown.at) return;
     window.addEventListener('scroll', hide, { capture: true, passive: true });
     return () => window.removeEventListener('scroll', hide, { capture: true });
   }, [shown, hide]);

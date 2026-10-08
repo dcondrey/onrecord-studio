@@ -44,7 +44,10 @@ export function HeatCell({ x, y, width, height, value, step = 1, text, glyph, in
   const showText = text && fitsInside(text, glyph ? w - 12 : w) && h >= 14;
   return (
     <MarkGroup interaction={interaction} box={{ x: x + inset, y: y + inset, width: w, height: h }} ringRadius={4}>
-      {!measuredValue && <title>{`${ABSENCE_LABEL[value.state]}: ${value.reason}`}</title>}
+      {/* Words that do not fit the cell stay in its title, so no cell's state is carried by fill alone. */}
+      {(!measuredValue || (text && !showText)) && (
+        <title>{[text && !showText ? text : null, measuredValue ? null : `${ABSENCE_LABEL[value.state]}: ${value.reason}`].filter(Boolean).join('. ')}</title>
+      )}
       <rect
         x={x + inset + (measuredValue ? 0 : 0.5)}
         y={y + inset + (measuredValue ? 0 : 0.5)}

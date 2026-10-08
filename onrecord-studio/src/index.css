@@ -125,15 +125,19 @@
   --viz-ord-2: #64748b;
   --viz-ord-3: #475569;
   --viz-ord-4: #334155;
-  --viz-seq-1: #e2e8f0;
-  --viz-seq-2: #cbd5e1;
-  --viz-seq-3: #94a3b8;
-  --viz-seq-4: #64748b;
-  --viz-seq-5: #334155;
-  /* Text set inside a sequential cell: ink on the light steps, the surface colour on the dark ones. */
+  /* Sequential (heat cells, calendars): one slate hue, light to dark. The plan's #e2e8f0..#334155
+     failed --ordinal (light end 1.23:1, #e2e8f0/#cbd5e1 dL 0.06), so a small measured value read
+     as empty; these PASS on #ffffff, light end 2.18:1. Absence is never a step. */
+  --viz-seq-1: #a3b1c4;
+  --viz-seq-2: #8291a7;
+  --viz-seq-3: #64748b;
+  --viz-seq-4: #475569;
+  --viz-seq-5: #27344a;
+  /* Text inside a sequential cell, in both themes: --fg on steps 1-2 (light 8.2:1 and 5.6:1; dark
+     6.3:1 and 4.5:1), the surface colour on steps 3-5 (light 4.76:1 and up; dark 4.7:1 and up). */
   --viz-on-seq-1: rgb(var(--fg));
   --viz-on-seq-2: rgb(var(--fg));
-  --viz-on-seq-3: rgb(var(--fg));
+  --viz-on-seq-3: var(--viz-surface);
   --viz-on-seq-4: var(--viz-surface);
   --viz-on-seq-5: var(--viz-surface);
   --viz-on-ord-1: rgb(var(--fg));
@@ -207,8 +211,9 @@
      lead vs mark CVD 20.8 / normal 21.8. Ordinal ramp --ordinal PASS, light end 2.15:1. */
   --viz-ink: #e2e8f0;
   --viz-mark: #94a3b8;
-  /* One step lighter than the spec's #475569 and #1e293b, which were set against #0f172a: on this
-     panel (#162033) they measured about 2:1 and the hollow peer marks disappeared. */
+  /* Lighter than the plan's #475569 and #1e293b, which were chosen against #0f172a. On this panel
+     (#162033) they measure 2.15:1 and 1.11:1, and hollow 1.5px peer marks faded out; #64748b is
+     3.42:1. The track recedes at 1.26:1 by design. */
   --viz-context: #64748b;
   --viz-track: #263247;
   --viz-lead: #8b5cf6;
@@ -218,12 +223,12 @@
   --viz-ord-2: #64748b;
   --viz-ord-3: #94a3b8;
   --viz-ord-4: #cbd5e1;
-  --viz-seq-1: #263247;
-  --viz-seq-2: #334155;
-  --viz-seq-3: #475569;
-  --viz-seq-4: #64748b;
-  --viz-seq-5: #94a3b8;
-  --viz-on-seq-4: rgb(var(--fg));
+  /* Sequential --ordinal on panel #162033: PASS, light end 2.15:1 (2.36:1 on #0f172a). */
+  --viz-seq-1: #475569;
+  --viz-seq-2: #5d6d83;
+  --viz-seq-3: #7b8ba1;
+  --viz-seq-4: #9eabbe;
+  --viz-seq-5: #cbd5e1;
   --viz-on-ord-2: rgb(var(--fg));
   --scrollbar: #334155;
   --scrollbar-hover: #475569;

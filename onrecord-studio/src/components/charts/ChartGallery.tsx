@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import ChartFrame, { type ChartFrameProps } from './frame/ChartFrame';
 import { Axis } from './frame/Axis';
 import { Grid } from './frame/Grid';
@@ -31,6 +31,9 @@ import { VIZ } from './core/claim';
  */
 
 const ROW_LABEL_CLASS = 'fill-fg-secondary text-[12px]';
+
+/** Roving props frozen in the focused state, so a capture shows each mark family's focus ring. */
+const SHOWN_FOCUSED = { tabIndex: -1 as const, onKeyDown() {}, onFocus() {}, onBlur() {}, ref() {}, 'data-focused': true as const };
 
 interface Row {
   key: string;
@@ -120,6 +123,7 @@ function CountedBars({ width }: { width: number }) {
               motionKey={`counted-${row.key}`}
               interaction={{
                 name,
+                item: row.key === 'pd' ? SHOWN_FOCUSED : undefined,
                 onPointerMove: (event) => tooltip.show(
                   <TooltipContent title={d.label} rows={[{ key: 'm', value: label ?? 'not recorded', label: 'counted deadline misses', swatch: 'flag', tone: 'counted' }]} />,
                   event,
@@ -332,6 +336,33 @@ function WeeklyCounts({ width }: { width: number }) {
   );
 }
 
+function LonePoint({ width }: { width: number }) {
+  const at = parseDate('2024-06-30');
+  const x = scaleTime([at, at], [48, width - 72], { fiscalYearStartMonth: 7 });
+  const y = scaleLinear([1_240_000, 1_240_000], [120, 12]);
+  return (
+    <>
+      <Grid scale={y} extent={[48, width - 72]} />
+      <LineSeries points={[{ key: 'fy24', x: at, y: measured(1_240_000) }]} x={x} y={y} label="$1.24M" />
+      <Axis scale={y} kind="currency" orient="left" offset={44} />
+      <Axis time={x} orient="bottom" offset={120} />
+    </>
+  );
+}
+
+function AllAbsent({ width }: { width: number }) {
+  const x = scaleTime([FY_STARTS[0], FY_STARTS[FY_STARTS.length - 1]], [48, width - 16], { fiscalYearStartMonth: 7 });
+  const y = scaleLinear([0, 0], [120, 12]);
+  const points: LinePoint[] = FY_STARTS.map((at, i) => ({ key: `g${i}`, x: at, y: absent('not-covered', 'the archive has no e-filed return for this year') }));
+  // No value axis: with nothing observed, its ticks would read as values.
+  return (
+    <>
+      <LineSeries points={points} x={x} y={y} />
+      <Axis time={x} orient="bottom" offset={120} />
+    </>
+  );
+}
+
 // ---- Bullets ------------------------------------------------------------------------------
 
 const CONTRACTS = [
@@ -382,27 +413,21 @@ const PEERS = [
   { key: 'p9', value: 22.0, n: 12 }, { key: 'p10', value: 26.5, n: 47 }, { key: 'p11', value: 29.8, n: 4 },
 ];
 
-function PeerDots({ width, focusOnMount }: { width: number; focusOnMount?: boolean }) {
+function PeerDots({ width, showFocus }: { width: number; showFocus?: boolean }) {
   const tooltip = useTooltip();
   const x = scaleLinear([0, 45], [16, width - 16]);
   const mean = 18.0;
   const sd = 5.6;
   const focusables = [...PEERS.map((peer) => ({ key: peer.key, value: peer.value, name: `Peer agency: ${formatValue(peer.value, { kind: 'days' })} average closure (n=${peer.n})${peer.n < 5 ? ', small sample' : ''}.` })), { key: 'esd', value: 41.2, name: 'Environmental Services: 41.2 d average closure (n=74), slower than peers (statistical).' }];
   const roving = useRovingFocus({ shape: { rows: focusables.length }, onActivate: () => {}, onEscape: tooltip.hide });
-  const wrapper = useRef<SVGGElement>(null);
-  useEffect(() => {
-    if (!focusOnMount) return;
-    const target = wrapper.current?.querySelector<SVGGElement>('[aria-label^="Environmental Services"]');
-    target?.focus({ preventScroll: true });
-  }, [focusOnMount]);
   const interaction = (index: number) => ({
     name: focusables[index].name,
-    item: roving.getItemProps(index),
+    item: showFocus && index === PEERS.length ? { ...roving.getItemProps(index), ...SHOWN_FOCUSED } : roving.getItemProps(index),
     onFocusMark: (box: DOMRect) => tooltip.show(<TooltipContent rows={[{ key: 'v', value: formatValue(focusables[index].value, { kind: 'days' }), label: 'average closure' }]} note={focusables[index].name} />, box),
     onBlurMark: tooltip.hide,
   });
   return (
-    <g ref={wrapper}>
+    <g>
       <ReferenceBand axis="x" from={x(mean - 2 * sd)} to={x(mean + 2 * sd)} extent={[8, 92]} label="typical range (within 2 sd)" />
       <ReferenceLine kind="peer-mean" axis="x" at={x(mean)} extent={[8, 76]} label="peer mean 18.0 d" />
       <Beeswarm
@@ -432,7 +457,7 @@ function Intervals({ width }: { width: number }) {
       {items.map((item, index) => (
         <g key={item.key}>
           <text x={16} y={14 + index * 40} className={ROW_LABEL_CLASS}>{item.label}</text>
-          <Interval y={30 + index * 40} x={x} bounds={[16, width - 16]} start={item.start} end={item.end} role="primary" />
+          <Interval y={30 + index * 40} x={x} bounds={[16, width - 16]} start={item.start} end={item.end} role="primary" interaction={item.key === 'v3' ? { name: `${item.label}: in force since Nov 2, 2024, no recorded end.`, item: SHOWN_FOCUSED } : undefined} />
         </g>
       ))}
       <Axis time={x} orient="bottom" offset={132} />
@@ -522,7 +547,7 @@ function StateGridDemo({ width }: { width: number }) {
                 step={state.step}
                 glyph={state.glyph}
                 text={state.text}
-                interaction={{ name: `${row}, ${col}: ${state.text}.`, item: roving.getItemProps(i, j) }}
+                interaction={{ name: `${row}, ${col}: ${state.text}.`, item: i === 1 && j === 2 ? { ...roving.getItemProps(i, j), ...SHOWN_FOCUSED } : roving.getItemProps(i, j) }}
               />
             );
           })}
@@ -636,7 +661,7 @@ function Frames({ narrow }: { narrow: boolean }) {
           interactive={{ roledescription: 'dot plot' }}
           storageKey={`gallery-peers-${narrow}`}
         >
-          {({ width }) => <PeerDots width={width} focusOnMount={!narrow} />}
+          {({ width }) => <PeerDots width={width} showFocus={!narrow} />}
         </ChartFrame>
       </div>
       {!narrow && (
@@ -661,6 +686,14 @@ function Frames({ narrow }: { narrow: boolean }) {
             </ChartFrame>
             <ChartFrame {...BASE} title="Adopted operating budget actuals" headline="FY25 actuals are 1,877; FY23 actuals are not published." summary="Five fiscal years; FY23 not recorded; FY26 a measured zero." table={{ caption: 'Actuals by fiscal year', columns: [{ key: 'fy', label: 'Fiscal year' }, { key: 'v', label: 'Actuals', kind: 'count' }], rows: [{ fy: 'FY21', v: 1204 }, { fy: 'FY22', v: 1530 }, { fy: 'FY23', v: absent('not-recorded', 'FY23 actuals are not published') }, { fy: 'FY24', v: 1877 }, { fy: 'FY25', v: 0 }] }} minHeight={210} sources={{ tables: ['budget_actuals'] }}>
               {({ width }) => <Columns width={width} />}
+            </ChartFrame>
+          </div>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <ChartFrame {...BASE} title="Government grants, one filing" headline="One return reports grants: $1.24M for FY24." summary="A single observed value; both axes collapse to it." table={{ caption: 'Government grants', columns: [{ key: 'fy', label: 'Fiscal year' }, { key: 'v', label: 'Grants' }], rows: [{ fy: 'FY24', v: '$1,240,000.00' }] }} minHeight={140} sources={{ tables: ['irs_990_filings'] }}>
+              {({ width }) => <LonePoint width={width} />}
+            </ChartFrame>
+            <ChartFrame {...BASE} title="Program service revenue" headline="No year of program service revenue was checked." summary="Eight fiscal years, none checked; nothing is plotted as zero." table={{ caption: 'Program service revenue', columns: [{ key: 'fy', label: 'Fiscal year' }, { key: 'v', label: 'Revenue' }], rows: FY_STARTS.map((at) => ({ fy: formatDate(at, 'fiscal-year'), v: absent('not-covered', 'the archive has no e-filed return for this year') })) }} minHeight={140} sources={{ tables: ['irs_990_filings'] }}>
+              {({ width }) => <AllAbsent width={width} />}
             </ChartFrame>
           </div>
         </>
@@ -719,7 +752,7 @@ export default function ChartGallery() {
           <h1 className="text-display text-fg">Chart system gallery</h1>
           <p className="text-body text-muted">Every primitive in src/components/charts, with gaps, long labels, negative values, single-point and empty series. Review-harness only.</p>
         </header>
-        <Section title="Frames and bars" note="Counted bars are crimson with the flag and the word Counted; a statistical comparison is an ink outline or ring. The dot plot's agency mark is focused, showing the focus ring and the anchored tooltip.">
+        <Section title="Frames and bars" note="Counted bars are crimson with the flag and the word Counted; a statistical comparison is an ink outline or ring. The dot plot's agency dot, the Police bar, one watch cell and one interval are drawn in their keyboard-focus state; the pinned tooltip is in the cells section.">
           <Frames narrow={false} />
         </Section>
         <Section title="Inspector width (340px)" note="Labels move above their bars; tick density drops; nothing scrolls sideways.">

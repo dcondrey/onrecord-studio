@@ -1,5 +1,5 @@
 import { ShapeGlyph, type GlyphShape } from '../../ui/shapeGlyph';
-import { paintFor, VIZ, type MarkRole } from '../core/claim';
+import { paintFor, VIZ, type Claim, type MarkRole } from '../core/claim';
 import { formatDate } from '../core/format';
 import { MUTED_LABEL_CLASS, MarkGroup, type MarkInteraction } from './shared';
 
@@ -10,6 +10,7 @@ export interface LaneEvent {
   shape?: GlyphShape;
   hollow?: boolean;
   role?: MarkRole;
+  claim?: Claim;
   /** Full sentence for the mark's title and accessible name. */
   name: string;
   interaction?: MarkInteraction;
@@ -81,7 +82,7 @@ export function TimelineLane({ y, x, events, spans = [], label }: {
           perDay.set(day, index + 1);
           const cx = x(event.at);
           const cy = y - index * STACK_STEP;
-          const paint = paintFor('descriptive', event.hollow ? 'hollow' : 'fill', event.role ?? 'primary');
+          const paint = paintFor(event.claim ?? 'descriptive', event.hollow ? 'hollow' : 'fill', event.role ?? 'primary');
           const open = event.hollow || event.shape === 'ring';
           return (
             <MarkGroup key={event.key} interaction={event.interaction} box={{ x: cx - 4, y: cy - 4, width: 8, height: 8 }} ringRadius={7}>

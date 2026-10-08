@@ -255,6 +255,9 @@ export function scaleTime(
   { fiscalYearStartMonth }: TimeOptions = {},
 ): TimeScale {
   let [lo, hi] = domainMs[0] <= domainMs[1] ? domainMs : [domainMs[1], domainMs[0]];
+  // One instant has no span to tick across: it gets a single tick at itself, as a fiscal year or a
+  // day, never a ladder of hours around it.
+  const instant = lo === hi ? lo : null;
   if (lo === hi) [lo, hi] = [lo - DAY / 2, hi + DAY / 2];
   const resolved: readonly [number, number] = [lo, hi];
   const { forward, invert } = linearFrom(resolved, range, false);
@@ -264,7 +267,8 @@ export function scaleTime(
     range,
     invert,
     fiscalYearStartMonth,
-    ticks: (target = 6) => {
+    ticks: (target = 6): TimeTick[] => {
+      if (instant !== null) return [{ at: instant, unit: fiscalYearStartMonth && fiscalYearStartMonth !== 1 ? 'fiscal-year' : 'day', major: true }];
       const span = hi - lo;
       const choice = LADDER.find((rung) => span / rung.approx <= target) ?? LADDER[LADDER.length - 1];
       const unit: TimeUnit = choice.unit === 'year' && fiscalYearStartMonth && fiscalYearStartMonth !== 1 ? 'fiscal-year' : choice.unit;

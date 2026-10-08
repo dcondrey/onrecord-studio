@@ -80,7 +80,8 @@ export function Bar({ orient = 'horizontal', band, value, scale, claim = 'descri
       const outside = outsideRoom >= width + 6 || zero;
       const inside = !outside && !outline && fitsInside(text, length);
       if (outside || inside) {
-        const x = outside ? (negative ? end - 4 : end + 4) : negative ? end + 4 : end - 4;
+        // Outside labels clear the 3px focus-ring margin plus its stroke.
+        const x = outside ? (negative ? end - 6 : end + 6) : negative ? end + 4 : end - 4;
         const anchor = outside === negative ? 'end' : 'start';
         labelNode = (
           <text x={x} y={cross + t / 2} dy="0.32em" textAnchor={anchor} className={LABEL_CLASS} style={inside ? INSIDE_LABEL_STYLE : undefined}>
