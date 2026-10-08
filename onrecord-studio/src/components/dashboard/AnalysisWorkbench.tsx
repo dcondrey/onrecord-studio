@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import DifferenceDots from '../charts/figures/DifferenceDots';
+import { budgetComparisonLineQuery, readBudgetComparison } from '../../utils/budgetComparison';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
@@ -113,6 +115,8 @@ export default function AnalysisWorkbench() {
   const [schema, setSchema] = useState<AnalyticalSchema | null>(null);
   const [sql, setSql] = useState('');
   const [sqlResult, setSqlResult] = useState<SqlQueryResult | null>(null);
+  // The query the shown result answers; the editor text can move on without a rerun.
+  const [resultSql, setResultSql] = useState('');
   const [exportResult, setExportResult] = useState<SqlExportResult | null>(null);
   const [datasetKind, setDatasetKind] = useState<AnalyticalDatasetKind>('REGIONAL_DATA');
   const [displayName, setDisplayName] = useState('');
@@ -191,7 +195,9 @@ export default function AnalysisWorkbench() {
     setSqlResult(null);
     setStatus('Loading supporting records');
     void invokeCommand('run_analytical_sql', { sql: inspection.sql, limit: 500 }).then((result) => {
-      if (sqlGate.isCurrent(request)) setSqlResult(result);
+      if (!sqlGate.isCurrent(request)) return;
+      setSqlResult(result);
+      setResultSql(inspection.sql);
     }).catch((reason) => { if (sqlGate.isCurrent(request)) setError(formatNativeError(reason)); }).finally(() => { release?.(); if (active) setStatus(null); });
     window.requestAnimationFrame(() => document.getElementById('analytical-sql-editor')?.focus());
     return () => {
@@ -237,7 +243,9 @@ export default function AnalysisWorkbench() {
       label,
       () => invokeCommand('run_analytical_sql', { sql: query, limit }),
       (result) => {
-        if (sqlGate.isCurrent(request)) setSqlResult(result);
+        if (!sqlGate.isCurrent(request)) return;
+        setSqlResult(result);
+        setResultSql(query);
       },
       () => sqlGate.isCurrent(request),
     );
@@ -527,6 +535,7 @@ export default function AnalysisWorkbench() {
                     Export CSV
                   </button>
                 </div>
+                {sqlResult && <BudgetDifference result={sqlResult} onInspect={(line) => { setSql(budgetComparisonLineQuery(resultSql, line)); sqlGate.invalidate(); }} />}
                 {sqlResult && <SqlTable result={sqlResult} />}
                 {exportResult && <p className="mt-2 break-all text-label leading-4 text-muted">Exported {exportResult.rowCount.toLocaleString()} rows to {exportResult.outputPath}. Export limit: 10,000 rows.</p>}
               </div>
@@ -584,6 +593,32 @@ function TemplateList({ templates, onChoose }: { templates: SqlTemplate[]; onCho
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** The budget-comparison result as a difference chart, above the exact table; any other result shows the table alone. */
+function BudgetDifference({ result, onInspect }: { result: SqlQueryResult; onInspect: (line: { fund: string | null; center: string | null; account: string | null }) => void }) {
+  const lines = useMemo(() => readBudgetComparison(result), [result]);
+  if (!lines) return null;
+  const byKey = new Map(lines.map((line) => [line.key, line] as const));
+  const compared = lines.flatMap((line) => (line.difference !== null && line.budget !== null && line.actuals !== null
+    ? [{ key: line.key, label: line.label, context: line.departments, from: line.budget, to: line.actuals, difference: line.difference, percent: line.variancePercent }]
+    : []));
+  const uncompared = lines.filter((line) => line.difference === null || line.budget === null || line.actuals === null)
+    .map((line) => ({ key: line.key, label: line.label, status: line.status === 'Matched' ? 'Amounts not readable' : line.status }));
+  return (
+    <div className="mt-3">
+      <DifferenceDots
+        title="Actuals minus budget, by account line"
+        sources={{ tables: result.provenance.length ? result.provenance : ['run_analytical_sql result'], note: 'Matched lines only; positive means actuals exceed the selected allocation, which is not a finding' }}
+        compared={compared}
+        uncompared={uncompared}
+        fromLabel="budget"
+        toLabel="actual"
+        truncated={result.truncated}
+        onActivate={(key) => { const line = byKey.get(key); if (line) onInspect(line); }}
+      />
     </div>
   );
 }
