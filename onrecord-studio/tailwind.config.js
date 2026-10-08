@@ -37,6 +37,17 @@ export default {
         'danger-mark': 'rgb(var(--danger-mark) / <alpha-value>)',
         'on-danger': 'rgb(var(--on-danger) / <alpha-value>)',
         'warning-mark': 'rgb(var(--warning-mark) / <alpha-value>)',
+        // Chart roles are full colours (forced-colors maps them to system colours), so no /alpha.
+        'viz-surface': 'var(--viz-surface)',
+        'viz-ink': 'var(--viz-ink)',
+        'viz-mark': 'var(--viz-mark)',
+        'viz-context': 'var(--viz-context)',
+        'viz-track': 'var(--viz-track)',
+        'viz-grid': 'var(--viz-grid)',
+        'viz-baseline': 'var(--viz-baseline)',
+        'viz-lead': 'var(--viz-lead)',
+        'viz-positive': 'var(--viz-positive)',
+        'viz-counted': 'var(--viz-counted)',
       },
       // The type scale. Each token carries its own line height (and weight/tracking where the role
       // fixes them), so a size never inherits a leading that is off the 4px grid. Keep these keys in

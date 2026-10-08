@@ -101,6 +101,35 @@
   /* Text on a chart fill: ink on cyan, amber and crimson; white only on light slate. */
   --viz-on-color: #0f172a;
   --viz-on-slate: #ffffff;
+  /* Chart system roles (src/components/charts). A chart is neutral slate; each accent has one
+     meaning: lead = the app surfaced this, positive = recorded within the allowed period or observed
+     unchanged, counted = a counted legal or policy measure from the evaluator. A statistical mark
+     never takes an accent; it is an ink outline, hollow mark or dashed line. Full colours, not
+     channels, so forced-colors can map them to system colours. Validated with the dataviz skill's
+     validate_palette.js --pairs all against panel #ffffff and bg #f8fafc: lead #7c3aed, positive
+     #0d9488, counted #b91c1c ALL PASS (worst CVD dE 14.0, normal 30.4, each >= 3:1); lead vs
+     mark CVD 20.5, counted vs mark CVD 11.3. Ordinal ramp --ordinal PASS, light end 2.56:1. */
+  --viz-surface: rgb(var(--panel));
+  --viz-ink: #1e293b;
+  --viz-mark: #475569;
+  --viz-context: #94a3b8;
+  --viz-track: #e2e8f0;
+  --viz-grid: rgb(var(--line));
+  --viz-baseline: rgb(var(--control));
+  --viz-lead: rgb(var(--lead-mark));
+  --viz-positive: #0d9488;
+  --viz-counted: rgb(var(--violation));
+  --viz-focus: rgb(var(--focus));
+  --viz-dim: 0.15;
+  --viz-ord-1: #94a3b8;
+  --viz-ord-2: #64748b;
+  --viz-ord-3: #475569;
+  --viz-ord-4: #334155;
+  --viz-seq-1: #e2e8f0;
+  --viz-seq-2: #cbd5e1;
+  --viz-seq-3: #94a3b8;
+  --viz-seq-4: #64748b;
+  --viz-seq-5: #334155;
   --scrollbar: #cbd5e1;
   --scrollbar-hover: #94a3b8;
   font-synthesis: none;
@@ -161,6 +190,27 @@
   --viz-slate: #94a3b8;
   --viz-on-color: #0b1222;
   --viz-on-slate: #0b1222;
+  /* The design system's dark mark steps cannot carry chart accents: --lead-mark #a78bfa and
+     --success-mark #34d399 sit above the dark lightness band, and #a78bfa vs the slate mark measures
+     normal-vision dE 13.3 (hard fail below 15); --violation is 2.6:1 on the dark panel. These steps
+     pass on panel #162033, canvas #0b1222 and bg #0f172a: ALL PASS (CVD 10.3, normal 27.0);
+     lead vs mark CVD 20.8 / normal 21.8. Ordinal ramp --ordinal PASS, light end 2.15:1. */
+  --viz-ink: #e2e8f0;
+  --viz-mark: #94a3b8;
+  --viz-context: #475569;
+  --viz-track: #1e293b;
+  --viz-lead: #8b5cf6;
+  --viz-positive: #0d9488;
+  --viz-counted: #f43f5e;
+  --viz-ord-1: #475569;
+  --viz-ord-2: #64748b;
+  --viz-ord-3: #94a3b8;
+  --viz-ord-4: #cbd5e1;
+  --viz-seq-1: #1e293b;
+  --viz-seq-2: #334155;
+  --viz-seq-3: #475569;
+  --viz-seq-4: #64748b;
+  --viz-seq-5: #94a3b8;
   --scrollbar: #334155;
   --scrollbar-hover: #475569;
 }
@@ -691,6 +741,11 @@ a[href] {
   --danger: 153 27 27;
   --danger-mark: 220 38 38;
   --focus: 7 89 133;
+  /* Grid and baseline darken with --line and --control; comparison series darken one step. */
+  --viz-ink: #0f172a;
+  --viz-mark: #334155;
+  --viz-context: #64748b;
+  --viz-track: #cbd5e1;
 }
 
 :root[data-contrast="more"][data-theme="dark"] {
@@ -713,6 +768,10 @@ a[href] {
   --danger: 254 202 202;
   --danger-mark: 248 113 113;
   --focus: 125 211 252;
+  --viz-ink: #f8fafc;
+  --viz-mark: #cbd5e1;
+  --viz-context: #94a3b8;
+  --viz-track: #334155;
 }
 
 :root[data-contrast="more"] :focus-visible {
@@ -837,4 +896,98 @@ a[href] {
 :root[data-motion="reduce"]::view-transition-old(*),
 :root[data-motion="reduce"]::view-transition-new(*) {
   animation: none !important;
+}
+
+/* Chart system (src/components/charts). Under forced colours every data mark is CanvasText,
+   tracks and comparison marks are GrayText, focus is Highlight; the excluded hatch survives because
+   it is a pattern, not a fill colour. The selector list outranks each theme and contrast block. */
+@media (forced-colors: active) {
+  :root,
+  :root[data-theme="dark"],
+  :root[data-contrast="more"],
+  :root[data-contrast="more"][data-theme="dark"] {
+    --viz-surface: Canvas;
+    --viz-ink: CanvasText;
+    --viz-mark: CanvasText;
+    --viz-context: GrayText;
+    --viz-track: GrayText;
+    --viz-grid: GrayText;
+    --viz-baseline: CanvasText;
+    --viz-lead: CanvasText;
+    --viz-positive: CanvasText;
+    --viz-counted: CanvasText;
+    --viz-focus: Highlight;
+    --viz-ord-1: GrayText;
+    --viz-ord-2: GrayText;
+    --viz-ord-3: CanvasText;
+    --viz-ord-4: CanvasText;
+    --viz-seq-1: Canvas;
+    --viz-seq-2: GrayText;
+    --viz-seq-3: GrayText;
+    --viz-seq-4: CanvasText;
+    --viz-seq-5: CanvasText;
+  }
+}
+
+/* Tabular figures for ticks, value columns, table cells and tooltip values. */
+.viz-num {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* An SVG mark draws its own focus ring (WebKit does not outline SVG elements); the ring is the
+   focus colour, never the lead violet. */
+.viz-focusable {
+  outline: none;
+}
+
+.viz-focusable .viz-focus-ring {
+  visibility: hidden;
+}
+
+.viz-focusable:focus-visible .viz-focus-ring,
+.viz-focusable[data-focused] .viz-focus-ring {
+  visibility: visible;
+}
+
+/* First-mount entrances only (useChartMotion). Transform origin is the mark's baseline, set inline. */
+@keyframes viz-grow-x {
+  from { transform: scaleX(0); }
+}
+
+@keyframes viz-grow-y {
+  from { transform: scaleY(0); }
+}
+
+@keyframes viz-draw {
+  from { stroke-dashoffset: 1; }
+}
+
+.viz-enter-grow-x { animation: viz-grow-x var(--dur-slow) var(--ease-out) backwards; }
+.viz-enter-grow-y { animation: viz-grow-y var(--dur-slow) var(--ease-out) backwards; }
+.viz-enter-draw { stroke-dasharray: 1; animation: viz-draw var(--dur-slow) var(--ease-out) backwards; }
+.viz-enter-fade { animation: motion-fade var(--dur-slow) var(--ease-out) backwards; }
+
+/* Drill-down without a view transition (useDrillDown): rows expand on grid-template-rows, which the
+   reduce rule above makes instant. `data-instant` is set while a view transition animates instead. */
+.viz-drill {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--dur-base) var(--ease-out);
+}
+
+.viz-drill[data-open] {
+  grid-template-rows: 1fr;
+}
+
+.viz-drill[data-instant] {
+  transition: none;
+}
+
+.viz-drill > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.viz-drill:not([data-open]) > * {
+  visibility: hidden;
 }
