@@ -40,7 +40,7 @@ export interface ContrastCommandDefinition {
 }
 
 export const workspaceCommandRegistry: readonly WorkspaceCommandDefinition[] = [
-  { id: 'workspace-overview', view: 'overview', label: 'Open San Diego research desk', navigationLabel: 'San Diego', detail: 'Local sources, records, and meeting preparation', icon: 'grid', keywords: 'overview workspace screen san diego sources meetings police cpp city', shortcutIndex: 1 },
+  { id: 'workspace-overview', view: 'overview', label: 'Open the overview', navigationLabel: 'Overview', detail: 'Local sources, records, and meeting preparation', icon: 'grid', keywords: 'overview workspace screen san diego sources meetings police cpp city', shortcutIndex: 1 },
   { id: 'workspace-patterns', view: 'patterns', label: 'Explore patterns', navigationLabel: 'Patterns', detail: 'Cross-file connections and recurring language', icon: 'sparkles', keywords: 'patterns workspace connections recurring language', shortcutIndex: 2 },
   { id: 'workspace-analysis', view: 'analysis', label: 'Analyze San Diego data', navigationLabel: 'Analysis', detail: 'Semantic retrieval and local SQL datasets', icon: 'database', keywords: 'analysis semantic vector embeddings sql ripa calls nibrs budget san diego', shortcutIndex: 3 },
   { id: 'workspace-evidence', view: 'evidence', label: 'Review evidence', navigationLabel: 'Evidence', detail: 'Search requests and inspect source records', icon: 'evidence', keywords: 'evidence workspace search case review', shortcutIndex: 4 },

@@ -22,6 +22,7 @@ import { useAppStore } from '../store/useAppStore';
 const bridge = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock('../ipc', async (importOriginal) => ({ ...(await importOriginal<typeof import('../ipc')>()), invokeCommand: bridge.invoke }));
 import WatchlistPanel, { describeDimension } from '../components/dashboard/WatchlistPanel';
+import { formatShortDate } from '../components/objects/labels';
 
 function dimension(overrides: Partial<DimensionResult>): DimensionResult {
   return { dimension: 'DOCUMENTS', outcome: 'UNCHANGED', changeCount: 0, baselineAsOf: '2026-10-01T00:00:00Z', observedAsOf: '2026-10-02T00:00:00Z', reason: null, ...overrides };
@@ -84,7 +85,7 @@ describe('watchlist change detection', () => {
     bridge.invoke.mockImplementation((command: string) => Promise.resolve(command === 'list_watches' ? [summary('a', 'Alpha', [same, missing])] : []));
     render(<WatchlistPanel />);
     await screen.findByText(/No data this run: No sync run has completed since the baseline\./);
-    expect(screen.getByText(/Observed, no change since (Sep 30|Oct 1), 2026/)).toBeTruthy();
+    expect(screen.getByText(`Observed, no change since ${formatShortDate('2026-10-01T00:00:00Z')}`, { exact: false })).toBeTruthy();
     expect(describeDimension(missing).text).not.toMatch(/no change/i);
     expect(describeDimension(dimension({ outcome: 'BASELINE_RECORDED', baselineAsOf: null })).text).not.toMatch(/no change/i);
   });
@@ -94,8 +95,8 @@ describe('watchlist change detection', () => {
     render(<WatchlistPanel />);
     await screen.findByText('city:2.pdf');
     expect(screen.getByText('Not present at the baseline')).toBeTruthy();
-    expect(screen.getByText(/Before, as of 2026-10-01T00:00:00Z/)).toBeTruthy();
-    expect(screen.getByText(/Now, as of 2026-10-02T00:00:00Z/)).toBeTruthy();
+    expect(screen.getByText(`Before, as of ${formatShortDate('2026-10-01T00:00:00Z')}`)).toBeTruthy();
+    expect(screen.getByText(`Now, as of ${formatShortDate('2026-10-02T00:00:00Z')}`)).toBeTruthy();
     expect(screen.getByText(/Basis: Present now and absent from the baseline\./)).toBeTruthy();
   });
 

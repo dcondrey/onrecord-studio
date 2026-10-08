@@ -25,19 +25,19 @@ export default function AgencySelector() {
 
   return (
     <Select
-        aria-label="Department"
-        value={selectedAgencyId !== null && activePortalKey ? JSON.stringify([activePortalKey, selectedAgencyId]) : ''}
-        onChange={(event) => {
-          const agency = agencyIndex.find((candidate) => candidate.value === event.target.value);
-          if (agency && activePortalKey !== agency.portalKey) setActivePortal(agency.portalKey);
-          setSearchFilters(searchTerm, agency?.agencyId ?? null, selectedStatus, selectedPolicyDeviation);
-        }}
-        className="focus-ring w-40 truncate xl:w-48"
-      >
-        <option value="">All departments</option>
-        {agencies.map((agency) => (
-          <option key={agency.value} value={agency.value}>{agency.name}{activePortalKey ? '' : ` · ${agency.portalKey}`}</option>
-        ))}
-      </Select>
+      aria-label="Department"
+      value={selectedAgencyId !== null && activePortalKey ? JSON.stringify([activePortalKey, selectedAgencyId]) : ''}
+      onChange={(event) => {
+        const agency = agencyIndex.find((candidate) => candidate.value === event.target.value);
+        if (agency && activePortalKey !== agency.portalKey) setActivePortal(agency.portalKey);
+        setSearchFilters(searchTerm, agency?.agencyId ?? null, selectedStatus, selectedPolicyDeviation);
+      }}
+      className="focus-ring w-40 truncate xl:w-48"
+    >
+      <option value="">All departments</option>
+      {agencies.map((agency) => (
+        <option key={agency.value} value={agency.value}>{agency.name}{activePortalKey ? '' : ` · ${agency.portalKey}`}</option>
+      ))}
+    </Select>
   );
 }

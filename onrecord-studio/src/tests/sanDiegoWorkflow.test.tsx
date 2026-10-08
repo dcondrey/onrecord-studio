@@ -55,6 +55,12 @@ import App from '../App';
 import AgencySelector from '../components/filters/AgencySelector';
 import { useAppStore } from '../store/useAppStore';
 
+/** The per-source tools live behind the composer's "Source options" menu. */
+function sourceTool(name: string) {
+  fireEvent.click(screen.getByRole('button', { name: 'Source options' }));
+  return screen.getByRole('menuitem', { name });
+}
+
 function documentSummary(documentId: number, fileName: string) {
   return { documentId, portalKey: 'sandiego', fileName, fileSize: 100032, contentType: 'text/plain', visibility: 'public', downloadStatus: 'DOWNLOADED', rawFileSha256: null, extractedTextSha256: null, extractionStatus: 'SEARCHABLE', extractionFormat: 'text', extractionDeferredReason: null };
 }
@@ -101,7 +107,7 @@ describe('San Diego research workflow', () => {
     fireEvent.click(within(card).getByRole('button', { name: 'Choose source' }));
     expect(bridge.calls.some((call) => call.command === 'start_data_source')).toBe(false);
     expect((screen.getByLabelText('Public data source URL') as HTMLInputElement).value).toBe('https://www.sandiego.gov/police/data-transparency/policies-procedures');
-    fireEvent.click(screen.getByRole('button', { name: 'Crawl settings' }));
+    fireEvent.click(sourceTool('Crawl settings'));
     expect((screen.getByLabelText(/^Page limit/) as HTMLInputElement).value).toBe('100');
     expect((screen.getByLabelText(/^Crawl depth/) as HTMLInputElement).value).toBe('4');
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
@@ -131,20 +137,20 @@ describe('San Diego research workflow', () => {
     render(<App />);
     await openRequest();
     fireEvent.click(screen.getByRole('button', { name: /policy.txt.*Searchable text/ }));
-    await screen.findByRole('dialog', { name: 'Document policy.txt' });
+    await screen.findByRole('dialog', { name: 'policy.txt' });
     bridge.hasNewDocument = true;
     act(() => bridge.listeners.get('ingestion-telemetry')!({ payload: {
       protocolVersion: 1, sequence: '1', type: 'documentCompleted', payload: { portalKey: 'sandiego', documentId: 2, bytesSaved: 50 },
     } }));
     await waitFor(() => expect(screen.getByText('new-response.txt')).toBeTruthy(), { timeout: 2000 });
-    expect(screen.getByRole('dialog', { name: 'Document policy.txt' })).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'policy.txt' })).toBeTruthy();
   });
 
   it('shows the final chunk after paging and permits returning to the previous chunk', async () => {
     render(<App />);
     await openRequest();
     fireEvent.click(screen.getByRole('button', { name: /policy.txt.*Searchable text/ }));
-    await screen.findByRole('dialog', { name: 'Document policy.txt' });
+    await screen.findByRole('dialog', { name: 'policy.txt' });
     fireEvent.click(screen.getByRole('button', { name: 'Next text page' }));
     fireEvent.click(screen.getByRole('button', { name: 'Next chunk' }));
     expect(await screen.findByText('FINAL CHUNK: review and retention')).toBeTruthy();
@@ -157,6 +163,6 @@ describe('San Diego research workflow', () => {
     render(<App />);
     expect(await screen.findByText('FINAL CHUNK: review and retention')).toBeTruthy();
     expect(useAppStore.getState().workspaceView).toBe('evidence');
-    expect(screen.getByRole('dialog', { name: 'Document policy.txt' })).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'policy.txt' })).toBeTruthy();
   });
 });

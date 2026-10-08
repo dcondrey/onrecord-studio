@@ -160,7 +160,7 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
     <>
       {pendingRemoval && (
         <ConnectorDialog id="remove-source-title" eyebrow="Sources" tone="text-danger" title={<>Remove {pendingRemoval.displayName}?</>} closeLabel="Close removal confirmation" onClose={() => setPendingRemoval(null)}>
-            <div className="space-y-2 p-4 text-label leading-relaxed text-muted">
+            <div className="space-y-2 p-4 text-body text-muted">
               {/* Saying which of the two this is, is the point. A "Remove" that silently keeps
                   hundreds of ingested records and one that silently destroys them are both false
                   statements about the evidence if the interface does not distinguish them. */}
@@ -175,7 +175,7 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
       )}
       {pendingPurge && (
         <ConnectorDialog id="purge-source-title" eyebrow="Sources" tone="text-danger" title={<>Delete {pendingPurge.displayName} and everything from it?</>} closeLabel="Close deletion confirmation" onClose={() => setPendingPurge(null)}>
-            <div className="space-y-2 p-4 text-label leading-relaxed text-muted">
+            <div className="space-y-2 p-4 text-body text-muted">
               {/* The counts are the point. "This cannot be undone" asks the operator to approve an
                   unknown quantity of evidence loss; the numbers say what is at stake. Until they
                   arrive the confirming button stays disabled rather than defaulting to zero, because
@@ -217,7 +217,7 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
               </label>
               <label className="block text-caption font-semibold text-muted">
                 Content
-                <textarea value={pasteContent} onChange={(event) => setPasteContent(event.target.value)} autoFocus rows={14} placeholder="Paste the source material here…" className="focus-ring mt-1.5 w-full resize-y rounded-xl border border-control bg-canvas/70 p-3 font-mono text-label leading-relaxed text-fg-secondary placeholder:text-muted" />
+                <textarea value={pasteContent} onChange={(event) => setPasteContent(event.target.value)} autoFocus rows={14} placeholder="Paste the source material here…" className="focus-ring mt-1.5 w-full resize-y rounded-xl border border-control bg-canvas/70 p-3 font-mono text-body text-fg-secondary placeholder:text-muted" />
               </label>
             </div>
             <div className="flex items-center justify-between border-t border-line px-4 py-3">
@@ -342,7 +342,7 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
                           value={guidanceDraft[field]}
                           onChange={(event) => updateGuidanceDraft({ [field]: event.target.value })}
                           placeholder="One rule per line"
-                          className="focus-ring mt-1.5 w-full resize-y rounded-xl border border-control bg-canvas/70 p-2.5 font-mono text-label leading-relaxed text-fg placeholder:text-muted"
+                          className="focus-ring mt-1.5 w-full resize-y rounded-xl border border-control bg-canvas/70 p-2.5 font-mono text-body text-fg placeholder:text-muted"
                         />
                         <span className="mt-1 block text-caption font-normal leading-relaxed text-muted">{hint}</span>
                       </label>

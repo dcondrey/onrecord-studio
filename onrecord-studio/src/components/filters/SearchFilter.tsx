@@ -9,10 +9,13 @@ import { compileToLegacyQuery, interpretNaturalLanguage, parseQualifierQuery, se
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { displayError } from '../../utils/errorMessage';
 import { SearchField, Select } from '../ui/Field';
-import { buttonClass } from '../ui/Button';
+import Button, { buttonClass } from '../ui/Button';
+import Badge from '../ui/Badge';
 import Switch from '../ui/Switch';
 
-export default function SearchFilter() {
+/** `onPendingChange` reports whether the latest search is still running, so the results pane can
+ * tell "not answered yet" from "answered with nothing". */
+export default function SearchFilter({ onPendingChange }: { onPendingChange?: (pending: boolean) => void }) {
   const activePortalKey = useAppStore((state) => state.activePortalKey);
   const evidenceRefreshRequests = useAppStore((state) => state.evidenceRefreshRequests);
   const searchTerm = useAppStore((state) => state.searchTerm);
@@ -68,8 +71,9 @@ export default function SearchFilter() {
     // LIMIT(query): Tauri invoke calls have no cancellation handle. Debouncing avoids work that has
     // not started; the latest-request gate prevents every stale completion from changing the UI.
     const request = requestGate.begin();
+    setIsSearching(true);
+    onPendingChange?.(true);
     const timer = window.setTimeout(async () => {
-      setIsSearching(true);
       setSearchError(null);
       setSearchStatus('pending');
       try {
@@ -105,11 +109,14 @@ export default function SearchFilter() {
           setSearchError(displayError(reason).message);
         }
       } finally {
-        if (requestGate.isCurrent(request)) setIsSearching(false);
+        if (requestGate.isCurrent(request)) {
+          setIsSearching(false);
+          onPendingChange?.(false);
+        }
       }
     }, 220);
     return () => window.clearTimeout(timer);
-  }, [activePortalKey, compiledQuery, evidenceRefreshRequests, inputValue, requestGate, selectedAgencyId, selectedPolicyDeviation, selectedStatus, setFilteredResults, setSearchError, setSearchStatus]);
+  }, [activePortalKey, compiledQuery, evidenceRefreshRequests, inputValue, requestGate, selectedAgencyId, selectedPolicyDeviation, selectedStatus, setFilteredResults, setSearchError, setSearchStatus, onPendingChange]);
 
   const updateTerm = (value: string) => {
     setInputValue(value);
@@ -225,18 +232,22 @@ export default function SearchFilter() {
         {parsedQuery.filters.map((filter, index) => {
           const deferred = deferredFilterKeys.has(filterKey(filter));
           return (
-          <span key={`${filter.field}-${filter.value}-${index}`} title={deferred ? 'Recognized qualifier, but not applied to this search' : `Applied qualifier: ${filter.raw ?? serializeQualifierQuery({ version: 1, source: 'qualifier', text: '', filters: [filter], issues: [] })}`} className={deferred ? 'rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 font-semibold text-warning' : 'rounded-full border border-accent/30 bg-accent/5 px-2 py-0.5 font-semibold text-accent'}>
-            {filter.negated ? '-' : ''}{filter.field}:{filter.value}
-          </span>
+            <Badge
+              key={`${filter.field}-${filter.value}-${index}`}
+              tone={deferred ? 'warning' : 'neutral'}
+              title={deferred ? 'Recognized qualifier, but not applied to this search' : `Applied qualifier: ${filter.raw ?? serializeQualifierQuery({ version: 1, source: 'qualifier', text: '', filters: [filter], issues: [] })}`}
+            >
+              {filter.negated ? '-' : ''}{filter.field}:{filter.value}
+            </Badge>
           );
         })}
         {compiledQuery.deferredFilters.length > 0 && (
-          <span className="text-warning" role="status">
-            {compiledQuery.deferredFilters.length} qualifier{compiledQuery.deferredFilters.length === 1 ? '' : 's'} not applied
+          <span className="text-caption text-warning" role="status">
+            <span className="tabular-nums">{compiledQuery.deferredFilters.length}</span> qualifier{compiledQuery.deferredFilters.length === 1 ? '' : 's'} not applied
           </span>
         )}
         {parsedQuery.issues.some((issue) => issue.severity === 'warning' || issue.severity === 'error') && (
-          <span className="text-warning" title="Some query tokens need review">Query syntax needs review</span>
+          <span className="text-caption text-warning" title="Some query tokens need review">Query syntax needs review</span>
         )}
         {selectedPolicyDeviation && (
           <button type="button" onClick={() => setSearchFilters(inputValue, selectedAgencyId, selectedStatus, null)} className="focus-ring inline-flex h-6 items-center rounded-full border border-warning/30 bg-warning/10 px-2 font-medium text-warning">
@@ -257,9 +268,9 @@ export default function SearchFilter() {
           </button>
         )}
         {watchStatus && (
-          <span role={watchStatus.ok ? 'status' : 'alert'} className={watchStatus.ok ? 'text-success' : 'text-danger'}>
+          <span role={watchStatus.ok ? 'status' : 'alert'} className={watchStatus.ok ? 'text-caption text-success' : 'text-caption text-danger'}>
             {watchStatus.text}
-            {watchStatus.ok && <button type="button" onClick={() => setWorkspaceView('overview')} className="ml-1 underline">Open watchlist</button>}
+            {watchStatus.ok && <Button variant="link" onClick={() => setWorkspaceView('overview')} className="ml-1 text-caption">Open watchlist</Button>}
           </span>
         )}
         {/* With nothing retained, the workbench states the failure itself. */}

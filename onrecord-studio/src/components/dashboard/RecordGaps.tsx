@@ -36,8 +36,8 @@ export default function RecordGaps({ gaps }: { gaps: RecordGap[] }) {
   const open = gaps.filter((gap) => !gap.answered);
   return <section aria-label="Record gaps" className="space-y-2">
     <h3 className="text-sm font-semibold text-fg">Records that would answer these leads</h3>
-    <p className="text-label leading-4 text-muted">Each lead leaves a question its tables cannot answer. Search what you already hold first; a request is drafted only for you to review and file yourself.{gaps.length > open.length ? ` ${gaps.length - open.length} answered by an imported record.` : ''}</p>
-    {error && <p role="alert" className="text-label leading-4 text-warning">Tracked requests could not be read: {error}</p>}
+    <p className="text-body text-muted">Each lead leaves a question its tables cannot answer. Search what you already hold first; a request is drafted only for you to review and file yourself.{gaps.length > open.length ? ` ${gaps.length - open.length} answered by an imported record.` : ''}</p>
+    {error && <p role="alert" className="text-body text-warning">Tracked requests could not be read: {error}</p>}
     {open.map((gap) => <RecordGapRow key={gap.key} gap={gap} custodian={custodian(gap)} tracked={tracked.find((status) => status.gapKey === gap.key)} onTracked={load} />)}
   </section>;
 }
@@ -76,7 +76,7 @@ function RecordGapRow({ gap, custodian, tracked, onTracked }: { gap: RecordGap; 
     return 'Tracked. Record the submission date in casework once you have filed it.';
   });
   const state = recordGapState(gap, tracked, matches, new Date().toISOString());
-  return <article className="rounded-xl border border-line p-3 text-label leading-4 text-fg-secondary">
+  return <article className="rounded-xl border border-line p-3 text-body text-fg-secondary">
     <h4 className="font-semibold text-fg">{gap.definition.record}</h4>
     <p className="mt-1">{gap.definition.missing} For: {gap.leadTitle}</p>
     <p role="status" className="mt-1 text-fg">{recordGapStateLabel(state)}</p>
@@ -90,6 +90,6 @@ function RecordGapRow({ gap, custodian, tracked, onTracked }: { gap: RecordGap; 
       {tracked ? <button type="button" className="analysis-button" onClick={() => useAppStore.getState().openCasework(tracked.reportId)}>Open casework</button>
         : <button type="button" className="analysis-button" disabled={busy} onClick={track}>Track this request</button>}
     </div>
-    {!tracked && <details className="mt-2"><summary>Drafted request</summary><pre className="mt-2 whitespace-pre-wrap break-words text-label leading-4 text-muted">{input.draft}</pre></details>}
+    {!tracked && <details className="mt-2"><summary>Drafted request</summary><pre className="mt-2 whitespace-pre-wrap break-words text-body text-muted">{input.draft}</pre></details>}
   </article>;
 }

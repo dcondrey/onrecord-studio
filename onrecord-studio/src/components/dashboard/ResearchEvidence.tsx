@@ -1,4 +1,5 @@
 import type { ResearchCitation, ResearchEvidence, ResearchReport } from "../../types";
+import Time from "../ui/Time";
 import { useAppStore } from "../../store/useAppStore";
 
 export function Citations({
@@ -132,7 +133,7 @@ export function EvidenceLinks({
       {ids.map((id) => {
         const evidence = report.evidence.find((item) => item.id === id);
         if (!evidence) return null;
-        const links = [...(evidence.sourceReferences ?? []).map((source) => ({ url: source.url, label: `Original source · ${source.snapshot}` })), ...(evidence.sourceUrl ? [{ url: evidence.sourceUrl, label: "Open original source" }] : [])].filter((source, index, all) => /^https?:\/\//.test(source.url) && all.findIndex((item) => item.url === source.url) === index);
+        const links = [...(evidence.sourceReferences ?? []).map((source) => ({ url: source.url, label: <SnapshotLabel snapshot={source.snapshot} /> })), ...(evidence.sourceUrl ? [{ url: evidence.sourceUrl, label: <>Open original source</> }] : [])].filter((source, index, all) => /^https?:\/\//.test(source.url) && all.findIndex((item) => item.url === source.url) === index);
         return (
           <div key={id} className="min-w-0 w-full text-label leading-4 text-muted">
           <div className="mb-2 flex flex-wrap gap-3">{links.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2">{source.label}</a>)}</div>
@@ -187,4 +188,10 @@ export function EvidenceLinks({
       })}
     </div>
   );
+}
+
+/** A snapshot id ("snap-2026-09-30") names its date; the reader needs the date, not the id. */
+function SnapshotLabel({ snapshot }: { snapshot: string }) {
+  const date = /\d{4}-\d{2}-\d{2}/.exec(snapshot)?.[0];
+  return <span title={`Snapshot ${snapshot}`}>Original source{date ? <> · <Time value={date} /></> : null}</span>;
 }

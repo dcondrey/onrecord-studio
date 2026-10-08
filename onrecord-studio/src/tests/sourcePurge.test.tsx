@@ -78,6 +78,7 @@ import Header from '../components/dashboard/Header';
 import { useAppStore } from '../store/useAppStore';
 import type { PortalRegistration } from '../types';
 
+/** The per-source tools live behind the composer's "Source options" menu. */
 function registrationFor(portalKey: string, displayName: string): PortalRegistration {
   return {
     portalKey,

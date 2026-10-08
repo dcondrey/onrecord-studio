@@ -58,7 +58,7 @@ export default function OverdueFollowUp({
   const record = draft?.agencyRecord ?? null;
   return (
     <div className="rounded-lg border border-line bg-canvas/40 p-3" aria-label="Overdue follow-up letter">
-      <p className="text-label leading-4 text-muted">
+      <p className="text-body text-muted">
         A follow-up letter exists only after {dueOn} has passed with no recorded response in the last saved revision. It is text for you to review and send yourself; this application sends nothing.
       </p>
       <button type="button" onClick={() => run(null)} disabled={busy} className="analysis-button mt-2">
@@ -71,7 +71,7 @@ export default function OverdueFollowUp({
       )}
       {draft && (
         <>
-          <label className="mt-2 block text-label leading-4 text-fg-secondary">
+          <label className="mt-2 block text-body text-fg-secondary">
             Agency record from your library (optional)
             <select
               className="mt-1 block w-full rounded border border-control bg-surface px-2 py-1 text-label text-fg"
@@ -88,10 +88,10 @@ export default function OverdueFollowUp({
             </select>
           </label>
           {draft.agencyOptions.length === 0 && (
-            <p className="mt-1 text-label leading-4 text-muted">No agency in your library has enough closed requests for a counted paragraph.</p>
+            <p className="mt-1 text-body text-muted">No agency in your library has enough closed requests for a counted paragraph.</p>
           )}
           {record && (
-            <p className="mt-1 text-label leading-4 text-muted">
+            <p className="mt-1 text-body text-muted">
               {draft.agencyParagraphIncluded
                 ? `The letter includes one paragraph counted from ${record.closedRequests} closed requests in your library. Delete it from the text below if you do not want it.`
                 : `Only ${record.closedRequests} closed requests are held for this agency, too few to count; no paragraph was added.`}

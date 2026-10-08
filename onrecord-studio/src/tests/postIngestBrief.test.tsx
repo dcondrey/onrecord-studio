@@ -94,7 +94,7 @@ describe('PostIngestBrief', () => {
       useAppStore.setState({ postIngestBriefOpen: true });
     });
     render(<PostIngestBrief />);
-    await screen.findByRole('dialog');
+    await screen.findByRole('region', { name: /finding/i });
     await screen.findByText(/Response held \(recent\)/);
     expect(screen.queryByText(/Response held \(older\)/)).toBeNull();
     await waitFor(() => expect(bridge.filters.length).toBeGreaterThan(0));
@@ -115,14 +115,14 @@ describe('PostIngestBrief', () => {
     act(() => {
       useAppStore.setState({ postIngestBriefOpen: false });
     });
-    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('region')).toBeNull();
     bridge.next = () => new Promise(() => {});
     act(() => {
       useAppStore.setState({ postIngestBriefOpen: true });
     });
-    await screen.findByRole('dialog');
+    await screen.findByRole('region', { name: /finding/i });
     expect(screen.queryByText(/Response held \(first\)/)).toBeNull();
-    expect(screen.getByRole('status').textContent).toContain('Reading detector output');
+    expect(screen.getAllByRole('status').map((node) => node.textContent).join(' ')).toContain('Checking for new findings');
   });
 
   it('does not claim nothing surfaced when the findings load failed', async () => {
@@ -132,7 +132,7 @@ describe('PostIngestBrief', () => {
     });
     render(<PostIngestBrief />);
     await screen.findByRole('alert');
-    expect(screen.queryByText(/Nothing notable surfaced/)).toBeNull();
+    expect(screen.queryByText(/No new findings/)).toBeNull();
     expect(screen.getByText(/could not be read/)).toBeTruthy();
   });
 
@@ -142,7 +142,7 @@ describe('PostIngestBrief', () => {
       useAppStore.setState({ postIngestBriefOpen: true });
     });
     render(<PostIngestBrief />);
-    await screen.findByText(/Ingest complete. Nothing notable/i);
+    await screen.findByText(/Import finished. No new findings/i);
     fireEvent.click(screen.getByRole('button', { name: /dismiss/i }));
     await waitFor(() => {
       expect(useAppStore.getState().postIngestBriefOpen).toBe(false);

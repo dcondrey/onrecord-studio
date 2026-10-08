@@ -6,6 +6,13 @@ import { openHelp } from '../help/helpEvents';
 import type { SeriesGapReport, StandingQueryFilters, StandingQueryOutcome, StandingQuerySummary } from '../../types/standingSearch';
 import { describeCountBasis, describeGap, describeRun, formatFacetCount } from '../../utils/standingSearch';
 import MethodNote from '../ui/MethodNote';
+import Panel, { PanelHeader } from '../ui/Panel';
+import Button from '../ui/Button';
+import Badge from '../ui/Badge';
+import InlineError from '../ui/InlineError';
+import Skeleton from '../ui/Skeleton';
+import Time from '../ui/Time';
+import { formatInstant } from '../objects/labels';
 
 const FACET_LABELS: Record<string, string> = { status: 'Status', agency: 'Department', portal: 'Source', year: 'Year filed' };
 
@@ -97,62 +104,61 @@ export default function StandingSearchPanel() {
   };
 
   return (
-    <section className="app-panel p-4" aria-label="Standing searches">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h3 className="text-heading text-fg">Standing searches</h3>
-          <p className="mt-1 text-label leading-4 text-muted">
-            Saved queries re-run whenever the corpus changes. Each run names the corpus state it saw.{' '}
-            <button type="button" className="underline" onClick={() => openHelp('standing-search')}>How to read a run</button>
-          </p>
-        </div>
-        <button type="button" className="analysis-button" disabled={busy} onClick={() => void sync(true)}>{busy ? 'Working…' : 'Run due queries'}</button>
-      </div>
-      {notice && <p role="status" className="mt-2 text-label text-muted">{notice}</p>}
-      {error && <p role="alert" className="mt-2 text-label text-warning">{error}</p>}
+    <Panel aria-label="Standing searches">
+      <PanelHeader
+        title="Standing searches"
+        description={<>
+          Saved queries re-run whenever the corpus changes. Each run names the corpus state it saw.{' '}
+          <Button variant="link" className="text-caption" onClick={() => openHelp('standing-search')}>How to read a run</Button>
+        </>}
+        actions={<Button disabled={busy} onClick={() => void sync(true)}>{busy ? 'Running…' : 'Run due queries'}</Button>}
+      />
+      <div className="space-y-4 p-5 text-body">
+      {notice && <p role="status" className="text-caption text-muted">{notice}</p>}
+      {error && <InlineError summary="Standing searches couldn’t be read." detail={error} onRetry={() => void sync(false)} />}
 
       {summaries === null ? (
-        <p className="mt-3 text-label text-muted">Reading standing searches.</p>
+        !error && <Skeleton variant="lines" lines={2} label="Reading standing searches" />
       ) : summaries.length === 0 ? (
-        <p className="mt-3 text-label text-muted">None saved. Run a search in the evidence view and choose “Save as standing query”.</p>
+        <p className="text-muted">None saved. Run a search in the evidence view and choose “Save as standing query”.</p>
       ) : (
-        <ul className="mt-3 space-y-3">
+        <ul className="space-y-3">
           {summaries.map((summary) => (
-            <li key={summary.query.id} className="rounded-lg border border-line p-3 text-label">
+            <li key={summary.query.id} className="rounded-lg border border-line p-3">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="font-semibold text-fg">{summary.query.label || '(untitled)'}</span>
-                <span className="font-mono text-muted">{describeFilters(summary.query.filters)}</span>
-                {summary.due && <span className="rounded-full border border-warning/30 px-2 py-0.5 text-warning">Corpus changed since last run</span>}
-                <span className="ml-auto flex gap-2">
-                  <button type="button" className="underline" onClick={() => open(summary)}>Open rows in evidence search</button>
-                  <button type="button" className="underline text-danger" onClick={() => void remove(summary.query.id)}>Delete</button>
+                <span className="font-medium text-fg">{summary.query.label || 'Untitled search'}</span>
+                <span className="min-w-0 truncate text-caption text-muted">{describeFilters(summary.query.filters)}</span>
+                {summary.due && <Badge tone="warning">Corpus changed since last run</Badge>}
+                <span className="ml-auto flex gap-1">
+                  <Button size="sm" variant="ghost" onClick={() => open(summary)}>Open in evidence</Button>
+                  <Button size="sm" variant="ghost" className="text-danger hover:text-danger" onClick={() => void remove(summary.query.id)}>Delete</Button>
                 </span>
               </div>
               {summary.lastRun ? (
                 <RunView run={summary.lastRun} />
               ) : (
-                <p className="mt-1 text-muted">Never run.</p>
+                <p className="mt-1 text-caption text-muted">Never run.</p>
               )}
             </li>
           ))}
         </ul>
       )}
 
-      <div className="mt-4 border-t border-line pt-3">
-        <h4 className="text-heading text-fg">Missing series numbers</h4>
-        <div className="mt-1 text-label text-muted">
+      <div className="border-t border-line pt-4">
+        <h4 className="text-body font-medium text-fg">Missing series numbers</h4>
+        <div className="mt-1 text-caption text-muted">
           Gaps in numbered series of resolutions, ordinances, contracts and permits.{' '}
           <MethodNote>
-            A gap is a number absent from the corpus between two documents of one labelled series. It is a lead for a request,
+            A gap is a number absent from the corpus between two documents of one labeled series. It is a lead for a request,
             not evidence that the agency withheld anything.
           </MethodNote>
         </div>
         {gaps === null ? null : gaps.gaps.length === 0 ? (
-          <p className="mt-2 text-label text-muted">
-            {gaps.seriesCount === 0 ? 'No labelled series with three or more numbers has been read from the corpus.' : `No short gaps in ${gaps.seriesCount} series.`}
+          <p className="mt-2 text-caption text-muted">
+            {gaps.seriesCount === 0 ? 'No labeled series with three or more numbers has been read from the corpus.' : `No short gaps in ${gaps.seriesCount} series.`}
           </p>
         ) : (
-          <ul className="mt-2 space-y-1 text-label text-fg-secondary">
+          <ul className="mt-2 space-y-1 text-body text-fg-secondary">
             {gaps.gaps.map((gap) => (
               <li key={`${gap.label}:${gap.prefix}:${gap.fromNumber}`}>{describeGap(gap)}</li>
             ))}
@@ -160,22 +166,26 @@ export default function StandingSearchPanel() {
           </ul>
         )}
       </div>
-    </section>
+      </div>
+    </Panel>
   );
 }
 
 function RunView({ run }: { run: StandingQuerySummary['lastRun'] & object }) {
   const basis = run.result.countBasis;
   return (
-    <div className="mt-1 space-y-2 text-fg-secondary">
-      <p>{describeRun(run)}</p>
-      <p className="text-muted">Breakdowns below are {describeCountBasis(basis)}.</p>
+    <div className="mt-2 space-y-2 text-fg-secondary">
+      <p className="text-caption tabular-nums text-muted" title={describeRun(run)}>
+        Ran <Time value={run.ranAt} format={formatInstant} className="whitespace-nowrap" /> · {run.result.matchCount.toLocaleString()} matching request{run.result.matchCount === 1 ? '' : 's'}
+        {' · '}{run.changedSincePrevious === null ? 'first run' : run.changedSincePrevious ? `match set changed from ${run.previousMatchCount?.toLocaleString() ?? 'an unrecorded count'} to ${run.result.matchCount.toLocaleString()}` : 'no change since the previous run'}
+      </p>
+      <p className="text-caption text-muted">Breakdowns below are {describeCountBasis(basis)}.</p>
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {run.result.facets.map((facet) => (
-          <dl key={facet.dimension} className="rounded border border-line p-2">
-            <dt className="font-semibold text-fg">{FACET_LABELS[facet.dimension] ?? facet.dimension}</dt>
+          <dl key={facet.dimension} className="rounded-md bg-raised/60 p-2 text-caption">
+            <dt className="font-medium text-fg">{FACET_LABELS[facet.dimension] ?? facet.dimension}</dt>
             {facet.values.map((value) => (
-              <dd key={value.value} className="flex justify-between gap-2"><span className="truncate">{value.value || '(none)'}</span><span className="font-mono">{formatFacetCount(value.count, basis)}</span></dd>
+              <dd key={value.value} className="flex justify-between gap-2"><span className="truncate">{value.value || '(none)'}</span><span className="tabular-nums">{formatFacetCount(value.count, basis)}</span></dd>
             ))}
             {facet.truncated && <dd className="text-muted">More values not listed.</dd>}
           </dl>
@@ -183,11 +193,11 @@ function RunView({ run }: { run: StandingQuerySummary['lastRun'] & object }) {
       </div>
       {run.result.clusters.length > 0 && (
         <div>
-          <p className="font-semibold text-fg">Identical documents across requests</p>
-          <ul className="mt-1 space-y-0.5">
+          <p className="font-medium text-fg">Identical documents across requests</p>
+          <ul className="mt-1 space-y-0.5 text-caption">
             {run.result.clusters.map((cluster) => (
               <li key={cluster.extractedTextSha256}>
-                {cluster.exampleFileName || 'Document'}: identical extracted text under {cluster.requestCount} requests ({cluster.documentCount} copies), sha256:{cluster.extractedTextSha256.slice(0, 16)}
+                {cluster.exampleFileName || 'Document'}: identical extracted text under {cluster.requestCount} requests ({cluster.documentCount} copies) <span className="font-mono text-code text-muted" title={cluster.extractedTextSha256}>sha256:{cluster.extractedTextSha256.slice(0, 16)}</span>
               </li>
             ))}
           </ul>

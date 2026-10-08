@@ -51,14 +51,14 @@ describe('workspace initialization states', () => {
     useAppStore.setState({ workspaceInitializationStatus: 'ready' });
     render(<OverviewDashboard />);
 
-    expect(screen.queryByText('Start with the local record.')).toBeNull();
+    expect(screen.queryByRole('region', { name: 'San Diego research desk' })).toBeNull();
     expect(screen.queryByRole('region', { name: 'Investigation workbench' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Open casework and research tools' })).toBeTruthy();
     const drawer = screen.getByText('Browse sources and add records').closest('details')!;
     drawer.open = true;
     fireEvent(drawer, new Event('toggle'));
-    expect(await screen.findByText('Start with the local record.')).toBeTruthy();
-    expect(screen.queryByText(/Saved sources couldn't be loaded/)).toBeNull();
+    expect(await screen.findByRole('region', { name: 'San Diego research desk' })).toBeTruthy();
+    expect(screen.queryByText('Your saved sources didn’t load')).toBeNull();
   });
 
   it('shows an unavailable state instead of first-run onboarding after a load failure', () => {
@@ -68,7 +68,7 @@ describe('workspace initialization states', () => {
     });
     render(<OverviewDashboard />);
 
-    expect(screen.getByText(/Saved sources couldn't be loaded/)).toBeTruthy();
+    expect(screen.getByText('Your saved sources didn’t load')).toBeTruthy();
     expect(screen.getByText('source catalog unavailable')).toBeTruthy();
     expect(screen.queryAllByText('Not yet in your library')).toHaveLength(0);
   });

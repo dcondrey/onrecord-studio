@@ -61,6 +61,7 @@ import Header from '../components/dashboard/Header';
 import { useAppStore } from '../store/useAppStore';
 import type { PortalRegistration, SourceLifecycleState } from '../types';
 
+/** The per-source tools live behind the composer's "Source options" menu. */
 const registration: PortalRegistration = {
   portalKey: 'sandiego',
   displayName: 'San Diego',

@@ -92,7 +92,7 @@ describe('PatternExplorer evidence gating', () => {
     await waitFor(() => expect(resolvers.has('10')).toBe(true));
 
     // Before it resolves, the user selects pattern Y instead.
-    fireEvent.click(screen.getByText('Pattern pattern-y', { selector: 'h3' }).closest('button')!);
+    fireEvent.click(screen.getByRole('button', { name: /Pattern pattern-y/ }));
     await screen.findByText('Y evidence');
 
     // X's excerpt fetch now resolves. Flush the `.then` chain fully (`waitFor`'s "eventually

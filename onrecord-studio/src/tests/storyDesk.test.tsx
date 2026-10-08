@@ -102,7 +102,7 @@ describe('StoryDesk', () => {
     await waitFor(() => expect(bridge.pending).toHaveLength(1));
     act(() => bridge.pending[0]([lead('a', 'Stated total does not match the table')]));
     await screen.findByText('Stated total does not match the table');
-    expect(screen.getByLabelText('Attention score').textContent).toBe('52.0');
+    expect(screen.getByLabelText('Attention score').textContent).toBe('52');
     expect(screen.getByText(/largest figure named/)).toBeTruthy();
     expect(screen.getByText(/pattern signal/i)).toBeTruthy();
     expect(screen.getByText(/1 related finding/)).toBeTruthy();
@@ -114,7 +114,7 @@ describe('StoryDesk', () => {
     act(() => bridge.pending[0]([lead('a', 'First lead'), lead('b', 'Second lead')]));
     await screen.findByText('Second lead');
     act(() => {
-      screen.getByRole('button', { name: 'Assemble dossier: Second lead' }).click();
+      screen.getByRole('button', { name: 'Open evidence chain: Second lead' }).click();
     });
     expect(useAppStore.getState().inspectorStack).toEqual([{ kind: 'finding', id: 'b' }]);
     act(() => useAppStore.getState().closeInspector());

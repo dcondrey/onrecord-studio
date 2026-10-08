@@ -9,6 +9,9 @@ import ArtifactDrafts from './ArtifactDrafts';
 import EvidenceChain from '../objects/EvidenceChain';
 import ObjectLink from '../objects/ObjectLink';
 import { downloadText } from './textDownload';
+import Badge from '../ui/Badge';
+import Button from '../ui/Button';
+import InlineError from '../ui/InlineError';
 
 type DossierState =
   | { status: 'pending' }
@@ -49,9 +52,9 @@ export default function LeadDossier({ findingId }: { findingId: string }) {
     downloadText(`lead-dossier-${dossier.finding.id}.md`, dossierMarkdown(dossier), 'text/markdown;charset=utf-8');
 
   return (
-    <section aria-label="Lead dossier" className="text-label text-fg-secondary">
+    <section aria-label="Lead dossier" className="text-body text-fg-secondary">
       {state.status === 'pending' && <DossierSkeleton />}
-      {state.status === 'failed' && <p role="alert" className="mt-2 text-danger">The dossier could not be assembled: {state.message}</p>}
+      {state.status === 'failed' && <InlineError className="mt-2" summary="The dossier couldn’t be assembled." detail={state.message} />}
       {state.status === 'ready' && (
         <div className="space-y-4">
           <EvidenceChain dossier={state.dossier} />
@@ -63,11 +66,11 @@ export default function LeadDossier({ findingId }: { findingId: string }) {
             {state.dossier.related.length === 0 ? (
               <p className="text-muted">No other undismissed finding touches this request or these documents.</p>
             ) : (
-              <ul className="space-y-1">
+              <ul className="space-y-1.5">
                 {state.dossier.related.map((related) => (
-                  <li key={related.id}>
-                    <span className="text-muted">{related.basis === 'SAME_REQUEST' ? 'same request' : 'same document'}</span> ·{' '}
+                  <li key={related.id} className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <ObjectLink target={{ kind: 'finding', id: related.id, label: related.headline }}>{related.headline}</ObjectLink>
+                    <Badge>{related.basis === 'SAME_REQUEST' ? 'Same request' : 'Same document'}</Badge>
                   </li>
                 ))}
               </ul>
@@ -95,8 +98,8 @@ export default function LeadDossier({ findingId }: { findingId: string }) {
             )}
           </Section>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => addToBriefing(state.dossier)} className="focus-ring rounded-md border border-highlight/30 bg-highlight/10 px-2 py-1 text-caption font-semibold text-highlight">Add to briefing</button>
-            <button type="button" onClick={() => exportMarkdown(state.dossier)} className="focus-ring rounded-md border border-control px-2 py-1 text-caption font-medium text-muted hover:text-fg">Export as Markdown</button>
+            <Button size="sm" onClick={() => addToBriefing(state.dossier)}>Add to briefing</Button>
+            <Button size="sm" variant="ghost" onClick={() => exportMarkdown(state.dossier)}>Export as Markdown</Button>
           </div>
         </div>
       )}
@@ -118,13 +121,13 @@ function TablesRead({ sources }: { sources: TableLeadSources | null }) {
                 <span className="font-medium text-fg">{table.parts.name}</span>
                 <span className="block break-all">Source: {table.parts.source}</span>
                 <span className="block">Retrieved: {table.parts.retrievedOn}</span>
-                <span className="block break-all font-mono">SHA-256: {table.parts.sha256}</span>
+                <span className="block break-all font-mono text-code">SHA-256: {table.parts.sha256}</span>
               </>
             )}
           </li>
         ))}
       </ul>
-      <pre aria-label="Query the figures were computed with" className="mt-2 whitespace-pre-wrap break-words font-mono">{sources.sql}</pre>
+      <pre aria-label="Query the figures were computed with" className="mt-2 whitespace-pre-wrap break-words rounded-md bg-raised/60 p-3 font-mono text-code">{sources.sql}</pre>
     </Section>
   );
 }
@@ -132,8 +135,8 @@ function TablesRead({ sources }: { sources: TableLeadSources | null }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h4 className="text-caption font-semibold uppercase tracking-wider text-accent">{title}</h4>
-      <div className="mt-1">{children}</div>
+      <h4 className="text-body font-medium text-fg">{title}</h4>
+      <div className="mt-1.5">{children}</div>
     </div>
   );
 }

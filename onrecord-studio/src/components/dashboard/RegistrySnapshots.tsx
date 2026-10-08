@@ -3,6 +3,8 @@ import { open as chooseFile } from '@tauri-apps/plugin-dialog';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { openHelp } from '../help/helpEvents';
+import Button from '../ui/Button';
+import InlineError from '../ui/InlineError';
 import type { RegistryKind, RegistrySnapshotSummary } from '../../types/registry';
 import { describeSnapshot, REGISTRY_TITLES } from '../../utils/registryAnchor';
 
@@ -43,35 +45,33 @@ export default function RegistrySnapshots() {
   };
 
   return (
-    <details className="mt-4 text-label">
-      <summary className="text-fg-secondary">Public registry snapshots</summary>
-      <div className="mt-3 space-y-3 text-muted">
+    <section aria-labelledby="registry-snapshots-title" className="space-y-3 text-body text-muted">
+        <h4 id="registry-snapshots-title" className="font-medium text-fg">Public registry snapshots</h4>
         <p>
-          Import a registry list you downloaded yourself so a licence number read from a document can be shown with the name it is registered to. Nothing is fetched; the file&apos;s digest is kept with every match.{' '}
-          <button type="button" className="underline" onClick={() => openHelp('registry-anchoring')}>What a match means</button>
+          Import a registry list you downloaded so a license number in a document shows the name it is registered to.{' '}
+          <Button variant="link" onClick={() => openHelp('registry-anchoring')}>What a match means</Button>
         </p>
         {REGISTRIES.map((registry) => {
           const snapshot = snapshots?.find((row) => row.registry === registry) ?? null;
           return (
-            <div key={registry} className="rounded border border-line p-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-semibold text-fg-secondary">{REGISTRY_TITLES[registry]}</span>
-                <button type="button" className="analysis-button" disabled={busy !== null} onClick={() => void importSnapshot(registry)}>
+            <div key={registry} className="rounded-lg border border-line p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-medium text-fg-secondary">{REGISTRY_TITLES[registry]}</span>
+                <Button size="sm" disabled={busy !== null} onClick={() => void importSnapshot(registry)}>
                   {busy === registry ? 'Importing…' : snapshot ? 'Replace snapshot' : 'Import CSV'}
-                </button>
+                </Button>
               </div>
-              <p className="mt-1 break-all">
+              <p className="mt-1 break-all text-caption">
                 {snapshots === null
                   ? error ? 'Imported snapshots could not be read.' : 'Reading snapshots.'
                   : snapshot
                     ? `${describeSnapshot(snapshot)}${snapshot.skippedRowCount > 0 ? `; ${snapshot.skippedRowCount.toLocaleString('en-US')} rows skipped (no usable number or a repeat)` : ''}. Source: ${snapshot.sourcePath}`
-                    : 'No snapshot imported. Licence numbers are shown as not checked.'}
+                    : 'No snapshot imported. License numbers are shown as not checked.'}
               </p>
             </div>
           );
         })}
-        {error && <p role="alert" className="text-warning">{error}</p>}
-      </div>
-    </details>
+        {error && <InlineError summary="The registry snapshot couldn’t be imported." detail={error} />}
+    </section>
   );
 }

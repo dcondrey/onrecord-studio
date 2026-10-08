@@ -5,7 +5,13 @@ import { useAppStore } from '../../store/useAppStore';
 import { useFirstRunDataStore } from '../../store/useFirstRunDataStore';
 import { useAutomaticDiscovery } from './AutomaticDiscoveryProvider';
 import type { StoryLead } from '../../types';
-import { claimBasisLabel, findingKindLabel, severityLabel } from '../objects/labels';
+import { severityLabel } from '../objects/labels';
+import { findingFamily } from '../objects/findingFamily';
+import FamilyBadge, { ClaimBasisBadge } from '../ui/FamilyBadge';
+import SegmentedControl from '../ui/SegmentedControl';
+import Button from '../ui/Button';
+import InlineError from '../ui/InlineError';
+import SeverityGlyph from './SeverityGlyph';
 import { findingToBriefingEvidence } from './BriefingWorkspace';
 import FindingsInbox from './FindingsInbox';
 import PageHeader from '../ui/PageHeader';
@@ -30,7 +36,9 @@ type DeskState =
  */
 export default function StoryDesk() {
   const [state, setState] = useState<DeskState>({ status: 'PENDING' });
-  const [notice, setNotice] = useState<{ text: string; failed: boolean } | null>(null);
+  // Keyed by lead, so the outcome shows beside the button that caused it.
+  const [notices, setNotices] = useState<Record<string, { text: string; failed: boolean }>>({});
+  const [refreshing, setRefreshing] = useState(false);
   const gate = useLatestRequestGate();
   const briefingGate = useLatestRequestGate();
   const findingsRefreshRequests = useAppStore((s) => s.findingsRefreshRequests);
@@ -58,7 +66,9 @@ export default function StoryDesk() {
 
   const load = useCallback(() => {
     const token = gate.begin();
-    setState({ status: 'PENDING' });
+    // A refresh keeps the ranked list on screen, so the page neither collapses nor loses its place.
+    setState((current) => (current.status === 'READY' ? current : { status: 'PENDING' }));
+    setRefreshing(true);
     invokeCommand('list_story_leads', { limit: 100 })
       .then((leads) => {
         if (!gate.isCurrent(token)) return;
@@ -67,6 +77,9 @@ export default function StoryDesk() {
       .catch((reason) => {
         if (!gate.isCurrent(token)) return;
         setState({ status: 'FAILED', message: formatNativeError(reason) });
+      })
+      .finally(() => {
+        if (gate.isCurrent(token)) setRefreshing(false);
       });
   }, [gate]);
 
@@ -96,22 +109,26 @@ export default function StoryDesk() {
         const finding = findings.find((row) => row.id === lead.findingId);
         const evidence = finding ? findingToBriefingEvidence(finding) : null;
         if (!evidence) {
-          setNotice({ text: 'This lead has no request anchor, so it cannot be added to a briefing.', failed: true });
+          setNotices((current) => ({ ...current, [lead.findingId]: { text: 'This lead has no request anchor, so it can’t be added to a briefing.', failed: true } }));
           return;
         }
         addBriefingEvidence(evidence);
-        setNotice({ text: `Added to the briefing: ${lead.headline}`, failed: false });
+        setNotices((current) => ({ ...current, [lead.findingId]: { text: `Added to the briefing: ${lead.headline}`, failed: false } }));
       } catch (reason) {
         if (!briefingGate.isCurrent(token)) return;
-        setNotice({ text: formatNativeError(reason), failed: true });
+        setNotices((current) => ({ ...current, [lead.findingId]: { text: `Couldn’t add to the briefing: ${formatNativeError(reason)}`, failed: true } }));
       }
     },
     [addBriefingEvidence, briefingGate],
   );
 
+  const hasLeads = state.status === 'READY' && state.leads.length > 0;
+  // While the load has failed, the error's own Try again is the one retry on screen.
+  const showRefresh = mode === 'all' || state.status === 'PENDING' || hasLeads;
+
   return (
     <main className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto w-full max-w-[1200px] space-y-4 p-4 lg:p-6">
+      <div className="mx-auto w-full max-w-6xl space-y-6 px-4 pb-10 pt-6 md:px-6">
         <PageHeader
           title="What the records point to"
           summary="Findings ranked by what the records show, with every claim one click from its source."
@@ -122,43 +139,55 @@ export default function StoryDesk() {
             about any record. Only a counted violation is a legal claim; everything else is a pattern signal.
           </>}
           actions={<>
-            <div role="tablist" aria-label="Story desk view" className="flex rounded-lg border border-control p-0.5">
-              {(['ranked', 'all'] as const).map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  role="tab"
-                  aria-selected={mode === value}
-                  onClick={() => setMode(value)}
-                  className={cn('motion-press focus-ring rounded-md px-3 py-1 text-label font-semibold transition', mode === value ? 'bg-accent/10 text-accent' : 'text-muted hover:text-fg')}
-                >
-                  {value === 'ranked' ? 'Ranked leads' : 'All findings'}
-                </button>
-              ))}
-            </div>
-            {mode === 'ranked' && <SinceControl />}
-            {mode === 'ranked' && (
-              <button type="button" onClick={load} className="motion-press focus-ring rounded-lg border border-control px-3 py-1.5 text-label font-semibold text-fg-secondary hover:border-accent/30">
-                Refresh
-              </button>
+            <SegmentedControl
+              label="Story desk view"
+              mode="tabs"
+              value={mode}
+              onChange={setMode}
+              panelId={() => 'story-desk-panel'}
+              options={[{ value: 'ranked', label: 'Ranked leads' }, { value: 'all', label: 'All findings' }]}
+            />
+            {mode === 'ranked' && (hasLeads || state.status === 'PENDING') && <SinceControl disabled={state.status === 'PENDING'} />}
+            {showRefresh && (
+              <Button
+                className="min-w-[7rem]"
+                disabled={mode === 'ranked' && (refreshing || state.status === 'PENDING')}
+                onClick={mode === 'ranked' ? load : requestFindingsRefresh}
+              >
+                {mode === 'ranked' && state.status === 'PENDING' ? 'Loading…' : mode === 'ranked' && refreshing ? 'Refreshing…' : 'Refresh'}
+              </Button>
             )}
           </>}
         />
-        {notice && <p role={notice.failed ? 'alert' : 'status'} className={cn('motion-reveal text-label', notice.failed ? 'text-warning' : 'text-success')}>{notice.text}</p>}
 
         <CaseScopeBar state={caseScope} noun={mode === 'all' ? 'findings' : 'leads'} />
 
+        <div id="story-desk-panel" role="tabpanel" aria-label={mode === 'ranked' ? 'Ranked leads' : 'All findings'} className="space-y-4">
         {mode === 'all' ? <FindingsInbox /> : <>
-        {state.status === 'PENDING' && <p role="status" className="text-label text-muted">Ranking leads…</p>}
+        {state.status === 'PENDING' && (
+          <div role="status" aria-busy="true" className="space-y-3">
+            <span className="sr-only">Ranking leads…</span>
+            {[0, 1, 2].map((card) => (
+              <div key={card} aria-hidden="true" className="flex h-[168px] flex-col gap-3 rounded-xl border border-line bg-panel p-4">
+                <div className="flex gap-2"><div className="skeleton h-5 w-24 rounded-full" /><div className="skeleton h-5 w-28 rounded-full" /></div>
+                <div className="skeleton h-5 w-3/4 rounded" />
+                <div className="skeleton h-3 w-1/3 rounded" />
+                <div className="mt-auto flex gap-2"><div className="skeleton h-7 w-28 rounded-md" /><div className="skeleton h-7 w-28 rounded-md" /></div>
+              </div>
+            ))}
+          </div>
+        )}
         {state.status === 'FAILED' && (
-          <p role="alert" className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-label text-danger">
-            Leads could not be loaded: {state.message}
-          </p>
+          <InlineError
+            summary="Leads couldn’t be loaded. The local evidence store is busy; try again in a moment."
+            detail={state.message}
+            onRetry={load}
+          />
         )}
         {state.status === 'READY' && state.leads.length > 0 && visibleLeads.length < state.leads.length && (
-          <p role="status" className="text-label text-muted">
-            Showing {visibleLeads.length.toLocaleString()} of {state.leads.length.toLocaleString()} leads{since ? ' first seen in this window' : ''}{caseScope.status === 'ready' ? ' in the active case' : ''}.{' '}
-            {since && <button type="button" onClick={() => setSincePreset('all')} className="focus-ring rounded text-accent hover:underline">Any time</button>}
+          <p role="status" className="text-body text-muted">
+            Showing <span className="tabular-nums">{visibleLeads.length.toLocaleString()}</span> of <span className="tabular-nums">{state.leads.length.toLocaleString()}</span> leads{since ? ' first seen in this window' : ''}{caseScope.status === 'ready' ? ' in the active case' : ''}.{' '}
+            {since && <Button variant="link" onClick={() => setSincePreset('all')}>Any time</Button>}
           </p>
         )}
         {state.status === 'READY' && state.leads.length === 0 && (
@@ -168,18 +197,17 @@ export default function StoryDesk() {
               title="No leads yet"
               body="Leads come from the records you collect or the tables you import. San Diego’s budget, Get It Done and SDPD tables can be fetched in one step."
               actions={<>
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
                   disabled={fetchingCoreData}
                   onClick={() => {
                     void useFirstRunDataStore.getState().run(controller);
                     setWorkspaceView('overview');
                   }}
-                  className="motion-press focus-ring rounded-lg border border-transparent primary-action px-3 py-1.5 text-label font-semibold text-white"
                 >
                   Get San Diego’s core public data
-                </button>
-                <button type="button" onClick={openSourceConnector} className="motion-press focus-ring rounded-lg border border-control px-3 py-1.5 text-label font-semibold text-fg-secondary">Add source</button>
+                </Button>
+                <Button onClick={openSourceConnector}>Add source</Button>
               </>}
             />
           ) : savedSourceCount === 0 ? (
@@ -187,7 +215,7 @@ export default function StoryDesk() {
               icon="flag"
               title="No leads yet"
               body="Leads come from findings on the records you collect. Add a records portal, website or file to start."
-              actions={<button type="button" onClick={openSourceConnector} className="motion-press focus-ring rounded-lg border border-transparent primary-action px-3 py-1.5 text-label font-semibold text-white">Add source</button>}
+              actions={<Button variant="primary" onClick={openSourceConnector}>Add source</Button>}
             />
           ) : (
             <EmptyState
@@ -195,75 +223,92 @@ export default function StoryDesk() {
               title="No leads yet"
               body="Findings appear when the detectors finish a sweep of what has been ingested. Run the sweep again, or check whether a sync is still running."
               actions={<>
-                <button type="button" onClick={requestFindingsRefresh} className="motion-press focus-ring rounded-lg border border-transparent primary-action px-3 py-1.5 text-label font-semibold text-white">Refresh findings</button>
-                <button type="button" onClick={() => setWorkspaceView('activity')} className="motion-press focus-ring rounded-lg border border-control px-3 py-1.5 text-label font-semibold text-fg-secondary">See sync activity</button>
+                <Button variant="primary" onClick={requestFindingsRefresh}>Refresh findings</Button>
+                <Button onClick={() => setWorkspaceView('activity')}>See sync activity</Button>
               </>}
             />
           )
         )}
         {state.status === 'READY' && visibleLeads.length > 0 && (
-          <ol className="motion-stagger space-y-3" aria-label="Ranked story leads">
+          <ol className="motion-stagger space-y-3" aria-label="Ranked story leads" aria-busy={refreshing || undefined}>
             {visibleLeads.map((lead, index) => (
-              <li key={lead.findingId} className="motion-lift rounded-xl border border-line bg-canvas/40 p-4 hover:border-line-strong">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-caption font-semibold uppercase tracking-wider text-accent">
-                      #{index + 1} · {findingKindLabel(lead.kind)} · {severityLabel(lead.severity)} · {claimBasisLabel(lead.kind)}
+              <li key={lead.findingId}>
+                <article aria-labelledby={`lead-${lead.findingId}`} className="flex flex-col gap-3 rounded-xl border border-line bg-panel p-4 shadow-panel">
+                  <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-caption tabular-nums text-muted">#{index + 1}</span>
+                        <FamilyBadge family={findingFamily(lead.kind)} />
+                        <ClaimBasisBadge kind={lead.kind} />
+                        <span className="inline-flex items-center gap-1 text-caption text-fg-secondary">
+                          <SeverityGlyph severity={lead.severity} />
+                          {severityLabel(lead.severity)}
+                        </span>
+                      </div>
+                      <h3 id={`lead-${lead.findingId}`} className="mt-2 text-heading">
+                        <ObjectLink target={{ kind: 'finding', id: lead.findingId, label: lead.headline }} className="text-fg no-underline hover:underline">{lead.headline}</ObjectLink>
+                      </h3>
+                      <AgencyReference lead={lead} />
                     </div>
-                    <h3 className="mt-1 text-sm font-semibold leading-snug">
-                      <ObjectLink target={{ kind: 'finding', id: lead.findingId, label: lead.headline }} className="text-fg decoration-line-strong hover:text-accent">{lead.headline}</ObjectLink>
-                    </h3>
-                    <AgencyReference lead={lead} />
-                  </div>
-                  <div className="text-right">
-                    <div className="text-caption uppercase tracking-wider text-muted">Attention score</div>
-                    <div className="font-mono text-sm text-fg" aria-label="Attention score">
-                      {(lead.publicInterest.totalBasisPoints / 100).toFixed(1)}
+                    <div className="shrink-0 text-right" title="Ranks attention; not a measure of newsworthiness or a legal finding">
+                      <p className="text-metric tabular-nums text-fg" aria-label="Attention score">{Math.round(lead.publicInterest.totalBasisPoints / 100)}</p>
+                      <p className="text-caption text-muted">Attention score</p>
                     </div>
                   </div>
-                </div>
-                <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="Ranking factors">
-                  {lead.publicInterest.factors.map((factor) => (
-                    <li
-                      key={factor.name}
-                      title={factor.evidence}
-                      className="rounded-full border border-line-strong px-2 py-0.5 text-caption text-fg-secondary"
-                    >
-                      <span className="font-semibold">{factor.name}</span> +{(factor.basisPoints / 100).toFixed(0)}
-                      <span className="text-muted"> · {factor.evidence}</span>
-                    </li>
-                  ))}
-                </ul>
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-label">
-                  <button type="button" onClick={() => inspect(lead)} className="focus-ring rounded-lg border border-control px-2.5 py-1 font-semibold text-fg-secondary hover:border-accent/30">
-                    Inspect records
-                  </button>
-                  <button type="button" onClick={() => void addToBriefing(lead)} className="focus-ring rounded-lg border border-highlight/30 bg-highlight/10 px-2.5 py-1 font-semibold text-highlight">
-                    Add to briefing
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openLeadDossier(lead.findingId)}
-                    aria-label={`Assemble dossier: ${lead.headline}`}
-                    className="motion-press focus-ring rounded-lg border border-control px-2.5 py-1 font-semibold text-fg-secondary hover:border-accent/30"
-                  >
-                    Open evidence chain
-                  </button>
-                  {lead.relatedFindingIds.length > 0 && (
-                    <span className="text-muted">
-                      {lead.relatedFindingIds.length} related finding{lead.relatedFindingIds.length === 1 ? '' : 's'} on the same subject
-                    </span>
-                  )}
-                </div>
-                <LeadDraftToggle findingId={lead.findingId} />
+                  <ul className="flex flex-wrap gap-1.5" aria-label="Ranking factors">
+                    {lead.publicInterest.factors.map((factor) => (
+                      <li key={factor.name} title={factor.evidence} className="inline-flex min-h-5 max-w-full items-center rounded-full border border-line bg-raised px-2 py-0.5 text-caption text-fg-secondary">
+                        <span className="min-w-0 truncate">
+                          <span className="font-medium">{factorLabel(factor.name)}</span>{' '}
+                          <span className="tabular-nums">+{(factor.basisPoints / 100).toFixed(0)}</span>
+                          <span className="text-muted"> · {factor.evidence}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button size="sm" onClick={() => openLeadDossier(lead.findingId)} aria-label={`Open evidence chain: ${lead.headline}`}>
+                      Open evidence chain
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => inspect(lead)}>Inspect records</Button>
+                    <Button size="sm" variant="ghost" onClick={() => void addToBriefing(lead)}>Add to briefing</Button>
+                    {lead.relatedFindingIds.length > 0 && (
+                      <span className="text-caption tabular-nums text-muted">
+                        {lead.relatedFindingIds.length} related finding{lead.relatedFindingIds.length === 1 ? '' : 's'} on the same subject
+                      </span>
+                    )}
+                    {notices[lead.findingId] && (
+                      <span role={notices[lead.findingId].failed ? 'alert' : 'status'} className={cn('motion-fade text-caption', notices[lead.findingId].failed ? 'text-danger' : 'text-success')}>
+                        {notices[lead.findingId].text}
+                      </span>
+                    )}
+                  </div>
+                  <LeadDraftToggle findingId={lead.findingId} />
+                </article>
               </li>
             ))}
           </ol>
         )}
         </>}
+        </div>
       </div>
     </main>
   );
+}
+
+// The backend names factors in lowercase prose; the card shows one consistent label per factor.
+const FACTOR_LABELS: Record<string, string> = {
+  'money at stake': 'Money',
+  scale: 'Scale',
+  recurrence: 'Recurrence',
+  'record contradicts statement': 'Contradiction',
+  'counted statutory or policy violation': 'Counted violation',
+  'evidence strength': 'Evidence strength',
+  freshness: 'Freshness',
+};
+
+function factorLabel(name: string) {
+  return FACTOR_LABELS[name] ?? name.charAt(0).toUpperCase() + name.slice(1);
 }
 
 /** The agency a lead is about, as a link, when the analytics profile names it. */
@@ -282,17 +327,17 @@ function AgencyReference({ lead }: { lead: StoryLead }) {
 function LeadDraftToggle({ findingId }: { findingId: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <details open={open} className="mt-3 text-label">
+    <details open={open} className="group border-t border-line pt-3">
       <summary
         onClick={(event) => {
           event.preventDefault();
           setOpen((current) => !current);
         }}
-        className="focus-ring select-none text-muted hover:text-fg"
+        className="focus-ring inline-flex cursor-pointer list-none select-none items-center gap-1.5 rounded text-body text-fg-secondary hover:text-fg [&::-webkit-details-marker]:hidden"
       >
         Draft a records request or appeal
       </summary>
-      {open && <ArtifactDrafts findingId={findingId} />}
+      {open && <div className="mt-3"><ArtifactDrafts findingId={findingId} /></div>}
     </details>
   );
 }

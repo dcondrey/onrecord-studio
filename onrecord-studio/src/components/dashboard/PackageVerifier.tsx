@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { PackageVerificationResult } from '../../types/investigation';
+import Button from '../ui/Button';
+import InlineError from '../ui/InlineError';
 
 export default function PackageVerifier() {
   const gate = useLatestRequestGate();
@@ -9,6 +11,8 @@ export default function PackageVerifier() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [fileName, setFileName] = useState('');
+  const [chosenName, setChosenName] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
 
   async function verify(file: File) {
     const token = gate.begin();
@@ -30,23 +34,25 @@ export default function PackageVerifier() {
   }
 
   return (
-    <details className="app-panel p-4" aria-label="Verify a signed package">
-      <summary className="font-semibold text-fg">Verify a signed chain-of-custody or evidence package</summary>
-      <p className="mt-2 text-label leading-4 text-muted">
-        Checks a package's signature and integrity without leaving the application. This confirms the
-        file has not changed since whoever exported it signed it locally; it does not authenticate
-        that signer's real-world identity, and it is not a legal determination of admissibility.
+    <section aria-labelledby="package-verifier-title" className="rounded-lg border border-line p-4">
+      <h4 id="package-verifier-title" className="text-body font-medium text-fg">Verify a signed chain-of-custody or evidence package</h4>
+      <p className="mt-1 max-w-prose text-caption text-muted">
+        Confirms the file hasn’t changed since whoever exported it signed it. It doesn’t authenticate
+        the signer’s real-world identity, and it isn’t a legal determination of admissibility.
       </p>
-      <label className="mt-3 block text-label leading-4 text-fg-secondary">
-        Open a signed package (.json)
+      <div className="mt-3 flex min-w-0 items-center gap-3">
         <input
+          ref={inputRef}
           type="file"
           accept=".json,application/json"
-          className="mt-2 block w-full text-label leading-4"
+          aria-label="Open a signed package (.json)"
+          className="sr-only"
+          tabIndex={-1}
           disabled={busy}
           onChange={(event) => {
             const file = event.target.files?.[0];
             if (!file) return;
+            setChosenName(file.name);
             if (file.size > 64 * 1024 * 1024) {
               gate.invalidate();
               setBusy(false);
@@ -56,12 +62,13 @@ export default function PackageVerifier() {
             void verify(file);
           }}
         />
-      </label>
-      {error && <p role="alert" className="mt-3 text-sm text-danger">{error}</p>}
-      {busy && <p role="status" className="mt-3 text-sm text-muted">Verifying…</p>}
+        <Button size="sm" disabled={busy} onClick={() => inputRef.current?.click()}>{busy ? 'Verifying…' : 'Choose package…'}</Button>
+        {chosenName && !result && <span className="min-w-0 truncate font-mono text-code text-muted" title={chosenName}>{chosenName}</span>}
+      </div>
+      {error && (error.startsWith('Package files must') ? <p role="alert" className="mt-3 text-body text-danger">{error}</p> : <InlineError className="mt-3" summary="The package couldn’t be verified." detail={error} />)}
       {result && (
-        <div className="mt-3 rounded border border-line-strong bg-canvas/70 p-3 text-label leading-4">
-          <p className="font-semibold text-fg">{fileName}</p>
+        <div className="mt-3 rounded-lg border border-line bg-canvas p-3 text-body">
+          <p className="font-mono text-code text-fg">{fileName}</p>
           {result.parseError ? (
             <p className="mt-2 text-danger">{result.parseError}</p>
           ) : (
@@ -80,40 +87,40 @@ export default function PackageVerifier() {
               <p className="mt-2 text-muted">Schema: {result.schemaVersion ?? 'unknown'}</p>
               <p className="mt-1 text-muted">Identity assurance: {result.identityAssurance ?? 'unknown'} — a self-managed local key proves only that whoever held it signed these bytes, not a notarized identity.</p>
               {result.unverifiedCitationLabels.length > 0 && (
-                <div className="mt-2 rounded border border-warning/30 bg-warning/10 p-2 text-warning">
-                  <p className="font-semibold">{result.unverifiedCitationLabels.length} citation{result.unverifiedCitationLabels.length === 1 ? '' : 's'} inside this package are themselves marked unverified:</p>
+                <div className="mt-2 rounded-md border border-warning/30 bg-warning/10 p-2 text-warning">
+                  <p className="font-medium">{result.unverifiedCitationLabels.length} citation{result.unverifiedCitationLabels.length === 1 ? '' : 's'} inside this package are themselves marked unverified:</p>
                   <ul className="mt-1 list-disc pl-4">
                     {result.unverifiedCitationLabels.map((label) => <li key={label}>{label}</li>)}
                   </ul>
                 </div>
               )}
               {result.withheldCitationLabels.length > 0 && (
-                <div className="mt-2 rounded border border-danger/30 bg-danger/10 p-2 text-danger">
-                  <p className="font-semibold">{result.withheldCitationLabels.length} citation{result.withheldCitationLabels.length === 1 ? '' : 's'} withheld from this package's evidence, by label and reason:</p>
+                <div className="mt-2 rounded-md border border-danger/30 bg-danger/10 p-2 text-danger">
+                  <p className="font-medium">{result.withheldCitationLabels.length} citation{result.withheldCitationLabels.length === 1 ? '' : 's'} withheld from this package's evidence, by label and reason:</p>
                   <ul className="mt-1 list-disc pl-4">
                     {result.withheldCitationLabels.map((label) => <li key={label}>{label}</li>)}
                   </ul>
                 </div>
               )}
               {result.revokedSigner && result.revokedSigner.status === 'RETIRED' && (
-                <div className="mt-2 rounded border border-line-strong bg-raised/40 p-2 text-fg-secondary">
-                  <p className="font-semibold">Signer key retired by this installation on {result.revokedSigner.revokedAt} ({result.revokedSigner.reason}).</p>
+                <div className="mt-2 rounded-md border border-line bg-raised p-2 text-fg-secondary">
+                  <p className="font-medium">Signer key retired by this installation on {result.revokedSigner.revokedAt} ({result.revokedSigner.reason}).</p>
                   <p className="mt-1">This was a routine key rotation, not a compromise. Packages this key already signed, including this one, remain trusted.</p>
                 </div>
               )}
               {result.revokedSigner && result.revokedSigner.status !== 'RETIRED' && (
-                <div className="mt-2 rounded border border-danger/30 bg-danger/10 p-2 text-danger">
-                  <p className="font-semibold">Signer key revoked as compromised by this installation on {result.revokedSigner.revokedAt} ({result.revokedSigner.reason}).</p>
+                <div className="mt-2 rounded-md border border-danger/30 bg-danger/10 p-2 text-danger">
+                  <p className="font-medium">Signer key revoked as compromised by this installation on {result.revokedSigner.revokedAt} ({result.revokedSigner.reason}).</p>
                   <p className="mt-1">The signature over these bytes is still mathematically valid — that check above is unaffected — but this signer is no longer trusted; treat the package as untrusted regardless of the other checks.</p>
                 </div>
               )}
-              <p className={`mt-3 font-semibold ${result.overallPassed ? 'text-success' : 'text-danger'}`}>
+              <p className={`mt-3 font-medium ${result.overallPassed ? 'text-success' : 'text-danger'}`}>
                 {result.overallPassed ? 'Overall: PASS — internally consistent and unaltered since signing.' : 'Overall: FAIL — treat this package as unverified.'}
               </p>
             </>
           )}
         </div>
       )}
-    </details>
+    </section>
   );
 }

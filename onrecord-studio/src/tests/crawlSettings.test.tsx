@@ -50,6 +50,12 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({ open: () => Promise.resolve(null) 
 import Header from '../components/dashboard/Header';
 import { useAppStore } from '../store/useAppStore';
 
+/** The per-source tools live behind the composer's "Source options" menu. */
+function sourceTool(name: string) {
+  fireEvent.click(screen.getByRole('button', { name: 'Source options' }));
+  return screen.getByRole('menuitem', { name });
+}
+
 const DEFAULT_RATE_LIMIT = { burstCapacity: 5, refillTokensPerSecond: 1 };
 
 async function startSource(url: string) {
@@ -81,7 +87,7 @@ describe('crawl settings', () => {
   // an untouched dialog sending a default-valued object would record a choice nobody made. It also
   // travels separately from the crawl policy, which is the pairing this asserts in both directions.
   it('sends the metadata page window only once it is moved off the built-in one', async () => {
-    fireEvent.click(screen.getByRole('button', { name: 'Crawl settings' }));
+    fireEvent.click(sourceTool('Crawl settings'));
     fireEvent.change(screen.getByLabelText(/Metadata start page/), { target: { value: '400' } });
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
 
@@ -91,7 +97,7 @@ describe('crawl settings', () => {
   });
 
   it('refuses a page size the portal API cannot serve instead of sending it', async () => {
-    fireEvent.click(screen.getByRole('button', { name: 'Crawl settings' }));
+    fireEvent.click(sourceTool('Crawl settings'));
     fireEvent.change(screen.getByLabelText(/Metadata page size/), { target: { value: '101' } });
     fireEvent.click(screen.getByRole('button', { name: 'Close crawl settings' }));
 
@@ -110,7 +116,7 @@ describe('crawl settings', () => {
   });
 
   it('sends the full policy once a limit is customized', async () => {
-    fireEvent.click(screen.getByRole('button', { name: 'Crawl settings' }));
+    fireEvent.click(sourceTool('Crawl settings'));
     fireEvent.change(screen.getByLabelText(/Crawl depth/), { target: { value: '16' } });
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
 
@@ -125,7 +131,7 @@ describe('crawl settings', () => {
   });
 
   it('refuses to start on an out-of-range limit instead of sending it', async () => {
-    fireEvent.click(screen.getByRole('button', { name: 'Crawl settings' }));
+    fireEvent.click(sourceTool('Crawl settings'));
     fireEvent.change(screen.getByLabelText(/Crawl depth/), { target: { value: '99' } });
     fireEvent.click(screen.getByRole('button', { name: 'Close crawl settings' }));
 

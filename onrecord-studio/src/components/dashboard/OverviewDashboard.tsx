@@ -7,6 +7,12 @@ import AnalyticsUnavailable from '../charts/AnalyticsUnavailable';
 import { useAppStore } from '../../store/useAppStore';
 import MetricsGrid from './MetricsGrid';
 import Icon from '../ui/icons';
+import PageHeader from '../ui/PageHeader';
+import Panel, { PanelHeader } from '../ui/Panel';
+import Button from '../ui/Button';
+import InlineError from '../ui/InlineError';
+import { Select } from '../ui/Field';
+import { cn } from '../../utils/cn';
 import SanDiegoWorkspace from './SanDiegoWorkspace';
 import InvestigationDesk from './InvestigationDesk';
 import ResearchWorkspace from './ResearchWorkspace';
@@ -19,7 +25,6 @@ import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { AgencyPerformanceProfile } from '../../types';
 import AttentionFeed, { AttentionFeedSkeleton } from './AttentionFeed';
-import InlineError from '../ui/InlineError';
 import SinceControl from './SinceControl';
 import WatchlistPanel from './WatchlistPanel';
 import StandingSearchPanel from './StandingSearchPanel';
@@ -52,40 +57,40 @@ export default function OverviewDashboard() {
   const analyticsUpdatedAt = useAppStore((state) => state.analyticsUpdatedAt);
   const analyticsError = useAppStore((state) => state.analyticsError);
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
+  const correlationCount = useAppStore((state) => state.crossAgencyCorrelations.length);
+  // With no result at all, one retryable error stands for the whole panel; the comparison and the
+  // charts below would each restate the same failure.
+  const analyticsUnavailable = analyticsError !== null && profiles.length === 0 && correlationCount === 0;
   const scopedProfiles = useMemo(
     () => profiles.filter((profile) => !activePortalKey || profile.portalSubdomain === activePortalKey),
     [activePortalKey, profiles],
   );
-  const criticalDepartments = scopedProfiles.filter(
+  const outlierDepartments = scopedProfiles.filter(
     (profile) => profile.performanceZScore !== null && profile.performanceZScore >= 2,
   ).length;
   const monitoredDepartments = scopedProfiles.length;
+  const openWorkbench = () => setWorkbench({ reportId: '', review: false });
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto w-full max-w-[1800px] space-y-4 p-4 sm:p-5 lg:p-6">
-        <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div className="min-w-0">
-            <h2 className="text-display text-fg">{workbench ? 'Develop the case' : 'Your investigation briefing'}</h2>
-            <p className="mt-1 max-w-3xl text-body text-muted">
-              Investigate homelessness spending, encampment abatements, public bathrooms, and City budget priorities.
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {showAnalytics && (analyticsError ? (
-              // `analyticsUpdatedAt` only advances on success, so the unchanged badge would keep
-              // claiming "Live" over a figure that stopped updating.
-              <span className="overview-freshness hidden items-center gap-2 whitespace-nowrap rounded-full border border-warning/30 px-3 py-1.5 text-caption text-warning sm:flex" title={`Analytics refresh failed: ${analyticsError}`}><span className="h-1.5 w-1.5 rounded-full bg-warning" /> {analyticsUpdatedAt ? `Stale · last updated ${formatRelativeTime(analyticsUpdatedAt)}` : 'Analytics unavailable'}</span>
-            ) : analyticsUpdatedAt ? (
-              <span className="overview-freshness hidden items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-caption text-muted sm:flex" title={`Analytics updated ${formatRelativeTime(analyticsUpdatedAt)}`}><span className="h-1.5 w-1.5 rounded-full bg-success" /> Live · {formatRelativeTime(analyticsUpdatedAt)}</span>
-            ) : null)}
-            {portals.length > 0 && <SinceControl />}
-            <button type="button" onClick={() => setWorkspaceView('evidence')} className="secondary-action focus-ring flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border px-3.5 py-2.5 text-label font-semibold text-fg-secondary transition hover:text-accent">
-              Review evidence <Icon name="arrow" className="h-3.5 w-3.5" />
+      <div className="mx-auto w-full max-w-content space-y-6 px-4 pb-10 pt-6 md:px-6">
+        {workbench ? (
+          <div>
+            <button type="button" onClick={() => setWorkbench(null)} className="focus-ring mb-2 inline-flex items-center gap-1 rounded text-body text-accent hover:underline">
+              <Icon name="back" size="sm" /> Overview
             </button>
+            <PageHeader title="Casework" summary="Track requests and commitments, reconcile spending, and challenge the evidence." />
           </div>
-        </section>
-
+        ) : (
+          <PageHeader
+            title="Overview"
+            summary="New leads, what you follow, and the state of your sources."
+            actions={<>
+              {portals.length > 0 && <SinceControl />}
+              <Button onClick={() => setWorkspaceView('evidence')}>Review evidence</Button>
+            </>}
+          />
+        )}
 
         <FirstRunData />
         {workspaceInitializationStatus === 'loading' ? (
@@ -97,10 +102,9 @@ export default function OverviewDashboard() {
         ) : null}
 
         <PostIngestBrief />
-        {workbench ? <>
-          <button type="button" className="analysis-button" onClick={() => setWorkbench(null)}>Return to investigation briefing</button>
-          <ProfessionalWorkbench key={`${workbench.reportId}:${workbench.review}`} initialReportId={workbench.reportId} initialTab={workbench.review ? 'Evidence review' : 'Cases and follow-through'} />
-        </> : <>
+        {workbench ? (
+          <ProfessionalWorkbench key={`${workbench.reportId}:${workbench.review}`} initialReportId={workbench.reportId} initialTab={workbench.review ? 'Evidence review' : 'Cases'} />
+        ) : <>
           <SubjectDossier />
           {portals.length > 0 && <AttentionFeed />}
           <section aria-label="Following" className="grid grid-cols-1 items-start gap-4 2xl:grid-cols-2">
@@ -108,39 +112,76 @@ export default function OverviewDashboard() {
             <StandingSearchPanel />
           </section>
           <ResearchWorkspace onReview={(reportId) => setWorkbench({ reportId, review: true })} />
-          <section className="app-panel flex flex-wrap items-center justify-between gap-3 p-4"><div><h3 className="text-sm font-semibold text-fg">Develop a lead into a durable case</h3><p className="mt-1 text-label leading-4 text-muted">Track requests, productions and commitments; reconcile spending; challenge the evidence.</p></div><button type="button" className="analysis-button" onClick={() => setWorkbench({ reportId: '', review: false })}>Open casework and research tools</button></section>
-        </>}
-        <ToolDrawer label="Shared language and topics across corpora"><CrossCorpusExplorer /></ToolDrawer>
-        <ToolDrawer label="Topics: encampments, belongings, police spending, public restrooms"><TopicPacks /></ToolDrawer>
-        <ToolDrawer label="Plan an investigation or draft a request manually"><InvestigationDesk /></ToolDrawer>
-        <ToolDrawer label="Collection, coverage and storage"><AutomaticDiscovery /><div className="mt-4"><DataMaintenance /></div><ResearchSnapshotExport /><RegistrySnapshots /></ToolDrawer>
-        <ToolDrawer label="Browse sources and add records"><SanDiegoWorkspace /></ToolDrawer>
 
-        {portals.length > 0 && <button type="button" onClick={() => setShowAnalytics((visible) => !visible)} aria-expanded={showAnalytics} className="secondary-action focus-ring rounded-xl border px-4 py-2 text-label leading-4 text-fg-secondary">{showAnalytics ? 'Hide response analytics' : 'Show response analytics'}</button>}
-        {showAnalytics && <>
-        <PeriodComparison activePortalKey={activePortalKey} />
+          {portals.length > 0 && (
+            <Panel aria-labelledby="response-analytics-title" className={cn(!showAnalytics && '[&>div:first-child]:border-b-0')}>
+              <PanelHeader
+                titleId="response-analytics-title"
+                title="Response analytics"
+                description={analyticsError && !analyticsUnavailable
+                  ? (analyticsUpdatedAt ? `Stale: the last refresh failed. Last updated ${formatRelativeTime(analyticsUpdatedAt)}.` : 'Analytics couldn’t be calculated.')
+                  : analyticsUpdatedAt ? `Updated ${formatRelativeTime(analyticsUpdatedAt)}` : 'How quickly and completely agencies answer requests.'}
+                actions={(
+                  <Button aria-expanded={showAnalytics} aria-controls="response-analytics-body" aria-label={showAnalytics ? 'Hide response analytics' : 'Show response analytics'} onClick={() => setShowAnalytics((visible) => !visible)}>
+                    {showAnalytics ? 'Hide' : 'Show'}
+                  </Button>
+                )}
+              />
+              {showAnalytics && (
+                <div id="response-analytics-body" className="motion-reveal space-y-4 p-5">
+                  {analyticsUnavailable ? <MetricsGrid /> : <>
+                    <PeriodComparison activePortalKey={activePortalKey} />
+                    <MetricsGrid />
+                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+                      <PerformanceScatter />
+                      <SignalSummary outlierDepartments={outlierDepartments} monitoredDepartments={monitoredDepartments} />
+                    </div>
+                    <section aria-label="Investigative analytics" className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-[1.15fr_.8fr_1.05fr]">
+                      <AnomalyRadar />
+                      <LifecycleFunnel />
+                      <div className="lg:col-span-2 2xl:col-span-1"><TemporalMap /></div>
+                    </section>
+                  </>}
+                </div>
+              )}
+            </Panel>
+          )}
 
-        <MetricsGrid />
-
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
-          <PerformanceScatter />
-          <SignalSummary criticalDepartments={criticalDepartments} monitoredDepartments={monitoredDepartments} />
-        </div>
-
-        <section aria-label="Investigative analytics" className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-[1.15fr_.8fr_1.05fr]">
-          <AnomalyRadar />
-          <LifecycleFunnel />
-          <div className="lg:col-span-2 2xl:col-span-1"><TemporalMap /></div>
-        </section>
+          <Panel aria-labelledby="more-tools-title">
+            <PanelHeader titleId="more-tools-title" title="More tools" />
+            <div className="divide-y divide-line px-5">
+              <div className="flex items-center justify-between gap-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-body font-medium text-fg">Develop a lead into a durable case</p>
+                  <p className="text-caption text-muted">Track requests, productions and commitments; reconcile spending; challenge the evidence.</p>
+                </div>
+                <Button onClick={openWorkbench}>Open casework and research tools</Button>
+              </div>
+              <ToolDrawer label="Discoveries across your library"><AutomaticDiscovery /></ToolDrawer>
+              <ToolDrawer label="Topic packs"><TopicPacks /></ToolDrawer>
+              <ToolDrawer label="Shared language across sources"><CrossCorpusExplorer /></ToolDrawer>
+              <ToolDrawer label="Plan an investigation or draft a request"><InvestigationDesk /></ToolDrawer>
+              <ToolDrawer label="Browse sources and add records"><SanDiegoWorkspace /></ToolDrawer>
+              <ToolDrawer label="Data upkeep and storage"><div className="space-y-6"><DataMaintenance /><ResearchSnapshotExport /><RegistrySnapshots /></div></ToolDrawer>
+            </div>
+          </Panel>
         </>}
       </div>
     </div>
   );
 }
 
+/** Mounted on first open and kept mounted, so a closed drawer keeps its drafts and filters. */
 function ToolDrawer({ label, children }: { label: string; children: ReactNode }) {
-  const [open, setOpen] = useState(false);
-  return <details className="app-panel p-4" onToggle={(event) => setOpen(event.currentTarget.open)}><summary className="focus-ring cursor-pointer rounded text-heading text-fg">{label}</summary>{open && <div className="mt-4">{children}</div>}</details>;
+  const [everOpened, setEverOpened] = useState(false);
+  return (
+    <details className="group" onToggle={(event) => { if (event.currentTarget.open) setEverOpened(true); }}>
+      <summary className="focus-ring flex h-12 cursor-pointer list-none items-center gap-2 rounded text-body font-medium text-fg [&::-webkit-details-marker]:hidden">
+        {label}
+      </summary>
+      {everOpened && <div className="pb-5 pt-1">{children}</div>}
+    </details>
+  );
 }
 
 function PeriodComparison({ activePortalKey }: { activePortalKey: string | null }) {
@@ -175,7 +216,28 @@ function PeriodComparison({ activePortalKey }: { activePortalKey: string | null 
 
   const currentSummary = summarizePeriod(current);
   const priorSummary = summarizePeriod(prior);
-  return <section className="app-panel flex flex-col gap-3 p-4 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between" aria-label="Response behavior period comparison"><div className="min-w-0"><div className="app-eyebrow">Period comparison</div><p className="mt-1 text-caption text-muted">Current interval versus the immediately preceding interval, based on request creation time.</p></div><label className="secondary-action w-fit rounded-lg border px-2.5 py-1.5 text-caption text-muted">Interval <select value={days} onChange={(event) => setDays(Number(event.target.value))} className="bg-transparent font-mono text-fg"><option value={7}>7 days</option><option value={30}>30 days</option><option value={90}>90 days</option><option value={365}>365 days</option></select></label>{error ? <div role="alert" className="text-caption text-danger">Comparison unavailable: {error}</div> : <div className="grid min-w-0 flex-1 basis-full gap-2 [grid-template-columns:repeat(auto-fit,minmax(7rem,1fr))] lg:basis-auto"><ComparisonMetric label="Requests" current={currentSummary.requests} prior={priorSummary.requests} loading={isLoading} /><ComparisonMetric label="Closure rate" current={currentSummary.closureRate} prior={priorSummary.closureRate} percent loading={isLoading} /><ComparisonMetric label="Deadline rate" current={currentSummary.violationRate} prior={priorSummary.violationRate} percent inverse loading={isLoading} /><ComparisonMetric label="Avg. closure days" current={currentSummary.averageClosureDays} prior={priorSummary.averageClosureDays} inverse loading={isLoading} /></div>}</section>;
+  return (
+    <section className="rounded-lg border border-line p-4" aria-label="Response behavior period comparison">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h4 className="text-body font-medium text-fg">Period comparison</h4>
+          <p className="mt-0.5 text-caption text-muted">This interval against the one before it, by request creation time.</p>
+        </div>
+        <Select size="sm" aria-label="Interval" value={days} onChange={(event) => setDays(Number(event.target.value))} className="w-auto tabular-nums">
+          <option value={7}>7 days</option><option value={30}>30 days</option><option value={90}>90 days</option><option value={365}>365 days</option>
+        </Select>
+      </div>
+      {error ? (
+        <InlineError className="mt-3" summary="The period comparison couldn’t be calculated." detail={error} />
+      ) : (
+        <div className="mt-3 grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(10rem,1fr))]">
+          <ComparisonMetric label="Closure rate" current={currentSummary.closureRate} prior={priorSummary.closureRate} percent loading={isLoading} />
+          <ComparisonMetric label="Missed statutory deadlines" current={currentSummary.violationRate} prior={priorSummary.violationRate} percent inverse loading={isLoading} />
+          <ComparisonMetric label="Avg. closure days" current={currentSummary.averageClosureDays} prior={priorSummary.averageClosureDays} inverse loading={isLoading} />
+        </div>
+      )}
+    </section>
+  );
 }
 
 function summarizePeriod(profiles: AgencyPerformanceProfile[]) {
@@ -189,23 +251,52 @@ function summarizePeriod(profiles: AgencyPerformanceProfile[]) {
 
 function ComparisonMetric({ label, current, prior, percent = false, inverse = false, loading = false }: { label: string; current: number | null; prior: number | null; percent?: boolean; inverse?: boolean; loading?: boolean }) {
   const delta = current === null || prior === null || prior === 0 ? null : (current - prior) / Math.abs(prior);
-  const favorable = delta === null ? null : inverse ? delta <= 0 : delta >= 0;
+  // An unchanged figure is neither better nor worse, so it takes no tone.
+  const favorable = delta === null || Math.abs(delta) < 0.0005 ? null : inverse ? delta < 0 : delta > 0;
   const format = (value: number) => percent ? `${(value * 100).toFixed(1)}%` : Number.isInteger(value) ? value.toLocaleString() : value.toFixed(1);
-  return <div className="min-w-0 rounded-lg border border-line bg-canvas/40 px-3 py-2"><div className="truncate text-caption text-muted" title={label}>{label}</div><div className="mt-1 break-words font-mono text-sm leading-tight text-fg">{loading ? '—' : current === null ? 'Not measured' : format(current)}</div><div className={favorable === null ? 'text-caption leading-tight text-muted' : favorable ? 'text-caption leading-tight text-success' : 'text-caption leading-tight text-warning'}>{loading ? 'Loading…' : delta === null ? 'No comparable prior baseline' : `${delta >= 0 ? '+' : ''}${(delta * 100).toFixed(1)}% vs prior`}</div></div>;
+  return (
+    <div className="min-w-0 rounded-md bg-raised/60 px-3 py-2">
+      <p className="truncate text-caption text-muted" title={label}>{label}</p>
+      {loading ? (
+        <div aria-hidden="true" className="mt-1 space-y-1.5"><div className="skeleton h-5 w-16 rounded" /><div className="skeleton h-3 w-24 rounded" /></div>
+      ) : (
+        <>
+          <p className={cn('mt-1 text-heading tabular-nums', current === null ? 'font-normal text-muted' : 'text-fg')}>{current === null ? 'Not measured' : format(current)}</p>
+          <p className={cn('text-caption tabular-nums', favorable === null ? 'text-muted' : favorable ? 'text-success' : 'text-warning')}>
+            {delta === null ? 'No comparable prior baseline' : favorable === null ? 'No change vs prior' : `${delta > 0 ? '+' : ''}${(delta * 100).toFixed(1)}% vs prior`}
+          </p>
+        </>
+      )}
+    </div>
+  );
 }
 
 function WorkspaceSourcesUnavailable({ detail }: { detail: string | null }) {
   const retry = useAppStore((state) => state.retryWorkspaceInitialization);
   return (
-    <InlineError
-      summary="Saved sources couldn't be loaded. Your sources may still be there; this is not a first-run workspace."
-      detail={detail ?? undefined}
-      onRetry={retry}
-    />
+    <section className="app-panel p-5" aria-labelledby="sources-unavailable-title">
+      <div className="flex items-start gap-3">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-raised text-fg-secondary"><Icon name="database" size="md" /></span>
+        <div className="min-w-0">
+          <h3 id="sources-unavailable-title" role="alert" className="text-heading text-fg">Your saved sources didn’t load</h3>
+          <p className="mt-1 max-w-prose text-body text-muted">
+            The local evidence store is busy or unavailable. Your sources and documents are not affected.
+          </p>
+          {detail && (
+            <details className="mt-2">
+              <summary className="text-caption text-muted">Technical details</summary>
+              <p className="mt-1 break-words font-mono text-code text-fg-secondary">{detail}</p>
+            </details>
+          )}
+          <Button size="sm" className="mt-3" onClick={retry}>Try again</Button>
+        </div>
+      </div>
+    </section>
   );
 }
 
-function SignalSummary({ criticalDepartments, monitoredDepartments }: { criticalDepartments: number; monitoredDepartments: number }) {
+
+function SignalSummary({ outlierDepartments, monitoredDepartments }: { outlierDepartments: number; monitoredDepartments: number }) {
   const profiles = useAppStore((state) => state.agencyProfiles);
   const analyticsError = useAppStore((state) => state.analyticsError);
   const activePortalKey = useAppStore((state) => state.activePortalKey);
@@ -223,6 +314,7 @@ function SignalSummary({ criticalDepartments, monitoredDepartments }: { critical
       .slice(0, 4),
     [activePortalKey, profiles],
   );
+  const unmeasured = analyticsError !== null && profiles.length === 0;
 
   const inspect = (portalKey: string, agencyId: number) => {
     setActivePortal(portalKey);
@@ -231,45 +323,46 @@ function SignalSummary({ criticalDepartments, monitoredDepartments }: { critical
   };
 
   return (
-    <aside className="app-panel flex min-h-[390px] flex-col overflow-hidden">
-      <div className="border-b border-line px-5 py-4">
-        <div className="app-eyebrow">Signal brief</div>
-        <h2 className="mt-1 text-label font-semibold text-fg">What needs attention</h2>
+    <aside aria-labelledby="signal-summary-title" className="flex min-h-[390px] flex-col overflow-hidden rounded-lg border border-line">
+      <div className="border-b border-line px-4 py-3">
+        <h4 id="signal-summary-title" className="text-body font-medium text-fg">Departments to look at first</h4>
       </div>
-      <div className="grid grid-cols-2 gap-px border-b border-line bg-raised/70">
-        <div className="bg-surface/70 p-4">
-          <div className="font-mono text-2xl font-semibold text-danger">{analyticsError && profiles.length === 0 ? '—' : criticalDepartments}</div>
-          <div className="mt-1 text-caption uppercase tracking-wider text-muted">Critical outliers</div>
+      <dl className="grid grid-cols-2 divide-x divide-line border-b border-line">
+        <div className="p-4">
+          <dt className="text-caption text-muted">Outliers (≥2σ)</dt>
+          <dd className={cn('mt-1 text-metric tabular-nums', unmeasured ? 'text-body text-muted' : 'text-fg')}>{unmeasured ? 'Not measured' : outlierDepartments}</dd>
         </div>
-        <div className="bg-surface/70 p-4">
-          <div className="font-mono text-2xl font-semibold text-accent">{analyticsError && profiles.length === 0 ? '—' : monitoredDepartments}</div>
-          <div className="mt-1 text-caption uppercase tracking-wider text-muted">Departments mapped</div>
+        <div className="p-4">
+          <dt className="text-caption text-muted">Departments mapped</dt>
+          <dd className={cn('mt-1 text-metric tabular-nums', unmeasured ? 'text-body text-muted' : 'text-fg')}>{unmeasured ? 'Not measured' : monitoredDepartments}</dd>
         </div>
-      </div>
-      <div className="min-h-0 flex-1 p-4">
+      </dl>
+      <div className="min-h-0 flex-1 p-3">
         {priority.length === 0 && analyticsError ? (
-          <AnalyticsUnavailable heading="Signal brief unavailable" />
+          <AnalyticsUnavailable heading="Department summary unavailable" />
         ) : priority.length === 0 ? (
-          <div className="grid h-full min-h-40 place-items-center rounded-xl border border-dashed border-line bg-canvas/40 p-4 text-center">
+          <div className="grid h-full min-h-40 place-items-center p-4 text-center">
             <div>
-              <Icon name="shield" className="mx-auto h-5 w-5 text-muted" />
-              <p className="mt-2 text-label font-medium text-muted">No risk signals to summarize yet</p>
-              <p className="mt-1 text-caption leading-relaxed text-muted">The brief updates as agency profiles are calculated.</p>
+              <p className="text-body font-medium text-fg-secondary">No department profiles yet</p>
+              <p className="mt-1 text-caption text-muted">This updates as agency profiles are calculated.</p>
             </div>
           </div>
         ) : (
-          <div className="space-y-2">
+          <ul className="space-y-1">
             {priority.map((profile) => (
-              <button key={`${profile.portalSubdomain}-${profile.agencyId}`} type="button" onClick={() => inspect(profile.portalSubdomain, profile.agencyId)} className="focus-ring group flex w-full items-center gap-3 rounded-xl border border-control bg-canvas/40 px-3 py-3 text-left transition hover:border-warning/30 hover:bg-warning/5">
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-warning/10 font-mono text-label font-semibold text-warning">{profile.statutoryViolationCount}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-label font-medium text-fg-secondary">{profile.agencyName}</span>
-                  <span className="mt-0.5 block text-caption text-muted">{profile.suspiciousFastClosureCount} rapid closures · z {profile.performanceZScore === null ? 'not computed' : profile.performanceZScore.toFixed(1)}</span>
-                </span>
-                <Icon name="chevron" className="h-3 w-3 text-muted transition group-hover:translate-x-0.5 group-hover:text-warning" />
-              </button>
+              <li key={`${profile.portalSubdomain}-${profile.agencyId}`}>
+                <button type="button" onClick={() => inspect(profile.portalSubdomain, profile.agencyId)} className="focus-ring group flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors duration-fast hover:bg-raised">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-body font-medium text-fg">{profile.agencyName}</span>
+                    <span className="mt-0.5 block text-caption tabular-nums text-muted">
+                      {profile.statutoryViolationCount} counted deadline violation{profile.statutoryViolationCount === 1 ? '' : 's'} · {profile.suspiciousFastClosureCount} fast closure{profile.suspiciousFastClosureCount === 1 ? '' : 's'} · {profile.performanceZScore === null ? 'deviation not measured' : `${profile.performanceZScore >= 0 ? '+' : ''}${profile.performanceZScore.toFixed(1)}σ vs peers`}
+                    </span>
+                  </span>
+                  <Icon name="chevron" size="xs" className="text-muted group-hover:text-fg-secondary" />
+                </button>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </div>
     </aside>

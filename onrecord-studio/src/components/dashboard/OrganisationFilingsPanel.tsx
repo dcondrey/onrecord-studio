@@ -12,6 +12,10 @@ import { contractFileRequest } from '../../utils/organisationRequests';
 import { peopleAcrossReturns, yearChange } from '../../utils/organisationPeople';
 import { guidanceForSubject } from '../../utils/sourceGuidance';
 import { useAppStore } from '../../store/useAppStore';
+import Button from '../ui/Button';
+import InlineError from '../ui/InlineError';
+import Time from '../ui/Time';
+import { Field, Input, Select, Textarea } from '../ui/Field';
 
 const dollars = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const NOT_STATED = 'not stated';
@@ -35,7 +39,7 @@ let tableSequence = 0;
 // The caption sits outside the scrolling container so a wide table does not clip it on a phone.
 function Table({ caption, head, rows }: { caption: string; head: string[]; rows: ReactNode[][] }) {
   const [id] = useState(() => `organisation-table-${++tableSequence}`);
-  return <div><p id={id} className="pb-1 text-label leading-4 text-muted">{caption}</p><div className="overflow-x-auto"><table aria-labelledby={id} className="w-full text-left text-label leading-4">
+  return <div><p id={id} className="pb-1 text-body text-muted">{caption}</p><div className="overflow-x-auto"><table aria-labelledby={id} className="w-full text-left text-body">
     <thead><tr>{head.map((label) => <th key={label} scope="col" className="pr-4 pb-1 font-normal text-muted">{label}</th>)}</tr></thead>
     <tbody>{rows.map((row, index) => <tr key={index} className="border-t border-line-strong align-top">{row.map((cell, at) => <td key={at} className="pr-4 py-1 text-fg-secondary">{cell}</td>)}</tr>)}</tbody>
   </table></div></div>;
@@ -43,7 +47,7 @@ function Table({ caption, head, rows }: { caption: string; head: string[]; rows:
 
 function Explanations({ items }: { items: FilingExplanation[] }) {
   if (!items.length) return null;
-  return <div className="space-y-2">{items.map((item, index) => <blockquote key={index} className="border-l-2 border-line-strong pl-3 text-label leading-4 text-fg-secondary">
+  return <div className="space-y-2">{items.map((item, index) => <blockquote key={index} className="border-l-2 border-line-strong pl-3 text-body text-fg-secondary">
     <p className="whitespace-pre-wrap break-words">{item.text}</p>
     <footer className="mt-1 text-muted">The filer's explanation{item.lineReference ? `, ${item.lineReference}` : ''}</footer>
   </blockquote>)}</div>;
@@ -53,34 +57,34 @@ function Statement({ statement }: { statement: Form990Statement }) {
   const listed = statement.people.filter((person) => person.former || (person.reportableCompensation ?? 0) > 0 || (person.relatedOrganisationCompensation ?? 0) > 0 || (person.otherCompensation ?? 0) > 0);
   const unpaid = statement.people.length - listed.length;
   return <div className="mt-3 space-y-4">
-    <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-label leading-4 sm:grid-cols-3">
+    <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-body sm:grid-cols-3">
       {([['Total revenue', statement.totalRevenue], ['Total expenses', statement.totalExpenses], ['Total assets, end of year', statement.totalAssetsEndOfYear], ['Total liabilities, end of year', statement.totalLiabilitiesEndOfYear], ['Net assets, end of year', statement.netAssetsEndOfYear], ['Government grants', statement.governmentGrants], ['Reportable compensation, Part VII total', statement.totalReportableCompensation]] as const)
         .map(([label, value]) => <div key={label}><dt className="text-muted">{label}</dt><dd className="text-fg">{money(value)}</dd></div>)}
     </dl>
-    <div className="text-label leading-4 text-fg-secondary">
-      <p><span className="text-muted">Part VI line 5, whether the organisation became aware of a significant diversion of its assets during the year:</span> {answer(statement.significantDiversionReported)}</p>
+    <div className="text-body text-fg-secondary">
+      <p><span className="text-muted">Part VI line 5, whether the organization became aware of a significant diversion of its assets during the year:</span> {answer(statement.significantDiversionReported)}</p>
       <p><span className="text-muted">Part VII line 3, whether a former officer, director, trustee, key employee or highest compensated employee is listed:</span> {answer(statement.formerListed)}</p>
       {statement.amended === true && <p>The return is marked as amended.</p>}
     </div>
     {listed.length > 0 && <Table caption={`Part VII Section A: people the return lists as former or with compensation.${unpaid > 0 ? ` ${unpaid} more are listed with none.` : ''}`}
-      head={['Name', 'Title', 'Position boxes checked', 'From the organisation', 'From related organisations', 'Other compensation']}
+      head={['Name', 'Title', 'Position boxes checked', 'From the organization', 'From related organizations', 'Other compensation']}
       rows={listed.map((person) => [person.name ?? NOT_STATED, person.title ?? NOT_STATED, person.positions.join(', ') || 'none', money(person.reportableCompensation), money(person.relatedOrganisationCompensation), money(person.otherCompensation)])} />}
     {statement.scheduleJAttached ? <div className="space-y-2">
-      <p className="text-label leading-4 text-fg-secondary"><span className="text-muted">Schedule J Part I line 4a, whether a listed person received a severance or change-of-control payment:</span> {answer(statement.severancePaymentReported)}</p>
-      {statement.scheduleJPeople.length > 0 && <Table caption="Schedule J Part II: compensation from the filing organisation, as the return reports it."
-        head={['Name', 'Title', 'Base', 'Bonus and incentive', 'Other reportable', 'Deferred', 'Nontaxable benefits', 'Total', 'Total from related organisations']}
+      <p className="text-body text-fg-secondary"><span className="text-muted">Schedule J Part I line 4a, whether a listed person received a severance or change-of-control payment:</span> {answer(statement.severancePaymentReported)}</p>
+      {statement.scheduleJPeople.length > 0 && <Table caption="Schedule J Part II: compensation from the filing organization, as the return reports it."
+        head={['Name', 'Title', 'Base', 'Bonus and incentive', 'Other reportable', 'Deferred', 'Nontaxable benefits', 'Total', 'Total from related organizations']}
         rows={statement.scheduleJPeople.map((person) => [person.name ?? NOT_STATED, person.title ?? NOT_STATED, money(person.filingOrganisation.base), money(person.filingOrganisation.bonus), money(person.filingOrganisation.other), money(person.filingOrganisation.deferred), money(person.filingOrganisation.nontaxableBenefits), money(person.filingOrganisation.total), money(person.relatedOrganisations.total)])} />}
       <Explanations items={statement.scheduleJExplanations} />
-    </div> : <p className="text-label leading-4 text-muted">No Schedule J is attached to this return, so it carries no severance answer.</p>}
+    </div> : <p className="text-body text-muted">No Schedule J is attached to this return, so it carries no severance answer.</p>}
     {statement.scheduleLAttached ? <div className="space-y-2">
       {statement.scheduleLTransactions.length > 0 ? <Table caption="Schedule L: transactions with interested persons, as the return reports them."
         head={['Part of the schedule', 'Name', 'Relationship', 'Description', 'Amount', 'Balance due', 'Other columns']}
         rows={statement.scheduleLTransactions.map((row) => [SCHEDULE_L_PARTS[row.part], row.name ?? NOT_STATED, row.relationship ?? NOT_STATED, row.description ?? NOT_STATED, money(row.amount), row.part === 'LOAN' ? money(row.balanceDue) : '', row.lines.map((line) => `${line.label}: ${line.value}`).join('; ')])} />
-        : <p className="text-label leading-4 text-muted">A Schedule L is attached and lists no transaction rows.</p>}
+        : <p className="text-body text-muted">A Schedule L is attached and lists no transaction rows.</p>}
       <Explanations items={statement.scheduleLExplanations} />
-    </div> : <p className="text-label leading-4 text-muted">No Schedule L is attached to this return.</p>}
+    </div> : <p className="text-body text-muted">No Schedule L is attached to this return.</p>}
     {statement.scheduleOExplanations.length > 0 && <details open={statement.significantDiversionReported === true}>
-      <summary className="text-label leading-4 text-accent">Schedule O: the filer's explanations ({statement.scheduleOExplanations.length}){statement.significantDiversionReported === true ? '. The form requires one here for the Yes on Part VI line 5.' : ''}</summary>
+      <summary className="text-body text-accent">Schedule O: the filer's explanations ({statement.scheduleOExplanations.length}){statement.significantDiversionReported === true ? '. The form requires one here for the Yes on Part VI line 5.' : ''}</summary>
       <div className="mt-2"><Explanations items={statement.scheduleOExplanations} /></div>
     </details>}
   </div>;
@@ -88,10 +92,10 @@ function Statement({ statement }: { statement: Form990Statement }) {
 
 function ReturnCard({ listed }: { listed: OrganisationReturn }) {
   return <article className="rounded-lg border border-line-strong p-3" aria-label={`Form ${listed.returnType}, tax period ${period(listed.taxPeriod)}`}>
-    <h4 className="text-sm font-semibold text-fg">Form {listed.returnType}, tax period ending {period(listed.taxPeriod)}</h4>
-    <p className="text-label leading-4 text-muted">Filed as {listed.taxpayerName}. IRS e-file index {listed.indexYear}, return {listed.objectId}.</p>
-    {listed.statement ? <Statement statement={listed.statement} /> : <p className="mt-2 text-label leading-4 text-warning">Not read: {listed.unreadReason ?? 'no reason recorded.'}</p>}
-    {listed.archiveUrl && <details className="mt-3 text-label leading-4 text-muted"><summary>Where this return was read</summary>
+    <h4 className="text-body font-medium text-fg">Form {listed.returnType}, tax period ending {period(listed.taxPeriod)}</h4>
+    <p className="text-body text-muted">Filed as {listed.taxpayerName}. IRS e-file index {listed.indexYear}, return {listed.objectId}.</p>
+    {listed.statement ? <Statement statement={listed.statement} /> : <p className="mt-2 text-body text-warning">Not read: {listed.unreadReason ?? 'no reason recorded.'}</p>}
+    {listed.archiveUrl && <details className="mt-3 text-body text-muted"><summary>Where this return was read</summary>
       <p className="break-all">Archive: <a className="text-accent underline" href={listed.archiveUrl} target="_blank" rel="noreferrer">{listed.archiveUrl}</a></p>
       <p className="break-all">Member: {listed.memberName}</p>
       {listed.xmlSha256 && <p className="break-all">SHA-256 of the return as read: {listed.xmlSha256}{listed.retrievedAt ? `, retrieved ${listed.retrievedAt.slice(0, 10)}` : ''}</p>}
@@ -100,17 +104,17 @@ function ReturnCard({ listed }: { listed: OrganisationReturn }) {
 }
 
 function Audits({ history }: { history: SingleAuditHistory | null }) {
-  if (!history) return <p className="text-label leading-4 text-muted">No single-audit lookup has run. Enter a Federal Audit Clearinghouse key above and check again.</p>;
-  if (!history.audits.length) return <p className="text-label leading-4 text-muted">The Federal Audit Clearinghouse lists no single audit under this EIN (retrieved {history.retrievedAt.slice(0, 10)}).</p>;
+  if (!history) return <p className="text-body text-muted">No single-audit lookup has run. Enter a Federal Audit Clearinghouse key above and check again.</p>;
+  if (!history.audits.length) return <p className="text-body text-muted">The Federal Audit Clearinghouse lists no single audit under this EIN (retrieved {history.retrievedAt.slice(0, 10)}).</p>;
   return <div className="space-y-2">
-    {history.audits.map((audit) => <details key={audit.reportId} className="rounded-lg border border-line-strong p-3 text-label leading-4">
+    {history.audits.map((audit) => <details key={audit.reportId} className="rounded-lg border border-line-strong p-3 text-body">
       <summary className="text-fg">Audit year {audit.auditYear ?? NOT_STATED}: federal awards expended {money(audit.federalAmountExpended)}; {audit.findings.length} finding {audit.findings.length === 1 ? 'row' : 'rows'} recorded</summary>
       <p className="mt-2 text-muted">Report {audit.reportId}{audit.fiscalYearEnd ? `, fiscal year ending ${audit.fiscalYearEnd}` : ''}{audit.auditor ? `, auditor ${audit.auditor}` : ''}{audit.acceptedDate ? `, accepted ${audit.acceptedDate}` : ''}.</p>
       <ul className="mt-2 list-disc pl-5 text-fg-secondary">{audit.lines.map((line) => <li key={line.label}>{line.label}: {line.value}</li>)}</ul>
       {audit.findings.length > 0 && <Table caption="Findings as the audit submission records them." head={['Reference', 'Compliance requirement', 'Recorded answers']}
         rows={audit.findings.map((finding) => [finding.referenceNumber ?? NOT_STATED, finding.complianceRequirement ?? NOT_STATED, finding.lines.map((line) => `${line.label}: ${line.value}`).join('; ')])} />}
     </details>)}
-    <p className="text-label leading-4 text-muted">Source: <a className="text-accent underline" href={history.sourceUrl} target="_blank" rel="noreferrer">Federal Audit Clearinghouse</a>, retrieved {history.retrievedAt.slice(0, 10)}. An audit finding is the auditor's statement about the audited year.</p>
+    <p className="text-body text-muted">Source: <a className="text-accent underline" href={history.sourceUrl} target="_blank" rel="noreferrer">Federal Audit Clearinghouse</a>, retrieved {history.retrievedAt.slice(0, 10)}. An audit finding is the auditor's statement about the audited year.</p>
   </div>;
 }
 
@@ -168,41 +172,41 @@ function Library({ filings }: { filings: OrganisationFilings }) {
     if (!custodian || !name) return;
     const request = actionGate.begin();
     invokeCommand('start_data_source', { url: custodian.registration.originUrl, guidance: guidanceForSubject(name) })
-      .then(() => { if (actionGate.isCurrent(request)) setMessage(`Collection started from ${custodian.registration.displayName} for "${name}"; the source is listed in the sidebar. The lists above are read again when you reopen this organisation.`); }, (reason) => { if (actionGate.isCurrent(request)) setMessage(formatNativeError(reason)); });
+      .then(() => { if (actionGate.isCurrent(request)) setMessage(`Collection started from ${custodian.registration.displayName} for "${name}"; the source is listed in the sidebar. The lists above are read again when you reopen this organization.`); }, (reason) => { if (actionGate.isCurrent(request)) setMessage(formatNativeError(reason)); });
   };
   const date = (value: string | null) => value ? value.slice(0, 10) : '';
   const trackedRequest = tracked.status === 'ready' ? tracked.value : undefined;
   return <section aria-label="In your library" className="space-y-3">
-    <h3 className="text-sm font-semibold text-fg">In your library</h3>
-    {notes.map((note) => <p key={note} className="text-label leading-4 text-warning">{note}</p>)}
-    {name && documents === undefined && <p role="status" className="text-label leading-4 text-muted">Searching your library for this name…</p>}
+    <h3 className="text-heading text-fg">In your library</h3>
+    {notes.map((note) => <p key={note} className="text-body text-warning">{note}</p>)}
+    {name && documents === undefined && <p role="status" className="text-body text-muted">Searching your library for this name…</p>}
     <div className="grid gap-4 sm:grid-cols-2">
       <div>
-        <h4 className="text-label leading-4 text-muted">Documents that mention the name{documents ? ` (${documents.length}${documents.length === 10 ? ', first 10' : ''})` : ''}</h4>
-        {documents?.length === 0 && <p className="text-label leading-4 text-muted">None of the collected documents mentions this name.</p>}
-        <ul className="mt-1 space-y-2">{(documents ?? []).map((hit) => <li key={hit.stableId} className="text-label leading-4"><span className="text-fg">{hit.title || hit.fileName}</span><span className="text-muted"> · {hit.agencyName}{hit.publicationDate ? ` · ${date(hit.publicationDate)}` : ''}</span>{hit.excerpt && <blockquote className="mt-1 border-l-2 border-line-strong pl-2 text-fg-secondary">{hit.excerpt}</blockquote>}</li>)}</ul>
+        <h4 className="text-body text-muted">Documents that mention the name{documents ? ` (${documents.length}${documents.length === 10 ? ', first 10' : ''})` : ''}</h4>
+        {documents?.length === 0 && <p className="text-body text-muted">None of the collected documents mentions this name.</p>}
+        <ul className="mt-1 space-y-2">{(documents ?? []).map((hit) => <li key={hit.stableId} className="text-body"><span className="text-fg">{hit.title || hit.fileName}</span><span className="text-muted"> · {hit.agencyName}{hit.publicationDate ? ` · ${date(hit.publicationDate)}` : ''}</span>{hit.excerpt && <blockquote className="mt-1 border-l-2 border-line-strong pl-2 text-fg-secondary">{hit.excerpt}</blockquote>}</li>)}</ul>
       </div>
       <div>
-        <h4 className="text-label leading-4 text-muted">Held requests that mention the name{requests ? ` (${requests.length}${requests.length === 10 ? ', first 10' : ''})` : ''}</h4>
-        {requests?.length === 0 && <p className="text-label leading-4 text-muted">No held request mentions this name.</p>}
-        <ul className="mt-1 space-y-1">{(requests ?? []).map((held) => <li key={`${held.portalKey}:${held.requestId}`} className="text-label leading-4"><span className="text-fg">{held.title}</span><span className="text-muted"> · {held.agencyName} · {held.status} · {date(held.createdAt)}</span></li>)}</ul>
+        <h4 className="text-body text-muted">Held requests that mention the name{requests ? ` (${requests.length}${requests.length === 10 ? ', first 10' : ''})` : ''}</h4>
+        {requests?.length === 0 && <p className="text-body text-muted">No held request mentions this name.</p>}
+        <ul className="mt-1 space-y-1">{(requests ?? []).map((held) => <li key={`${held.portalKey}:${held.requestId}`} className="text-body"><span className="text-fg">{held.title}</span><span className="text-muted"> · {held.agencyName} · {held.status} · {date(held.createdAt)}</span></li>)}</ul>
       </div>
     </div>
     <div className="rounded-lg border border-line-strong p-3 space-y-2">
-      <h4 className="text-label leading-4 text-fg">The contract file</h4>
-      <p className="text-label leading-4 text-muted">Filings and payment rows do not show what an agency contracted for, paid against, or found in monitoring. Choose the agency, then either collect what its request portal already released under this name, or track a drafted request for its contract file; you review and file it yourself.</p>
-      <label className="text-label leading-4 text-fg-secondary">Agency<select className="analysis-input ml-2" value={custodianKey} onChange={(event) => { actionGate.invalidate(); setCustodianKey(event.target.value); setMessage(''); }}><option value="">Choose a saved source</option>{portals.map((portal) => <option key={portal.registration.portalKey} value={portal.registration.portalKey}>{portal.registration.displayName}</option>)}</select></label>
-      {portals.length === 0 && <p className="text-label leading-4 text-muted">No source is saved yet; add the agency's request portal in the sidebar first.</p>}
-      {custodian && name && <button type="button" className="analysis-button" onClick={collect}>Search {custodian.registration.displayName} for this name</button>}
-      {input && <details className="text-label leading-4"><summary className="text-accent">Drafted request</summary><pre className="mt-2 whitespace-pre-wrap text-fg-secondary">{input.draft}</pre></details>}
+      <h4 className="text-body text-fg">The contract file</h4>
+      <p className="text-body text-muted">Filings and payment rows do not show what an agency contracted for, paid against, or found in monitoring. Choose the agency, then either collect what its request portal already released under this name, or track a drafted request for its contract file; you review and file it yourself.</p>
+      <Select label="Agency" className="w-64" value={custodianKey} onChange={(event) => { actionGate.invalidate(); setCustodianKey(event.target.value); setMessage(''); }}><option value="">Choose a saved source</option>{portals.map((portal) => <option key={portal.registration.portalKey} value={portal.registration.portalKey}>{portal.registration.displayName}</option>)}</Select>
+      {portals.length === 0 && <p className="text-body text-muted">No source is saved yet; add the agency's request portal in the sidebar first.</p>}
+      {custodian && name && <Button size="sm" onClick={collect}>Search {custodian.registration.displayName} for this name</Button>}
+      {input && <details className="text-body"><summary className="text-accent">Drafted request</summary><pre className="mt-2 whitespace-pre-wrap text-fg-secondary">{input.draft}</pre></details>}
       {input && (tracked.status === 'reading'
-        ? <p role="status" className="text-label leading-4 text-muted">Checking whether this request is already tracked…</p>
+        ? <p role="status" className="text-body text-muted">Checking whether this request is already tracked…</p>
         : tracked.status === 'failed'
-          ? <p role="alert" className="text-label leading-4 text-warning">Whether this request is already tracked could not be read: {tracked.message}</p>
+          ? <p role="alert" className="text-body text-warning">Whether this request is already tracked could not be read: {tracked.message}</p>
           : trackedRequest
-            ? <p className="text-label leading-4 text-fg-secondary">Tracked as a casework request{trackedRequest.submittedAt ? `, submitted ${date(trackedRequest.submittedAt)}` : '; no submission date is recorded yet'}. <button type="button" className="text-accent underline" onClick={() => useAppStore.getState().openCasework(trackedRequest.reportId)}>Open casework</button></p>
-            : <button type="button" className="analysis-button" onClick={track}>Track this request</button>)}
-      {message && <p role="status" className="text-label leading-4 text-muted">{message}</p>}
+            ? <p className="text-body text-fg-secondary">Tracked as a casework request{trackedRequest.submittedAt ? `, submitted ${date(trackedRequest.submittedAt)}` : '; no submission date is recorded yet'}. <button type="button" className="text-accent underline" onClick={() => useAppStore.getState().openCasework(trackedRequest.reportId)}>Open casework</button></p>
+            : <Button size="sm" onClick={track}>Track this request</Button>)}
+      {message && <p role="status" className="text-body text-muted">{message}</p>}
     </div>
   </section>;
 }
@@ -214,8 +218,8 @@ function People({ filings }: { filings: OrganisationFilings }) {
   if (people.length === 0) return null;
   const periods = [...new Set(people.flatMap((p) => p.years.map((y) => y.period)))].sort().reverse();
   return <section aria-label="People across returns" className="space-y-2">
-    <h3 className="text-sm font-semibold text-fg">People across the read returns</h3>
-    <Table caption="Everyone Part VII or Schedule J lists on any read return, with reportable compensation from the organisation per return (Schedule J total in brackets where listed). An empty cell is a return that does not list the person; &quot;former&quot; is the box the return checked."
+    <h3 className="text-heading text-fg">People across the read returns</h3>
+    <Table caption="Everyone Part VII or Schedule J lists on any read return, with reportable compensation from the organization per return (Schedule J total in brackets where listed). An empty cell is a return that does not list the person; &quot;former&quot; is the box the return checked."
       head={['Name', 'Title (latest)', ...periods]}
       rows={people.map((p) => [p.name, p.years[0].title ?? NOT_STATED, ...periods.map((period) => {
         const year = p.years.find((y) => y.period === period);
@@ -228,33 +232,33 @@ function People({ filings }: { filings: OrganisationFilings }) {
 
 function Record({ filings }: { filings: OrganisationFilings }) {
   return <div className="space-y-5">
-    {filings.warnings.length > 0 && <ul role="alert" className="list-disc pl-5 text-label leading-4 text-warning">{filings.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
+    {filings.warnings.length > 0 && <ul role="alert" className="list-disc pl-5 text-body text-warning">{filings.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
     <section aria-label="Returns as filed" className="space-y-3">
-      <h3 className="text-sm font-semibold text-fg">Returns as filed</h3>
-      <p className="text-label leading-4 text-muted">Read from the IRS e-file archives for index years {filings.indexYears.map((check) => check.year).join(', ') || 'none'}. Each figure and answer is the organisation's own statement on its return. Earlier years' returns are not read; the summary below covers them.</p>
-      {filings.returns.length ? filings.returns.map((listed) => <ReturnCard key={listed.objectId} listed={listed} />) : <p className="text-label leading-4 text-muted">The IRS indexes that were read list no e-filed return under this EIN.</p>}
+      <h3 className="text-heading text-fg">Returns as filed</h3>
+      <p className="text-body text-muted">Read from the IRS e-file archives for index years {filings.indexYears.map((check) => check.year).join(', ') || 'none'}. Each figure and answer is the organization's own statement on its return. Earlier years' returns are not read; the summary below covers them.</p>
+      {filings.returns.length ? filings.returns.map((listed) => <ReturnCard key={listed.objectId} listed={listed} />) : <p className="text-body text-muted">The IRS indexes that were read list no e-filed return under this EIN.</p>}
     </section>
     <People filings={filings} />
     <section aria-label="Summary by year" className="space-y-2">
-      <h3 className="text-sm font-semibold text-fg">Summary by year</h3>
+      <h3 className="text-heading text-fg">Summary by year</h3>
       {filings.summary ? <>
         {filings.summary.years.length > 0 ? <Table caption="Figures extracted from each year's return. The change column is the difference from the year before, shown only when both years state the figure." head={['Tax year', 'Form', 'Total revenue', 'Change', 'Total expenses', 'Change', 'Total assets', 'Total liabilities', 'Compensation of current officers']}
           rows={filings.summary.years.map((year, index) => [String(year.taxYear), year.formType ?? NOT_STATED, money(year.totalRevenue), signed(yearChange(filings.summary!.years, index, (y) => y.totalRevenue)), money(year.totalExpenses), signed(yearChange(filings.summary!.years, index, (y) => y.totalExpenses)), money(year.totalAssetsEndOfYear), money(year.totalLiabilitiesEndOfYear), money(year.officerCompensation)])} />
-          : <p className="text-label leading-4 text-muted">The source holds no extracted year for this organisation.</p>}
-        <p className="text-label leading-4 text-muted">Source: <a className="text-accent underline" href={filings.summary.sourceUrl} target="_blank" rel="noreferrer">ProPublica Nonprofit Explorer</a>, from IRS extracts, retrieved {filings.summary.retrievedAt.slice(0, 10)}.</p>
-      </> : <p className="text-label leading-4 text-muted">No summary was read.</p>}
+          : <p className="text-body text-muted">The source holds no extracted year for this organization.</p>}
+        <p className="text-body text-muted">Source: <a className="text-accent underline" href={filings.summary.sourceUrl} target="_blank" rel="noreferrer">ProPublica Nonprofit Explorer</a>, from IRS extracts, retrieved {filings.summary.retrievedAt.slice(0, 10)}.</p>
+      </> : <p className="text-body text-muted">No summary was read.</p>}
     </section>
     <section aria-label="Single audits" className="space-y-2">
-      <h3 className="text-sm font-semibold text-fg">Single audits of federal money</h3>
+      <h3 className="text-heading text-fg">Single audits of federal money</h3>
       <Audits history={filings.singleAudits} />
     </section>
     <Library filings={filings} />
     <section aria-label="Public money in your library" className="space-y-2">
-      <h3 className="text-sm font-semibold text-fg">Public money in your library</h3>
-      {filings.publicMoney.length > 0 && <Table caption="Rows of your mapped contract, amendment and payment tables whose vendor value contains this organisation's name. The tables carry no EIN, so confirm each vendor value is this organisation."
+      <h3 className="text-heading text-fg">Public money in your library</h3>
+      {filings.publicMoney.length > 0 && <Table caption="Rows of your mapped contract, amendment and payment tables whose vendor value contains this organization's name. The tables carry no EIN, so confirm each vendor value is this organization."
         head={['Record', 'Table', 'Vendor as written', 'Fiscal year', 'Rows', 'Amount']}
         rows={filings.publicMoney.map((line) => [line.role, line.sourceUrl ? <a className="text-accent underline" href={line.sourceUrl} target="_blank" rel="noreferrer">{line.datasetName}</a> : line.datasetName, line.vendorValue, line.fiscalYear ?? NOT_STATED, String(line.rows), line.amount === null ? 'not summed: an amount could not be read' : decimalMoney(line.amount)])} />}
-      {filings.publicMoneyNotes.map((note) => <p key={note} className="text-label leading-4 text-muted">{note}</p>)}
+      {filings.publicMoneyNotes.map((note) => <p key={note} className="text-body text-muted">{note}</p>)}
     </section>
   </div>;
 }
@@ -319,27 +323,27 @@ function BatchCheck({ auditKey, onDone }: { auditKey: string; onDone: () => void
   };
   const choose = (entry: string, ein: string) => setResolutions((current) => current?.map((r) => r.entry === entry ? { ...r, chosen: r.candidates.find((c) => c.ein === ein) ?? null } : r));
   return <details className="rounded-lg border border-line-strong p-3">
-    <summary className="text-label leading-4 text-accent">Check a list of organisations</summary>
+    <summary className="text-body text-accent">Check a list of organizations</summary>
     <form className="mt-2 space-y-2" onSubmit={(event) => { event.preventDefault(); void start(); }}>
-      <label className="block text-label leading-4 text-fg-secondary">Organisation names or EINs, one per line
-        <textarea className="analysis-input mt-1 block w-full" rows={4} value={text} onChange={(event) => setText(event.target.value)} placeholder={'Alpha Project for the Homeless\n33-0492302'} /></label>
+      <label className="block text-body text-fg-secondary">Organization names or EINs, one per line
+        <Textarea className="mt-1.5" rows={4} value={text} onChange={(event) => setText(event.target.value)} placeholder={'Alpha Project for the Homeless\n33-0492302'} /></label>
       <div className="flex flex-wrap items-center gap-3">
-        <button type="button" className="analysis-button" disabled={busy !== ''} onClick={addPayees}>{busy === 'payees' ? 'Reading payees' : 'Add payees from your payment tables'}</button>
-        <button type="button" className="analysis-button" disabled={busy !== '' || names.length === 0} onClick={() => { void lookUp(); }}>{busy === 'lookup' ? 'Looking up' : `Look up ${names.length} ${names.length === 1 ? 'name' : 'names'}`}</button>
-        <button type="submit" className="analysis-button" disabled={busy !== '' || targets.length === 0}>{busy === 'check' ? 'Checking' : `Check ${targets.length} ${targets.length === 1 ? 'organisation' : 'organisations'}`}</button>
-        {progress && <p role="status" className="text-label leading-4 text-muted">{progress.done} of {progress.total} checked{progress.failed.length ? `, ${progress.failed.length} failed` : ''}.</p>}
+        <Button size="sm" disabled={busy !== ''} onClick={addPayees}>{busy === 'payees' ? 'Reading payees' : 'Add payees from your payment tables'}</Button>
+        <Button size="sm" disabled={busy !== '' || names.length === 0} onClick={() => { void lookUp(); }}>{busy === 'lookup' ? 'Looking up' : `Look up ${names.length} ${names.length === 1 ? 'name' : 'names'}`}</Button>
+        <Button type="submit" size="sm" disabled={busy !== '' || targets.length === 0}>{busy === 'check' ? 'Checking' : `Check ${targets.length} ${targets.length === 1 ? 'organization' : 'organizations'}`}</Button>
+        {progress && <p role="status" className="text-body text-muted">{progress.done} of {progress.total} checked{progress.failed.length ? `, ${progress.failed.length} failed` : ''}.</p>}
       </div>
-      {error && <p role="alert" className="text-label leading-4 text-warning">{error}</p>}
-      {names.length > 0 && (stale || !resolutions) && <p className="text-label leading-4 text-muted">{names.length} {names.length === 1 ? 'name needs' : 'names need'} looking up before they can be checked.</p>}
-      {resolutions && !stale && <ul aria-label="Name lookups" className="space-y-1 text-label leading-4">{resolutions.map((r) => <li key={r.entry} className="flex flex-wrap items-center gap-2">
+      {error && <p role="alert" className="text-body text-warning">{error}</p>}
+      {names.length > 0 && (stale || !resolutions) && <p className="text-body text-muted">{names.length} {names.length === 1 ? 'name needs' : 'names need'} looking up before they can be checked.</p>}
+      {resolutions && !stale && <ul aria-label="Name lookups" className="space-y-1 text-body">{resolutions.map((r) => <li key={r.entry} className="flex flex-wrap items-center gap-2">
         <span className="text-fg-secondary">{r.entry}</span>
         {r.chosen && normalisedName(r.chosen.name) === normalisedName(r.entry) && r.candidates.filter((c) => normalisedName(c.name) === normalisedName(r.entry)).length === 1
           ? <span className="text-muted">→ {r.chosen.name}, EIN {r.chosen.ein}{[r.chosen.city, r.chosen.state].filter(Boolean).length ? ` (${[r.chosen.city, r.chosen.state].filter(Boolean).join(', ')})` : ''}</span>
           : r.candidates.length === 0 ? <span className="text-warning">no match in ProPublica Nonprofit Explorer</span>
-          : <select aria-label={`Match for ${r.entry}`} className="analysis-input" value={r.chosen?.ein ?? ''} onChange={(e) => choose(r.entry, e.target.value)}><option value="">Choose the organisation, or skip</option>{r.candidates.map((c) => <option key={c.ein} value={c.ein}>{c.name}{[c.city, c.state].filter(Boolean).length ? ` (${[c.city, c.state].filter(Boolean).join(', ')})` : ''} · EIN {c.ein}</option>)}</select>}
+          : <Select aria-label={`Match for ${r.entry}`} size="sm" value={r.chosen?.ein ?? ''} onChange={(e) => choose(r.entry, e.target.value)}><option value="">Choose the organization, or skip</option>{r.candidates.map((c) => <option key={c.ein} value={c.ein}>{c.name}{[c.city, c.state].filter(Boolean).length ? ` (${[c.city, c.state].filter(Boolean).join(', ')})` : ''} · EIN {c.ein}</option>)}</Select>}
       </li>)}</ul>}
-      {resolutions && !stale && unresolved > 0 && <p className="text-label leading-4 text-muted">{unresolved} {unresolved === 1 ? 'name is' : 'names are'} not matched and will be skipped.</p>}
-      {progress && progress.failed.length > 0 && <ul role="alert" className="list-disc pl-5 text-label leading-4 text-warning">{progress.failed.map((line) => <li key={line}>{line}</li>)}</ul>}
+      {resolutions && !stale && unresolved > 0 && <p className="text-body text-muted">{unresolved} {unresolved === 1 ? 'name is' : 'names are'} not matched and will be skipped.</p>}
+      {progress && progress.failed.length > 0 && <ul role="alert" className="list-disc pl-5 text-body text-warning">{progress.failed.map((line) => <li key={line}>{line}</li>)}</ul>}
     </form>
   </details>;
 }
@@ -349,17 +353,17 @@ function Portfolio({ rows, onOpen }: { rows: PortfolioRow[]; onOpen: (row: Portf
   if (!rows.length) return null;
   const exportCsv = async () => {
     try {
-      const outputPath = await save({ defaultPath: 'organisations-checked.csv', filters: [{ name: 'CSV', extensions: ['csv'] }] });
+      const outputPath = await save({ defaultPath: 'organizations-checked.csv', filters: [{ name: 'CSV', extensions: ['csv'] }] });
       if (!outputPath) return;
       await invokeCommand('export_organisation_portfolio_csv', { outputPath, content: portfolioCsv(rows) });
       setMessage(`Written to ${outputPath}.`);
     } catch (reason) { setMessage(formatNativeError(reason)); }
   };
-  return <section aria-label="Checked organisations" className="space-y-2">
-    <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold text-fg">Checked organisations</h3><button type="button" className="analysis-button" onClick={() => { void exportCsv(); }}>Export CSV</button></div>
-    {message && <p role="status" className="text-label leading-4 text-muted">{message}</p>}
-    <Table caption="Each organisation's latest read return, its single audits and the payments your tables record, as stated. Select a name to open its record."
-      head={['Organisation', 'Latest return', 'Total revenue', 'Government grants', 'Diversion of assets (Part VI 5)', 'Former listed (Part VII 3)', 'Severance (Sch J 4a)', 'Sch L rows', 'Single audits', 'Audit finding rows', 'Payments in library', 'Not read']}
+  return <section aria-label="Checked organizations" className="space-y-2">
+    <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-heading text-fg">Checked organizations</h3><Button size="sm" onClick={() => { void exportCsv(); }}>Export CSV</Button></div>
+    {message && <p role="status" className="text-body text-muted">{message}</p>}
+    <Table caption="Each organization's latest read return, its single audits and the payments your tables record, as stated. Select a name to open its record."
+      head={['Organization', 'Latest return', 'Total revenue', 'Government grants', 'Diversion of assets (Part VI 5)', 'Former listed (Part VII 3)', 'Severance (Sch J 4a)', 'Sch L rows', 'Single audits', 'Audit finding rows', 'Payments in library', 'Not read']}
       rows={rows.map((row) => [
         <button type="button" className="text-left text-accent underline" onClick={() => onOpen(row)}>{row.name}</button>,
         row.latestPeriod ?? 'none read', money(row.totalRevenue), money(row.governmentGrants), row.significantDiversion, row.formerListed, row.severance,
@@ -388,18 +392,18 @@ function PaymentTables({ schema, loadError, mappings, onChange }: { schema: Anal
   };
   const nameOf = (id: string) => datasets.find((d) => d.snapshotId === id)?.displayName ?? id;
   return <details className="rounded-lg border border-line-strong p-3">
-    <summary className="text-label leading-4 text-accent">Tables searched for payments ({mappings.length} payee {mappings.length === 1 ? 'table' : 'tables'})</summary>
-    <p className="mt-2 text-label leading-4 text-muted">A table you imported in Analysis that lists payees and amounts, such as a contract or grant payment list, is searched by the organisation's name once you name its columns here. Contract, amendment and payment tables mapped under Spending and outcomes are searched as well.</p>
-    {mappings.length > 0 && <ul className="mt-2 space-y-1 text-label leading-4 text-fg-secondary">{mappings.map((mapping) => <li key={mapping.snapshotId}>{nameOf(mapping.snapshotId)}: vendor {mapping.vendorColumn}, amount {mapping.amountColumn}{mapping.fiscalYearColumn ? `, fiscal year ${mapping.fiscalYearColumn}` : ''} <button type="button" className="text-accent underline" onClick={() => run(invokeCommand('remove_organisation_payment_mapping', { snapshotId: mapping.snapshotId }))}>Remove</button></li>)}</ul>}
-    {error && <p role="alert" className="mt-2 text-label leading-4 text-danger">{error}</p>}
-    {loadError && <p role="alert" className="mt-2 text-label leading-4 text-warning">{loadError}</p>}
-    {schema === undefined ? (!loadError && <p role="status" className="mt-2 text-label leading-4 text-muted">Reading imported tables…</p>)
-      : datasets.length === 0 ? <p className="mt-2 text-label leading-4 text-muted">No table has been imported in Analysis yet.</p>
+    <summary className="text-body text-accent">Tables searched for payments ({mappings.length} payee {mappings.length === 1 ? 'table' : 'tables'})</summary>
+    <p className="mt-2 text-body text-muted">A table you imported in Analysis that lists payees and amounts, such as a contract or grant payment list, is searched by the organization's name once you name its columns here. Contract, amendment and payment tables mapped under Spending are searched as well.</p>
+    {mappings.length > 0 && <ul className="mt-2 space-y-1 text-body text-fg-secondary">{mappings.map((mapping) => <li key={mapping.snapshotId}>{nameOf(mapping.snapshotId)}: vendor {mapping.vendorColumn}, amount {mapping.amountColumn}{mapping.fiscalYearColumn ? `, fiscal year ${mapping.fiscalYearColumn}` : ''} <button type="button" className="text-accent underline" onClick={() => run(invokeCommand('remove_organisation_payment_mapping', { snapshotId: mapping.snapshotId }))}>Remove</button></li>)}</ul>}
+    {error && <p role="alert" className="mt-2 text-body text-danger">{error}</p>}
+    {loadError && <p role="alert" className="mt-2 text-body text-warning">{loadError}</p>}
+    {schema === undefined ? (!loadError && <p role="status" className="mt-2 text-body text-muted">Reading imported tables…</p>)
+      : datasets.length === 0 ? <p className="mt-2 text-body text-muted">No table has been imported in Analysis yet.</p>
       : <form className="mt-3 flex flex-wrap items-end gap-3" onSubmit={(event) => { event.preventDefault(); run(invokeCommand('save_organisation_payment_mapping', { mapping: { snapshotId, vendorColumn, amountColumn, fiscalYearColumn: fiscalYearColumn || null } })); }}>
-        <label className="text-label leading-4 text-fg-secondary">Table<select className="analysis-input mt-1 block" value={snapshotId} onChange={(e) => { setSnapshotId(e.target.value); setVendorColumn(''); setAmountColumn(''); setFiscalYearColumn(''); }}><option value="">Choose a table</option>{datasets.map((d) => <option key={d.snapshotId} value={d.snapshotId}>{d.displayName}</option>)}</select></label>
+        <Select label="Table" value={snapshotId} onChange={(e) => { setSnapshotId(e.target.value); setVendorColumn(''); setAmountColumn(''); setFiscalYearColumn(''); }}><option value="">Choose a table</option>{datasets.map((d) => <option key={d.snapshotId} value={d.snapshotId}>{d.displayName}</option>)}</Select>
         {([['Payee or vendor column', vendorColumn, setVendorColumn, true], ['Amount column', amountColumn, setAmountColumn, true], ['Fiscal year column (optional)', fiscalYearColumn, setFiscalYearColumn, false]] as const).map(([label, value, set, required]) =>
-          <label key={label} className="text-label leading-4 text-fg-secondary">{label}<select className="analysis-input mt-1 block" value={value} onChange={(e) => set(e.target.value)} disabled={!dataset} required={required}><option value="">{required ? 'Choose a column' : 'None'}</option>{columns.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>)}
-        <button type="submit" className="analysis-button" disabled={!snapshotId || !vendorColumn || !amountColumn}>Search this table</button>
+          <Select key={label} label={label} value={value} onChange={(e) => set(e.target.value)} disabled={!dataset} required={required}><option value="">{required ? 'Choose a column' : 'None'}</option>{columns.map((c) => <option key={c} value={c}>{c}</option>)}</Select>)}
+        <Button type="submit" size="sm" disabled={!snapshotId || !vendorColumn || !amountColumn}>Search this table</Button>
       </form>}
   </details>;
 }
@@ -477,38 +481,37 @@ export default function OrganisationFilingsPanel({ initialQuery = '' }: { initia
   const handedOver = initialQuery.trim();
   // Runs once per handed-over value; the host keys the panel by it.
   useEffect(() => { if (handedOver) search(handedOver); }, [handedOver]);
-  return <section aria-label="Organisation filings" className="space-y-4">
-    <div>
-      <h3 className="text-sm font-semibold text-fg">Organisation filings</h3>
-      <p className="text-label leading-4 text-muted">Name a tax-exempt organisation to read what its Form 990 returns state, its single audits, and the payments your library's tables record to it. Nothing here is a finding: a return's answer is the filer's statement and a payment is a payment.</p>
-    </div>
-    <form className="flex flex-wrap items-end gap-3" onSubmit={(event) => { event.preventDefault(); search(); }}>
-      <label className="min-w-0 flex-1 text-label leading-4 text-fg-secondary">Organisation name or EIN
-        <input className="analysis-input mt-1 w-full" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name, or EIN such as 33-0215585" /></label>
-      <label className="text-label leading-4 text-fg-secondary">Federal Audit Clearinghouse key (optional)
-        <input className="analysis-input mt-1 w-full" type="password" autoComplete="off" value={auditKey} onChange={(event) => setAuditKey(event.target.value)} aria-describedby="organisation-audit-key-note" /></label>
-      <button type="submit" className="analysis-button" disabled={busy === 'search' || !query.trim()}>{busy === 'search' ? 'Searching' : 'Find'}</button>
+  return <section aria-label="Organization filings" className="space-y-4">
+    <p className="max-w-prose text-body text-muted">Name a tax-exempt organization to read what its Form 990 returns state, its single audits, and the payments your library's tables record to it. Nothing here is a finding: a return's answer is the filer's statement and a payment is a payment.</p>
+    <form className="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,18rem)_auto]" onSubmit={(event) => { event.preventDefault(); search(); }}>
+      <Field label="Organization name or EIN">
+        <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name, or EIN such as 33-0215585" />
+      </Field>
+      <Field label="Federal Audit Clearinghouse key (optional)">
+        <Input type="password" autoComplete="off" value={auditKey} onChange={(event) => setAuditKey(event.target.value)} aria-describedby="organisation-audit-key-note" />
+      </Field>
+      <Button type="submit" variant="primary" disabled={busy === 'search' || !query.trim()}>{busy === 'search' ? 'Searching…' : 'Find'}</Button>
     </form>
-    <p id="organisation-audit-key-note" className="text-label leading-4 text-muted">A free api.data.gov key lets the check read single audits. It is sent only to api.fac.gov and is not saved.</p>
-    {error && <p role="alert" className="text-sm text-danger">{error}</p>}
-    {matches && <ul aria-label="Matching organisations" className="space-y-1">
-      {matches.length === 0 && <li className="text-label leading-4 text-muted">ProPublica Nonprofit Explorer lists no organisation matching that name.</li>}
-      {matches.map((match) => <li key={match.ein}><button type="button" className="text-left text-label leading-4 text-accent underline" onClick={() => show(match, 'load')}>{match.name}</button><span className="text-label leading-4 text-muted"> {[match.city, match.state].filter(Boolean).join(', ')} · EIN {match.ein}</span></li>)}
-      {matches.length > 0 && <li className="text-label leading-4 text-muted">Name search by ProPublica Nonprofit Explorer.</li>}
+    <p id="organisation-audit-key-note" className="text-caption text-muted">A free api.data.gov key lets the check read single audits. It is sent only to api.fac.gov and is not saved.</p>
+    {error && <InlineError summary="The organization search couldn’t complete." detail={error} />}
+    {matches && <ul aria-label="Matching organizations" className="space-y-1 text-body">
+      {matches.length === 0 && <li className="text-muted">ProPublica Nonprofit Explorer lists no organization matching that name.</li>}
+      {matches.map((match) => <li key={match.ein}><Button variant="link" onClick={() => show(match, 'load')}>{match.name}</Button><span className="text-caption text-muted"> {[match.city, match.state].filter(Boolean).join(', ')} · EIN <span className="tabular-nums">{match.ein}</span></span></li>)}
+      {matches.length > 0 && <li className="text-caption text-muted">Name search by ProPublica Nonprofit Explorer.</li>}
     </ul>}
     <BatchCheck auditKey={auditKey} onDone={() => void loadChecked()} />
     <PaymentTables schema={schema} loadError={tablesError} mappings={mappings} onChange={(saved) => { setMappings(saved); void loadChecked(); if (selected && filings) show(selected, 'load'); }} />
-    {listError && <p role="alert" className="text-label leading-4 text-warning">Checked organisations could not be read: {listError}</p>}
+    {listError && <InlineError summary="Checked organizations couldn’t be read." detail={listError} />}
     <Portfolio rows={portfolio} onOpen={(row) => show({ ein: row.ein, name: row.name }, 'load')} />
-    {checked.length > 0 && portfolio.length === 0 && <div className="flex flex-wrap items-center gap-2 text-label leading-4"><span className="text-muted">Checked before:</span>{checked.map((item) => <button type="button" key={item.ein} className="rounded border border-control px-2 py-1 text-fg-secondary" onClick={() => show(item, 'load')}>{item.name ?? item.ein}</button>)}</div>}
+    {checked.length > 0 && portfolio.length === 0 && <div className="flex flex-wrap items-center gap-2 text-body"><span className="text-muted">Checked before:</span>{checked.map((item) => <Button size="sm" key={item.ein} onClick={() => show(item, 'load')}>{item.name ?? item.ein}</Button>)}</div>}
     {selected && <div className="space-y-4 border-t border-line-strong pt-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h3 className="text-base font-semibold text-fg">{filings?.name ?? selected.name ?? `EIN ${selected.ein}`}</h3>
-          <p className="text-label leading-4 text-muted">EIN {selected.ein}{filings ? ` · checked ${filings.checkedAt.slice(0, 10)}` : ''}</p></div>
-        <button type="button" className="analysis-button" disabled={busy === 'check' || busy === 'load'} onClick={() => show(selected, 'check')}>{busy === 'check' ? 'Checking' : filings ? 'Check again' : 'Check filings'}</button>
+        <div><h3 className="text-heading text-fg">{filings?.name ?? selected.name ?? `EIN ${selected.ein}`}</h3>
+          <p className="text-caption tabular-nums text-muted">EIN {selected.ein}{filings && <> · checked <Time value={filings.checkedAt} /></>}</p></div>
+        <Button disabled={busy === 'check' || busy === 'load'} onClick={() => show(selected, 'check')}>{busy === 'check' ? 'Checking…' : filings ? 'Check again' : 'Check filings'}</Button>
       </div>
-      {busy === 'check' && <p role="status" className="text-label leading-4 text-muted">Reading the IRS e-file index for each year your library does not hold yet (about 90 MB a year, kept for every organisation) and this organisation's returns. A first check can take several minutes.</p>}
-      {filings === null && busy === '' && <p className="text-label leading-4 text-muted">Nothing is held for this organisation yet. Checking reads the IRS e-file index for each year from 2024 (about 90 MB a year, downloaded once for every organisation) and this organisation's returns.</p>}
+      {busy === 'check' && <p role="status" className="text-body text-muted">Reading the IRS e-file index for each year your library does not hold yet (about 90 MB a year, kept for every organization) and this organization's returns. A first check can take several minutes.</p>}
+      {filings === null && busy === '' && <p className="text-body text-muted">Nothing is held for this organization yet. Checking reads the IRS e-file index for each year from 2024 (about 90 MB a year, downloaded once for every organization) and this organization's returns.</p>}
       {filings && <Record filings={filings} />}
     </div>}
   </section>;

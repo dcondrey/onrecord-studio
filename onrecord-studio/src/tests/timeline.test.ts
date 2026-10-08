@@ -29,9 +29,9 @@ describe('buildTimeline', () => {
       { ...base, kind: 'CONTRACT_CEILING_EXCEEDED' } as Finding,
       { ...base, kind: 'EXTENSION_ABUSE' } as Finding,
     ]);
-    expect(counted.provenance).toContain('Counted violation');
-    expect(counted.provenance).not.toContain('Pattern signal');
-    expect(signal.provenance).toContain('Pattern signal, not a legal claim');
+    expect(counted.provenance).toContain('A counted violation.');
+    expect(counted.provenance).not.toContain('pattern signal');
+    expect(signal.provenance).toContain('A pattern signal, not a legal claim.');
   });
 
   it('orders newest first, includes both bound days, and counts unreadable dates instead of placing them', () => {
@@ -64,5 +64,19 @@ describe('caseItems', () => {
     expect(filed?.citations).toEqual([{ label: 'Agenda', grade: 'SAVED_REPORT' }]);
     expect(built.items.find((i) => i.id === 'clock:c:q:determination-due')?.citations).toEqual([]);
     expect(buildTimeline(built.items, { sources: new Set(['CASE']), from: '', to: '', text: '', lane: 'hypothesis:c:h' }).items.map((i) => i.id)).toEqual(['clock:c:q:filed', 'decision:c:d1']);
+  });
+
+  // The timeline and the inbox read the claim basis from one source, so a counted violation is never
+  // also called "not a legal claim" here.
+  it('states each finding\'s claim basis from its kind', () => {
+    const finding = (kind: Finding['kind']): Finding => ({
+      id: kind, kind, severity: 'SERIOUS', confidence: { kind: 'MEASURED', basisPoints: 5000 }, subject: { kind: 'AGENCY' } as unknown as Finding['subject'],
+      headline: 'h', explanation: 'e', citations: [], discoveredAt: '2026-10-01T00:00:00Z', lastSeenAt: '2026-10-02T00:00:00Z', dismissedAt: null, sourceDetector: 'encampment_notice',
+    });
+    const [counted, signal] = findingItems([finding('ENCAMPMENT_NOTICE_SHORTFALL'), finding('BOILERPLATE_DENIAL')]);
+    expect(counted.provenance).toContain('A counted violation.');
+    expect(counted.provenance).not.toContain('not a legal claim');
+    expect(counted.provenance).toContain('encampment notice check');
+    expect(signal.provenance).toContain('A pattern signal, not a legal claim.');
   });
 });

@@ -37,7 +37,6 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 
 import MainLayout from '../components/dashboard/MainLayout';
-import SearchFilter from '../components/filters/SearchFilter';
 import LegalCompliancePanel from '../components/legal/LegalCompliancePanel';
 import { useAppStore } from '../store/useAppStore';
 import type { RequestSearchResult } from '../types';
@@ -78,11 +77,13 @@ describe('evidence error states', () => {
 
   it('retains the last successful evidence result set when a later query fails', async () => {
     useAppStore.setState({ filteredResults: [record] });
-    render(<SearchFilter />);
+    render(<MainLayout />);
 
     expect((await screen.findByRole('alert')).textContent).toContain(
-      'showing 1 results from the last successful query',
+      'Showing 1 result from the last search that completed',
     );
+    // The failed query has no count of its own; the retained rows' count is not its answer.
+    expect(screen.queryByText(/^0$/)).toBeNull();
     expect(useAppStore.getState().filteredResults).toEqual([record]);
     expect(useAppStore.getState().searchError).toContain('database busy');
   });
