@@ -55,6 +55,12 @@ import App from '../App';
 import AgencySelector from '../components/filters/AgencySelector';
 import { useAppStore } from '../store/useAppStore';
 
+/** The per-source tools live behind the composer's "Source options" menu. */
+function sourceTool(name: string) {
+  fireEvent.click(screen.getByRole('button', { name: 'Source options' }));
+  return screen.getByRole('menuitem', { name });
+}
+
 function documentSummary(documentId: number, fileName: string) {
   return { documentId, portalKey: 'sandiego', fileName, fileSize: 100032, contentType: 'text/plain', visibility: 'public', downloadStatus: 'DOWNLOADED', rawFileSha256: null, extractedTextSha256: null, extractionStatus: 'SEARCHABLE', extractionFormat: 'text', extractionDeferredReason: null };
 }
@@ -101,7 +107,7 @@ describe('San Diego research workflow', () => {
     fireEvent.click(within(card).getByRole('button', { name: 'Choose source' }));
     expect(bridge.calls.some((call) => call.command === 'start_data_source')).toBe(false);
     expect((screen.getByLabelText('Public data source URL') as HTMLInputElement).value).toBe('https://www.sandiego.gov/police/data-transparency/policies-procedures');
-    fireEvent.click(screen.getByRole('button', { name: 'Crawl settings' }));
+    fireEvent.click(sourceTool('Crawl settings'));
     expect((screen.getByLabelText(/^Page limit/) as HTMLInputElement).value).toBe('100');
     expect((screen.getByLabelText(/^Crawl depth/) as HTMLInputElement).value).toBe('4');
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));

@@ -78,6 +78,12 @@ import Header from '../components/dashboard/Header';
 import { useAppStore } from '../store/useAppStore';
 import type { PortalRegistration } from '../types';
 
+/** The per-source tools live behind the composer's "Source options" menu. */
+function sourceTool(name: string) {
+  fireEvent.click(screen.getByRole('button', { name: 'Source options' }));
+  return screen.getByRole('menuitem', { name });
+}
+
 function registrationFor(portalKey: string, displayName: string): PortalRegistration {
   return {
     portalKey,
@@ -137,7 +143,7 @@ describe('source purge', () => {
       findings: useAppStore.getState().findingsRefreshRequests,
       analytics: useAppStore.getState().analyticsRefreshRequests,
     };
-    fireEvent.click(screen.getByRole('button', { name: 'Remove source' }));
+    fireEvent.click(sourceTool('Remove source'));
     expect(screen.getByText(/Documents already ingested from this source are kept/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Delete source and documents' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Remove and keep documents' }));
@@ -154,7 +160,7 @@ describe('source purge', () => {
   it('names the counts before destroying anything, and reports what was destroyed', async () => {
     mountWith([sanDiego], 'sandiego');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete source and its documents' }));
+    fireEvent.click(sourceTool('Delete source and its documents'));
     // Opening the confirmation reads counts and destroys nothing.
     await waitFor(() => expect(bridge.calls).toHaveLength(1));
     expect(bridge.calls[0]).toEqual({
@@ -198,14 +204,14 @@ describe('source purge', () => {
     bridge.holdPreviewFor = 'sandiego';
     mountWith([sanDiego, oakland], 'sandiego');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete source and its documents' }));
+    fireEvent.click(sourceTool('Delete source and its documents'));
     await waitFor(() => expect(bridge.heldPreviews.has('sandiego')).toBe(true));
     // The dialog is still counting; nothing can be confirmed yet.
     expect(screen.getByRole('button', { name: 'Delete source and documents' })).toHaveProperty('disabled', true);
 
     fireEvent.click(screen.getByRole('button', { name: 'Close deletion confirmation' }));
     act(() => useAppStore.setState({ activePortalKey: 'oakland' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Delete source and its documents' }));
+    fireEvent.click(sourceTool('Delete source and its documents'));
     await screen.findByText(/Delete Oakland and everything from it\?/);
     await waitFor(() => expect(screen.getByText('3', { exact: true })).toBeTruthy());
 
@@ -228,7 +234,7 @@ describe('source purge', () => {
     bridge.holdPurgeFor = 'sandiego';
     mountWith([sanDiego, oakland], 'sandiego');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete source and its documents' }));
+    fireEvent.click(sourceTool('Delete source and its documents'));
     const confirmSanDiego = await screen.findByRole('button', { name: 'Delete source and documents' });
     fireEvent.click(confirmSanDiego);
     await waitFor(() => expect(bridge.heldPurges.has('sandiego')).toBe(true));
@@ -236,7 +242,7 @@ describe('source purge', () => {
     // The operator gives up watching San Diego's in-flight deletion and checks Oakland instead.
     fireEvent.click(screen.getByRole('button', { name: 'Close deletion confirmation' }));
     act(() => useAppStore.setState({ activePortalKey: 'oakland' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Delete source and its documents' }));
+    fireEvent.click(sourceTool('Delete source and its documents'));
     await screen.findByText(/Delete Oakland and everything from it\?/);
     await waitFor(() => expect(screen.getByText('3', { exact: true })).toBeTruthy());
 

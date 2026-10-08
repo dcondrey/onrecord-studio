@@ -1,3 +1,4 @@
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { cn } from '../../utils/cn';
 import Icon from '../ui/icons';
 import { Select } from '../ui/select';
@@ -35,7 +36,7 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
   const addDisabled = isDiscovering || syncCapacityReached || (activeIsSyncing && !portalUrlDraft.trim());
 
   return (
-    <form onSubmit={(event) => void startSync(event)} className="source-composer flex min-w-0 flex-1 items-center gap-1 p-1">
+    <form onSubmit={(event) => void startSync(event)} className="source-composer flex h-8 min-w-0 flex-1 items-center gap-1 px-px">
       <Select
         aria-label="Built-in source connector"
         title={selectedSource.description}
@@ -47,14 +48,14 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
         }}
         disabled={isDiscovering}
         size="sm"
-        className="w-44 border-0 bg-transparent text-control text-fg-secondary shadow-none"
+        className="w-40 shrink-0 border-0 bg-transparent text-control text-fg-secondary shadow-none"
       >
         <optgroup label="San Diego sources">
           {BUILT_IN_SOURCE_OPTIONS.map((source) => <option key={source.id} value={source.id}>{source.label}</option>)}
         </optgroup>
       </Select>
       <label htmlFor={inputId} className="sr-only">Public data source URL</label>
-      <div className="relative h-7 min-w-[240px] flex-1">
+      <div className="relative h-7 min-w-0 flex-1">
         <Icon name="globe" size="sm" className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted" />
         <input
           id={inputId}
@@ -91,29 +92,6 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
         <Icon name="filePlus" size="sm" />
       </button>
       <span className="sr-only" role="status">{selectedSource.description}</span>
-      <button
-        type="button"
-        onClick={() => setCrawlSettingsOpen(true)}
-        disabled={isDiscovering}
-        aria-label="Crawl settings"
-        title={crawlSettingsAreCustom ? 'Crawl settings (customized)' : 'Crawl settings'}
-        className="source-tool-button focus-ring relative grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted transition-colors hover:bg-raised hover:text-fg disabled:opacity-50"
-      >
-        <Icon name="sliders" size="sm" />
-        {crawlSettingsAreCustom && (
-          <span aria-hidden="true" className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-accent" />
-        )}
-      </button>
-      <button
-        type="button"
-        onClick={() => setPasteOpen(true)}
-        disabled={isDiscovering}
-        aria-label="Paste content"
-        title="Paste content"
-        className="source-tool-button focus-ring grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted transition-colors hover:bg-raised hover:text-fg disabled:opacity-50"
-      >
-        <Icon name="clipboard" size="sm" />
-      </button>
       {/* The label names the action only. Whether a source is syncing is shown on its sidebar row. */}
       <Button
         type="submit"
@@ -124,35 +102,136 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
       >
         {isDiscovering ? 'Discovering…' : 'Add'}
       </Button>
-      {activeIsSyncing && (
-        <button type="button" onClick={() => void pauseSync()} title="Pause synchronization" aria-label="Pause synchronization" className="source-tool-button focus-ring grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted transition hover:text-warning">
-          <Icon name="pause" className="h-3.5 w-3.5" />
-        </button>
-      )}
-      {activeIsPaused && !activeIsSyncing && (
-        <button type="button" onClick={() => void resumeSync()} title="Resume synchronization" aria-label="Resume synchronization" className="source-tool-button focus-ring grid h-7 w-7 shrink-0 place-items-center rounded-md text-warning transition hover:text-success">
-          <Icon name="play" className="h-3.5 w-3.5" />
-        </button>
-      )}
-      {activePortal && !activeIsPaused && (
-        <button type="button" onClick={() => void recheckSource()} disabled={activeIsRechecking} title="Fetch collected documents again and record whether the source still serves the same bytes" aria-label="Check collected documents against the source" className="source-tool-button focus-ring grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted transition hover:text-success disabled:opacity-50">
-          <Icon name="shield" className={cn('h-3.5 w-3.5', activeIsRechecking && 'animate-pulse')} />
-        </button>
-      )}
-      {/* Two controls, because they are two operations. The withdrawal keeps the evidence and so
-          does not carry the trash glyph; the purge destroys it and does. A single button with a
-          "also delete the documents" checkbox would put the difference between keeping and
-          erasing evidence one stray click away. */}
-      {activePortal && (
-        <button type="button" onClick={() => setPendingRemoval(activePortal)} title="Remove source and keep its documents" aria-label="Remove source" className="source-tool-button focus-ring grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted transition hover:text-warning">
-          <Icon name="eject" className="h-3.5 w-3.5" />
-        </button>
-      )}
-      {activePortal && (
-        <button type="button" onClick={() => setPendingPurge(activePortal)} title="Delete source and every document ingested from it" aria-label="Delete source and its documents" className="source-tool-button focus-ring grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted transition hover:text-danger">
-          <Icon name="trash" className="h-3.5 w-3.5" />
-        </button>
-      )}
+      <SourceToolsMenu
+        items={[
+          { label: 'Crawl settings', hint: crawlSettingsAreCustom ? 'Customized' : undefined, disabled: isDiscovering, onSelect: () => setCrawlSettingsOpen(true) },
+          { label: 'Paste content', disabled: isDiscovering, onSelect: () => setPasteOpen(true) },
+          ...(activeIsSyncing ? [{ label: 'Pause synchronization', separated: true, onSelect: () => void pauseSync() }] : []),
+          ...(activeIsPaused && !activeIsSyncing ? [{ label: 'Resume synchronization', separated: true, onSelect: () => void resumeSync() }] : []),
+          ...(activePortal && !activeIsPaused
+            ? [{
+              label: activeIsRechecking ? 'Rechecking documents…' : 'Recheck collected documents',
+              separated: !activeIsSyncing,
+              disabled: activeIsRechecking,
+              onSelect: () => void recheckSource(),
+            }]
+            : []),
+          // Two items, because they are two operations. The withdrawal keeps the evidence; the purge
+          // destroys it. One item with an "also delete the documents" checkbox would put the
+          // difference between keeping and erasing evidence one stray click away.
+          ...(activePortal
+            ? [
+              { label: 'Remove source', hint: 'Keeps its documents', separated: true, onSelect: () => setPendingRemoval(activePortal) },
+              { label: 'Delete source and its documents', danger: true, onSelect: () => setPendingPurge(activePortal) },
+            ]
+            : []),
+        ]}
+        flagged={crawlSettingsAreCustom}
+      />
     </form>
+  );
+}
+
+interface SourceTool {
+  label: string;
+  hint?: string;
+  disabled?: boolean;
+  danger?: boolean;
+  /** Draws a rule above the item, starting a new group. */
+  separated?: boolean;
+  onSelect: () => void;
+}
+
+/** The per-source tools behind one "More" button, so the composer stays a single row. */
+function SourceToolsMenu({ items, flagged }: { items: SourceTool[]; flagged: boolean }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+
+  const enabledItems = () => Array.from(menu.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)') ?? []);
+
+  const close = (returnFocus: boolean) => {
+    setOpen(false);
+    if (returnFocus) trigger.current?.focus();
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    menu.current?.querySelector<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')?.focus();
+    const onPointer = (event: PointerEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    };
+    window.addEventListener('pointerdown', onPointer);
+    return () => window.removeEventListener('pointerdown', onPointer);
+  }, [open]);
+
+  const onMenuKey = (event: KeyboardEvent<HTMLDivElement>) => {
+    const list = enabledItems();
+    const index = list.indexOf(document.activeElement as HTMLButtonElement);
+    const move = (next: number) => { event.preventDefault(); list[(next + list.length) % list.length]?.focus(); };
+    if (event.key === 'ArrowDown') move(index + 1);
+    else if (event.key === 'ArrowUp') move(index - 1);
+    else if (event.key === 'Home') move(0);
+    else if (event.key === 'End') move(list.length - 1);
+    else if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(true); }
+    else if (event.key === 'Tab') setOpen(false);
+  };
+
+  return (
+    <div ref={root} className="relative shrink-0">
+      <button
+        ref={trigger}
+        type="button"
+        aria-label="Source options"
+        title="Source options"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        onClick={() => setOpen((current) => !current)}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowDown' && !open) { event.preventDefault(); setOpen(true); }
+        }}
+        className="source-tool-button focus-ring relative grid h-7 w-7 place-items-center rounded-md text-muted transition-colors hover:bg-raised hover:text-fg aria-expanded:bg-raised aria-expanded:text-fg"
+      >
+        <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="currentColor">
+          <circle cx="3" cy="8" r="1.5" />
+          <circle cx="8" cy="8" r="1.5" />
+          <circle cx="13" cy="8" r="1.5" />
+        </svg>
+        {flagged && <span aria-hidden="true" className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-accent" />}
+      </button>
+      {open && (
+        <div
+          ref={menu}
+          id={menuId}
+          role="menu"
+          aria-label="Source options"
+          onKeyDown={onMenuKey}
+          className="motion-pop absolute right-0 top-full z-popover mt-2 w-72 rounded-xl border border-line-strong bg-panel p-1 shadow-popover"
+        >
+          {items.map((item, index) => (
+            <button
+              key={item.label}
+              type="button"
+              role="menuitem"
+              aria-label={item.label}
+              aria-describedby={item.hint ? `${menuId}-hint-${index}` : undefined}
+              disabled={item.disabled}
+              onClick={() => { close(true); item.onSelect(); }}
+              className={cn(
+                'focus-ring flex h-8 w-full items-center justify-between gap-3 rounded-md px-2.5 text-left text-control transition-colors disabled:opacity-50',
+                item.danger ? 'text-danger hover:bg-danger/10 focus-visible:bg-danger/10' : 'text-fg hover:bg-raised focus-visible:bg-raised',
+                item.separated && 'relative mt-2 before:absolute before:-top-1 before:left-0 before:right-0 before:h-px before:bg-line',
+              )}
+            >
+              <span className="truncate">{item.label}</span>
+              {item.hint && <span id={`${menuId}-hint-${index}`} className="shrink-0 text-caption text-muted">{item.hint}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
