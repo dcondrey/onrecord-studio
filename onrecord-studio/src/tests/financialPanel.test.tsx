@@ -44,7 +44,7 @@ it('labels a counted spending case and a pattern differently and shows the cited
  bridge.invoke.mockImplementation((command:string)=>command==='get_financial_workspace'?Promise.resolve(workspace):Promise.resolve(spending));
  await mounted();await run();
  expect(screen.getByText(/Counted comparison of recorded rows with a written limit · confidence 90%/)).toBeTruthy();
- expect(screen.getByText(/Labelled pattern, not a finding that a rule was broken · confidence 40%/)).toBeTruthy();
+ expect(screen.getByText(/Labeled pattern, not a finding that a rule was broken · confidence 40%/)).toBeTruthy();
  expect(screen.queryByText(/wasted|illegal/i)).toBeNull();
  expect(screen.getAllByRole('button',{name:'Inspect 1 cited rows'}).length).toBeGreaterThanOrEqual(2);
 });
