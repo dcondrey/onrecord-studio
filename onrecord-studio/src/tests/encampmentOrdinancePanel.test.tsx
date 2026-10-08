@@ -25,6 +25,7 @@ const report: EncampmentOrdinanceReport = {
 };
 vi.mock('@tauri-apps/api/core', () => ({ invoke: async () => report }));
 import EncampmentOrdinancePanel from '../components/dashboard/EncampmentOrdinancePanel';
+import { DistanceStrip, NightHoursStrip } from '../components/charts/figures/OrdinanceStrips';
 
 afterEach(cleanup);
 
@@ -48,5 +49,32 @@ describe('encampment ordinance observations', () => {
     expect(screen.getByText(/Distance to schools and stations is not measured for every section; 0 offenses not geocoded/)).toBeTruthy();
     expect(screen.getByText('1,320 ft stand-in (reference)')).toBeTruthy();
     expect(document.body.innerHTML).not.toMatch(/--viz-(counted|lead|positive)/);
+  });
+
+  it('steps through dots in clock order, piles overflow as a count, and announces the focused dot', () => {
+    const night = report.nightHours as NonNullable<typeof report.nightHours>;
+    const activity = (n: string, recordedAt: string) => ({ activityNumber: n, activityType: 'Citation', section: '63.0404(a)', recordedAt, atWindowBoundary: false, location: 'x' });
+    // Backend order is by date: the 02:00 activity comes first, but on the noon-to-noon clock it is last.
+    const listed = [activity('early', '2025-03-01 02:00'), activity('late', '2025-03-02 23:30'), activity('mid', '2025-03-03 22:00'), ...Array.from({ length: 12 }, (_, i) => activity(`pile${i}`, '2025-03-04 00:30'))];
+    render(<NightHoursStrip night={{ ...night, listedActivities: listed }} sources={{ tables: ['t'] }} onRecord={() => {}} />);
+    const first = screen.getByRole('img', { name: /activity mid:/ });
+    expect(first.getAttribute('tabindex')).toBe('0');
+    fireEvent.focus(first);
+    fireEvent.keyDown(first, { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(screen.getByRole('img', { name: /activity late:/ }));
+    expect(document.querySelector('[aria-live="polite"]')?.textContent).toMatch(/activity late:/);
+    // Seven rows fit at one time; the other five are a '+5' marker, not dots drawn over each other.
+    expect(screen.getAllByRole('img', { name: /activity pile/ })).toHaveLength(7);
+    expect(screen.getByText('+5')).toBeTruthy();
+    expect(screen.getByText(/22 outside the window are counted, not placed/)).toBeTruthy();
+  });
+
+  it('counts offenses beyond the axis and offenses with no measured distance instead of placing them', () => {
+    const locations = report.locations as NonNullable<typeof report.locations>;
+    const incident = (caseNumber: string, feet: number | null) => ({ caseNumber, occurredOn: '2025-02-01', section: '63.0404(C)', blockAddress: 'b', latitude: 32.7, longitude: -117.1, nearestSchool: feet === null ? null : { name: 'S', distanceFeet: feet }, nearestStation: null });
+    render(<DistanceStrip locations={{ ...locations, incidents: [incident('near', 800), incident('far', 6200), incident('none', null)] }} sources={{ tables: ['t'] }} onRecord={() => {}} />);
+    expect(screen.getAllByRole('img', { name: /^Case / })).toHaveLength(1);
+    expect(screen.getByText(/1 distance not measured/)).toBeTruthy();
+    expect(document.body.textContent).toMatch(/1 >5,000 ft/);
   });
 });
