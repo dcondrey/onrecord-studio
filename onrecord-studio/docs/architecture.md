@@ -114,10 +114,15 @@ cannot open. `storage/legacy_import.rs` classifies the file by header bytes befo
 it, and converts a legacy core in place:
 
 1. Build the DuckDB schema in a sibling `*.migrating` file.
-2. `ATTACH` the legacy file `(TYPE SQLITE, READ_ONLY)` — the original is never written to.
-3. Copy shared tables in foreign-key dependency order, inside one transaction.
-4. Verify per-table row counts **before** commit.
-5. Retain the original as `*.legacy-sqlite.bak`, then move the new core into place.
+2. Read the legacy file with the bundled SQLite library, opened `immutable` and read-only, so no
+   byte, lock, journal, WAL or `-shm` is written for it. DuckDB's `sqlite` extension is not used:
+   it is not compiled in, and extensions are never loaded at runtime. A pending `-wal` or
+   `-journal` would be ignored by an immutable open, so in that case a private copy is read instead.
+3. Stream each shared table, values in their stored storage class, into a scratch DuckDB file
+   (`*.migrating-legacy`) attached read-only as `legacy`.
+4. Copy shared tables in foreign-key dependency order, inside one transaction.
+5. Verify **before** commit that every distinct legacy row is present in the converted table.
+6. Retain the original (with any `-wal`) as `*.legacy-sqlite.bak`, then move the new core into place.
 
 Any failure leaves the original exactly where it was and removes the partial core, so the operation
 is safe to retry. A file matching neither engine's header is never overwritten; startup refuses.

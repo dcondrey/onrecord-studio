@@ -4,20 +4,30 @@
 //! file. DuckDB cannot open one, so without this module an upgraded application fails at startup
 //! with an engine-level error and the investigator's corpus is unreachable.
 //!
-//! Conversion cost is linear at roughly 37 ms per MB of legacy database, dominated by the
-//! full-row verification anti-join; see `tests/bench_migration.rs` for measurements. It is paid
-//! once per installation, before the window is shown.
+//! The legacy file is read with the bundled SQLite library, not DuckDB's `sqlite` extension: that
+//! extension is not compiled in, and the application never loads one at runtime (see
+//! `storage::open_duckdb`). Each legacy table the conversion reads is first streamed into a scratch
+//! DuckDB file, which is attached read-only as the catalog `legacy`, so the copy and the full-row
+//! verification are plain DuckDB SQL over `legacy.<table>`.
 //!
-//! The conversion never writes to the legacy file. It builds the DuckDB core beside it, copies
-//! every table the two schemas share inside a single transaction, verifies every legacy row is
-//! present in the converted table, and only then swaps the new file into place. The legacy file
-//! is retained as a backup on every path, including failure.
+//! Conversion cost is linear in the size of the legacy database: an 82 MB WAL-mode core converts
+//! at 140 ms/MB in the unoptimized test profile, where the extension-based reader this replaced
+//! took 813 ms/MB. It is paid once per installation, before the window is shown.
+//!
+//! The conversion never writes to the legacy file, nor creates a journal, WAL or shared-memory
+//! file for it. It builds the DuckDB core beside it, copies every table the two schemas share
+//! inside a single transaction, verifies every legacy row is present in the converted table, and
+//! only then swaps the new file into place. The legacy file is retained as a backup on every path,
+//! including failure.
 
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
+use duckdb::types::{ToSqlOutput, Value as DuckValue, ValueRef as DuckValueRef};
 use duckdb::Connection;
+use rusqlite::types::ValueRef as SqliteValueRef;
+use rusqlite::OpenFlags;
 
 use crate::error::AppError;
 
@@ -32,6 +42,24 @@ const HEADER_PROBE_BYTES: usize = 16;
 const LEGACY_BACKUP_SUFFIX: &str = "legacy-sqlite.bak";
 /// Suffix of the half-built core, removed on both success and failure.
 const IN_PROGRESS_SUFFIX: &str = "migrating";
+/// Suffix of the scratch DuckDB copy of the legacy tables, removed on both success and failure.
+const LEGACY_SNAPSHOT_SUFFIX: &str = "migrating-legacy";
+/// Suffix of a private copy of the legacy file, made only when a WAL or journal must be replayed.
+const LEGACY_SOURCE_COPY_SUFFIX: &str = "migrating-source";
+/// SQLite's sidecar files. Only `-wal` and `-journal` can hold pages the main file lacks; `-shm` is
+/// a rebuildable index, moved with the others so none is left beside the converted core.
+const SQLITE_SIDECARS: [&str; 3] = ["-wal", "-journal", "-shm"];
+/// Text and blob bytes appended before the appender is flushed. DuckDB otherwise buffers about
+/// 200k rows, which for a document-text table is the whole table.
+const APPENDER_FLUSH_BYTES: usize = 64 * 1024 * 1024;
+/// Integers up to this magnitude convert to `f64` exactly.
+const EXACT_F64_INTEGER_LIMIT: u64 = 1 << 53;
+
+/// SQLite storage classes as distinct bit flags, so a `sum(DISTINCT ...)` of them is their union.
+const CLASS_INTEGER: i64 = 1;
+const CLASS_REAL: i64 = 2;
+const CLASS_TEXT: i64 = 4;
+const CLASS_BLOB: i64 = 8;
 
 /// What, if anything, currently occupies the core database path.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -128,18 +156,25 @@ pub fn migrate_legacy_sqlite_core(
     let backup_path = sibling_path(core_path, LEGACY_BACKUP_SUFFIX);
     let in_progress_path = sibling_path(core_path, IN_PROGRESS_SUFFIX);
 
-    if backup_path.exists() {
+    if let Some(existing) = std::iter::once(backup_path.clone())
+        .chain(SQLITE_SIDECARS.map(|suffix| sidecar_path(&backup_path, suffix)))
+        .find(|path| path.exists())
+    {
         return Err(AppError::Storage(format!(
             "A previous migration backup already exists at '{}'. Move or remove it before \
              retrying so the original database is never overwritten.",
-            backup_path.display()
+            existing.display()
         )));
     }
     // A leftover from an interrupted attempt carries no committed data; the swap below is the only
     // step that publishes it, and that step never runs unless verification passed.
     remove_if_present(&in_progress_path)?;
+    remove_staging_files(core_path)?;
 
     let result = build_converted_core(core_path, &in_progress_path, migration_sql);
+    if let Err(cleanup_error) = remove_staging_files(core_path) {
+        eprintln!("Failed to remove the migration's scratch files: {cleanup_error}");
+    }
 
     let report = match result {
         Ok(report) => report,
@@ -160,14 +195,14 @@ pub fn migrate_legacy_sqlite_core(
 
     // Publish only after verification succeeded: retain the original, then move the new core into
     // place. If the second rename fails the original is restored so startup can retry cleanly.
-    fs::rename(core_path, &backup_path).map_err(|error| {
+    move_with_sidecars(core_path, &backup_path).map_err(|error| {
         AppError::Storage(format!(
             "Failed to retain the legacy database as '{}': {error}",
             backup_path.display()
         ))
     })?;
     if let Err(error) = fs::rename(&in_progress_path, core_path) {
-        let restore = fs::rename(&backup_path, core_path);
+        let restore = move_with_sidecars(&backup_path, core_path);
         let _ = remove_if_present(&in_progress_path);
         return Err(AppError::Storage(match restore {
             Ok(()) => format!(
@@ -215,19 +250,6 @@ fn build_converted_core(
         AppError::Storage(format!("Failed to build the DuckDB schema: {error}"))
     })?;
 
-    load_sqlite_extension(&connection)?;
-    connection
-        .execute_batch(&format!(
-            "ATTACH {} AS legacy (TYPE SQLITE, READ_ONLY);",
-            quote_sql_literal(legacy_path)?
-        ))
-        .map_err(|error| {
-            AppError::Storage(format!(
-                "Failed to open the legacy database '{}' for reading: {error}",
-                legacy_path.display()
-            ))
-        })?;
-
     // The target's catalog name is derived from its file name, not the literal "main"; only the
     // schema inside it is called that. Ask the connection which catalog it is currently in.
     let target_catalog: String = connection
@@ -236,7 +258,19 @@ fn build_converted_core(
             AppError::Storage(format!("Failed to resolve the target catalog: {error}"))
         })?;
     let target_tables = list_tables(&connection, &target_catalog)?;
-    let legacy_tables = list_tables(&connection, "legacy")?;
+
+    let snapshot_path = sibling_path(legacy_path, LEGACY_SNAPSHOT_SUFFIX);
+    let legacy_tables = snapshot_legacy_tables(legacy_path, &snapshot_path, &target_tables)?;
+    connection
+        .execute_batch(&format!(
+            "ATTACH {} AS legacy (READ_ONLY);",
+            quote_sql_literal(&snapshot_path)?
+        ))
+        .map_err(|error| {
+            AppError::Storage(format!(
+                "Failed to open the staged copy of the legacy database: {error}"
+            ))
+        })?;
 
     // Foreign keys are enforced during the copy, so a child table inserted before its parent
     // aborts the whole transaction. Order the copy by the target schema's own dependency graph.
@@ -311,6 +345,347 @@ fn build_converted_core(
         absent_from_legacy,
         dropped_from_legacy,
     })
+}
+
+/// Streams each legacy table named in `wanted` into a new DuckDB file at `snapshot_path`, returning
+/// the names of every table the legacy database holds.
+fn snapshot_legacy_tables(
+    legacy_path: &Path,
+    snapshot_path: &Path,
+    wanted: &[String],
+) -> Result<Vec<String>, AppError> {
+    let source = open_legacy_source(legacy_path)?;
+    let legacy_tables = sqlite_tables(&source)?;
+    let snapshot = super::open_duckdb(Some(snapshot_path)).map_err(|error| {
+        AppError::Storage(format!(
+            "Failed to create the staged copy of the legacy database '{}': {error}",
+            snapshot_path.display()
+        ))
+    })?;
+    for table in legacy_tables.iter().filter(|table| wanted.contains(*table)) {
+        snapshot_table(&source, &snapshot, table)?;
+    }
+    snapshot.execute_batch("CHECKPOINT;").map_err(|error| {
+        AppError::Storage(format!(
+            "Failed to checkpoint the staged legacy tables: {error}"
+        ))
+    })?;
+    Ok(legacy_tables)
+}
+
+/// Opens the legacy database for reading without writing to it or creating any file beside it.
+///
+/// `immutable` stops SQLite from taking locks or creating a `-shm` or `-journal`, but it also makes
+/// SQLite ignore a WAL and a hot journal. The legacy application ran in WAL mode, so committed rows
+/// can exist only in its `-wal`; when either sidecar holds data, a private copy is opened instead
+/// and SQLite replays the sidecar into that copy.
+fn open_legacy_source(legacy_path: &Path) -> Result<rusqlite::Connection, AppError> {
+    let open_error = |error: rusqlite::Error| {
+        AppError::Storage(format!(
+            "Failed to open the legacy database '{}' for reading: {error}",
+            legacy_path.display()
+        ))
+    };
+    let mut pending = Vec::new();
+    for suffix in ["-wal", "-journal"] {
+        let path = sidecar_path(legacy_path, suffix);
+        match fs::metadata(&path) {
+            Ok(metadata) if metadata.len() > 0 => pending.push(suffix),
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(AppError::Storage(format!(
+                    "Failed to inspect '{}': {error}",
+                    path.display()
+                )))
+            }
+        }
+    }
+    if pending.is_empty() {
+        return rusqlite::Connection::open_with_flags(
+            immutable_uri(legacy_path)?,
+            OpenFlags::SQLITE_OPEN_READ_ONLY
+                | OpenFlags::SQLITE_OPEN_NO_MUTEX
+                | OpenFlags::SQLITE_OPEN_URI,
+        )
+        .map_err(open_error);
+    }
+    let copy = sibling_path(legacy_path, LEGACY_SOURCE_COPY_SUFFIX);
+    copy_file(legacy_path, &copy)?;
+    for suffix in pending {
+        copy_file(
+            &sidecar_path(legacy_path, suffix),
+            &sidecar_path(&copy, suffix),
+        )?;
+    }
+    rusqlite::Connection::open_with_flags(
+        &copy,
+        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .map_err(open_error)
+}
+
+/// A `file:` URI for `path` with `immutable=1`. SQLite percent-decodes the path and ends it at `?`
+/// or `#`, and a Windows drive path needs a leading `/`.
+fn immutable_uri(path: &Path) -> Result<String, AppError> {
+    let value = path.to_str().ok_or_else(|| {
+        AppError::DataParsing(format!("Database path '{}' is not UTF-8", path.display()))
+    })?;
+    let mut uri = String::from("file:");
+    if cfg!(windows) && path.is_absolute() {
+        uri.push('/');
+    }
+    for character in value.chars() {
+        match character {
+            '%' => uri.push_str("%25"),
+            '?' => uri.push_str("%3F"),
+            '#' => uri.push_str("%23"),
+            '\\' if cfg!(windows) => uri.push('/'),
+            other => uri.push(other),
+        }
+    }
+    uri.push_str("?immutable=1");
+    Ok(uri)
+}
+
+/// Copies into a newly created file, so the copy is writable even when the legacy file is not.
+fn copy_file(from: &Path, to: &Path) -> Result<(), AppError> {
+    let copy_error = |error: std::io::Error| {
+        AppError::Storage(format!(
+            "Failed to copy '{}' to '{}': {error}",
+            from.display(),
+            to.display()
+        ))
+    };
+    let mut source = fs::File::open(from).map_err(copy_error)?;
+    let mut target = fs::File::create(to).map_err(copy_error)?;
+    std::io::copy(&mut source, &mut target).map_err(copy_error)?;
+    Ok(())
+}
+
+/// Ordinary and virtual table names in the legacy database, excluding SQLite's internal tables.
+fn sqlite_tables(source: &rusqlite::Connection) -> Result<Vec<String>, AppError> {
+    let mut statement = source
+        .prepare(
+            "SELECT name FROM sqlite_master
+             WHERE type = 'table' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\'
+             ORDER BY name",
+        )
+        .map_err(|error| {
+            AppError::Storage(format!("Failed to enumerate legacy tables: {error}"))
+        })?;
+    let rows = statement
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|error| AppError::Storage(format!("Failed to read legacy tables: {error}")))?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| AppError::Storage(format!("Failed to decode legacy tables: {error}")))
+}
+
+/// How one legacy column is staged in DuckDB.
+///
+/// SQLite stores each value with its own storage class whatever the column declares: a column
+/// declared `INTEGER` keeps text such as `'0x1F'` as text. So the staged type follows the classes
+/// the column's values actually hold, and every value is staged exactly as stored; the declared
+/// type's affinity decides only for a column with no values. If the copy into the converted schema
+/// then changes a value (`'0x1F'` cast to `31`), the verification anti-join reports that row as
+/// missing and the conversion aborts, rather than altering evidence silently.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StagedColumn {
+    Integer,
+    /// Real values, plus integers that convert exactly.
+    Real,
+    Text,
+    Blob,
+    /// Text mixed with numbers, each number kept as its exact decimal text.
+    MixedText,
+}
+
+impl StagedColumn {
+    /// `None` when binary values share the column with another class: no type holds both exactly.
+    fn resolve(declared: &str, classes: i64) -> Option<Self> {
+        Some(match classes {
+            0 => Self::from_affinity(declared),
+            CLASS_INTEGER => Self::Integer,
+            CLASS_REAL => Self::Real,
+            CLASS_TEXT => Self::Text,
+            CLASS_BLOB => Self::Blob,
+            mixed if mixed == CLASS_INTEGER | CLASS_REAL => Self::Real,
+            mixed if mixed & CLASS_BLOB == 0 => Self::MixedText,
+            _ => return None,
+        })
+    }
+
+    /// SQLite's affinity rules, in their precedence order; NUMERIC and untyped columns stage as
+    /// text.
+    fn from_affinity(declared: &str) -> Self {
+        let declared = declared.to_ascii_uppercase();
+        let has = |needles: &[&str]| needles.iter().any(|needle| declared.contains(needle));
+        if has(&["INT"]) {
+            Self::Integer
+        } else if has(&["CHAR", "CLOB", "TEXT"]) {
+            Self::Text
+        } else if has(&["BLOB"]) {
+            Self::Blob
+        } else if has(&["REAL", "FLOA", "DOUB"]) {
+            Self::Real
+        } else {
+            Self::Text
+        }
+    }
+
+    fn duckdb_type(self) -> &'static str {
+        match self {
+            Self::Integer => "BIGINT",
+            Self::Real => "DOUBLE",
+            Self::Text | Self::MixedText => "VARCHAR",
+            Self::Blob => "BLOB",
+        }
+    }
+
+    /// The staged form of one stored value, or why it cannot be staged without loss.
+    fn stage(self, value: SqliteValueRef<'_>) -> Result<ToSqlOutput<'_>, String> {
+        Ok(match (self, value) {
+            (_, SqliteValueRef::Null) => ToSqlOutput::Borrowed(DuckValueRef::Null),
+            (Self::Integer, SqliteValueRef::Integer(number)) => {
+                ToSqlOutput::Borrowed(DuckValueRef::BigInt(number))
+            }
+            (Self::Real, SqliteValueRef::Real(number)) => {
+                ToSqlOutput::Borrowed(DuckValueRef::Double(number))
+            }
+            (Self::Real, SqliteValueRef::Integer(number))
+                if number.unsigned_abs() <= EXACT_F64_INTEGER_LIMIT =>
+            {
+                ToSqlOutput::Borrowed(DuckValueRef::Double(number as f64))
+            }
+            (Self::Real, SqliteValueRef::Integer(_)) => {
+                return Err("holds an integer too large to stage exactly beside real values".into())
+            }
+            (Self::MixedText, SqliteValueRef::Integer(number)) => {
+                ToSqlOutput::Owned(DuckValue::Text(number.to_string()))
+            }
+            // `Display` for `f64` is the shortest text that parses back to the same value.
+            (Self::MixedText, SqliteValueRef::Real(number)) => {
+                ToSqlOutput::Owned(DuckValue::Text(number.to_string()))
+            }
+            (Self::Text | Self::MixedText, SqliteValueRef::Text(bytes)) => {
+                std::str::from_utf8(bytes)
+                    .map_err(|_| "holds text that is not valid UTF-8".to_string())?;
+                ToSqlOutput::Borrowed(DuckValueRef::Text(bytes))
+            }
+            (Self::Blob, SqliteValueRef::Blob(bytes)) => {
+                ToSqlOutput::Borrowed(DuckValueRef::Blob(bytes))
+            }
+            (_, other) => {
+                return Err(format!(
+                    "changed storage class to {} while being read",
+                    other.data_type()
+                ))
+            }
+        })
+    }
+}
+
+/// Streams one legacy table into the staging file through DuckDB's appender.
+fn snapshot_table(
+    source: &rusqlite::Connection,
+    snapshot: &Connection,
+    table: &str,
+) -> Result<(), AppError> {
+    let read_error = |error: rusqlite::Error| {
+        AppError::Storage(format!("Failed to read legacy table '{table}': {error}"))
+    };
+    let stage_error = |error: duckdb::Error| {
+        AppError::Storage(format!("Failed to stage legacy table '{table}': {error}"))
+    };
+    let unconvertible = |column: &str, reason: &str| {
+        AppError::Storage(format!(
+            "Legacy column '{table}.{column}' {reason}; it cannot be converted without loss. \
+             The original was not modified."
+        ))
+    };
+    let quoted = quote_identifier(table);
+
+    // Hidden columns (an FTS5 table's own name and `rank`) are absent from `table_info`, so the
+    // explicit projection below never reads them.
+    let columns: Vec<(String, String)> = source
+        .prepare("SELECT name, type FROM pragma_table_info(?1) ORDER BY cid")
+        .and_then(|mut statement| {
+            statement
+                .query_map([table], |row| Ok((row.get(0)?, row.get(1)?)))?
+                .collect()
+        })
+        .map_err(read_error)?;
+    let quoted_columns: Vec<String> = columns
+        .iter()
+        .map(|(name, _)| quote_identifier(name))
+        .collect();
+
+    let class_unions = quoted_columns
+        .iter()
+        .map(|column| {
+            format!(
+                "coalesce(sum(DISTINCT CASE typeof({column}) \
+                   WHEN 'integer' THEN {CLASS_INTEGER} WHEN 'real' THEN {CLASS_REAL} \
+                   WHEN 'text' THEN {CLASS_TEXT} WHEN 'blob' THEN {CLASS_BLOB} ELSE 0 END), 0)"
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let classes: Vec<i64> = source
+        .query_row(&format!("SELECT {class_unions} FROM {quoted}"), [], |row| {
+            (0..columns.len()).map(|index| row.get(index)).collect()
+        })
+        .map_err(read_error)?;
+    let staged = columns
+        .iter()
+        .zip(classes)
+        .map(|((name, declared), classes)| {
+            StagedColumn::resolve(declared, classes).ok_or_else(|| {
+                unconvertible(name, "mixes binary values with other storage classes")
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let definitions = quoted_columns
+        .iter()
+        .zip(&staged)
+        .map(|(column, kind)| format!("{column} {}", kind.duckdb_type()))
+        .collect::<Vec<_>>()
+        .join(", ");
+    snapshot
+        .execute_batch(&format!("CREATE TABLE {quoted} ({definitions});"))
+        .map_err(stage_error)?;
+
+    let mut statement = source
+        .prepare(&format!(
+            "SELECT {} FROM {quoted}",
+            quoted_columns.join(", ")
+        ))
+        .map_err(read_error)?;
+    let mut rows = statement.query([]).map_err(read_error)?;
+    let mut appender = snapshot.appender(table).map_err(stage_error)?;
+    let mut buffered_bytes = 0_usize;
+    while let Some(row) = rows.next().map_err(read_error)? {
+        let mut values = Vec::with_capacity(staged.len());
+        for (index, kind) in staged.iter().enumerate() {
+            let value = row.get_ref(index).map_err(read_error)?;
+            if let SqliteValueRef::Text(bytes) | SqliteValueRef::Blob(bytes) = value {
+                buffered_bytes += bytes.len();
+            }
+            values.push(
+                kind.stage(value)
+                    .map_err(|reason| unconvertible(&columns[index].0, &reason))?,
+            );
+        }
+        appender
+            .append_row(duckdb::appender_params_from_iter(values))
+            .map_err(stage_error)?;
+        if buffered_bytes >= APPENDER_FLUSH_BYTES {
+            appender.flush().map_err(stage_error)?;
+            buffered_bytes = 0;
+        }
+    }
+    appender.flush().map_err(stage_error)
 }
 
 /// Copies one table by column name, returning the number of rows read from the legacy database.
@@ -559,20 +934,47 @@ fn push_statement(statement: &mut String, schema: &mut String, seeds: &mut Strin
     statement.clear();
 }
 
-/// Loads the already-installed `sqlite_scanner` extension so the legacy core can be `ATTACH`ed.
-///
-/// Deliberately does not fall back to `INSTALL sqlite`: that downloads unsigned native code from
-/// extensions.duckdb.org, which App Review rejects and signed-build library validation refuses to
-/// load (see `storage::open_duckdb`). The extension is not compiled in either (the `sqlite`
-/// feature is not enabled in `Cargo.toml`), so a missing extension here is a real, reportable
-/// failure rather than something this function can silently work around.
-fn load_sqlite_extension(connection: &Connection) -> Result<(), AppError> {
-    connection.execute_batch("LOAD sqlite;").map_err(|error| {
-        AppError::Storage(format!(
-            "The DuckDB SQLite reader required to upgrade the existing database is not \
-             available in this build and cannot be downloaded at runtime: {error}"
-        ))
-    })
+/// Removes the scratch files a conversion stages beside `core_path`.
+fn remove_staging_files(core_path: &Path) -> Result<(), AppError> {
+    let snapshot = sibling_path(core_path, LEGACY_SNAPSHOT_SUFFIX);
+    let source_copy = sibling_path(core_path, LEGACY_SOURCE_COPY_SUFFIX);
+    remove_if_present(&snapshot)?;
+    remove_if_present(&sibling_path(&snapshot, "wal"))?;
+    remove_if_present(&source_copy)?;
+    for suffix in SQLITE_SIDECARS {
+        remove_if_present(&sidecar_path(&source_copy, suffix))?;
+    }
+    Ok(())
+}
+
+/// Renames a SQLite database together with whichever sidecars it has. A WAL can hold committed
+/// rows the main file lacks, so a backup separated from it would be incomplete. On failure,
+/// everything already moved is moved back.
+fn move_with_sidecars(from: &Path, to: &Path) -> std::io::Result<()> {
+    fs::rename(from, to)?;
+    let mut moved = Vec::new();
+    for suffix in SQLITE_SIDECARS {
+        let (source, target) = (sidecar_path(from, suffix), sidecar_path(to, suffix));
+        match fs::rename(&source, &target) {
+            Ok(()) => moved.push((source, target)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                for (source, target) in moved.iter().rev() {
+                    let _ = fs::rename(target, source);
+                }
+                let _ = fs::rename(to, from);
+                return Err(error);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Appends `suffix` to the file name verbatim, the way SQLite names `-wal`, `-journal` and `-shm`.
+fn sidecar_path(path: &Path, suffix: &str) -> PathBuf {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(suffix);
+    path.with_file_name(name)
 }
 
 pub(super) fn remove_if_present(path: &Path) -> Result<(), AppError> {
@@ -616,11 +1018,73 @@ mod tests {
 
     const MIGRATION: &str = include_str!("../../migrations/0001_initial_schema.sql");
 
+    /// Writes `tables` from `staging`'s in-memory catalog to a new SQLite file, declaring each
+    /// column with its DuckDB type name and storing booleans as integers, as SQLite has no boolean.
+    fn write_sqlite_copy(staging: &Connection, tables: &[String], path: &Path) {
+        use rusqlite::types::Value as SqliteValue;
+
+        let mut sqlite = rusqlite::Connection::open(path).unwrap();
+        let transaction = sqlite.transaction().unwrap();
+        for table in tables {
+            let quoted = quote_identifier(table);
+            let columns: Vec<(String, String)> = staging
+                .prepare(
+                    "SELECT column_name, data_type FROM information_schema.columns
+                     WHERE table_catalog = 'memory' AND table_schema = 'main' AND table_name = ?1
+                     ORDER BY ordinal_position",
+                )
+                .unwrap()
+                .query_map([table], |row| Ok((row.get(0)?, row.get(1)?)))
+                .unwrap()
+                .collect::<Result<_, _>>()
+                .unwrap();
+            let definitions = columns
+                .iter()
+                .map(|(name, data_type)| format!("{} {data_type}", quote_identifier(name)))
+                .collect::<Vec<_>>()
+                .join(", ");
+            transaction
+                .execute_batch(&format!("CREATE TABLE {quoted} ({definitions});"))
+                .unwrap();
+            let placeholders = vec!["?"; columns.len()].join(", ");
+            let mut insert = transaction
+                .prepare(&format!("INSERT INTO {quoted} VALUES ({placeholders})"))
+                .unwrap();
+            let mut select = staging.prepare(&format!("SELECT * FROM {quoted}")).unwrap();
+            let mut rows = select.query([]).unwrap();
+            while let Some(row) = rows.next().unwrap() {
+                let values: Vec<SqliteValue> = (0..columns.len())
+                    .map(|index| match row.get::<_, DuckValue>(index).unwrap() {
+                        DuckValue::Null => SqliteValue::Null,
+                        DuckValue::Boolean(flag) => SqliteValue::Integer(i64::from(flag)),
+                        DuckValue::Int(number) => SqliteValue::Integer(i64::from(number)),
+                        DuckValue::BigInt(number) => SqliteValue::Integer(number),
+                        DuckValue::Float(number) => SqliteValue::Real(f64::from(number)),
+                        DuckValue::Double(number) => SqliteValue::Real(number),
+                        DuckValue::Text(text) => SqliteValue::Text(text),
+                        DuckValue::Blob(bytes) => SqliteValue::Blob(bytes),
+                        other => panic!("fixture value {other:?} in '{table}' has no SQLite form"),
+                    })
+                    .collect();
+                insert.execute(rusqlite::params_from_iter(values)).unwrap();
+            }
+        }
+        transaction.commit().unwrap();
+    }
+
+    /// Shaped like the pre-DuckDB application's core: WAL mode, with document text in FTS5.
     fn legacy_sqlite_core(path: &Path) {
         let connection = rusqlite::Connection::open(path).unwrap();
         connection
             .execute_batch(
-                "CREATE TABLE portals (
+                "PRAGMA journal_mode = WAL;
+                 CREATE VIRTUAL TABLE documents_fts USING fts5(
+                    document_id, portal_subdomain UNINDEXED, file_name, extracted_text,
+                    tokenize=\"porter unicode61\"
+                 );
+                 INSERT INTO documents_fts
+                 VALUES (100, 'city-a', 'release.pdf', 'body worn camera retention schedule');
+                 CREATE TABLE portals (
                     subdomain TEXT PRIMARY KEY, display_name TEXT NOT NULL, base_url TEXT NOT NULL
                  );
                  CREATE TABLE agencies (
@@ -716,6 +1180,7 @@ mod tests {
         assert_eq!(copied.get("requests"), Some(&2));
         assert_eq!(copied.get("agencies"), Some(&1));
         assert_eq!(copied.get("portals"), Some(&1));
+        assert_eq!(copied.get("documents_fts"), Some(&1));
         assert!(
             report
                 .dropped_from_legacy
@@ -785,28 +1250,13 @@ mod tests {
             )
             .unwrap();
 
-        load_sqlite_extension(&staging).unwrap();
-        staging
-            .execute_batch(&format!(
-                "ATTACH {} AS legacy (TYPE SQLITE);",
-                quote_sql_literal(&core).unwrap()
-            ))
-            .unwrap();
         let tables = list_tables(&staging, "memory").unwrap();
         assert!(
             tables.len() >= 20,
             "the fixture must cover the real schema, saw {} tables",
             tables.len()
         );
-        for table in &tables {
-            let quoted = quote_identifier(table);
-            staging
-                .execute_batch(&format!(
-                    "CREATE TABLE legacy.{quoted} AS SELECT * FROM main.{quoted};"
-                ))
-                .unwrap_or_else(|error| panic!("fixture table '{table}' must transfer: {error}"));
-        }
-        staging.execute_batch("DETACH legacy;").unwrap();
+        write_sqlite_copy(&staging, &tables, &core);
         drop(staging);
 
         assert_eq!(
@@ -914,8 +1364,147 @@ mod tests {
             "the half-built core must be removed"
         );
         assert!(
+            !sibling_path(&core, LEGACY_SNAPSHOT_SUFFIX).exists(),
+            "the staged legacy tables must be removed"
+        );
+        assert!(
             !sibling_path(&core, LEGACY_BACKUP_SUFFIX).exists(),
             "no backup should be published when the conversion never completed"
         );
+    }
+
+    /// SQLite's INTEGER affinity converts only well-formed decimal text, so `'0x1F'` stays TEXT in
+    /// a column declared `INTEGER`. The copy into a `BIGINT` column casts it to 31, a changed
+    /// value, which the verification anti-join must catch rather than pass as a clean upgrade.
+    #[test]
+    fn verification_rejects_a_declared_integer_column_value_the_copy_would_change() {
+        let directory = tempfile::tempdir().unwrap();
+        let core = directory.path().join("core.db");
+        let connection = rusqlite::Connection::open(&core).unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE ledger (id INTEGER, amount INTEGER);
+                 INSERT INTO ledger VALUES (1, 10), (2, '0x1F');",
+            )
+            .unwrap();
+        let stored: String = connection
+            .query_row(
+                "SELECT typeof(amount) FROM ledger WHERE id = 2",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(stored, "text");
+        drop(connection);
+
+        let error =
+            migrate_legacy_sqlite_core(&core, "CREATE TABLE ledger (id BIGINT, amount BIGINT);")
+                .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("Migration verification failed for table 'ledger'"),
+            "unexpected: {error}"
+        );
+        assert_eq!(
+            classify_core_database(&core).unwrap(),
+            CoreDatabaseKind::LegacySqlite
+        );
+    }
+
+    /// The legacy application ran in WAL mode. Opening such a file read-only without `immutable`
+    /// creates a `-shm` beside it, so this fixture is what distinguishes a truly read-only open.
+    #[test]
+    fn conversion_neither_writes_the_legacy_file_nor_creates_files_beside_it() {
+        let directory = tempfile::tempdir().unwrap();
+        let core = directory.path().join("core.db");
+        legacy_sqlite_core(&core);
+        for suffix in SQLITE_SIDECARS {
+            assert!(
+                !sidecar_path(&core, suffix).exists(),
+                "fixture left {suffix}"
+            );
+        }
+        let stale =
+            std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
+        fs::File::options()
+            .write(true)
+            .open(&core)
+            .unwrap()
+            .set_modified(stale)
+            .unwrap();
+        let original = fs::read(&core).unwrap();
+
+        let report = migrate_legacy_sqlite_core(&core, MIGRATION).unwrap();
+
+        assert_eq!(fs::read(&report.backup_path).unwrap(), original);
+        assert_eq!(
+            fs::metadata(&report.backup_path)
+                .unwrap()
+                .modified()
+                .unwrap(),
+            stale
+        );
+        let mut names: Vec<String> = fs::read_dir(directory.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        assert_eq!(
+            names,
+            vec!["core.db", "core.db.legacy-sqlite.bak"],
+            "no journal, WAL, shared-memory or staging file may remain"
+        );
+    }
+
+    /// `immutable` makes SQLite ignore a WAL, and a WAL-mode database that was not checkpointed
+    /// holds committed rows only there. Those rows must be converted, and the WAL must stay with
+    /// the retained backup so the backup still holds them.
+    #[test]
+    fn rows_committed_only_to_a_pending_wal_are_converted_and_kept_with_the_backup() {
+        let directory = tempfile::tempdir().unwrap();
+        let live = directory.path().join("live.db");
+        let writer = rusqlite::Connection::open(&live).unwrap();
+        writer
+            .execute_batch(
+                "PRAGMA journal_mode = WAL;
+                 PRAGMA wal_autocheckpoint = 0;
+                 CREATE TABLE portals (
+                    subdomain TEXT PRIMARY KEY, display_name TEXT NOT NULL, base_url TEXT NOT NULL
+                 );
+                 INSERT INTO portals VALUES ('city-a', 'City A', 'https://city-a.example');",
+            )
+            .unwrap();
+        // Copy while the writer is open: the state a crash or force-quit leaves on disk.
+        let core = directory.path().join("core.db");
+        fs::copy(&live, &core).unwrap();
+        fs::copy(sidecar_path(&live, "-wal"), sidecar_path(&core, "-wal")).unwrap();
+        drop(writer);
+        let original = fs::read(&core).unwrap();
+        let wal = fs::read(sidecar_path(&core, "-wal")).unwrap();
+        assert!(!wal.is_empty());
+
+        let report = migrate_legacy_sqlite_core(
+            &core,
+            "CREATE TABLE portals (
+                subdomain TEXT PRIMARY KEY, display_name TEXT NOT NULL, base_url TEXT NOT NULL
+             );",
+        )
+        .unwrap();
+
+        assert_eq!(report.copied_tables, vec![("portals".to_string(), 1)]);
+        let converted = Connection::open(&core).unwrap();
+        let name: String = converted
+            .query_row("SELECT display_name FROM portals", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(name, "City A");
+        assert_eq!(fs::read(&report.backup_path).unwrap(), original);
+        assert_eq!(
+            fs::read(sidecar_path(&report.backup_path, "-wal")).unwrap(),
+            wal,
+            "the WAL must travel with the backup, unchanged"
+        );
+        assert!(!sidecar_path(&core, "-wal").exists());
+        assert!(!sibling_path(&core, LEGACY_SOURCE_COPY_SUFFIX).exists());
     }
 }
