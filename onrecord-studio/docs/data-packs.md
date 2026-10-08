@@ -346,6 +346,34 @@ rules above already need:
   lifecycle, payment timing) use the Enforcement and Money packs; its records that are documents
   (DS-450 forms, Housing Commission packets, audit reports) are collected sources, not pack tables.
 
+## Held registry entries
+
+Removed from `src-tauri/src/packs/sources.json` until their publisher serves them to the builder.
+Every `www.huduser.gov` URL answers a non-browser client (curl, the builder) with
+`HTTP/2 202`, `content-length: 0`, `x-amzn-waf-action: challenge` (probed 2026-10-07): an AWS WAF
+JavaScript challenge, not the file. A browser User-Agent is served the file, but posing as a
+browser to pass a bot challenge is not something the builder does. `files.hudexchange.info` is not
+challenged and stays.
+
+| Pack | Table | URL |
+|---|---|---|
+| ca-housing | `hud_fair_market_rents_history` | `https://www.huduser.gov/portal/datasets/FMR/FMR_All_1983_2027.csv` |
+| ca-housing | `hud_small_area_fair_market_rents` | `https://www.huduser.gov/portal/datasets/fmr/fmr2027/FY27_safmrs.xlsx` (sheet `SAFMRs`) |
+| ca-housing | `hud_picture_subsidized_households_pha` | `https://www.huduser.gov/portal/datasets/pictures/files/PHA_{year}_2020census.xlsx`, 2022 to 2025 (sheet `PHA_EXTRACT`) |
+| ca-housing | `hud_picture_subsidized_households_project` | `https://www.huduser.gov/portal/datasets/pictures/files/PROJECT_{year}_2020census.xlsx`, 2022 to 2025 (sheet `PROJECT_EXTRACT`) |
+| ca-housing | `hud_lihtc_properties` | `https://www.huduser.gov/lihtc/lihtcpub.zip` (sheet `Data`) |
+| ca-homelessness-system | `hud_hic_counts_by_coc` | `https://www.huduser.gov/portal/sites/default/files/xls/2007-2025-HIC-Counts-by-CoC.xlsx` (sheet `2025`) |
+| ca-homelessness-system | `hud_pit_veteran_counts_by_coc` | `https://www.huduser.gov/portal/sites/default/files/xls/2011-2025-PIT-Veteran-Counts-by-CoC.xlsx` (sheet `2025`) |
+| ca-homelessness-system | `hud_hic_projects` | `https://www.huduser.gov/portal/sites/default/files/xls/2025-HIC-Counts-by-State.csv` |
+
+| ca-public-money | `usaspending_hud_assistance` | `https://files.usaspending.gov/award_data_archive/FY{year}_086_Assistance_Full_{yyyymmdd}.zip`, 2007 to 2026 |
+
+`usaspending_hud_assistance` is held for another reason: the archive names each file by the date
+it was generated, and the registry substitutes only `{year}`, so the URL keeps a literal
+`{yyyymmdd}` and answers 404. It needs the current file names resolved from the archive listing.
+
+The full entries (licence evidence, headers, sizes) are in `sources.json` at commit `3a6b013`.
+
 ## Open
 
 - Written permission, or a stated licence, from the UCSD Homelessness Hub, the SDSU sanitation
