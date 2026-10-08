@@ -57,7 +57,7 @@ const COLUMNS: readonly ColumnDefinition[] = [
   },
   { key: 'validLatencySampleSize', label: 'Measured', full: 'Closures with a measurable latency', format: (p) => p.validLatencySampleSize.toLocaleString() },
   { key: 'statutoryViolationCount', label: 'Violations', full: 'Counted statutory violations', format: (p) => p.statutoryViolationCount.toLocaleString() },
-  { key: 'statutoryViolationRate', label: 'Violation rate', format: (p) => `${(p.statutoryViolationRate * 100).toFixed(1)}%` },
+  { key: 'statutoryViolationRate', label: 'Rate', full: 'Share of measured requests past the statutory deadline', format: (p) => `${(p.statutoryViolationRate * 100).toFixed(1)}%` },
   {
     key: 'suspiciousFastClosureCount',
     label: 'Fast closures',
@@ -201,6 +201,7 @@ export default function AgencyComparison() {
                       <Th
                         key={definition.key}
                         numeric
+                        className="px-2"
                         aria-sort={active ? (direction === 'desc' ? 'descending' : 'ascending') : 'none'}
                       >
                         <button
@@ -251,7 +252,7 @@ export default function AgencyComparison() {
                       {COLUMNS.map((definition) => {
                         const value = definition.format(profile);
                         return (
-                          <Td key={definition.key} numeric className={cn(value === null && 'italic text-muted')}>
+                          <Td key={definition.key} numeric className={cn('px-2', value === null && 'italic text-muted')}>
                             {value ?? NO_MEASURABLE_CLOSURE}
                           </Td>
                         );
