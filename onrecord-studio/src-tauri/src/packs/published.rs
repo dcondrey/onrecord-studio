@@ -7,7 +7,7 @@
 //! lists; the frontend names a pack, a version and tables, never a URL or a path.
 
 use super::catalog::{pack_names, SNAPSHOT_PACK};
-use super::import::{file_kind, import_files, manifest_sha256, summarize};
+use super::import::{file_source, import_files, manifest_sha256, summarize};
 use super::{
     check_pack_file, latest_retrieved, pack_relative, refused, verify_manifest,
     verify_manifest_bytes, PackFile, PackFileFormat, PackManifest, PinnedPackKey, SignedManifest,
@@ -41,12 +41,17 @@ fn repository(pack: &str) -> String {
     format!("onrecord-{pack}")
 }
 
+/// The public page of `pack`'s repository.
+pub(crate) fn repository_url(pack: &str) -> String {
+    format!("{HUB}datasets/{PUBLISHER}/{}", repository(pack))
+}
+
 /// Every pack OnRecord publishes.
 pub(crate) fn published_packs() -> Vec<PublishedPack> {
     pack_names()
         .map(|pack| PublishedPack {
             pack: pack.into(),
-            repository_url: format!("{HUB}datasets/{PUBLISHER}/{}", repository(pack)),
+            repository_url: repository_url(pack),
         })
         .collect()
 }
@@ -306,7 +311,7 @@ fn plan(
                     file.path
                 )));
             }
-            if file_kind(manifest, file).is_none() {
+            if file_source(manifest, file).is_none() {
                 return Err(AppError::DataParsing(format!(
                     "This app cannot import {}",
                     file.path
@@ -514,6 +519,7 @@ mod tests {
             last_modified: None,
             etag: None,
             changes: None,
+            licence: None,
         }
     }
 

@@ -402,6 +402,7 @@ mod tests {
             last_modified: None,
             etag: None,
             changes: None,
+            licence: None,
         }
     }
 

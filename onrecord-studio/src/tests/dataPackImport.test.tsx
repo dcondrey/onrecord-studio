@@ -47,7 +47,7 @@ describe('DataPackImport', () => {
 
   it('states per file whether rows were imported, none were, or the bytes were already stored', async () => {
     const files = ['a.csv', 'b.csv', 'c.csv'].map((path) => ({
-      path, year: null, rows: 2, bytes: 10, partial: false, sourceUrl: 'https://example.test/', retrievedAt: '2026-10-05T23:59:15Z', datasetKind: 'REGIONAL_DATA' as const,
+      path, year: null, rows: 2, bytes: 10, partial: false, sourceUrl: 'https://example.test/', retrievedAt: '2026-10-05T23:59:15Z', datasetKind: 'REGIONAL_DATA' as const, licence: null,
     }));
     const result = (importedRows: number): AnalyticalImportResult => ({
       snapshotId: 's', datasetKind: 'REGIONAL_DATA', displayName: 'd', tableName: 'analysis_t', importedRows, rejectedRows: 0, malformedRows: 0, duplicateKeyRows: 0, unconvertedCells: 0, schemaWarnings: [], sourceSha256: 'e'.repeat(64),
@@ -77,7 +77,7 @@ describe('DataPackImport', () => {
 
   it('shows a published pack from its signed manifest and downloads only the chosen years', async () => {
     const file = (year: number, bytes: number) => ({
-      path: `originals/police_calls/${year}.csv`, year, rows: 10, bytes, partial: false, sourceUrl: 'https://example.test/', retrievedAt: '2026-10-05T23:59:15Z', datasetKind: 'REGIONAL_DATA' as const,
+      path: `originals/police_calls/${year}.csv`, year, rows: 10, bytes, partial: false, sourceUrl: 'https://example.test/', retrievedAt: '2026-10-05T23:59:15Z', datasetKind: 'REGIONAL_DATA' as const, licence: null,
     });
     const manifest = { ...summary('san-diego-reports'), tables: [{ table: 'police_calls', files: [file(2024, 2_000_000), file(2025, 3_000_000)], unchangedChecks: 0, lastCheckedAt: null, changeRecords: 0 }] };
     vi.mocked(invokeCommand).mockImplementation(((command: string) => Promise.resolve(
@@ -99,7 +99,7 @@ describe('DataPackImport', () => {
 
   it('offers a snapshot table as its latest snapshot alone, whatever its earlier ones are', async () => {
     const snapshot = (stamp: string, bytes: number, datasetKind: 'REGIONAL_DATA' | null) => ({
-      path: `originals/call_types/${stamp}/types.csv`, year: null, rows: 10, bytes, partial: false, sourceUrl: 'https://example.test/', retrievedAt: `${stamp}T13:23:00Z`, datasetKind,
+      path: `originals/call_types/${stamp}/types.csv`, year: null, rows: 10, bytes, partial: false, sourceUrl: 'https://example.test/', retrievedAt: `${stamp}T13:23:00Z`, datasetKind, licence: null,
     });
     const files = [snapshot('2026-10-05', 1_000_000, null), snapshot('2026-10-07', 2_000_000, 'REGIONAL_DATA'), snapshot('2026-10-06', 4_000_000, 'REGIONAL_DATA')];
     const manifest = { ...summary('san-diego-snapshots'), snapshots: true, tables: [{ table: 'call_types', files, unchangedChecks: 0, lastCheckedAt: null, changeRecords: 2 }] };

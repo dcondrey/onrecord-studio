@@ -48,6 +48,7 @@ TITLES = {
     "san-diego-enforcement": "San Diego enforcement: police stops, offences, parking citations, collisions and hate crimes",
     "san-diego-capacity": "San Diego capacity: development approvals",
     SNAPSHOT_PACK: "San Diego snapshots: daily history of City files overwritten in place",
+    "ca-homelessness-system": "California homelessness system: statewide and Continuum of Care measures",
 }
 
 
@@ -80,13 +81,39 @@ def key_name(signed: dict) -> str:
     sys.exit("the manifest is not signed with a pinned publisher key")
 
 
+def mixed(manifest: dict) -> bool:
+    """A registry pack: its files come from several publishers, each under its own licence."""
+    return any(file.get("licence") for file in manifest["files"])
+
+
+def licence_section(manifest: dict) -> str:
+    licence = manifest["licence"]
+    if not mixed(manifest):
+        return f"""Published by the City of San Diego under the [{licence['id']}]({licence['url']}).
+The City's disclaimer, which the licence terms require: {licence['disclaimer']}"""
+    lines = [licence["disclaimer"], ""]
+    for file in manifest["files"]:
+        if file["format"] != "ORIGINAL":
+            continue
+        own = file.get("licence")
+        if not own:
+            sys.exit(f"{file['path']} states no licence in a pack that mixes publishers")
+        line = f"- `{file['path']}` ({file['sourceUrl']}): [{own['id']}]({own['url']})"
+        if own.get("attribution"):
+            line += f". Attribution: {own['attribution']}"
+        if own.get("disclaimer"):
+            line += f". Disclaimer: {own['disclaimer']}"
+        lines.append(line)
+    lines.append("")
+    lines.append("Each file's Parquet copy is under the same licence as its original.")
+    return "\n".join(lines)
+
+
 def common_sections(signed: dict, kid: str) -> str:
     manifest = signed["manifest"]
-    licence = manifest["licence"]
     return f"""## Licence
 
-Published by the City of San Diego under the [{licence['id']}]({licence['url']}).
-The City's disclaimer, which the licence terms require: {licence['disclaimer']}
+{licence_section(manifest)}
 
 ## Conformed columns (Parquet)
 
@@ -138,8 +165,9 @@ def curated_card(signed: dict, kid: str) -> str:
     configs = "\n".join(
         f"- config_name: {name}\n  data_files: parquet/{name}/*.parquet" for name in sorted(tables)
     )
+    registry = mixed(manifest)
     return f"""---
-license: pddl
+license: {'other' if registry else 'pddl'}
 pretty_name: "{TITLES.get(pack, pack)}"
 language:
 - en
@@ -154,7 +182,7 @@ configs:
 
 # {TITLES.get(pack, pack)}
 
-City of San Diego open data, retrieved by the OnRecord Studio pack builder on {manifest['builtAt'][:10]}
+{'Public data from the publishers listed under Licence' if registry else 'City of San Diego open data'}, retrieved by the OnRecord Studio pack builder on {manifest['builtAt'][:10]}
 and published as pack `{pack}` version `{manifest['packVersion']}` (conformed schema {manifest['schemaVersion']}).
 
 Every file is the publisher's original, byte for byte, beside a Parquet copy that keeps every

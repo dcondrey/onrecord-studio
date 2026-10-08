@@ -1,7 +1,7 @@
 //! Imports a verified pack's original files through the analytical import, one file per import,
 //! and records the pack beside each snapshot (`docs/data-packs.md`, build order step 4).
 
-use super::catalog::{original_kind, SNAPSHOT_PACK};
+use super::catalog::{original_source, PublishedFile, SNAPSHOT_PACK};
 use super::{
     check_pack_file, verify_manifest, verify_pack, PackFile, PackFileFormat, PackManifest,
     PinnedPackKey, SignedManifest,
@@ -10,8 +10,8 @@ use crate::error::AppError;
 use crate::integrity::sha256_hex;
 use crate::storage::sqlite::DuckDbRepository;
 use crate::types::{
-    AnalyticalDatasetKind, AnalyticalImportRequest, DataPackFileSummary, DataPackImportOutcome,
-    DataPackSummary, DataPackTable,
+    AnalyticalImportRequest, DataPackFileSummary, DataPackImportOutcome, DataPackSummary,
+    DataPackTable,
 };
 use chrono::{DateTime, Datelike, SecondsFormat, Utc};
 use std::path::PathBuf;
@@ -89,9 +89,10 @@ fn originals(manifest: &PackManifest) -> impl Iterator<Item = &PackFile> {
         .filter(|file| file.format == PackFileFormat::Original)
 }
 
-pub(super) fn file_kind(manifest: &PackManifest, file: &PackFile) -> Option<AnalyticalDatasetKind> {
+/// The source a pack's original is imported as; `None` when no source list publishes it.
+pub(super) fn file_source(manifest: &PackManifest, file: &PackFile) -> Option<PublishedFile> {
     let file_name = file.path.rsplit('/').next()?;
-    original_kind(
+    original_source(
         &manifest.pack,
         &file.table,
         file.year,
@@ -117,7 +118,8 @@ pub(crate) fn summarize(
             partial: file.partial,
             source_url: file.source_url.clone(),
             retrieved_at: file.retrieved_at.clone(),
-            dataset_kind: file_kind(&manifest, file),
+            dataset_kind: file_source(&manifest, file).map(|source| source.kind),
+            licence: file.licence.clone(),
         };
         match tables.iter_mut().find(|table| table.table == file.table) {
             Some(table) => table.files.push(summary),
@@ -216,12 +218,12 @@ pub(crate) async fn import_files(
     )
     .await?;
     let manifest = &signed.manifest;
-    let mut chosen: Vec<(&PackFile, AnalyticalDatasetKind, String)> = Vec::new();
+    let mut chosen: Vec<(&PackFile, PublishedFile, String)> = Vec::new();
     for file in &files {
-        let kind = file_kind(manifest, file).ok_or_else(|| {
+        let source = file_source(manifest, file).ok_or_else(|| {
             AppError::DataParsing(format!("This app cannot import {}", file.path))
         })?;
-        chosen.push((file, kind, retrieved_at(file)?));
+        chosen.push((file, source, retrieved_at(file)?));
     }
     if chosen.is_empty() {
         return Err(AppError::DataParsing(
@@ -229,16 +231,16 @@ pub(crate) async fn import_files(
         ));
     }
     let mut outcomes = Vec::with_capacity(chosen.len());
-    for (file, kind, retrieved_at) in chosen {
+    for (file, source, retrieved_at) in chosen {
         let request = AnalyticalImportRequest {
-            dataset_kind: kind,
+            dataset_kind: source.kind,
             display_name: display_name(manifest, file, &retrieved_at),
             source_uri: Some(file.source_url.clone()),
             local_path: directory.join(&file.path).to_string_lossy().into_owned(),
             observation_period_start: None,
             observation_period_end: None,
             partial_dataset: file.partial,
-            worksheet: None,
+            worksheet: source.worksheet.map(str::to_owned),
             source_file_name: file.path.rsplit('/').next().map(str::to_owned),
             // Catches a file replaced between verification and the import's own read.
             expected_source_sha256: Some(file.sha256.clone()),
@@ -278,6 +280,7 @@ mod tests {
     use super::*;
     use crate::integrity::sign_package;
     use crate::packs::{PackKeyScope, PackLicence, PACK_MANIFEST_FILE};
+    use crate::types::AnalyticalDatasetKind;
     use ed25519_dalek::SigningKey;
     use std::path::Path;
 
@@ -321,6 +324,7 @@ mod tests {
                 last_modified: None,
                 etag: None,
                 changes: None,
+                licence: None,
             }],
             key_id: None,
             checks: Vec::new(),
@@ -409,6 +413,65 @@ mod tests {
             count(repository, "SELECT COUNT(*) FROM analytical_snapshots").await,
             count(repository, "SELECT COUNT(*) FROM pack_origins").await,
         )
+    }
+
+    /// A registry file imports through the City files' path: matched by its exact URL and name,
+    /// as regional data, with the licence its signed manifest states.
+    #[tokio::test]
+    async fn a_registry_file_imports_as_its_entry_with_its_own_licence() {
+        let entry = &crate::packs::sources::registry()[0];
+        let name = crate::packs::sources::file_name(&entry.url).unwrap();
+        let path = format!("originals/{}/{name}", entry.table);
+        let bytes = format!(
+            "{}\n{}\n",
+            entry.headers.join(","),
+            vec!["1"; entry.headers.len()].join(",")
+        );
+        let directory = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(directory.path().join(&path).parent().unwrap()).unwrap();
+        std::fs::write(directory.path().join(&path), &bytes).unwrap();
+        let mut listed = manifest();
+        listed.pack = entry.pack.clone();
+        listed.files[0] = PackFile {
+            path: path.clone(),
+            table: entry.table.clone(),
+            source_url: reqwest::Url::parse(&entry.url).unwrap().to_string(),
+            sha256: sha256_hex(bytes.as_bytes()),
+            bytes: bytes.len() as u64,
+            rows: 1,
+            partial: entry.partial,
+            licence: Some(entry.file_licence()),
+            ..listed.files[0].clone()
+        };
+        sign_into(directory.path(), listed.clone());
+
+        let summary = summarize(listed.clone(), "pack-test").unwrap();
+        let file = &summary.tables[0].files[0];
+        assert_eq!(file.dataset_kind, Some(AnalyticalDatasetKind::RegionalData));
+        assert_eq!(file.licence, Some(entry.file_licence()));
+        let repository = repository().await;
+        let outcomes = import_files(
+            &repository,
+            directory.path().to_path_buf(),
+            &manifest_sha256(&listed).unwrap(),
+            vec![path],
+            vec![PinnedPackKey::test(
+                key().verifying_key(),
+                PackKeyScope::Curated,
+            )],
+        )
+        .await
+        .unwrap();
+        assert_eq!(outcomes[0].error, None);
+        assert_eq!(written(&repository).await, (1, 1));
+
+        // The same file listed at another address is not one the registry publishes.
+        let mut moved = listed;
+        moved.files[0].source_url = format!("https://example.test/{name}");
+        assert_eq!(
+            summarize(moved, "pack-test").unwrap().tables[0].files[0].dataset_kind,
+            None
+        );
     }
 
     #[tokio::test]

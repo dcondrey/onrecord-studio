@@ -43,8 +43,21 @@ export interface DataPackFileSummary {
   sourceUrl: string;
   /** When the pack builder retrieved the file from its publisher. */
   retrievedAt: string;
-  /** `null`: the City source list does not publish this file, so the app does not import it. */
+  /** `null`: no source list the app holds publishes this file, so the app does not import it. */
   datasetKind: AnalyticalDatasetKind | null;
+  /** The file's own licence, as the signed manifest states it; `null` when the pack's licence covers it. */
+  licence: DataPackFileLicence | null;
+}
+
+/** The licence one file of a pack is published under, where a pack mixes publishers. */
+export interface DataPackFileLicence {
+  /** An SPDX id, or a named public-domain basis such as `public-domain-us-government`. */
+  id: string;
+  url: string;
+  /** The credit line the licence requires; `null` when it requires none. */
+  attribution: string | null;
+  /** The disclaimer the publisher requires; `null` when it requires none. */
+  disclaimer: string | null;
 }
 
 /** A pack OnRecord publishes, and the public repository the app fetches it from. */

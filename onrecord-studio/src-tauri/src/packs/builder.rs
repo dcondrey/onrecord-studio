@@ -1,9 +1,9 @@
-//! The data-pack builder: retrieves a pack's City files through the app's own source list and
-//! downloader, records what the publisher served, and signs the manifest with the publisher key,
+//! The data-pack builder: retrieves a pack's files, from the City source list or the source
+//! registry, through the app's own downloader, records what the publisher served, and signs the manifest with the publisher key,
 //! kept in the macOS Keychain or, on the CI runner, given as an environment seed. Built only with
 //! the `pack-builder` feature.
 
-use super::catalog::{pack_tables, SNAPSHOT_PACK};
+use super::catalog::{is_registry_pack, published_files, SNAPSHOT_PACK};
 use super::conformed::{conformed_select, literal, ConformedOrigin};
 use super::{
     decode_hex, pinned_pack_keys, pinned_signer, PackFile, PackFileFormat, PackKeyScope,
@@ -11,10 +11,9 @@ use super::{
 };
 use crate::error::AppError;
 use crate::ingestion::client::{ApiClient, HttpClientConfig};
-use crate::ingestion::queue::dataset_source;
 use crate::storage::tabular::{TableSource, MAX_STREAMED_BYTES};
 use crate::storage::DuckDbRepository;
-use crate::types::{AnalyticalDatasetKind, AnalyticalImportRequest, CityDataset};
+use crate::types::{AnalyticalDatasetKind, AnalyticalImportRequest};
 use chrono::{Datelike, Utc};
 use ed25519_dalek::SigningKey;
 use std::path::{Path, PathBuf};
@@ -27,9 +26,6 @@ const KEYCHAIN_ACCOUNT: &str = "publisher-seed-v1";
 const SEED_VARIABLE: &str = "ONRECORD_PACK_SEED";
 /// The `PACK_PUBLIC_KEYS` name the seed's key must be pinned under.
 const KEY_ID_VARIABLE: &str = "ONRECORD_PACK_KEY_ID";
-/// The earliest year asked of a table split by year; the source list refuses years before its
-/// publisher's series, and those are skipped.
-const EARLIEST_YEAR: u16 = 2000;
 
 pub(super) fn licence() -> PackLicence {
     PackLicence {
@@ -39,6 +35,18 @@ pub(super) fn licence() -> PackLicence {
             only. The City does not warrant their completeness, accuracy, content, or fitness for \
             any particular purpose or use, and is not liable for any deficiency in them (City of \
             San Diego Open Data Policy, s. 2.7)."
+            .into(),
+    }
+}
+
+/// A registry pack's licence: its files are published by several publishers, each under the
+/// licence its manifest entry states.
+fn mixed_licence(pack: &str) -> PackLicence {
+    PackLicence {
+        id: "mixed".into(),
+        url: super::published::repository_url(pack),
+        disclaimer: "This pack's files come from several publishers: see each file's licence, \
+            attribution and disclaimer."
             .into(),
     }
 }
@@ -146,26 +154,21 @@ fn keychain_key() -> Result<PublisherKey, AppError> {
     )))
 }
 
-/// Rows in the original at `path` as the analytical import's reader counts them.
-pub(super) async fn count_rows(path: &Path, file_name: &str) -> Result<u64, AppError> {
+/// Rows in the original at `path` (its `worksheet`, for a workbook) as the analytical import's
+/// reader counts them.
+pub(super) async fn count_rows(
+    path: &Path,
+    file_name: &str,
+    worksheet: Option<&str>,
+) -> Result<u64, AppError> {
     let (source, name) = (path.to_path_buf(), file_name.to_owned());
+    let worksheet = worksheet.map(str::to_owned);
     Ok(tauri::async_runtime::spawn_blocking(move || {
-        TableSource::open(&source, &name, None)?.read(|_| Ok(()))
+        TableSource::open(&source, &name, worksheet.as_deref())?.read(|_| Ok(()))
     })
     .await
     .map_err(|error| AppError::Internal(format!("Pack row count: {error}")))??
     .rows as u64)
-}
-
-/// The years a table is published for, or `[None]` for a table published as one file.
-fn published_years(dataset: CityDataset, current_year: i32) -> Vec<Option<u16>> {
-    if dataset_source(dataset, None, current_year).is_ok() {
-        return vec![None];
-    }
-    (EARLIEST_YEAR..=current_year as u16)
-        .filter(|year| dataset_source(dataset, Some(*year), current_year).is_ok())
-        .map(Some)
-        .collect()
 }
 
 /// Retrieves every file of `pack` into `out` and writes its signed manifest there. `out` must not
@@ -176,7 +179,8 @@ pub async fn build(pack: &str, out: &Path) -> Result<PathBuf, AppError> {
             "{SNAPSHOT_PACK} is extended by `snapshot`, never built anew"
         )));
     }
-    let tables = pack_tables(pack)?;
+    let now = Utc::now();
+    let published = published_files(pack, now.year())?;
     let key = publisher_key()?;
     require_signs(&key, pack)?;
     let key = key.signing_key;
@@ -190,61 +194,62 @@ pub async fn build(pack: &str, out: &Path) -> Result<PathBuf, AppError> {
         max_document_bytes: MAX_STREAMED_BYTES as usize,
         ..HttpClientConfig::default()
     })?;
-    let now = Utc::now();
     let pack_version = format!("{}.{}.{}", now.year(), now.month(), now.day());
     let (_scratch, repository) = scratch_database().await?;
     let mut files = Vec::new();
-    for table in tables {
-        for year in published_years(table.dataset, now.year()) {
-            let published = dataset_source(table.dataset, year, now.year())?;
-            let (url, file_name, partial, kind) = (
-                published.url,
-                published.file_name,
-                published.partial,
-                published.kind,
-            );
-            let relative = format!("originals/{}/{file_name}", table.table);
-            let path = out.join(&relative);
-            tokio::fs::create_dir_all(path.parent().expect("a file under originals"))
-                .await
-                .map_err(|error| AppError::Storage(format!("Pack directory: {error}")))?;
-            let url = reqwest::Url::parse(&url)
-                .map_err(|error| AppError::Internal(format!("Pack source URL: {error}")))?;
-            let downloaded = client.download_url_to_path(url.clone(), &path).await?;
-            let rows = count_rows(&path, &file_name).await?;
-            eprintln!("{relative}: {rows} rows, {} bytes", downloaded.byte_count);
-            let original = PackFile {
-                path: relative,
-                table: table.table.into(),
-                format: PackFileFormat::Original,
-                source_url: url.to_string(),
-                retrieved_at: downloaded.acquisition.retrieved_at,
-                sha256: downloaded.sha256,
-                bytes: downloaded.byte_count,
-                rows,
-                excluded_rows: None,
-                year,
-                partial,
-                last_modified: downloaded.acquisition.last_modified,
-                etag: downloaded.acquisition.etag,
-                changes: None,
-            };
-            let (parquet, _) =
-                write_conformed_parquet(&repository, out, &original, kind.clone(), &pack_version)
-                    .await?;
-            eprintln!(
-                "{}: {} rows, {} bytes",
-                parquet.path, parquet.rows, parquet.bytes
-            );
-            files.extend([original, parquet]);
-        }
+    for published in published {
+        let relative = format!("originals/{}/{}", published.table, published.file_name);
+        let path = out.join(&relative);
+        tokio::fs::create_dir_all(path.parent().expect("a file under originals"))
+            .await
+            .map_err(|error| AppError::Storage(format!("Pack directory: {error}")))?;
+        let url = reqwest::Url::parse(&published.url)
+            .map_err(|error| AppError::Internal(format!("Pack source URL: {error}")))?;
+        let downloaded = client.download_url_to_path(url.clone(), &path).await?;
+        let rows = count_rows(&path, &published.file_name, published.worksheet).await?;
+        eprintln!("{relative}: {rows} rows, {} bytes", downloaded.byte_count);
+        let original = PackFile {
+            path: relative,
+            table: published.table.into(),
+            format: PackFileFormat::Original,
+            source_url: url.to_string(),
+            retrieved_at: downloaded.acquisition.retrieved_at,
+            sha256: downloaded.sha256,
+            bytes: downloaded.byte_count,
+            rows,
+            excluded_rows: None,
+            year: published.year,
+            partial: published.partial,
+            last_modified: downloaded.acquisition.last_modified,
+            etag: downloaded.acquisition.etag,
+            changes: None,
+            licence: published.licence,
+        };
+        let (parquet, _) = write_conformed_parquet(
+            &repository,
+            out,
+            &original,
+            published.kind,
+            published.worksheet,
+            &pack_version,
+        )
+        .await?;
+        eprintln!(
+            "{}: {} rows, {} bytes",
+            parquet.path, parquet.rows, parquet.bytes
+        );
+        files.extend([original, parquet]);
     }
     let manifest = PackManifest {
         pack: pack.into(),
         pack_version,
         schema_version: "1.0".into(),
         built_at: Utc::now().to_rfc3339(),
-        licence: licence(),
+        licence: if is_registry_pack(pack) {
+            mixed_licence(pack)
+        } else {
+            licence()
+        },
         files,
         key_id: None,
         checks: Vec::new(),
@@ -293,6 +298,7 @@ pub(super) async fn write_conformed_parquet(
     out: &Path,
     original: &PackFile,
     kind: AnalyticalDatasetKind,
+    worksheet: Option<&str>,
     pack_version: &str,
 ) -> Result<(PackFile, String), AppError> {
     let source = Path::new(&original.path);
@@ -319,7 +325,7 @@ pub(super) async fn write_conformed_parquet(
             observation_period_start: None,
             observation_period_end: None,
             partial_dataset: original.partial,
-            worksheet: None,
+            worksheet: worksheet.map(str::to_owned),
             source_file_name: Some(file_name.into()),
             expected_source_sha256: Some(original.sha256.clone()),
             derived_subset: None,
@@ -449,6 +455,7 @@ mod tests {
             last_modified: None,
             etag: None,
             changes: None,
+            licence: None,
         };
         let scratch = DuckDbRepository::new(":memory:").unwrap();
         scratch
@@ -460,6 +467,7 @@ mod tests {
             out.path(),
             &original,
             AnalyticalDatasetKind::OperatingBudget,
+            None,
             "2026.10.6",
         )
         .await

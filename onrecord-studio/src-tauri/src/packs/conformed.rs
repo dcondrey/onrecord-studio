@@ -9,12 +9,14 @@
 //! recorded. Absent or unreadable values are NULL, and a derived value is NULL whenever its basis
 //! is.
 
+use super::sources::RegistryTimeKind;
 use crate::error::AppError;
 use crate::storage::sqlite::quote_ident;
 use crate::storage::DuckDbRepository;
 use duckdb::{params, Connection, OptionalExt};
 
 /// Where a conformed table's time comes from.
+#[derive(Clone, Copy)]
 enum TimeColumn {
     /// A wall-clock reading. The City publishes Pacific local time with no offset, so it stays a
     /// zone-less TIMESTAMP: a value that carries an offset is not read rather than shifted.
@@ -22,10 +24,14 @@ enum TimeColumn {
     /// A City fiscal year published as its last two digits (`23` is the year ending June 2023).
     /// It names no day, so `occurred_at`, `occurred_on` and `calendar_year` stay NULL.
     FiscalYear(&'static str),
+    /// A four-digit calendar year. It names no day, so `occurred_at` and `occurred_on` stay NULL,
+    /// and no fiscal year, since a calendar year spans two.
+    CalendarYear(&'static str),
     /// A reference list or a holdings snapshot: its rows record no event time.
     Undated,
 }
 
+#[derive(Clone, Copy)]
 struct ConformedSpec {
     table: &'static str,
     /// The publisher's record key, matched to its header without regard to case.
@@ -217,14 +223,34 @@ fn storage(context: &'static str) -> impl Fn(duckdb::Error) -> AppError {
 
 #[cfg(test)]
 pub(super) fn has_definition(table: &str) -> bool {
-    SPECS.iter().any(|spec| spec.table == table)
+    spec(table).is_ok()
 }
 
-fn spec(table: &str) -> Result<&'static ConformedSpec, AppError> {
-    SPECS
+/// The City packs' conformed tables, whose names a registry entry may not reuse.
+pub(super) fn city_tables() -> Vec<&'static str> {
+    SPECS.iter().map(|spec| spec.table).collect()
+}
+
+/// A City table's definition, or a registry table's from its entry.
+fn spec(table: &str) -> Result<ConformedSpec, AppError> {
+    if let Some(spec) = SPECS.iter().find(|spec| spec.table == table) {
+        return Ok(*spec);
+    }
+    let entry = super::sources::registry()
         .iter()
-        .find(|spec| spec.table == table)
-        .ok_or_else(|| AppError::DataParsing(format!("'{table}' has no conformed definition")))
+        .find(|entry| entry.table == table)
+        .ok_or_else(|| AppError::DataParsing(format!("'{table}' has no conformed definition")))?;
+    let column = entry.time.column.as_deref().unwrap_or_default();
+    Ok(ConformedSpec {
+        table: &entry.table,
+        key: entry.key.as_deref(),
+        time: match entry.time.kind {
+            RegistryTimeKind::RecordedAt => TimeColumn::RecordedAt(column),
+            RegistryTimeKind::FiscalYear => TimeColumn::FiscalYear(column),
+            RegistryTimeKind::CalendarYear => TimeColumn::CalendarYear(column),
+            RegistryTimeKind::Undated => TimeColumn::Undated,
+        },
+    })
 }
 
 /// The publisher's record key header of `table`, if it has one.
@@ -257,7 +283,15 @@ pub fn conformed_select(
     snapshot_id: &str,
     origin: &ConformedOrigin,
 ) -> Result<String, AppError> {
-    let spec = spec(table)?;
+    select_for(conn, spec(table)?, snapshot_id, origin)
+}
+
+fn select_for(
+    conn: &Connection,
+    spec: ConformedSpec,
+    snapshot_id: &str,
+    origin: &ConformedOrigin,
+) -> Result<String, AppError> {
     let (typed, store, source_url, source_sha256): (
         String,
         Option<String>,
@@ -303,24 +337,35 @@ pub fn conformed_select(
         ),
         None => "CAST(NULL AS VARCHAR)".into(),
     };
-    let (time_header, occurred_at, occurred_on, fiscal_year) = match spec.time {
+    let year_of_day = "year(occurred_on)";
+    let (time_header, occurred_at, occurred_on, calendar_year, fiscal_year) = match spec.time {
         TimeColumn::RecordedAt(header) => (
             Some(header),
             "try_strptime(__time, ['%Y-%m-%d %H:%M:%S.%g', '%Y-%m-%d %H:%M:%S'])",
             "COALESCE(CAST(occurred_at AS DATE),
                 CAST(try_strptime(__time, ['%Y-%m-%d', '%m/%d/%Y']) AS DATE))",
+            year_of_day,
             "CAST(year(occurred_on) + CASE WHEN month(occurred_on) >= 7 THEN 1 ELSE 0 END AS INTEGER)",
         ),
         TimeColumn::FiscalYear(header) => (
             Some(header),
             "CAST(NULL AS TIMESTAMP)",
             "CAST(NULL AS DATE)",
+            year_of_day,
             "CASE WHEN regexp_full_match(__time, '[0-9]{2}') THEN 2000 + CAST(__time AS INTEGER) END",
+        ),
+        TimeColumn::CalendarYear(header) => (
+            Some(header),
+            "CAST(NULL AS TIMESTAMP)",
+            "CAST(NULL AS DATE)",
+            "CASE WHEN regexp_full_match(__time, '[0-9]{4}') THEN CAST(__time AS INTEGER) END",
+            "NULL",
         ),
         TimeColumn::Undated => (
             None,
             "CAST(NULL AS TIMESTAMP)",
             "CAST(NULL AS DATE)",
+            year_of_day,
             "NULL",
         ),
     };
@@ -351,9 +396,10 @@ pub fn conformed_select(
             {pack_version} AS pack_version,
             {occurred_at} AS occurred_at,
             {occurred_on} AS occurred_on,
-            CAST(year(occurred_on) AS INTEGER) AS calendar_year,
+            CAST({calendar_year} AS INTEGER) AS calendar_year,
             CAST({fiscal_year} AS INTEGER) AS fiscal_year,
-            CASE WHEN fiscal_year IS NOT NULL THEN {time_basis} END AS time_basis
+            CASE WHEN COALESCE(fiscal_year, calendar_year) IS NOT NULL THEN {time_basis} END
+                AS time_basis
          FROM (
             SELECT t.*, s._row_hash AS __row_hash, s.__row_ordinal, {key} AS __key,
                    {time} AS __time
@@ -600,6 +646,61 @@ mod tests {
     }
 
     /// The City's lease file writes dates month first without padding.
+    /// A calendar year names no day and no fiscal year, and is read only as four digits.
+    #[tokio::test]
+    async fn a_calendar_year_fills_only_the_calendar_year_and_its_basis() {
+        let repo = repository().await;
+        let snapshot = import(
+            &repo,
+            AnalyticalDatasetKind::RegionalData,
+            "counts",
+            "counts.csv",
+            "2026-10-06T00:00:00Z",
+            "year,count\n2024,5\n24,6\n,7\n",
+        )
+        .await;
+        let spec = ConformedSpec {
+            table: "counts",
+            key: None,
+            time: TimeColumn::CalendarYear("year"),
+        };
+        let rows = repo
+            .query_connection("calendar year", move |conn| {
+                let select = select_for(conn, spec, &snapshot, &ConformedOrigin::default())?;
+                let mut statement = conn
+                    .prepare(&format!(
+                        "SELECT calendar_year, fiscal_year, CAST(occurred_on AS VARCHAR),
+                                CAST(occurred_at AS VARCHAR), time_basis
+                         FROM ({select}) ORDER BY source_row"
+                    ))
+                    .unwrap();
+                let rows = statement
+                    .query_map([], |row| {
+                        Ok((
+                            row.get::<_, Option<i32>>(0)?,
+                            row.get::<_, Option<i32>>(1)?,
+                            row.get::<_, Option<String>>(2)?,
+                            row.get::<_, Option<String>>(3)?,
+                            row.get::<_, Option<String>>(4)?,
+                        ))
+                    })
+                    .unwrap()
+                    .collect::<Result<Vec<_>, _>>()
+                    .unwrap();
+                Ok(rows)
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            rows,
+            [
+                (Some(2024), None, None, None, Some("year".to_owned())),
+                (None, None, None, None, None),
+                (None, None, None, None, None),
+            ]
+        );
+    }
+
     #[tokio::test]
     async fn a_month_first_date_names_its_day_and_fiscal_year() {
         let (_, leases) = conformed(
