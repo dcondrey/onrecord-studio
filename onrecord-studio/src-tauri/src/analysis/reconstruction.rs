@@ -26,6 +26,8 @@ static KEYS: LazyLock<Regex> = LazyLock::new(|| {
 static DATE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\b(?:\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}/\d{4}|(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4})\b").unwrap()
 });
+static HEADERS: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?im)^(?:from|to|sender|recipient)\s*:\s*[^\n]{0,100}").unwrap());
 
 #[derive(Debug, Clone)]
 pub struct ReconstructionDocument {
@@ -630,8 +632,7 @@ fn role_findings(
     documents: &[&ReconstructionDocument],
     options: &ReconstructionOptions,
 ) -> Vec<ReconstructionFinding> {
-    let headers = Regex::new(r"(?im)^(?:from|to|sender|recipient)\s*:\s*[^\n]{0,100}").unwrap();
-    let masked_headers: Vec<_> = headers
+    let masked_headers: Vec<_> = HEADERS
         .find_iter(&target.text)
         .filter(|h| MASK.is_match(h.as_str()))
         .take(8)
