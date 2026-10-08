@@ -1,6 +1,6 @@
 //! Cross-corpus reused-denial-grounds detector.
 //!
-//! Wave 2B's `extension_abuse` catches an agency reaching for the same statutory extension
+//! `extension_abuse` catches an agency reaching for the same statutory extension
 //! reason on the majority of its extended requests. This detector catches the parallel pattern
 //! for the extension-reasons across the corpus's *statutory_extensions* table, gated on
 //! *topical diversity* of the extended requests: an agency invoking a single reason on 90% of

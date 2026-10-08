@@ -312,11 +312,8 @@ impl AnalyticsEngine {
     }
 
     /// Binds the node to a live sibling connection of the application's own DuckDB core, obtained
-    /// from `DuckDbRepository::analytics_connection`.
-    ///
-    /// The previous implementation opened a separate in-memory connection and `ATTACH`ed the core
-    /// file. That connection observed the database as it stood at process start and never saw a
-    /// subsequent write, so every profile was computed against a launch-time snapshot.
+    /// from `DuckDbRepository::analytics_connection`. A separately opened connection that
+    /// `ATTACH`es the core file would see only the database as it stood at attach time.
     pub fn bind_to_core(connection: Connection) -> Self {
         Self {
             state: Arc::new(Mutex::new(AnalyticsState {
@@ -1155,7 +1152,7 @@ mod tests {
     /// Pins the separation `convert_raw_profile` draws: an agency that answered every request
     /// inside the statutory deadline but far more slowly than its peers is a statistical outlier
     /// and nothing more. Reporting that as a statutory breach states a legal conclusion the
-    /// evidence does not support, which is what this labelling used to do.
+    /// evidence does not support.
     #[test]
     fn latency_outlier_without_a_violation_is_not_labeled_statutory() {
         let connection = Connection::open_in_memory().unwrap();

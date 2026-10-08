@@ -1,7 +1,7 @@
 //! Autonomous detector registry.
 //!
 //! Each detector is invoked by the `refresh_findings` command (fired on ingest completion and by
-//! explicit user request; no background heartbeat, per the current product decision). Detectors
+//! explicit user request; there is no background heartbeat). Detectors
 //! run sequentially against a shared repository; each is expected to be bounded (query with a
 //! limit, cap work by document count) so the refresh call stays responsive.
 //!
