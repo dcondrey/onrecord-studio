@@ -128,7 +128,7 @@ describe('DataPackImport', () => {
     expect(gap.textContent).not.toMatch(/\b0\b/);
     expect(screen.getByText('2 of 3 table-years have a file in this pack; 1 has none.')).toBeTruthy();
 
-    fireEvent.keyDown(screen.getByRole('gridcell', { name: /^police_calls, 2026: 1,200 rows/ }), { key: 'Enter' });
+    fireEvent.keyDown(screen.getByRole('gridcell', { name: /police_calls, 2026: 1,200 rows/ }), { key: 'Enter' });
     expect((screen.getByRole('checkbox', { name: /^2026 · 1,200 rows/ }) as HTMLInputElement).checked).toBe(true);
   });
 

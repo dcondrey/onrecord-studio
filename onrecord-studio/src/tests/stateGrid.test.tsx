@@ -92,4 +92,34 @@ describe('StateGrid', () => {
       width.mockRestore();
     }
   });
+
+  it('names every cell with the words it prints, so voice control can address it', () => {
+    const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(600);
+    try {
+      render(
+        <StateGrid
+          title="Watch outcomes"
+          storageKey="test-names"
+          headline="One watch."
+          sources={{ tables: ['watch_runs'] }}
+          summary="One watch by two dimensions."
+          status="ready"
+          rowHeader="Watch"
+          columns={[{ key: 'a', label: 'Documents' }, { key: 'b', label: 'Source' }]}
+          rows={[{ key: 'w', label: 'Alpha', cells: [
+            { kind: 'state', tone: 'lead', glyph: 'diamond', text: '3 changed', short: '3', name: 'Alpha, documents: 3 changes since Oct 1.' },
+            { kind: 'gap', absence: absent('not-recorded', 'the source did not load'), glyph: 'ring', text: 'not observed', short: 'n/o', name: 'Alpha, source: no data this run.' },
+          ] }]}
+        />,
+      );
+      const cells = screen.getAllByRole('gridcell').filter((cell) => cell.querySelector('text'));
+      expect(cells).toHaveLength(2);
+      for (const cell of cells) {
+        const printed = cell.querySelector('text')?.textContent ?? '';
+        expect(cell.getAttribute('aria-label')?.toLowerCase()).toContain(printed.toLowerCase());
+      }
+    } finally {
+      width.mockRestore();
+    }
+  });
 });
