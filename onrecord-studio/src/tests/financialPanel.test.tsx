@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { FinancialReport, FinancialScenario, FinancialWorkspace } from '../types/financial';
 const bridge=vi.hoisted(()=>({invoke:vi.fn()}));
-vi.mock('../ipc',()=>({invokeCommand:bridge.invoke}));
+vi.mock('../ipc',()=>({invokeCommand:bridge.invoke,formatNativeError:(reason:unknown)=>String(reason)}));
 vi.mock('@tauri-apps/api/core',()=>({isTauri:()=>true}));
 import FinancialInvestigationsPanel from '../components/dashboard/FinancialInvestigationsPanel';
 const workspace:FinancialWorkspace={datasets:[],mappings:[],defaultScope:{fiscalYear:2025,fund:'100000',department:'Police'},roles:[],fields:[],requirements:{},warnings:[],fiscalYears:[2025,2024],funds:['100000','200000'],departments:['Police','Parks']};
