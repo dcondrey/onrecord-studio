@@ -10,9 +10,8 @@
 //! DuckDB file, which is attached read-only as the catalog `legacy`, so the copy and the full-row
 //! verification are plain DuckDB SQL over `legacy.<table>`.
 //!
-//! Conversion cost is linear in the size of the legacy database: an 82 MB WAL-mode core converts
-//! at 140 ms/MB in the unoptimized test profile, where the extension-based reader this replaced
-//! took 813 ms/MB. It is paid once per installation, before the window is shown.
+//! Conversion cost is linear in the size of the legacy database. It is paid once per installation,
+//! before the window is shown.
 //!
 //! The conversion never writes to the legacy file, nor creates a journal, WAL or shared-memory
 //! file for it. It builds the DuckDB core beside it, copies every table the two schemas share
@@ -49,8 +48,8 @@ const LEGACY_SOURCE_COPY_SUFFIX: &str = "migrating-source";
 /// SQLite's sidecar files. Only `-wal` and `-journal` can hold pages the main file lacks; `-shm` is
 /// a rebuildable index, moved with the others so none is left beside the converted core.
 const SQLITE_SIDECARS: [&str; 3] = ["-wal", "-journal", "-shm"];
-/// Text and blob bytes appended before the appender is flushed. DuckDB otherwise buffers about
-/// 200k rows, which for a document-text table is the whole table.
+/// Text and blob bytes appended before the appender is flushed, bounding its buffer by size rather
+/// than row count, since document-text rows can each be megabytes.
 const APPENDER_FLUSH_BYTES: usize = 64 * 1024 * 1024;
 /// Integers up to this magnitude convert to `f64` exactly.
 const EXACT_F64_INTEGER_LIMIT: u64 = 1 << 53;
