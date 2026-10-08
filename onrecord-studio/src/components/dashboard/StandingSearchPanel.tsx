@@ -13,6 +13,14 @@ import InlineError from '../ui/InlineError';
 import Skeleton from '../ui/Skeleton';
 import Time from '../ui/Time';
 import { formatInstant } from '../objects/labels';
+import BarTable, { type BarTableRow } from '../charts/figures/BarTable';
+import ChartFrame from '../charts/frame/ChartFrame';
+import { Axis } from '../charts/frame/Axis';
+import { Bar } from '../charts/marks/Bar';
+import { AbsentSlot } from '../charts/marks/shared';
+import { absent, measured } from '../charts/core/nulls';
+import { scaleBand, scaleLinear } from '../charts/core/scale';
+import { formatValue } from '../charts/core/format';
 
 const FACET_LABELS: Record<string, string> = { status: 'Status', agency: 'Department', portal: 'Source', year: 'Year filed' };
 
@@ -171,6 +179,121 @@ export default function StandingSearchPanel() {
   );
 }
 
+type Run = StandingQuerySummary['lastRun'] & object;
+const RUN_SOURCES = { tables: ['standing_query_runs', 'requests'] };
+/** A wider year span is listed in the table only: the columns would be slivers. */
+const MAX_YEAR_COLUMNS = 40;
+
+function matchHeadline(run: Run): string {
+  const count = `${run.result.matchCount.toLocaleString('en-US')} match${run.result.matchCount === 1 ? '' : 'es'}`;
+  if (run.previousMatchCount === null) return `${count} (first run).`;
+  const delta = run.result.matchCount - run.previousMatchCount;
+  return `${count} (${formatValue(delta, { kind: 'count', signed: true })} since the last run, from ${run.previousMatchCount.toLocaleString('en-US')}).`;
+}
+
+/** Status, department and source breakdowns: each value's bar is proportional within its facet. */
+function FacetBars({ run }: { run: Run }) {
+  const basis = run.result.countBasis;
+  const estimated = basis.basis !== 'EXACT';
+  const facets = run.result.facets.filter((facet) => facet.dimension !== 'year');
+  const rows: BarTableRow[] = facets.flatMap((facet) => facet.values.map((value) => {
+    const label = value.value || '(none)';
+    const text = formatFacetCount(value.count, basis);
+    return {
+      key: `${facet.dimension}\u0000${value.value}`,
+      name: label,
+      label: `${FACET_LABELS[facet.dimension] ?? facet.dimension} ${label}: ${text}`,
+      group: { key: facet.dimension, label: FACET_LABELS[facet.dimension] ?? facet.dimension, note: facet.truncated ? 'more values not listed' : undefined },
+      header: <span className="line-clamp-2 text-fg-secondary" title={label}>{label}</span>,
+      cells: {
+        count: {
+          value: measured(value.count),
+          text,
+          approximate: estimated,
+          tooltip: { rows: [{ key: 'count', value: text, label: 'matching requests' }], note: estimated ? describeCountBasis(basis) : undefined },
+        },
+      },
+    };
+  }));
+  return (
+    <BarTable
+      title="Matches by facet"
+      headline={matchHeadline(run)}
+      sources={{ ...RUN_SOURCES, note: describeCountBasis(basis) }}
+      summary={`${rows.length} facet values across ${facets.length} facets. Bars are proportional within each facet.${facets.some((facet) => facet.truncated) ? ' Some facets list only their largest values.' : ''}`}
+      status={rows.length === 0 ? 'empty' : 'ready'}
+      emptyText="This run recorded no breakdown."
+      rowHeader="Value"
+      columns={[{ key: 'count', label: estimated ? 'Requests (estimated)' : 'Requests', scale: 'own-max', barWidth: 80 }]}
+      rows={rows}
+      twin={{
+        caption: 'Facet counts',
+        columns: [{ key: 'facet', label: 'Facet' }, { key: 'value', label: 'Value' }, { key: 'count', label: 'Requests', align: 'end' }],
+        rows: facets.flatMap((facet) => [
+          ...facet.values.map((value) => ({ facet: FACET_LABELS[facet.dimension] ?? facet.dimension, value: value.value || '(none)', count: formatFacetCount(value.count, basis) })),
+          ...(facet.truncated ? [{ facet: FACET_LABELS[facet.dimension] ?? facet.dimension, value: 'More values not listed', count: null }] : []),
+        ]),
+      }}
+      legend={estimated ? [{ key: 'estimated', label: 'Estimated from a sample (≈)', swatch: 'rect', tone: 'context' }] : undefined}
+    />
+  );
+}
+
+/** The 'Year filed' facet over its continuous year range: a year with no listed count is a slot. */
+function YearColumns({ run }: { run: Run }) {
+  const basis = run.result.countBasis;
+  const estimated = basis.basis !== 'EXACT';
+  const facet = run.result.facets.find((candidate) => candidate.dimension === 'year');
+  const counts = new Map((facet?.values ?? []).flatMap((value) => (/^\d{4}$/.test(value.value) ? [[Number(value.value), value.count] as const] : [])));
+  const unplaced = (facet?.values ?? []).filter((value) => !/^\d{4}$/.test(value.value));
+  const listed = [...counts.keys()];
+  const [first, last] = listed.length ? [Math.min(...listed), Math.max(...listed)] : [0, -1];
+  const years = last - first + 1 <= MAX_YEAR_COLUMNS ? Array.from({ length: Math.max(0, last - first + 1) }, (_, i) => first + i) : listed.sort((a, b) => a - b);
+  const none = years.filter((year) => !counts.has(year));
+  const reason = facet?.truncated ? 'No count listed for this year; the facet lists only its largest values' : 'No matching request lists this year';
+  return (
+    <ChartFrame
+      title="Year filed"
+      headline={years.length ? `Matches filed ${first}–${last}${none.length ? `; ${none.length} ${none.length === 1 ? 'year' : 'years'} with none listed` : ''}.` : null}
+      sources={{ ...RUN_SOURCES, note: describeCountBasis(basis) }}
+      summary={`${years.length} years from ${first} to ${last}. ${none.length ? `None listed in ${none.join(', ')}.` : ''}${unplaced.length ? ` ${unplaced.length} values are not a year and are listed in the table.` : ''}`}
+      status={years.length ? 'ready' : 'empty'}
+      emptyText="This run recorded no year breakdown."
+      minHeight={140}
+      table={{
+        caption: 'Matches by year filed',
+        columns: [{ key: 'year', label: 'Year filed' }, { key: 'count', label: 'Requests', align: 'end' }],
+        rows: [
+          ...years.map((year) => ({ year: String(year), count: counts.has(year) ? formatFacetCount(counts.get(year) ?? 0, basis) : absent('not-recorded', reason) })),
+          ...unplaced.map((value) => ({ year: value.value || '(none)', count: formatFacetCount(value.count, basis) })),
+        ],
+      }}
+    >
+      {({ width, height }) => {
+        const band = scaleBand(years.map(String), [0, width]);
+        const y = scaleLinear([0, Math.max(1, ...counts.values())], [height - 22, 14], { nice: false });
+        return (
+          <g>
+            <Axis band={band} orient="bottom" offset={height - 22} format={(key) => (years.length > 12 ? `’${key.slice(2)}` : key)} />
+            {years.map((year) => {
+              const pos = band(String(year));
+              const count = counts.get(year);
+              return count === undefined
+                ? <AbsentSlot key={year} absence={absent('not-recorded', reason)} box={{ x: pos, y: 14, width: band.bandwidth, height: height - 36 }} text="none listed" />
+                : (
+                  <g key={year}>
+                    <Bar orient="vertical" band={{ pos, thickness: band.bandwidth }} value={measured(count)} scale={y} role={estimated ? 'comparison' : 'default'} motionKey={`year:${year}`} />
+                    <text x={pos + band.bandwidth / 2} y={y(count) - 4} textAnchor="middle" className="viz-num fill-fg-secondary text-[11px]">{formatFacetCount(count, basis)}</text>
+                  </g>
+                );
+            })}
+          </g>
+        );
+      }}
+    </ChartFrame>
+  );
+}
+
 function RunView({ run }: { run: StandingQuerySummary['lastRun'] & object }) {
   const basis = run.result.countBasis;
   return (
@@ -180,16 +303,9 @@ function RunView({ run }: { run: StandingQuerySummary['lastRun'] & object }) {
         {' · '}{run.changedSincePrevious === null ? 'first run' : run.changedSincePrevious ? `match set changed from ${run.previousMatchCount?.toLocaleString() ?? 'an unrecorded count'} to ${run.result.matchCount.toLocaleString()}` : 'no change since the previous run'}
       </p>
       <p className="text-caption text-muted">Breakdowns below are {describeCountBasis(basis)}.</p>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        {run.result.facets.map((facet) => (
-          <dl key={facet.dimension} className="rounded-md bg-raised/60 p-2 text-caption">
-            <dt className="font-medium text-fg">{FACET_LABELS[facet.dimension] ?? facet.dimension}</dt>
-            {facet.values.map((value) => (
-              <dd key={value.value} className="flex justify-between gap-2"><span className="truncate">{value.value || '(none)'}</span><span className="tabular-nums">{formatFacetCount(value.count, basis)}</span></dd>
-            ))}
-            {facet.truncated && <dd className="text-muted">More values not listed.</dd>}
-          </dl>
-        ))}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <FacetBars run={run} />
+        <YearColumns run={run} />
       </div>
       {run.result.clusters.length > 0 && (
         <div>

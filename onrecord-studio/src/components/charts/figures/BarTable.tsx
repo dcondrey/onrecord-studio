@@ -76,6 +76,11 @@ export interface BarTableRow {
   cells: Partial<Record<string, BarTableCell>>;
   /** Too few records for shares to be stable: drawn at 40% with the chip the header carries. */
   dimmed?: boolean;
+  /**
+   * Rows sharing a group sit under one group header, and an 'own-max' column scales within the
+   * group: a breakdown's values are proportional within their own facet.
+   */
+  group?: { key: string; label: string; note?: string };
   /** The row's accessible label (rank, name and its values as one sentence). */
   label?: string;
 }
@@ -206,7 +211,14 @@ export default function BarTable(props: BarTableProps) {
   const drillDown = useDrillDown();
   const [view, setView] = useState<'chart' | 'table'>('chart');
   const showsData = status === 'ready' || status === 'stale';
-  const maxes = useMemo(() => columns.map((column) => columnMax(column, rows, props.sharedMax)), [columns, rows, props.sharedMax]);
+  const maxes = useMemo(() => {
+    const byGroup = new Map<string, number[]>();
+    for (const row of rows) {
+      const key = row.group?.key ?? '';
+      if (!byGroup.has(key)) byGroup.set(key, columns.map((column) => columnMax(column, rows.filter((other) => (other.group?.key ?? '') === key), props.sharedMax)));
+    }
+    return byGroup;
+  }, [columns, rows, props.sharedMax]);
   const mins = useMemo(() => columns.map((column) => columnMin(column, rows)), [columns, rows]);
   const legend = [...(props.legend ?? []), ...absenceLegend(absenceStatesOf(rows, columns))];
 
@@ -281,6 +293,14 @@ export default function BarTable(props: BarTableProps) {
               const expansionKey = drill?.mode === 'row' ? row.key : openColumn ? keyOf(row.key, openColumn.key) : null;
               return (
                 <Fragment key={row.key}>
+                  {row.group && row.group.key !== rows[i - 1]?.group?.key && (
+                    <tr>
+                      <th scope="colgroup" colSpan={columns.length + 1} className="border-b border-line px-2 pb-1 pt-3 text-left text-caption font-medium text-fg">
+                        {row.group.label}
+                        {row.group.note && <span className="ml-2 font-normal text-muted">{row.group.note}</span>}
+                      </th>
+                    </tr>
+                  )}
                   <tr
                     aria-label={row.label}
                     {...(drill?.mode === 'row' ? drillDown.rowProps(row.key) : {})}
@@ -336,7 +356,7 @@ export default function BarTable(props: BarTableProps) {
                         >
                           {cell ? (
                             <span className={cn('flex', props.layout === 'stacked' ? 'flex-col-reverse items-start gap-1' : 'items-center gap-1.5')}>
-                              <CellBar column={column} cell={cell} min={mins[j]} max={maxes[j]} motionKey={`${row.key}:${column.key}`} />
+                              <CellBar column={column} cell={cell} min={mins[j]} max={maxes.get(row.group?.key ?? '')?.[j] ?? 0} motionKey={`${row.key}:${column.key}`} />
                               <span className={cn('viz-num whitespace-nowrap text-caption', isValue(cell.value) ? 'text-fg-secondary' : 'text-muted', cellOpen && 'font-semibold text-fg')}>{cell.text}</span>
                             </span>
                           ) : (
