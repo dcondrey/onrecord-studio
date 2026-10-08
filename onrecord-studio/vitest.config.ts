@@ -17,5 +17,6 @@ export default defineConfig({
     // docblock, so the pure suites keep running without one.
     include: ['src/tests/**/*.test.{ts,tsx}'],
     environment: 'node',
+    setupFiles: ['src/tests/setupStorage.ts'],
   },
 });
