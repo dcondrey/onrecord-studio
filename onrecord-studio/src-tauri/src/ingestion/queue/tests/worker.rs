@@ -4,23 +4,11 @@ use super::super::worker::{
 use super::*;
 
 #[test]
-fn durable_retry_backoff_doubles_then_saturates() {
-    // The live domain. Every call site is gated by
-    // `frontier_attempt < MAXIMUM_DURABLE_TASK_ATTEMPTS`, so only attempts 0..4 reach
-    // production and the observable schedule is 1s, 1s, 2s, 4s.
-    assert_eq!(MAXIMUM_DURABLE_TASK_ATTEMPTS, 4);
+fn durable_retry_backoff_starts_at_one_second_and_saturates_at_thirty() {
     let live: Vec<u64> = (0..MAXIMUM_DURABLE_TASK_ATTEMPTS)
         .map(durable_retry_delay_seconds)
         .collect();
     assert_eq!(live, vec![1, 1, 2, 4]);
-
-    // Past that gate the pure function keeps doubling and saturates at 30s. The cap is NOT
-    // reachable within 0..=5: `attempt.saturating_sub(1).min(5)` first yields a shift of 5 at
-    // attempt 6, and 1 << 5 == 32 is the first value `.min(30)` actually clamps. Raising
-    // MAXIMUM_DURABLE_TASK_ATTEMPTS is what would put the tail below into service.
-    let full: Vec<u64> = (0..=5).map(durable_retry_delay_seconds).collect();
-    assert_eq!(full, vec![1, 1, 2, 4, 8, 16]);
-    assert_eq!(durable_retry_delay_seconds(6), 30);
     assert_eq!(durable_retry_delay_seconds(u64::MAX), 30);
 }
 

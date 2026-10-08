@@ -23,33 +23,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn first_attempt_is_the_base_delay() {
+    fn doubles_from_the_base_and_saturates_at_the_cap() {
         let base = Duration::from_millis(500);
         let cap = Duration::from_secs(15);
-        assert_eq!(exponential_delay(0, base, cap), base);
-    }
-
-    #[test]
-    fn doubles_on_the_next_attempt() {
-        let base = Duration::from_millis(500);
-        let cap = Duration::from_secs(15);
-        assert_eq!(
-            exponential_delay(1, base, cap),
-            Duration::from_millis(1_000)
-        );
-        assert_eq!(
-            exponential_delay(2, base, cap),
-            Duration::from_millis(2_000)
-        );
-    }
-
-    #[test]
-    fn saturates_at_the_cap_and_stays_there() {
-        let base = Duration::from_secs(1);
-        let cap = Duration::from_secs(30);
-        // 2^5 = 32s, already past the 30s cap.
-        assert_eq!(exponential_delay(5, base, cap), cap);
-        // A very large attempt count must not overflow or exceed the cap.
-        assert_eq!(exponential_delay(1_000, base, cap), cap);
+        for (attempt, expected_ms) in [
+            (0, 500),
+            (1, 1_000),
+            (2, 2_000),
+            (5, 15_000),
+            (u64::MAX, 15_000),
+        ] {
+            assert_eq!(
+                exponential_delay(attempt, base, cap),
+                Duration::from_millis(expected_ms),
+                "attempt {attempt}"
+            );
+        }
     }
 }

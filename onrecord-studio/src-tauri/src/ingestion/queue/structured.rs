@@ -6,6 +6,7 @@ use super::{
     frontier::enqueue_tasks_resilient,
     guidance::{guidance_allows_url, may_expand_structured_links},
     intake::has_likely_document_extension,
+    payload::document_declares_type,
     resources::{prepare_crawl_url, prepare_discovered_download},
 };
 
@@ -180,15 +181,11 @@ pub(super) async fn expand_structured_document_links(
 }
 
 fn document_is_json(document: &DocumentMetadata) -> bool {
-    document.content_type.as_deref().is_some_and(|value| {
-        let value = value.split(';').next().unwrap_or(value).trim();
-        value == "application/json" || value == "application/ld+json" || value.ends_with("+json")
-    }) || document.file_name.as_deref().is_some_and(|name| {
-        let name = name.to_ascii_lowercase();
-        [".json", ".jsonld"]
-            .iter()
-            .any(|extension| name.ends_with(extension))
-    })
+    document_declares_type(
+        document,
+        |media_type| media_type == "application/json" || media_type.ends_with("+json"),
+        &[".json", ".jsonld"],
+    )
 }
 
 /// Parses and walks one structured payload without retaining the potentially large JSON tree in
@@ -380,7 +377,7 @@ pub(crate) fn arcgis_hub_companion_urls(page_url: &str, body: &[u8]) -> Vec<Stri
     if !is_hub {
         return Vec::new();
     }
-    let decoded = percent_decode_bytes(body);
+    let decoded = crate::ingestion::client::percent_decode_bytes(body);
     let mut urls = BTreeSet::new();
     let decoded = String::from_utf8_lossy(&decoded);
     let identifiers =
@@ -473,34 +470,6 @@ pub(super) fn arcgis_search_next_page(
         .extend_pairs(retained)
         .append_pair("start", &next_start.to_string());
     Some(url.to_string())
-}
-
-fn percent_decode_bytes(value: &[u8]) -> Vec<u8> {
-    fn hex_nibble(value: u8) -> Option<u8> {
-        match value {
-            b'0'..=b'9' => Some(value - b'0'),
-            b'a'..=b'f' => Some(value - b'a' + 10),
-            b'A'..=b'F' => Some(value - b'A' + 10),
-            _ => None,
-        }
-    }
-
-    let mut decoded = Vec::with_capacity(value.len());
-    let mut index = 0;
-    while index < value.len() {
-        if value[index] == b'%' && index.saturating_add(2) < value.len() {
-            if let (Some(high), Some(low)) =
-                (hex_nibble(value[index + 1]), hex_nibble(value[index + 2]))
-            {
-                decoded.push((high << 4) | low);
-                index += 3;
-                continue;
-            }
-        }
-        decoded.push(value[index]);
-        index += 1;
-    }
-    decoded
 }
 
 pub(super) fn tableau_export_companion_urls(value: &str) -> Vec<String> {

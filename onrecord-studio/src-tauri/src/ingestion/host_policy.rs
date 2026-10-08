@@ -730,15 +730,10 @@ mod tests {
     }
 
     #[test]
-    fn an_end_anchored_pattern_matches_only_the_full_path() {
+    fn an_end_anchored_pattern_matches_the_path_end_wherever_its_suffix_recurs() {
         let rules = RobotsRules::parse("User-agent: *\nDisallow: /*.php$\n");
         assert_eq!(rules.evaluate("/index.php"), Some("/*.php$"));
         assert_eq!(rules.evaluate("/index.php?a=1"), None);
-    }
-
-    #[test]
-    fn an_end_anchored_pattern_matches_a_later_occurrence_of_its_suffix() {
-        let rules = RobotsRules::parse("User-agent: *\nDisallow: /*.php$\n");
         assert_eq!(rules.evaluate("/a.php/b.php"), Some("/*.php$"));
         assert_eq!(rules.evaluate("/x.php.php"), Some("/*.php$"));
         assert_eq!(rules.evaluate("/x.php/y"), None);
