@@ -1,5 +1,6 @@
 use crate::commands::validation::{required_text, validate_text};
 use crate::error::AppError;
+use crate::integrity::is_sha256_hex;
 use crate::packs::published::{self, PublishedPackRoot};
 use crate::packs::{import, pinned_pack_keys};
 use crate::storage::sqlite::DuckDbRepository;
@@ -10,8 +11,7 @@ use tauri::State;
 const MAX_SELECTED_FILES: usize = 1_000;
 
 fn require_inspected(manifest_sha256: &str) -> Result<(), AppError> {
-    if manifest_sha256.len() != 64 || !manifest_sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
-    {
+    if !is_sha256_hex(manifest_sha256) {
         return Err(AppError::DataParsing(
             "Inspect the data pack before importing from it".into(),
         ));

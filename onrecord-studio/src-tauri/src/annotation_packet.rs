@@ -99,7 +99,7 @@ fn validate_mark(
     check_context("prefix", &mark.prefix)?;
     check_context("suffix", &mark.suffix)?;
     if let Some(digest) = &mark.text_sha256 {
-        if digest.len() != 64 || !digest.chars().all(|c| c.is_ascii_hexdigit()) {
+        if !crate::integrity::is_sha256_hex(digest) {
             return Err(invalid("a packet annotation has an invalid text digest"));
         }
     }

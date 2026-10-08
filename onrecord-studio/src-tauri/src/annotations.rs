@@ -112,7 +112,7 @@ pub fn validate_rectangle(rectangle: &PageRectangle) -> Result<(), AppError> {
 }
 
 pub fn validate_original_digest(value: &str) -> Result<(), AppError> {
-    if value.len() == 64 && value.chars().all(|c| c.is_ascii_hexdigit()) {
+    if crate::integrity::is_sha256_hex(value) {
         Ok(())
     } else {
         Err(invalid("the original file digest is not a SHA-256"))

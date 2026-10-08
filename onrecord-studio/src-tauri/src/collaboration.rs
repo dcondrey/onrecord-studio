@@ -8,6 +8,7 @@
 
 use crate::atomic_write::write_atomic;
 use crate::error::AppError;
+use crate::integrity::is_sha256_hex;
 use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
@@ -46,7 +47,7 @@ struct ContributorDocument {
 /// A signer key id is `sha256(public key)`: exactly 64 lowercase hexadecimal characters.
 pub fn validate_key_id(key_id: &str) -> Result<String, AppError> {
     let key_id = key_id.trim().to_ascii_lowercase();
-    if key_id.len() != 64 || !key_id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+    if !is_sha256_hex(&key_id) {
         return Err(invalid("a key id is 64 hexadecimal characters"));
     }
     Ok(key_id)

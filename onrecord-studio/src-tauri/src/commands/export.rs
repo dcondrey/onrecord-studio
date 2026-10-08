@@ -4,8 +4,9 @@ use crate::commands::validation::{
 };
 use crate::error::AppError;
 use crate::integrity::{
-    check_revocation, load_or_create_signing_key, load_revocations, rotate_signing_key, sha256_hex,
-    sign_package, verify_package, verify_package_detailed, SignedPackage, SIGNATURE_ALGORITHM,
+    check_revocation, is_sha256_hex, load_or_create_signing_key, load_revocations,
+    rotate_signing_key, sha256_hex, sign_package, verify_package, verify_package_detailed,
+    SignedPackage, SIGNATURE_ALGORITHM,
 };
 use crate::storage::casework::{EXPORT_OUTCOME_FAILED, EXPORT_OUTCOME_WRITTEN};
 use crate::storage::pii::mask_pii;
@@ -745,7 +746,7 @@ fn validate_evidence_manifest(
         .into_iter()
         .flatten()
         {
-            if !is_sha256(digest) {
+            if !is_sha256_hex(digest) {
                 return Err(AppError::Export(format!(
                     "Document {} contains an invalid recorded SHA-256",
                     document.document_id
@@ -754,10 +755,6 @@ fn validate_evidence_manifest(
         }
     }
     Ok(manifest)
-}
-
-fn is_sha256(value: &str) -> bool {
-    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 /// Writes the standalone verifier next to the report directory so a signed package's recipient

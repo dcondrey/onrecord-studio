@@ -188,6 +188,11 @@ fn signing_key_from_bytes(bytes: &[u8], path: &Path) -> Result<SigningKey, AppEr
     Ok(SigningKey::from_bytes(&seed))
 }
 
+/// Whether `value` has the shape of a hex SHA-256 digest (either case).
+pub(crate) fn is_sha256_hex(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
 pub(crate) fn sha256_hex(value: &[u8]) -> String {
     digest_hex(Sha256::digest(value))
 }
