@@ -21,7 +21,7 @@ export default function Stat({ label, value, detail, unavailableReason = 'Nothin
       {value === null ? (
         <p className="mt-1 flex h-7 items-center text-body text-muted">Not measured</p>
       ) : (
-        <p className="numeric-value mt-1 text-fg">{typeof value === 'number' ? COUNT.format(value) : value}</p>
+        <p className="numeric-value mt-1 text-metric text-fg">{typeof value === 'number' ? COUNT.format(value) : value}</p>
       )}
       {value === null ? (
         <p className="mt-1 text-caption text-muted">{unavailableReason}</p>

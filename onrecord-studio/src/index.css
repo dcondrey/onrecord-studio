@@ -229,6 +229,13 @@ a[href] {
     outline: none;
   }
 
+  /* A heading sized outside the type scale still gets a leading on the 4px grid that grows with
+     it, instead of inheriting the body's 20px and overlapping itself when it wraps. Scale tokens
+     set their own line height and override this. */
+  :is(h1, h2, h3, h4) {
+    line-height: max(1.25rem, round(up, 1.2em, 4px));
+  }
+
   input[type="checkbox"],
   input[type="radio"] {
     width: 1rem;
@@ -327,7 +334,6 @@ a[href] {
   }
 
   .numeric-value {
-    @apply text-metric;
     font-variant-numeric: tabular-nums lining-nums;
   }
 

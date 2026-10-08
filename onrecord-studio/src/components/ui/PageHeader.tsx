@@ -14,7 +14,7 @@ interface PageHeaderProps {
 /** The page title. The header breadcrumb already names the view, so there is no eyebrow. */
 export default function PageHeader({ title, summary, method, actions }: PageHeaderProps) {
   return (
-    <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <header className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
       <div className="min-w-0 flex-1">
         <h2 className="text-balance text-display text-fg">{title}</h2>
         {(summary || method) && (
@@ -25,7 +25,7 @@ export default function PageHeader({ title, summary, method, actions }: PageHead
           </div>
         )}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2 lg:shrink-0 lg:justify-end">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center gap-2 xl:shrink-0 xl:justify-end">{actions}</div>}
     </header>
   );
 }
