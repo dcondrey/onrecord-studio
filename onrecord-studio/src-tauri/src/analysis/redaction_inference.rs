@@ -201,19 +201,7 @@ pub async fn infer_redaction_candidates(
 /// Scan a document for redaction spans in its extracted text. Used by the detector to identify
 /// spans to run inference over, and by tests to prove the marker patterns match reality.
 pub fn scan_redaction_spans(text: &str) -> Vec<RedactionSpan> {
-    let mut spans = Vec::new();
-    // ASCII lowercasing keeps byte offsets aligned with `text`.
-    let lower = text.to_ascii_lowercase();
-    for marker in BRACKETED_MARKERS {
-        let needle = marker.to_ascii_lowercase();
-        let mut cursor = 0;
-        while let Some(rel) = lower[cursor..].find(&needle) {
-            let start = cursor + rel;
-            let end = start + marker.len();
-            spans.push(RedactionSpan { start, end });
-            cursor = end;
-        }
-    }
+    let mut spans = bracketed_markers(text);
     // FOIA exemption citations: (b)(6), (b)(7)(C), (b)(7)(D), etc. — these often replace the
     // redacted text inline.
     let bytes = text.as_bytes();
@@ -258,6 +246,23 @@ pub fn scan_redaction_spans(text: &str) -> Vec<RedactionSpan> {
         deduped.push(span);
     }
     deduped
+}
+
+fn bracketed_markers(text: &str) -> Vec<RedactionSpan> {
+    // ASCII lowercasing keeps byte offsets aligned with `text`.
+    let lower = text.to_ascii_lowercase();
+    let mut spans = Vec::new();
+    for marker in BRACKETED_MARKERS {
+        let needle = marker.to_ascii_lowercase();
+        let mut cursor = 0;
+        while let Some(found) = lower[cursor..].find(&needle) {
+            let start = cursor + found;
+            let end = start + needle.len();
+            spans.push(RedactionSpan { start, end });
+            cursor = end;
+        }
+    }
+    spans
 }
 
 fn scan_char_runs(text: &str, targets: &[char], min_run: usize, out: &mut Vec<RedactionSpan>) {
@@ -463,8 +468,8 @@ pub fn classify_entity_hint(context: &str) -> CandidateKind {
 /// The context with its redaction markers removed, as search text.
 fn build_search_query(context: &str) -> String {
     let mut cleaned = context.to_string();
-    for marker in BRACKETED_MARKERS {
-        cleaned = cleaned.replace(marker, " ");
+    for span in bracketed_markers(context) {
+        cleaned.replace_range(span.start..span.end, &" ".repeat(span.end - span.start));
     }
     cleaned
         .replace(BLOCK_CHARACTERS, " ")
@@ -923,6 +928,11 @@ mod tests {
                 "██████████",
                 "________"
             ]
+        );
+        // A marker found in any case is also kept out of the search text.
+        assert_eq!(
+            build_search_query("Signed by [withheld] and [REDACTED] ██ today"),
+            "Signed by and today"
         );
     }
 
