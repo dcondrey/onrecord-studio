@@ -2,9 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useAppStore } from '../../store/useAppStore';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
+import { cn } from '../../utils/cn';
 import type { CorpusEntityNeighborhood, CorpusEntityNode } from '../../types/corpus';
 import type { Finding } from '../../types';
 import SeverityGlyph from './SeverityGlyph';
+import Button from '../ui/Button';
+import InlineError from '../ui/InlineError';
+import Skeleton from '../ui/Skeleton';
 
 /**
  * The stitched view for one subject. When the user names an entity or types a name into the
@@ -27,7 +31,8 @@ export default function SubjectDossier() {
   const inspect = useAppStore((state) => state.inspect);
 
   const [resolution, setResolution] = useState<Resolution>({ status: 'RESOLVING' });
-  const [neighborTotal, setNeighborTotal] = useState<number | null>(null);
+  // `unknown` is a count that was asked for and failed, which is not the same as one not yet read.
+  const [neighborTotal, setNeighborTotal] = useState<number | 'unknown' | null>(null);
   const [neighborhood, setNeighborhood] = useState<SectionState<CorpusEntityNeighborhood | null>>({
     status: 'LOADING',
   });
@@ -86,7 +91,9 @@ export default function SubjectDossier() {
         .then((counts) => {
           if (neighborhoodGate.isCurrent(request) && counts) setNeighborTotal(counts.unfilteredTotal);
         })
-        .catch(() => {});
+        .catch(() => {
+          if (neighborhoodGate.isCurrent(request)) setNeighborTotal('unknown');
+        });
       invokeCommand('get_corpus_entity_neighborhood', { entityId, limit: 24 })
         .then((value) => {
           if (!neighborhoodGate.isCurrent(request)) return;
@@ -144,83 +151,81 @@ export default function SubjectDossier() {
     return neighborhoodGate.invalidate;
   }, [loadNeighborhood, neighborhoodGate, resolvedEntityId]);
 
+  const neighborhoodPending = neighborhood.status === 'LOADING';
   useEffect(() => {
     if (resolution.status !== 'RESOLVED') return;
+    // Findings are matched by name. Without one, an empty match is not a measurement, so the
+    // section says it cannot match rather than that nothing mentions the subject. While the
+    // neighborhood may still supply the name, the section stays loading.
+    if (!resolution.label?.trim()) {
+      findingsGate.invalidate();
+      setFindings(neighborhoodPending ? { status: 'LOADING' } : { status: 'UNMATCHABLE' });
+      return;
+    }
     loadFindings(resolution.label);
     return findingsGate.invalidate;
-  }, [findingsGate, loadFindings, resolution]);
+  }, [findingsGate, loadFindings, neighborhoodPending, resolution]);
 
   const subjectLabel = useMemo(() => {
-    if (resolution.status === 'RESOLVED') return resolution.label ?? resolution.entityId;
+    if (resolution.status === 'RESOLVED') return resolution.label;
     if (target?.kind === 'name') return target.value;
     return null;
   }, [resolution, target]);
 
   if (!target) return null;
 
+  const entityId = resolution.status === 'RESOLVED' ? resolution.entityId : undefined;
+  const center = neighborhood.status === 'READY' && neighborhood.value?.center.entityId === entityId ? neighborhood.value?.center : null;
+  const findingsEmpty = findings.status === 'UNMATCHABLE' || (findings.status === 'READY' && findings.value.length === 0);
+  const unnamed = resolution.status === 'RESOLVED' && subjectLabel === null && !neighborhoodPending;
+
   return (
-    <section
-      aria-label="Subject dossier"
-      className="app-panel space-y-3 overflow-hidden rounded-xl border border-accent/30 bg-canvas/40 p-4"
-    >
+    <section aria-label="Subject dossier" className="app-panel space-y-4 p-5">
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="app-eyebrow text-accent">Subject dossier</div>
-          <h2 className="mt-1 truncate text-[15px] font-semibold text-fg">
-            {subjectLabel ?? 'Resolving subject…'}
+          <h2 className={cn('truncate text-title', unnamed ? 'text-muted' : 'text-fg')} title={entityId}>
+            {subjectLabel ?? (unnamed ? 'Unnamed subject' : 'Resolving subject…')}
           </h2>
-          {target.kind === 'name' && resolution.status === 'RESOLVED' && (
-            <p className="mt-0.5 text-caption text-muted">
-              Resolved from &ldquo;{target.value}&rdquo;.
-            </p>
-          )}
+          <p className="mt-1 text-caption text-muted">
+            {unnamed
+              ? 'Name not yet read from the entity index'
+              : center
+                ? `Seen in ${documentCount(center.documentCount)}`
+                : target.kind === 'name' && resolution.status === 'RESOLVED'
+                  ? <>Resolved from &ldquo;{target.value}&rdquo;</>
+                  : null}
+          </p>
         </div>
-        <button
-          type="button"
-          onClick={clear}
-          className="focus-ring shrink-0 rounded-lg border border-control px-3 py-1.5 text-label font-semibold text-fg-secondary transition hover:border-control hover:text-fg"
-        >
-          Close dossier
-        </button>
+        <Button size="sm" onClick={clear}>Close dossier</Button>
       </header>
 
-      {resolution.status === 'RESOLVING' && (
-        <p role="status" className="text-label text-muted">
-          Resolving subject in the entity index…
-        </p>
-      )}
+      {resolution.status === 'RESOLVING' && <Skeleton variant="lines" lines={2} label="Resolving subject in the entity index" />}
 
       {resolution.status === 'ERROR' && (
-        <p role="alert" className="text-label text-danger">
-          Subject resolution failed: {resolution.message}
-        </p>
+        <InlineError summary="This subject couldn’t be looked up in the entity index." detail={resolution.message} onRetry={resolveTarget} />
       )}
 
       {resolution.status === 'NONE' && (
-        <p className="text-label text-muted">
-          No corpus entity matches &ldquo;{target.value}&rdquo;
-          in the 500 most-cited entities. Add data or refine the name to try again.
+        <p className="text-body text-muted">
+          No entity matches &ldquo;{target.value}&rdquo;
+          among the 500 most-cited entities. Add data or refine the name to try again.
         </p>
       )}
 
       {resolution.status === 'AMBIGUOUS' && (
-        <div className="rounded-xl border border-warning/30 bg-warning/5 p-3">
-          <p className="text-label font-semibold text-warning">
+        <div className="rounded-lg border border-warning/30 bg-warning/10 p-3">
+          <p className="text-body font-medium text-warning">
             &ldquo;{target.value}&rdquo; matches {resolution.matches.length} entities. Pick one.
           </p>
           <ul className="mt-2 flex flex-wrap gap-1.5" role="list">
             {resolution.matches.map((entity) => (
               <li key={entity.entityId}>
-                <button
-                  type="button"
-                  onClick={() => open({ kind: 'entity', value: entity.entityId })}
-                  className="focus-ring rounded-full border border-warning/30 bg-warning/10 px-2 py-1 text-caption font-semibold text-warning"
-                >
+                <Button size="sm" onClick={() => open({ kind: 'entity', value: entity.entityId })}>
                   {entity.displayValue}
-                  <span className="ml-1 text-warning">
-                    · {entity.kind.toLocaleLowerCase()} · {entity.documentCount} docs
+                  <span className="text-caption tabular-nums text-muted">
+                    · {entity.kind.toLocaleLowerCase()} · {documentCount(entity.documentCount)}
                   </span>
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
@@ -228,78 +233,82 @@ export default function SubjectDossier() {
       )}
 
       {resolution.status === 'RESOLVED' && (
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <DossierSection
-            title="Findings that mention this subject"
-            state={findings}
-            emptyText="No detector output currently mentions this subject."
-            render={(items) => (
-              <ul className="flex flex-col gap-2" aria-label="Findings for this subject">
-                {items.slice(0, 5).map((finding) => (
-                  <DossierFindingRow
-                    key={finding.id}
-                    finding={finding}
-                    onOpen={() => inspect({ kind: 'finding', id: finding.id, label: finding.headline })}
-                  />
-                ))}
-                {items.length > 5 && (
-                  <li className="text-caption text-muted">
-                    + {items.length - 5} more finding{items.length - 5 === 1 ? '' : 's'} mention this
-                    subject. Open the findings inbox to see them all.
-                  </li>
+        <>
+          {findingsEmpty && (
+            <p className="text-body text-muted">
+              {findings.status === 'UNMATCHABLE'
+                ? 'Findings can’t be matched until this subject’s name is read.'
+                : 'No finding mentions this subject by name.'}
+            </p>
+          )}
+          <div className={cn('grid grid-cols-1 gap-4', !findingsEmpty && 'lg:grid-cols-2')}>
+            {!findingsEmpty && (
+              <DossierSection
+                title="Findings"
+                state={findings}
+                render={(items) => (
+                  <ul className="flex flex-col gap-2" aria-label="Findings for this subject">
+                    {items.slice(0, 5).map((finding) => (
+                      <DossierFindingRow
+                        key={finding.id}
+                        finding={finding}
+                        onOpen={() => inspect({ kind: 'finding', id: finding.id, label: finding.headline })}
+                      />
+                    ))}
+                    {items.length > 5 && (
+                      <li className="text-caption text-muted">
+                        {items.length - 5} more finding{items.length - 5 === 1 ? '' : 's'} mention this subject.
+                      </li>
+                    )}
+                    <li className="text-caption text-muted">
+                      Matched on the subject&rsquo;s name in the finding text; a namesake is possible.
+                    </li>
+                  </ul>
                 )}
-                <li className="text-caption italic text-muted">
-                  Matches are text-based on the subject&rsquo;s display value; a namesake is possible.
-                </li>
-              </ul>
+              />
             )}
-          />
-          <DossierSection
-            title="Corpus neighborhood"
-            state={neighborhood}
-            emptyText="No corpus edges recorded for this subject yet."
-            render={(value) => {
-              if (!value) return <p className="text-caption text-muted">Entity has no recorded neighborhood.</p>;
-              const edges = value.edges.slice(0, 8);
-              return (
-                <div className="space-y-2">
-                  <p className="text-caption text-muted">
-                    Center: <span className="font-mono text-fg-secondary">{value.center.displayValue}</span> · seen
-                    in {value.center.documentCount} documents.
-                  </p>
-                  {edges.length === 0 ? (
-                    <p className="text-caption text-muted">No co-occurrence edges.</p>
-                  ) : (
-                    <ul className="flex flex-wrap gap-1.5">
-                      {edges.map((edge) => (
-                        <li key={edge.neighbor.entityId}>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              open({ kind: 'entity', value: edge.neighbor.entityId })
-                            }
-                            className="focus-ring rounded-full border border-control bg-canvas/70 px-2 py-1 text-caption font-medium text-fg-secondary transition hover:border-accent/30 hover:text-accent"
-                          >
-                            {edge.neighbor.displayValue}
-                            <span className="ml-1 text-muted">· {edge.sharedDocumentCount} docs</span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {(value.edges.length > 8 || (neighborTotal !== null && neighborTotal > 8)) && (
-                    <p className="text-caption text-muted">
-                      Showing 8{neighborTotal !== null ? ` of ${neighborTotal.toLocaleString()}` : ''}. Open the entity graph to see every one.
-                    </p>
-                  )}
-                </div>
-              );
-            }}
-          />
-        </div>
+            <DossierSection
+              title="Related names"
+              state={neighborhood}
+              render={(value) => {
+                if (!value) return <p className="text-caption text-muted">No neighborhood is recorded for this subject.</p>;
+                const edges = value.edges.slice(0, 8);
+                return (
+                  <div className="space-y-2">
+                    {edges.length === 0 ? (
+                      <p className="text-caption text-muted">No name appears in the same documents yet.</p>
+                    ) : (
+                      <ul className="flex flex-wrap gap-1.5">
+                        {edges.map((edge) => (
+                          <li key={edge.neighbor.entityId}>
+                            <Button size="sm" onClick={() => open({ kind: 'entity', value: edge.neighbor.entityId })}>
+                              {edge.neighbor.displayValue}
+                              <span className="text-caption tabular-nums text-muted">· {documentCount(edge.sharedDocumentCount)}</span>
+                            </Button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {(value.edges.length > 8 || neighborTotal === 'unknown' || (neighborTotal !== null && neighborTotal > 8)) && (
+                      <p className="text-caption tabular-nums text-muted">
+                        {neighborTotal === 'unknown'
+                          ? `Showing ${edges.length}; total not available.`
+                          : `Showing ${edges.length}${neighborTotal !== null ? ` of ${neighborTotal.toLocaleString()}` : ''}. Open the entity graph to see every one.`}
+                      </p>
+                    )}
+                  </div>
+                );
+              }}
+            />
+          </div>
+        </>
       )}
     </section>
   );
+}
+
+function documentCount(count: number) {
+  return `${count.toLocaleString()} document${count === 1 ? '' : 's'}`;
 }
 
 type Resolution =
@@ -311,37 +320,26 @@ type Resolution =
 
 type SectionState<T> =
   | { status: 'LOADING' }
+  | { status: 'UNMATCHABLE' }
   | { status: 'READY'; value: T }
   | { status: 'ERROR'; message: string };
 
 function DossierSection<T>({
   title,
   state,
-  emptyText,
   render,
 }: {
   title: string;
   state: SectionState<T>;
-  emptyText: string;
   render: (value: T) => React.ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-line bg-canvas/40 p-3">
-      <h3 className="text-label font-semibold uppercase tracking-wider text-fg-secondary">{title}</h3>
-      <div className="mt-2">
-        {state.status === 'LOADING' && (
-          <p role="status" className="text-caption text-muted">
-            Loading…
-          </p>
-        )}
-        {state.status === 'ERROR' && (
-          <p role="alert" className="text-caption text-danger">
-            {state.message}
-          </p>
-        )}
-        {state.status === 'READY' && (Array.isArray(state.value) && state.value.length === 0
-          ? <p className="text-caption text-muted">{emptyText}</p>
-          : render(state.value))}
+    <section aria-label={title} className="rounded-lg border border-line bg-canvas p-4">
+      <h3 className="text-heading text-fg">{title}</h3>
+      <div className="mt-3">
+        {(state.status === 'LOADING' || state.status === 'UNMATCHABLE') && <Skeleton variant="lines" lines={2} label={`Loading ${title.toLowerCase()}`} />}
+        {state.status === 'ERROR' && <InlineError summary={`${title} couldn’t be read.`} detail={state.message} />}
+        {state.status === 'READY' && render(state.value)}
       </div>
     </section>
   );
@@ -353,13 +351,13 @@ function DossierFindingRow({ finding, onOpen }: { finding: Finding; onOpen: () =
       <button
         type="button"
         onClick={onOpen}
-        className="focus-ring flex w-full items-start gap-2 rounded-lg border border-control bg-canvas/40 p-2 text-left transition hover:border-accent/30 hover:bg-accent/5"
+        className="focus-ring group flex w-full items-start gap-2 rounded-md p-2 text-left transition-colors duration-fast hover:bg-raised"
         aria-label={`Open finding: ${finding.headline}`}
       >
         <SeverityGlyph severity={finding.severity} className="mt-0.5 h-5 w-5 rounded" />
         <span className="min-w-0 flex-1">
-          <span className="block text-label font-semibold text-fg">{finding.headline}</span>
-          <span className="mt-0.5 block text-caption text-muted">{finding.explanation}</span>
+          <span className="block text-body font-medium text-fg group-hover:underline">{finding.headline}</span>
+          <span className="mt-0.5 line-clamp-2 text-caption text-muted">{finding.explanation}</span>
         </span>
       </button>
     </li>

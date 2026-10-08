@@ -117,7 +117,7 @@ describe('SubjectDossier', () => {
       });
     });
     // Sections render as loading independently.
-    await screen.findByRole('status');
+    expect((await screen.findAllByRole('status')).length).toBeGreaterThan(0);
   });
 
   it('discards a slower neighborhood fetch after the subject changes', async () => {
@@ -155,9 +155,9 @@ describe('SubjectDossier', () => {
       });
     });
     await waitFor(() => {
-      const neighborhoodSection = screen.getByText('Corpus neighborhood').closest('section');
-      expect(within(neighborhoodSection!).getByText('Sarah Smith')).toBeTruthy();
+      expect(screen.getByRole('heading', { level: 2, name: 'Sarah Smith' })).toBeTruthy();
     });
+    expect(within(screen.getByRole('region', { name: 'Related names' })).getByText(/No name appears/)).toBeTruthy();
     // The stale neighborhood's neighbor label must not appear anywhere.
     expect(screen.queryByText(/wrong-poison-neighbor/i)).toBeNull();
   });
@@ -190,5 +190,23 @@ describe('SubjectDossier', () => {
     await waitFor(() => expect(resolvers.has('nb:entity-b')).toBe(true));
     expect(screen.queryByText('Payment to John Smith flagged')).toBeNull();
     expect(screen.queryByRole('heading', { name: 'John Smith' })).toBeNull();
+  });
+
+  it('never states that no finding mentions a subject whose name was never read', async () => {
+    // A finding that would match any name: if the dossier queried with an empty or internal key,
+    // the absence of a match would be presented as a measured negative.
+    findingsResponse = [finding('f1', 'Payment to John Smith flagged')];
+    act(() => {
+      useAppStore.setState({ subjectDossierTarget: { kind: 'entity', value: 'e-org-harborview' } });
+    });
+    render(<SubjectDossier />);
+    await waitFor(() => expect(resolvers.has('nb:e-org-harborview')).toBe(true));
+    act(() => {
+      resolvers.get('nb:e-org-harborview')!(null);
+    });
+    await screen.findByText(/can’t be matched until this subject’s name is read/);
+    expect(screen.queryByText(/No finding mentions this subject/)).toBeNull();
+    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('Unnamed subject');
+    expect(screen.queryByText('e-org-harborview')).toBeNull();
   });
 });
