@@ -139,7 +139,7 @@ export default function OverviewDashboard() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
-                  <LeadsModule expanded={expanded === 'leads'} onToggle={toggle('leads')} span={expanded === null ? 'md:col-span-2 2xl:row-span-2' : 'md:col-span-2'} />
+                  <LeadsModule expanded={expanded === 'leads'} onToggle={toggle('leads')} span={expanded === null ? 'md:col-span-2 2xl:row-span-2' : 'col-span-full'} />
                   {portals.length > 0 && (
                     <LedgerModule
                       expanded={expanded === 'ledger'}
