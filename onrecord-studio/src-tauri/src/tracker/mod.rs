@@ -208,13 +208,25 @@ pub fn update_claim(
     Ok(claim.clone())
 }
 
-pub fn remove_claim(document: &mut TrackerDocument, claim_id: &str) -> Result<(), AppError> {
-    let before = document.claims.len();
-    document.claims.retain(|claim| claim.id != claim_id);
-    if document.claims.len() == before {
-        return Err(invalid("no such tracked request"));
+fn remove_one<T>(
+    items: &mut Vec<T>,
+    matches: impl Fn(&T) -> bool,
+    missing: &str,
+) -> Result<(), AppError> {
+    let before = items.len();
+    items.retain(|item| !matches(item));
+    if items.len() == before {
+        return Err(invalid(missing));
     }
     Ok(())
+}
+
+pub fn remove_claim(document: &mut TrackerDocument, claim_id: &str) -> Result<(), AppError> {
+    remove_one(
+        &mut document.claims,
+        |claim| claim.id == claim_id,
+        "no such tracked request",
+    )
 }
 
 /// The extension rules shared by every way an event can be created, so no path can save an
@@ -247,29 +259,43 @@ fn extension_fields(
     }
 }
 
-pub fn add_event(
-    document: &mut TrackerDocument,
-    input: AddTimelineEventInput,
+/// A user-entered event; confirming a suggestion then sets its email basis and evidence.
+fn new_event(
+    kind: TimelineEventKind,
+    occurred_at: &str,
+    extension_reason: Option<crate::types::StatutoryExtensionReason>,
+    expected_determination_at: Option<&str>,
     now: &str,
 ) -> Result<TimelineEvent, AppError> {
-    let occurred_at = instant("occurredAt", &input.occurred_at)?;
-    let (extension_reason, expected_determination_at) = extension_fields(
-        input.kind,
-        input.extension_reason,
-        input.expected_determination_at.as_deref(),
-    )?;
-    let claim = claim_mut(document, &input.claim_id)?;
-    ensure_event_room(claim)?;
-    let event = TimelineEvent {
+    let occurred_at = instant("occurredAt", occurred_at)?;
+    let (extension_reason, expected_determination_at) =
+        extension_fields(kind, extension_reason, expected_determination_at)?;
+    Ok(TimelineEvent {
         id: Uuid::new_v4().to_string(),
-        kind: input.kind,
+        kind,
         occurred_at,
         basis: EventBasis::UserEntered,
         evidence: None,
         extension_reason,
         expected_determination_at,
         created_at: now.to_string(),
-    };
+    })
+}
+
+pub fn add_event(
+    document: &mut TrackerDocument,
+    input: AddTimelineEventInput,
+    now: &str,
+) -> Result<TimelineEvent, AppError> {
+    let event = new_event(
+        input.kind,
+        &input.occurred_at,
+        input.extension_reason,
+        input.expected_determination_at.as_deref(),
+        now,
+    )?;
+    let claim = claim_mut(document, &input.claim_id)?;
+    ensure_event_room(claim)?;
     claim.events.push(event.clone());
     Ok(event)
 }
@@ -288,13 +314,11 @@ pub fn remove_event(
     claim_id: &str,
     event_id: &str,
 ) -> Result<(), AppError> {
-    let claim = claim_mut(document, claim_id)?;
-    let before = claim.events.len();
-    claim.events.retain(|event| event.id != event_id);
-    if claim.events.len() == before {
-        return Err(invalid("no such event"));
-    }
-    Ok(())
+    remove_one(
+        &mut claim_mut(document, claim_id)?.events,
+        |event| event.id == event_id,
+        "no such event",
+    )
 }
 
 /// Accepts a suggestion as the user has now stated it. Only this moves an email-derived event into
@@ -304,11 +328,12 @@ pub fn confirm_suggestion(
     input: ConfirmSuggestedEventInput,
     now: &str,
 ) -> Result<TimelineEvent, AppError> {
-    let occurred_at = instant("occurredAt", &input.occurred_at)?;
-    let (extension_reason, expected_determination_at) = extension_fields(
+    let mut event = new_event(
         input.kind,
+        &input.occurred_at,
         input.extension_reason,
         input.expected_determination_at.as_deref(),
+        now,
     )?;
     let claim = claim_mut(document, &input.claim_id)?;
     let position = claim
@@ -317,17 +342,8 @@ pub fn confirm_suggestion(
         .position(|suggestion| suggestion.id == input.suggestion_id)
         .ok_or_else(|| invalid("no such suggested event"))?;
     ensure_event_room(claim)?;
-    let suggestion = claim.suggestions.remove(position);
-    let event = TimelineEvent {
-        id: Uuid::new_v4().to_string(),
-        kind: input.kind,
-        occurred_at,
-        basis: EventBasis::EmailConfirmed,
-        evidence: Some(suggestion.evidence),
-        extension_reason,
-        expected_determination_at,
-        created_at: now.to_string(),
-    };
+    event.basis = EventBasis::EmailConfirmed;
+    event.evidence = Some(claim.suggestions.remove(position).evidence);
     claim.events.push(event.clone());
     Ok(event)
 }
@@ -337,15 +353,11 @@ pub fn reject_suggestion(
     claim_id: &str,
     suggestion_id: &str,
 ) -> Result<(), AppError> {
-    let claim = claim_mut(document, claim_id)?;
-    let before = claim.suggestions.len();
-    claim
-        .suggestions
-        .retain(|suggestion| suggestion.id != suggestion_id);
-    if claim.suggestions.len() == before {
-        return Err(invalid("no such suggested event"));
-    }
-    Ok(())
+    remove_one(
+        &mut claim_mut(document, claim_id)?.suggestions,
+        |suggestion| suggestion.id == suggestion_id,
+        "no such suggested event",
+    )
 }
 
 /// Records one email's suggestions. The Message-ID check happens here, inside the store's

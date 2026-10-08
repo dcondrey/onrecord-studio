@@ -212,17 +212,7 @@ pub fn request_deadline(claim: &ClaimedRequest, now: DateTime<Utc>) -> RequestDe
         }
     };
 
-    match analysis.extension_status {
-        StatutoryExtensionStatus::NotInvoked | StatutoryExtensionStatus::Valid => {}
-        StatutoryExtensionStatus::MissingNoticeSource => notes.push(
-            "The extension notice you entered has no email source, so it is not applied. Import the notice email and confirm it to apply the extension."
-                .to_string(),
-        ),
-        other => notes.push(format!(
-            "The extension notice does not meet the statute's conditions ({}), so the initial deadline is shown.",
-            extension_problem(other)
-        )),
-    }
+    notes.extend(extension_note(analysis.extension_status));
     if determination.is_none()
         && of_kind(claim, TimelineEventKind::Closed, None)
             .next()
@@ -251,8 +241,15 @@ pub fn request_deadline(claim: &ClaimedRequest, now: DateTime<Utc>) -> RequestDe
     }
 }
 
-fn extension_problem(status: StatutoryExtensionStatus) -> &'static str {
-    match status {
+fn extension_note(status: StatutoryExtensionStatus) -> Option<String> {
+    let problem = match status {
+        StatutoryExtensionStatus::NotInvoked | StatutoryExtensionStatus::Valid => return None,
+        StatutoryExtensionStatus::MissingNoticeSource => {
+            return Some(
+                "The extension notice you entered has no email source, so it is not applied. Import the notice email and confirm it to apply the extension."
+                    .to_string(),
+            )
+        }
         StatutoryExtensionStatus::NoticeBeforeReceipt => "the notice predates the request",
         StatutoryExtensionStatus::NoticeAfterInitialDeadline => {
             "the notice came after the initial 10 days"
@@ -263,8 +260,10 @@ fn extension_problem(status: StatutoryExtensionStatus) -> &'static str {
         StatutoryExtensionStatus::ExtensionExceedsFourteenDays => {
             "the expected date is more than 14 days past the initial deadline"
         }
-        _ => "unspecified",
-    }
+    };
+    Some(format!(
+        "The extension notice does not meet the statute's conditions ({problem}), so the initial deadline is shown."
+    ))
 }
 
 fn countdown(analysis: &StatutoryComplianceAnalysis, basis: DeterminationBasis) -> Countdown {
