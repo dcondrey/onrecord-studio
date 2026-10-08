@@ -329,9 +329,9 @@ function StoryWorkbench({ leads, total, busy, onAddToBriefing, notice }: {
   const selected = useAppStore((s) => s.workbenchSelection.story ?? null);
   const selectWorkbenchLead = useAppStore((s) => s.selectWorkbenchLead);
   const queue = useMemo(() => leads?.map((lead) => ({ id: lead.findingId, headline: lead.headline, kind: findingFamily(lead.kind) })) ?? null, [leads]);
-  useWorkbenchQueue('story', queue);
   const select = useCallback((id: string) => selectWorkbenchLead('story', id), [selectWorkbenchLead]);
   const current = leads?.find((lead) => lead.findingId === selected) ?? leads?.[0] ?? null;
+  useWorkbenchQueue('story', queue, current?.findingId ?? null);
   const rank = new Map(leads?.map((lead, index) => [lead.findingId, index + 1]) ?? []);
   const max = Math.max(1, ...(leads ?? []).map((lead) => points(lead.publicInterest.totalBasisPoints)));
   const spansSources = new Set((leads ?? []).map((lead) => lead.portalKey).filter(Boolean)).size > 1;

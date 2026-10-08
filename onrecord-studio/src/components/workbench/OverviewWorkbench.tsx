@@ -60,8 +60,8 @@ export default function OverviewWorkbench({ ledgerFigure, onOpenLedger, onOpenFo
   const leads = useMemo(() => (findings.status === 'ready'
     ? rankLeads(findings.data.filter((finding) => caseScope.status !== 'ready' || caseScope.value.findingIds.has(finding.id)))
     : []), [caseScope, findings]);
-  const ranked = useMemo(() => new Map<string, { lead: StoryLead; rank: number }>(
-    ranking.status === 'ready' ? ranking.data.map((lead, index) => [lead.findingId, { lead, rank: index + 1 }]) : [],
+  const ranked = useMemo(() => new Map<string, { lead: StoryLead }>(
+    ranking.status === 'ready' ? ranking.data.map((lead) => [lead.findingId, { lead }]) : [],
   ), [ranking]);
   const ledger = useMemo(
     () => (caseScope.status === 'off' ? deadlineLedgerHeadline(agencyProfiles.filter((profile) => !activePortalKey || profile.portalSubdomain === activePortalKey)) : null),
@@ -70,9 +70,8 @@ export default function OverviewWorkbench({ ledgerFigure, onOpenLedger, onOpenFo
   const sourceName = useCallback((portalKey: string | null) => portals.find((saved) => saved.registration.portalKey === portalKey)?.registration.displayName, [portals]);
 
   const queue = useMemo(() => leads.map((finding) => ({ id: finding.id, headline: finding.headline, kind: findingFamily(finding.kind) })), [leads]);
-  useWorkbenchQueue('overview', findings.status === 'ready' ? queue : null);
-
   const current = selected === LEDGER_ID && ledger ? LEDGER_ID : queue.some((item) => item.id === selected) ? selected : queue[0]?.id ?? null;
+  useWorkbenchQueue('overview', findings.status === 'ready' ? queue : null, current);
   const select = useCallback((id: string) => selectWorkbenchLead('overview', id), [selectWorkbenchLead]);
   const selectIfQueued = useCallback((id: string) => {
     if (!queue.some((item) => item.id === id)) return false;
@@ -155,7 +154,9 @@ export default function OverviewWorkbench({ ledgerFigure, onOpenLedger, onOpenFo
     );
   } else {
     const story = ranked.get(current);
-    main = <LeadDetail findingId={current} storyLead={story?.lead} rank={story?.rank} position={position} onSelectFinding={selectIfQueued} />;
+    // The overview orders by severity; the Story desk's attention rank would be a second ordering
+    // beside "1 of 40", so the factors are drawn without it.
+    main = <LeadDetail findingId={current} storyLead={story?.lead} position={position} onSelectFinding={selectIfQueued} />;
   }
 
   return <Workbench navigator={navigator} wide={current === LEDGER_ID || (!current && findings.status !== 'pending')}>{main}</Workbench>;

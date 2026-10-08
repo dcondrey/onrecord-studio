@@ -45,6 +45,12 @@ export interface WorkbenchQueueLead {
 export interface WorkbenchQueue {
   surface: WorkbenchSurface;
   leads: WorkbenchQueueLead[];
+  /**
+   * What the stage shows: the selection, or the lead the workbench fell back to when nothing is
+   * selected or the selection left the queue. An id outside `leads` (the deadline ledger) steps
+   * to the first lead.
+   */
+  current: string | null;
 }
 export type WorkspaceView = 'overview' | 'story' | 'patterns' | 'analysis' | 'evidence' | 'activity' | 'briefing' | 'meetings' | 'compare';
 export type EvidenceMode = 'records' | 'timeline';
@@ -468,8 +474,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   stepWorkbenchLead: (delta) => {
     const queue = get().workbenchQueue;
     if (!queue || queue.leads.length === 0) return;
-    const current = queue.leads.findIndex((lead) => lead.id === get().workbenchSelection[queue.surface]);
-    const next = Math.max(0, Math.min(queue.leads.length - 1, (current < 0 ? 0 : current + delta)));
+    const current = queue.leads.findIndex((lead) => lead.id === queue.current);
+    const next = current < 0 ? 0 : Math.max(0, Math.min(queue.leads.length - 1, current + delta));
     get().selectWorkbenchLead(queue.surface, queue.leads[next].id);
   },
   requestedCasework: null,

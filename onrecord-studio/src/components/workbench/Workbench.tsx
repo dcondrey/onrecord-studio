@@ -73,14 +73,14 @@ const editable = (target: EventTarget | null) => target instanceof HTMLElement
  * Publishes the queue for the command bar and binds J and K to the next and previous lead, while
  * the workbench is mounted. Typing in a field, a modifier, or an open dialog leaves the keys alone.
  */
-export function useWorkbenchQueue(surface: WorkbenchSurface, leads: readonly WorkbenchQueueLead[] | null) {
+export function useWorkbenchQueue(surface: WorkbenchSurface, leads: readonly WorkbenchQueueLead[] | null, current: string | null) {
   const setWorkbenchQueue = useAppStore((state) => state.setWorkbenchQueue);
   const signature = leads ? leads.map((lead) => lead.id).join('|') : null;
   const latest = useRef(leads);
   latest.current = leads;
   useEffect(() => {
-    setWorkbenchQueue(latest.current ? { surface, leads: [...latest.current] } : null);
-  }, [setWorkbenchQueue, signature, surface]);
+    setWorkbenchQueue(latest.current ? { surface, leads: [...latest.current], current } : null);
+  }, [current, setWorkbenchQueue, signature, surface]);
   useEffect(() => () => setWorkbenchQueue(null), [setWorkbenchQueue]);
   useEffect(() => {
     const onKey = (event: globalThis.KeyboardEvent) => {

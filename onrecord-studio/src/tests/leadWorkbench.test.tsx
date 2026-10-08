@@ -39,6 +39,7 @@ vi.mock('../ipc', () => ({
 }));
 
 import StoryDesk from '../components/dashboard/StoryDesk';
+import { useAppStore } from '../store/useAppStore';
 
 // jsdom does not lay out, so it has no scrollIntoView; the queue keeps its selection in view with it.
 Element.prototype.scrollIntoView = vi.fn();
@@ -88,6 +89,7 @@ function dossier(id: string, headline: string) {
 
 afterEach(() => {
   cleanup();
+  useAppStore.setState({ workbenchSelection: {} });
   bridge.leads = [];
   bridge.dossiers.clear();
 });
@@ -111,5 +113,20 @@ describe('lead workbench', () => {
     });
     expect(screen.queryByRole('heading', { name: 'Dossier of the first lead' })).toBeNull();
     expect(screen.getByRole('heading', { name: 'Dossier of the second lead' })).toBeTruthy();
+  });
+
+  // With nothing selected the stage falls back to lead 1; stepping must start from what is shown,
+  // or the first J re-selects the lead already on the stage.
+  it('steps from the lead on the stage when nothing was selected yet', async () => {
+    render(<StoryDesk />);
+    await waitFor(() => expect(bridge.leads).toHaveLength(1));
+    act(() => bridge.leads[0]([lead('a', 'First lead'), lead('b', 'Second lead')]));
+    await waitFor(() => expect(bridge.dossiers.has('a')).toBe(true));
+    expect(screen.getByRole('button', { name: /First lead/ }).getAttribute('aria-current')).toBe('true');
+
+    fireEvent.keyDown(window, { key: 'j' });
+    await waitFor(() => expect(bridge.dossiers.has('b')).toBe(true));
+    expect(screen.getByRole('button', { name: /Second lead/ }).getAttribute('aria-current')).toBe('true');
+    expect(screen.getByRole('button', { name: /First lead/ }).getAttribute('aria-current')).toBeNull();
   });
 });
