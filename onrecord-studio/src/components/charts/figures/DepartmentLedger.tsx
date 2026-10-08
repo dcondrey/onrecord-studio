@@ -99,6 +99,7 @@ export interface DepartmentLedgerProps {
 
 const NAME_FONT = '500 12px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif';
 const HEADER_FONT = '500 11px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif';
+const NOTE_FONT = '11px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif';
 const NAME_CLASS = 'fill-fg text-[12px] font-medium';
 const NOTE_CLASS = 'fill-muted text-[11px]';
 const HEADER_CLASS = 'fill-fg-secondary text-[11px] font-medium';
@@ -111,6 +112,12 @@ const GUTTER = 20;
 /** The three columns' least usable width beside an inline name column; below it names go above. */
 const MIN_COLUMNS = 440;
 const COLUMN_TITLES = { a: 'Counted deadline misses', b: 'Rapid closures', c: 'Closure time vs peers' } as const;
+/**
+ * What each column's figure is, under its title: the counted column is the one legal claim, and
+ * the other two say they are not, so the frame itself never reads as both.
+ */
+const COLUMN_NOTES = { a: 'Counted (legal claim)', b: 'Statistical, not a legal finding', c: 'Statistical, not a legal finding' } as const;
+const LINE = 13;
 const FLAG_INDENT = 18;
 
 function truncate(text: string, width: number, font?: string): string {
@@ -121,14 +128,15 @@ function truncate(text: string, width: number, font?: string): string {
   return `${text.slice(0, end).trimEnd()}…`;
 }
 
-/** A column title on one line, or split at a word onto two; never cut. */
-export function wrapTitle(title: string, width: number): string[] {
-  if (measureText(title, HEADER_FONT) <= width) return [title];
-  const words = title.split(' ');
-  let first = words[0];
-  let index = 1;
-  while (index < words.length && measureText(`${first} ${words[index]}`, HEADER_FONT) <= width) first += ` ${words[index++]}`;
-  return index < words.length ? [first, words.slice(index).join(' ')] : [first];
+/** Text set on as many lines as `width` needs, broken at words; never cut. */
+export function wrapWords(text: string, width: number, font = HEADER_FONT): string[] {
+  const lines: string[] = [];
+  for (const word of text.split(' ')) {
+    const last = lines.length - 1;
+    if (last >= 0 && measureText(`${lines[last]} ${word}`, font) <= width) lines[last] = `${lines[last]} ${word}`;
+    else lines.push(word);
+  }
+  return lines;
 }
 
 interface Layout {
@@ -137,6 +145,7 @@ interface Layout {
   rowStep: number;
   header: number;
   titles: { a: string[]; b: string[]; c: string[] };
+  notes: { a: string[]; b: string[]; c: string[] };
   cols: { a: [number, number]; b: [number, number]; c: [number, number] };
   height(rows: number): number;
 }
@@ -161,13 +170,19 @@ function ledgerLayout(width: number, nameNeed: number): Layout {
     c: [start + a + b + 2 * GUTTER, width] as [number, number],
   };
   const titles = {
-    a: wrapTitle(COLUMN_TITLES.a, cols.a[1] - cols.a[0] - FLAG_INDENT),
-    b: wrapTitle(COLUMN_TITLES.b, cols.b[1] - cols.b[0]),
-    c: wrapTitle(COLUMN_TITLES.c, cols.c[1] - cols.c[0]),
+    a: wrapWords(COLUMN_TITLES.a, cols.a[1] - cols.a[0] - FLAG_INDENT),
+    b: wrapWords(COLUMN_TITLES.b, cols.b[1] - cols.b[0]),
+    c: wrapWords(COLUMN_TITLES.c, cols.c[1] - cols.c[0]),
   };
-  const header = Math.max(titles.a.length, titles.b.length, titles.c.length) > 1 ? 47 : 34;
+  const notes = {
+    a: wrapWords(COLUMN_NOTES.a, cols.a[1] - cols.a[0], NOTE_FONT),
+    b: wrapWords(COLUMN_NOTES.b, cols.b[1] - cols.b[0], NOTE_FONT),
+    c: wrapWords(COLUMN_NOTES.c, cols.c[1] - cols.c[0], NOTE_FONT),
+  };
+  const lines = Math.max(...(['a', 'b', 'c'] as const).map((column) => titles[column].length + notes[column].length));
+  const header = 8 + lines * LINE;
   const rowStep = narrow ? 54 : 38;
-  return { narrow, nameWidth, rowStep, header, titles, cols, height: (rows) => header + MEAN_STRIP + rows * rowStep + FOOT };
+  return { narrow, nameWidth, rowStep, header, titles, notes, cols, height: (rows) => header + MEAN_STRIP + rows * rowStep + FOOT };
 }
 
 /** The widest name or note line a row puts in the name column. */
@@ -269,7 +284,6 @@ export default function DepartmentLedger({ variant, profiles, scaleProfiles, sta
         title="Department deadline ledger"
         storageKey={`department-ledger-${variant}`}
         headline={headline}
-        claim="mixed"
         sources={{
           tables: ['requests', 'statutory_extensions', 'agencies'],
           note: 'misses counted under Cal. Gov. Code § 7922.535; rapid closures and closure time are statistical comparisons, not legal findings; peers are every measured closure in the workspace, all portals, not only the departments shown',
@@ -308,7 +322,7 @@ export default function DepartmentLedger({ variant, profiles, scaleProfiles, sta
   );
 }
 
-function ColumnHeader({ x, lines, note, width, flag = false }: { x: number; lines: readonly string[]; note: string; width: number; flag?: boolean }) {
+function ColumnHeader({ x, lines, note, flag = false }: { x: number; lines: readonly string[]; note: readonly string[]; flag?: boolean }) {
   const titleX = flag ? x + FLAG_INDENT : x;
   return (
     <g aria-hidden="true">
@@ -318,10 +332,12 @@ function ColumnHeader({ x, lines, note, width, flag = false }: { x: number; line
         </g>
       )}
       <text x={titleX} y={11} className={HEADER_CLASS}>
-        <title>{`${lines.join(' ')}: ${note}`}</title>
-        {lines.map((line, i) => <tspan key={line} x={titleX} dy={i === 0 ? 0 : 13}>{line}</tspan>)}
+        <title>{`${lines.join(' ')}: ${note.join(' ')}`}</title>
+        {lines.map((line, i) => <tspan key={line} x={titleX} dy={i === 0 ? 0 : LINE}>{line}</tspan>)}
       </text>
-      <text x={x} y={11 + (lines.length - 1) * 13 + 14} className={NOTE_CLASS}>{truncate(note, width)}</text>
+      <text x={x} y={11 + lines.length * LINE} className={NOTE_CLASS}>
+        {note.map((line, i) => <tspan key={line} x={x} dy={i === 0 ? 0 : LINE}>{line}</tspan>)}
+      </text>
     </g>
   );
 }
@@ -377,9 +393,9 @@ function LedgerPlot({ width, rows, scaleRows, portalName, nameNeed, onInspect }:
 
   return (
     <g>
-      <ColumnHeader x={cols.a[0]} width={cols.a[1] - cols.a[0]} lines={layout.titles.a} note="Counted · of requests" flag />
-      <ColumnHeader x={cols.b[0]} width={cols.b[1] - cols.b[0]} lines={layout.titles.b} note="statistical" />
-      <ColumnHeader x={cols.c[0]} width={cols.c[1] - cols.c[0]} lines={layout.titles.c} note="statistical · days · peers: all portals" />
+      <ColumnHeader x={cols.a[0]} lines={layout.titles.a} note={layout.notes.a} flag />
+      <ColumnHeader x={cols.b[0]} lines={layout.titles.b} note={layout.notes.b} />
+      <ColumnHeader x={cols.c[0]} lines={layout.titles.c} note={layout.notes.c} />
 
       {mean !== null && sd !== null && sd > 0 && (
         <ReferenceBand axis="x" from={c(Math.max(0, mean - 2 * sd))} to={c(mean + 2 * sd)} extent={[top - 4, bottom + 16]} label="within 2 sd of all closures" />

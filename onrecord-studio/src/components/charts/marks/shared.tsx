@@ -47,7 +47,8 @@ export function MarkGroup({ interaction, box, ringRadius = 3, children }: { inte
   const { item } = interaction;
   return (
     <g
-      role="img"
+      // A mark that opens something is a control; one that only describes is an image.
+      role={interaction.onClick ? 'button' : 'img'}
       aria-label={interaction.name}
       className="viz-focusable"
       tabIndex={item ? item.tabIndex : undefined}

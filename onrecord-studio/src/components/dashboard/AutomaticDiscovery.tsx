@@ -209,7 +209,7 @@ export default function AutomaticDiscovery() {
         key={item.id}
         nested
         badges={
-          item.kind === 'lead' ? <FamilyBadge family={spending ? 'Spending' : 'Records request'} />
+          item.kind === 'lead' ? <FamilyBadge family={spending ? 'Spending' : 'Pattern'} />
             : item.kind === 'pattern' ? <FamilyBadge family="Pattern" />
               : item.kind === 'quality' ? <Badge tone="neutral">Data quality</Badge>
                 : <FamilyBadge family="Data gap" />
@@ -258,7 +258,7 @@ export default function AutomaticDiscovery() {
           </details>
         </>}
         subject={<span title={dataset.sourceUri ?? 'Local export'}>{dataset.displayName}{dataset.partialDataset ? ' · Partial or unverified' : ''}</span>}
-        actions={item.query && <Button size="sm" onClick={() => { controller.inspect(item.query!.sql); openAnalysis(); }}>Explore this finding</Button>}
+        actions={item.query && <Button size="sm" aria-label={`Explore this finding: ${item.title}`} onClick={() => { controller.inspect(item.query!.sql); openAnalysis(); }}>Explore this finding</Button>}
       />
     );
   };

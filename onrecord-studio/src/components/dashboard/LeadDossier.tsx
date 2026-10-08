@@ -5,7 +5,7 @@ import { useAppStore } from '../../store/useAppStore';
 import type { DossierGap, EvidenceLink, LeadDossier as LeadDossierData, LeadFigure as LeadFigureData } from '../../types';
 import LeadFigure from '../charts/figures/LeadFigure';
 import { useDiscoveryController } from './AutomaticDiscoveryProvider';
-import { leadProse, tableLeadSources, type TableLeadSources } from '../../utils/tableLeadSources';
+import { leadProse, tableLeadSources } from '../../utils/tableLeadSources';
 import { findingToBriefingEvidence } from './BriefingWorkspace';
 import ArtifactDrafts from './ArtifactDrafts';
 import EvidenceChain from '../objects/EvidenceChain';
@@ -14,6 +14,7 @@ import { downloadText } from './textDownload';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
 import InlineError from '../ui/InlineError';
+import Icon from '../ui/icons';
 
 /** A stored lead's figure, none (not a lead, cut short, or stored before figures), or why it could not be read. */
 export type FigureState = { figure: LeadFigureData | null } | { error: string };
@@ -84,6 +85,8 @@ export default function LeadDossier({ findingId }: { findingId: string }) {
           <Section title="Draft from this finding">
             <ArtifactDrafts findingId={state.dossier.finding.id} />
           </Section>
+          <EvidenceChain dossier={state.dossier} />
+          <MethodDetails dossier={state.dossier} />
           <Section title={`Related findings (${state.dossier.related.length}${state.dossier.relatedTruncated ? ', more not shown' : ''})`}>
             {state.dossier.related.length === 0 ? (
               <p className="text-muted">No other undismissed finding touches this request or these documents.</p>
@@ -130,21 +133,17 @@ export default function LeadDossier({ findingId }: { findingId: string }) {
 }
 
 /**
- * A lead with a stored figure leads with it; its prose moves into 'Figures as text' so the wording
- * stays citable. A finding with no figure keeps its explanation in the evidence chain as before.
+ * The inspector leads with what can be seen: a stored figure, with the lead's prose under 'Figures
+ * as text' so the wording stays citable. A table lead stored without one says so rather than
+ * leaving a blank; a document finding has no figure to lack.
  */
 export function LeadFigureSection({ dossier, figure }: { dossier: LeadDossierData; figure: FigureState }) {
   const controller = useDiscoveryController();
   const sources = tableLeadSources(dossier.finding.explanation);
   const drawn = 'figure' in figure ? figure.figure : null;
   if (!drawn) {
-    return (
-      <>
-        {'error' in figure && <InlineError summary="The lead's figure couldn’t be read." detail={figure.error} />}
-        <EvidenceChain dossier={dossier} />
-        <TablesRead sources={sources} />
-      </>
-    );
+    if ('error' in figure) return <InlineError summary="The lead's figure couldn’t be read." detail={figure.error} />;
+    return sources ? <p className="text-caption text-muted">No stored figure for this lead.</p> : null;
   }
   const prose = leadProse(dossier.finding.explanation);
   const tables = sources?.tables.map((table) => table.parts?.name ?? table.line) ?? [];
@@ -164,34 +163,58 @@ export function LeadFigureSection({ dossier, figure }: { dossier: LeadDossierDat
         <summary className="focus-ring w-fit cursor-pointer rounded text-caption text-muted hover:text-fg">Figures as text</summary>
         <p className="mt-1 whitespace-pre-line">{prose}</p>
       </details>
-      <EvidenceChain dossier={{ ...dossier, finding: { ...dossier.finding, explanation: '' } }} />
-      <TablesRead sources={sources} />
     </>
   );
 }
 
-// Shown only for a lead whose stored explanation names the tables it read; a document finding has
-// none and gets no section rather than an empty one.
-export function TablesRead({ sources }: { sources: TableLeadSources | null }) {
-  if (sources === null) return null;
+/**
+ * How the finding was produced, folded: the detector, and for a table lead the tables it read
+ * (source, retrieval date and full digest, broken anywhere so nothing runs past the panel) and the
+ * query. A document finding has no tables and gets no table or query section.
+ */
+function MethodDetails({ dossier }: { dossier: LeadDossierData }) {
+  const sources = tableLeadSources(dossier.finding.explanation);
   return (
-    <Section title={`Tables read (${sources.tables.length}) and query`}>
-      <ul className="space-y-2">
-        {sources.tables.map((table) => (
-          <li key={table.line}>
-            {table.parts === null ? table.line : (
-              <>
-                <span className="font-medium text-fg">{table.parts.name}</span>
-                <span className="block break-all">Source: {table.parts.source}</span>
-                <span className="block">Retrieved: {table.parts.retrievedOn}</span>
-                <span className="block break-all font-mono text-code">SHA-256: {table.parts.sha256}</span>
-              </>
-            )}
-          </li>
-        ))}
-      </ul>
-      <pre aria-label="Query the figures were computed with" className="mt-2 whitespace-pre-wrap break-words rounded-md bg-raised/60 p-3 font-mono text-code">{sources.sql}</pre>
-    </Section>
+    <div className="divide-y divide-line border-y border-line">
+      <Fold title="Method">
+        <p>Detector <span className="break-all font-mono text-fg">{dossier.finding.sourceDetector}</span></p>
+      </Fold>
+      {sources && (
+        <>
+          <Fold title={`Tables read (${sources.tables.length})`}>
+            <ul className="space-y-2">
+              {sources.tables.map((table) => (
+                <li key={table.line} className="break-all">
+                  {table.parts === null ? table.line : (
+                    <>
+                      <span className="font-medium text-fg">{table.parts.name}</span>
+                      <span className="block break-all">Source: {table.parts.source}</span>
+                      <span className="block">Retrieved: {table.parts.retrievedOn}</span>
+                      <span className="block break-all font-mono text-code">SHA-256: {table.parts.sha256}</span>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </Fold>
+          <Fold title="SQL">
+            <pre aria-label="Query the figures were computed with" className="max-h-80 overflow-auto whitespace-pre-wrap break-all rounded-md bg-raised/60 p-3 font-mono text-code">{sources.sql}</pre>
+          </Fold>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Fold({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <details className="group py-2">
+      <summary className="focus-ring flex w-full cursor-pointer list-none items-center gap-1.5 rounded text-body font-medium text-fg [&::-webkit-details-marker]:hidden">
+        <Icon name="chevron" size="xs" className="text-muted transition-transform group-open:rotate-90" />
+        {title}
+      </summary>
+      <div className="mt-2 pl-4">{children}</div>
+    </details>
   );
 }
 
