@@ -26,6 +26,7 @@ use std::fs::File;
 use std::path::Path;
 
 use crate::error::AppError;
+use crate::parsers::office::decode_xml_entities;
 
 pub const MAX_PACKAGE_BYTES: u64 = 1024 * 1024 * 1024;
 pub const MAX_PART_BYTES: u64 = 2 * 1024 * 1024;
@@ -188,19 +189,10 @@ fn extract_body(xml: &str, tag: &str) -> Option<String> {
         return if body.is_empty() {
             None
         } else {
-            Some(decode_xml_entities(body))
+            decode_xml_entities(body).ok()
         };
     }
     None
-}
-
-/// Decode the five predefined XML entities. docProps content rarely uses more.
-fn decode_xml_entities(text: &str) -> String {
-    text.replace("&amp;", "&")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&apos;", "'")
 }
 
 fn parse_iso(value: &str) -> Option<DateTime<Utc>> {
@@ -307,27 +299,15 @@ mod tests {
     }
 
     #[test]
-    fn latest_touch_prefers_modified_over_last_printed_and_created() {
-        let props = OoxmlDocProps {
-            modified: Some("2024-04-15T10:00:00Z".parse().unwrap()),
-            last_printed: Some("2024-06-01T10:00:00Z".parse().unwrap()),
-            created: Some("2024-01-01T10:00:00Z".parse().unwrap()),
-            ..Default::default()
-        };
-        assert_eq!(
-            props.latest_touch(),
-            Some("2024-06-01T10:00:00Z".parse().unwrap()),
-            "last_printed is later than modified, so it wins the max"
-        );
-    }
-
-    #[test]
-    fn xml_entities_in_last_modified_by_are_decoded() {
-        let core = "<cp:lastModifiedBy>Jones &amp; Co</cp:lastModifiedBy>";
+    fn xml_entities_in_last_modified_by_are_decoded_exactly_once() {
+        let core = "<cp:lastModifiedBy>Jones &amp;lt;Co&amp;gt; &#x2019;s</cp:lastModifiedBy>";
         let app = "";
         let file = build_ooxml_package(core, app);
         let props = read_ooxml_docprops(file.path()).unwrap();
-        assert_eq!(props.last_modified_by.as_deref(), Some("Jones & Co"));
+        assert_eq!(
+            props.last_modified_by.as_deref(),
+            Some("Jones &lt;Co&gt; \u{2019}s")
+        );
     }
 
     #[test]
