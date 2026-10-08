@@ -54,9 +54,6 @@ vi.mock('@tauri-apps/api/core', () => ({
   },
 }));
 
-vi.mock('../components/charts/AnomalyRadar', () => ({ default: () => <div /> }));
-vi.mock('../components/charts/LifecycleFunnel', () => ({ default: () => <div /> }));
-vi.mock('../components/charts/PerformanceScatter', () => ({ default: () => <div /> }));
 vi.mock('../components/charts/TemporalMap', () => ({ default: () => <div /> }));
 vi.mock('../components/charts/AnalyticsUnavailable', () => ({ default: () => <div /> }));
 vi.mock('../components/dashboard/MetricsGrid', () => ({ default: () => <div /> }));

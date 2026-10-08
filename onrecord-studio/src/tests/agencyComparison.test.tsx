@@ -104,7 +104,7 @@ describe('AgencyComparison', () => {
     });
     render(<AgencyComparison />);
     const marked = bodyRows()
-      .filter((row) => within(row).queryByText('Slower than peers') !== null)
+      .filter((row) => within(row).queryByText('Slower than peers (statistical)') !== null)
       .map((row) => within(within(row).getAllByRole('cell')[1]).getAllByRole('button')[0].textContent);
     expect(marked.sort()).toEqual(['Above', 'At']);
     expect(screen.queryByText(/violat/i, { selector: 'td span' })).toBeNull();
