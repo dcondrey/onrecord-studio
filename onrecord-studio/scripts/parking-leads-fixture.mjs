@@ -1,15 +1,5 @@
 import fs from 'node:fs';
-import ts from 'typescript';
-const modules = new Map();
-function compile(name) {
-  if (modules.has(name)) return modules.get(name);
-  const source = fs.readFileSync(new URL(`../src/utils/${name}.ts`, import.meta.url), 'utf8');
-  const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
-  const module = { exports: {} };
-  new Function('module', 'exports', 'require', compiled)(module, module.exports, (path) => compile(path.replace('./', '')));
-  modules.set(name, module.exports);
-  return module.exports;
-}
+import { compileUtil as compile } from './compile-util.mjs';
 const { parkingQueries } = compile('parkingLeads');
 const header = ['citation_id', 'date_issue', 'date_creation', 'location', 'sector1', 'vio_code', 'vio_desc', 'vio_fine'];
 // The publisher quotes every header and value. Code spacing, the SDMC prefix, the _W warning

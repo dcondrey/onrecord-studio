@@ -1,15 +1,5 @@
 import fs from 'node:fs';
-import ts from 'typescript';
-const modules = new Map();
-function compile(name) {
-  if (modules.has(name)) return modules.get(name);
-  const source = fs.readFileSync(new URL(`../src/utils/${name}.ts`, import.meta.url), 'utf8');
-  const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
-  const module = { exports: {} };
-  new Function('module', 'exports', 'require', compiled)(module, module.exports, (path) => compile(path.replace('./', '')));
-  modules.set(name, module.exports);
-  return module.exports;
-}
+import { compileUtil as compile } from './compile-util.mjs';
 const { abatementQueries } = compile('abatementLeads');
 const quote = (value) => `"${String(value).replace(/"/g, '""')}"`;
 const toCsv = (header, rows) => `${[header, ...rows].map((row) => row.map(quote).join(',')).join('\n')}\n`;
