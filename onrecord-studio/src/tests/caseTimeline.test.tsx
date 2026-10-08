@@ -73,6 +73,6 @@ describe('CaseTimeline', () => {
     await screen.findByText('headline new');
     await act(async () => releaseFirst([finding('old')]));
     expect(screen.queryByText('headline old')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Inspect in evidence' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open finding' })).toBeTruthy();
   });
 });

@@ -5,6 +5,13 @@ import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useInspectFinding } from '../../hooks/useInspectFinding';
 import { useAppStore } from '../../store/useAppStore';
 import { KIND_LABELS } from '../tracker/MyRequestsPanel';
+import { cn } from '../../utils/cn';
+import Badge from '../ui/Badge';
+import Button from '../ui/Button';
+import EmptyState from '../ui/EmptyState';
+import { Input, SearchField, Select } from '../ui/Field';
+import MethodNote from '../ui/MethodNote';
+import Skeleton from '../ui/Skeleton';
 import type { Finding } from '../../types';
 import { caseItems, type DateContradiction, type TimelineLane } from '../../utils/caseTimeline';
 import {
@@ -65,29 +72,35 @@ export default function CaseTimeline() {
   const [limit, setLimit] = useState(PAGE);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [lane, setLane] = useState<string | null>(null);
+  // Bumped by Retry; every loader reads it so each re-runs under its own request gate.
+  const [reload, setReload] = useState(0);
 
   const loadRequests = useCallback(async (): Promise<Loaded<null>> => {
+    void reload;
     if (!isTauri()) return NOTHING;
     return { items: requestItems(await invokeCommand('list_claimed_requests', {}), KIND_LABELS), capped: false, detail: null };
-  }, []);
+  }, [reload]);
   // The refresh counter re-keys the loader so a completed ingest re-reads findings.
   const loadFindings = useCallback(async (): Promise<Loaded<Map<string, Finding>>> => {
     void findingsRefresh;
+    void reload;
     if (!isTauri()) return NOTHING;
     const rows = await invokeCommand('list_findings', { filter: null, limit: FINDING_LIMIT + 1 });
     const kept = rows.slice(0, FINDING_LIMIT);
     return { items: findingItems(kept), capped: rows.length > FINDING_LIMIT, detail: new Map(kept.map((finding) => [finding.id, finding])) };
-  }, [findingsRefresh]);
+  }, [findingsRefresh, reload]);
   const loadWatch = useCallback(async (): Promise<Loaded<null>> => {
+    void reload;
     if (!isTauri()) return NOTHING;
     const rows = await invokeCommand('list_watch_changes', { watchId: null, limit: WATCH_LIMIT + 1 });
     return { items: watchItems(rows.slice(0, WATCH_LIMIT)), capped: rows.length > WATCH_LIMIT, detail: null };
-  }, []);
+  }, [reload]);
   const loadCase = useCallback(async (): Promise<Loaded<{ lanes: TimelineLane[]; contradictions: DateContradiction[] }>> => {
+    void reload;
     if (!isTauri()) return NOTHING;
     const built = caseItems((await invokeCommand('get_casework_state', {})).cases);
     return { items: built.items, capped: false, detail: { lanes: built.lanes, contradictions: built.contradictions } };
-  }, []);
+  }, [reload]);
 
   const findings = useSource(loadFindings);
   const casework = useSource(loadCase);
@@ -104,7 +117,8 @@ export default function CaseTimeline() {
   const all = useMemo(() => SOURCES.flatMap((source) => sources[source].items), [sources.REQUEST.items, sources.FINDING.items, sources.WATCH.items, sources.CASE.items]);
   const view = useMemo(() => buildTimeline(all, { sources: shown, from, to, text, lane }), [all, shown, from, to, text, lane]);
   const visible = view.items.slice(0, limit);
-  const loading = SOURCES.some((source) => !sources[source].loaded);
+  const pending = SOURCES.filter((source) => !sources[source].loaded);
+  const failed = SOURCES.filter((source) => sources[source].error);
 
   const groups: { month: string; rows: TimelineItem[] }[] = [];
   for (const row of visible) {
@@ -116,114 +130,150 @@ export default function CaseTimeline() {
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto w-full max-w-[1100px] space-y-3 p-4 lg:p-5">
-        <p className="text-label leading-relaxed text-muted">
-          One timeline from your tracked requests, detector findings, watch changes and case records. An event date is when something happened. Last seen and noticed dates are when this app saw it, which can be later than the event. A due or modeled date is owed or computed, not observed. Case dates are the ones you recorded; none is read out of a document.
-        </p>
-
-        <div className="app-panel flex flex-wrap items-center gap-2 p-2 text-label text-fg-secondary">
-          <div role="group" aria-label="Show sources" className="flex gap-1">
-            {SOURCES.map((source) => (
-              <button
-                key={source}
-                type="button"
-                aria-pressed={shown.has(source)}
-                onClick={() =>
-                  setShown((current) => {
-                    const next = new Set(current);
-                    if (next.has(source)) next.delete(source);
-                    else next.add(source);
-                    return next;
-                  })
-                }
-                className={`focus-ring rounded-md border px-2 py-1 font-semibold ${shown.has(source) ? 'border-accent/60 text-accent' : 'border-control text-muted'}`}
-              >
-                {SOURCE_LABELS[source]}
-              </button>
-            ))}
+      <div className="w-full max-w-[1100px] space-y-4 px-5 pb-10 pt-4 lg:px-6">
+        <div className="app-panel grid gap-3 p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <div role="group" aria-label="Show sources" className="inline-flex h-8 items-center gap-0.5 rounded-lg border border-control p-0.5">
+              {SOURCES.map((source) => (
+                <button
+                  key={source}
+                  type="button"
+                  aria-pressed={shown.has(source)}
+                  onClick={() =>
+                    setShown((current) => {
+                      const next = new Set(current);
+                      if (next.has(source)) next.delete(source);
+                      else next.add(source);
+                      return next;
+                    })
+                  }
+                  className={cn(
+                    'focus-ring h-full whitespace-nowrap rounded-md px-2.5 text-control transition-colors',
+                    shown.has(source) ? 'bg-accent/10 text-accent' : 'text-muted hover:text-fg',
+                  )}
+                >
+                  {SOURCE_LABELS[source]}
+                </button>
+              ))}
+            </div>
+            <SearchField
+              value={text}
+              onChange={(event) => { setText(event.target.value); setLimit(PAGE); }}
+              placeholder="Filter timeline"
+              aria-label="Filter timeline by text"
+              wrapperClassName="min-w-[12rem] flex-1"
+            />
+            <MethodNote label="How dates are read">
+              One timeline from your tracked requests, detector findings, watch changes and case records. An event date is when something happened. Last seen and noticed dates are when this app saw it, which can be later than the event. A due or modeled date is owed or computed, not observed. Case dates are the ones you recorded; none is read out of a document.
+            </MethodNote>
           </div>
-          <label className="flex items-center gap-1">From<input type="date" value={from} max={to || undefined} onChange={(event) => { setFrom(event.target.value); setLimit(PAGE); }} className="focus-ring rounded border border-control bg-canvas px-1 py-0.5" /></label>
-          <label className="flex items-center gap-1">To<input type="date" value={to} min={from || undefined} onChange={(event) => { setTo(event.target.value); setLimit(PAGE); }} className="focus-ring rounded border border-control bg-canvas px-1 py-0.5" /></label>
-          {caseLanes.length > 0 && (
-            <label className="flex items-center gap-1">Lane
-              <select value={lane ?? ''} onChange={(event) => { setLane(event.target.value || null); setLimit(PAGE); }} className="focus-ring rounded border border-control bg-canvas px-1 py-0.5">
-                <option value="">All lanes</option>
-                {caseLanes.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-              </select>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <label className="flex items-center gap-2 text-caption text-muted">From
+              <Input type="date" value={from} max={to || undefined} onChange={(event) => { setFrom(event.target.value); setLimit(PAGE); }} className="w-40 tabular-nums" />
             </label>
-          )}
-          <label className="sr-only" htmlFor="timeline-text">Filter timeline by text</label>
-          <input id="timeline-text" type="search" value={text} onChange={(event) => { setText(event.target.value); setLimit(PAGE); }} placeholder="Filter timeline" className="focus-ring min-w-[10rem] flex-1 rounded border border-control bg-canvas px-2 py-1" />
+            <label className="flex items-center gap-2 text-caption text-muted">To
+              <Input type="date" value={to} min={from || undefined} onChange={(event) => { setTo(event.target.value); setLimit(PAGE); }} className="w-40 tabular-nums" />
+            </label>
+            <label className="flex items-center gap-2 text-caption text-muted">Lane
+              <Select value={lane ?? ''} disabled={caseLanes.length === 0} onChange={(event) => { setLane(event.target.value || null); setLimit(PAGE); }} className="w-44">
+                {caseLanes.length === 0 ? <option value="">No lanes</option> : <option value="">All lanes</option>}
+                {caseLanes.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+              </Select>
+            </label>
+          </div>
         </div>
 
-        {SOURCES.filter((source) => sources[source].error).map((source) => (
-          <p key={source} role="alert" className="rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-label text-danger">
-            {SOURCE_LABELS[source]} could not be read, so they are missing from this timeline: {sources[source].error}
-          </p>
-        ))}
+        {failed.length > 0 && (
+          <div role="alert" className="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+              <p className="min-w-0 flex-1 text-body text-danger">
+                {listOf(failed.map((source) => SOURCE_LABELS[source]))} could not be read, so {failed.length === 1 ? 'it is' : 'they are'} missing from this timeline.
+              </p>
+              <Button size="sm" onClick={() => setReload((count) => count + 1)}>Retry</Button>
+            </div>
+            <details className="mt-2">
+              <summary className="text-caption text-muted">Details</summary>
+              <ul className="mt-1 space-y-1 break-words font-mono text-code text-fg-secondary">
+                {failed.map((source) => <li key={source}>{SOURCE_LABELS[source]}: {sources[source].error}</li>)}
+              </ul>
+            </details>
+          </div>
+        )}
         {SOURCES.filter((source) => sources[source].capped).map((source) => (
-          <p key={source} role="status" className="text-label text-warning">
+          <p key={source} role="status" className="text-caption text-warning">
             Only the most recent {source === 'FINDING' ? FINDING_LIMIT : WATCH_LIMIT} {SOURCE_LABELS[source].toLowerCase()} are loaded; older ones are not shown.
           </p>
         ))}
         {contradictions.length > 0 && (
-          <section aria-label="Date contradictions" className="rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 text-label text-warning">
-            <h3 className="font-semibold">Two sources give different dates</h3>
+          <section aria-label="Date contradictions" className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-body text-warning">
+            <h3 className="text-heading">Two sources give different dates</h3>
             <ul className="mt-1 space-y-1">
               {contradictions.map((entry) => (
                 <li key={entry.id}>
                   <span className="font-medium">{entry.subject}</span>
-                  <ul className="ml-3 list-disc">
-                    {entry.readings.map((reading) => <li key={reading.date}><time dateTime={reading.date} className="font-mono">{reading.date}</time>: {reading.basis}</li>)}
+                  <ul className="ml-4 list-disc">
+                    {entry.readings.map((reading) => <li key={reading.date}><time dateTime={reading.date} className="tabular-nums">{formatDay(reading.date)}</time>: {reading.basis}</li>)}
                   </ul>
                 </li>
               ))}
             </ul>
-            <p className="mt-1 text-warning">Both readings are shown as recorded. Resolving which is right needs a sourced record, not a choice here.</p>
+            <p className="mt-1">Both readings are shown as recorded. Resolving which is right needs a sourced record, not a choice here.</p>
           </section>
         )}
         {view.unreadableDates > 0 && (
-          <p role="status" className="text-label text-warning">{view.unreadableDates} item{view.unreadableDates === 1 ? ' has' : 's have'} a date that could not be read and {view.unreadableDates === 1 ? 'is' : 'are'} not shown.</p>
+          <p role="status" className="text-caption text-warning">{view.unreadableDates} item{view.unreadableDates === 1 ? ' has' : 's have'} a date that could not be read and {view.unreadableDates === 1 ? 'is' : 'are'} not shown.</p>
         )}
 
-        {loading && all.length === 0 ? (
-          <p role="status" className="text-label text-muted">Loading the timeline…</p>
-        ) : view.items.length === 0 ? (
-          <div className="app-panel p-5 text-center text-label text-muted">
-            {all.length === 0
-              ? 'Nothing to place on a timeline yet. Dates you record in My requests, findings and watch changes appear here. This is not a statement that nothing happened.'
-              : 'No items match these filters.'}
+        {pending.length > 0 && all.length > 0 && (
+          <p role="status" className="text-caption text-muted">Still loading {listOf(pending.map((source) => SOURCE_LABELS[source].toLowerCase()))}…</p>
+        )}
+        {pending.length > 0 && all.length === 0 ? (
+          <div className="space-y-2">
+            <Skeleton variant="block" height={88} label="Loading the timeline" />
+            {[1, 2].map((slot) => <div key={slot} aria-hidden="true"><Skeleton variant="block" height={88} label="" /></div>)}
           </div>
+        ) : view.items.length === 0 ? (
+          all.length === 0 ? (
+            <EmptyState
+              icon="calendar"
+              title="Nothing on the timeline yet"
+              body="Dates appear here when you track a request, a detector finds something, or a watch changes. An empty timeline does not mean nothing happened."
+            />
+          ) : (
+            <p className="app-panel p-5 text-center text-body text-muted">No items match these filters.</p>
+          )
         ) : (
           groups.map((group) => (
-            <section key={group.month} aria-label={`Items from ${group.month}`}>
-              <h3 className="mb-1 text-label font-semibold text-fg">{group.month}</h3>
-              <ol className="divide-y divide-line rounded-xl border border-line">
+            <section key={group.month} aria-label={`Items from ${formatMonth(group.month)}`}>
+              <h3 className="mb-2 text-heading text-fg">{formatMonth(group.month)}</h3>
+              <ol className="app-panel divide-y divide-line overflow-hidden">
                 {group.rows.map((row) => (
-                  <li key={row.id} className="px-3 py-2">
-                    <div className="flex flex-wrap items-baseline gap-x-2 text-label">
-                      <time dateTime={row.at} className="font-mono text-fg-secondary">{row.at.slice(0, 10)}</time>
-                      <span className="rounded border border-line-strong px-1.5 text-caption uppercase tracking-wider text-muted">{DATE_MEANING_LABELS[row.dateMeaning]}</span>
-                      <span className="rounded border border-line-strong px-1.5 text-caption uppercase tracking-wider text-muted">{SOURCE_LABELS[row.source]}</span>
+                  <li key={row.id} className="px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <time dateTime={row.at} className="text-caption font-medium tabular-nums text-fg-secondary">{formatDay(row.at)}</time>
+                      <Badge tone="neutral">{DATE_MEANING_LABELS[row.dateMeaning]}</Badge>
+                      <Badge tone="neutral">{SOURCE_LABELS[row.source]}</Badge>
                     </div>
-                    <p className="mt-1 text-label font-medium text-fg">{row.title}</p>
-                    {row.detail && <p className="mt-0.5 text-label text-muted">{row.detail}</p>}
+                    <p className="mt-1.5 text-control text-fg">{row.title}</p>
+                    {row.detail && <p className="mt-0.5 text-body text-muted">{row.detail}</p>}
                     <p className="mt-0.5 text-caption text-muted">{row.provenance}</p>
                     {row.citations && row.citations.length === 0 && <p className="mt-0.5 text-caption text-warning">No citation recorded: this date rests on your entry alone.</p>}
-                    <div className="mt-1 flex gap-3 text-caption">
-                      {row.evidence && (
-                        <button type="button" aria-expanded={expanded === row.id} onClick={() => setExpanded((current) => (current === row.id ? null : row.id))} className="focus-ring underline text-fg-secondary">
-                          {expanded === row.id ? 'Hide basis' : 'Show basis'}
-                        </button>
-                      )}
-                      {row.findingId && findingsById?.get(row.findingId) && (
-                        <button type="button" onClick={() => inspectFinding(findingsById.get(row.findingId as string) as Finding)} className="focus-ring underline text-fg-secondary">Inspect in evidence</button>
-                      )}
-                      {row.source === 'WATCH' && (
-                        <button type="button" onClick={() => setWorkspaceView('overview')} className="focus-ring underline text-fg-secondary">Open watchlist</button>
-                      )}
-                    </div>
-                    {expanded === row.id && row.evidence && <blockquote className="mt-1 border-l border-line-strong pl-2 text-label text-fg-secondary">{row.evidence}</blockquote>}
+                    {(row.evidence || (row.findingId && findingsById?.get(row.findingId)) || row.source === 'WATCH') && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {row.evidence && (
+                          <Button size="sm" variant="ghost" aria-expanded={expanded === row.id} onClick={() => setExpanded((current) => (current === row.id ? null : row.id))}>
+                            {expanded === row.id ? 'Hide basis' : 'Show basis'}
+                          </Button>
+                        )}
+                        {row.findingId && findingsById?.get(row.findingId) && (
+                          <Button size="sm" onClick={() => inspectFinding(findingsById.get(row.findingId as string) as Finding)}>Open finding</Button>
+                        )}
+                        {row.source === 'WATCH' && (
+                          <Button size="sm" onClick={() => setWorkspaceView('overview')}>Open watchlist</Button>
+                        )}
+                      </div>
+                    )}
+                    {expanded === row.id && row.evidence && <blockquote className="mt-2 border-l-2 border-line-strong pl-3 text-body text-fg-secondary">{row.evidence}</blockquote>}
                   </li>
                 ))}
               </ol>
@@ -231,11 +281,31 @@ export default function CaseTimeline() {
           ))
         )}
         {view.items.length > limit && (
-          <button type="button" onClick={() => setLimit((current) => current + PAGE)} className="secondary-action focus-ring rounded-lg border px-3 py-1.5 text-label font-semibold text-fg-secondary">
-            Show {PAGE} more ({view.items.length - limit} remaining)
-          </button>
+          <Button onClick={() => setLimit((current) => current + PAGE)}>
+            Show {PAGE} more ({(view.items.length - limit).toLocaleString()} remaining)
+          </Button>
         )}
       </div>
     </div>
   );
+}
+
+const MONTH = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
+
+/** "2026-10" → "October 2026". The key is a calendar month, so it is read in UTC, not shifted by zone. */
+function formatMonth(key: string): string {
+  const [year, month] = key.split('-').map(Number);
+  return Number.isFinite(year) && Number.isFinite(month) ? MONTH.format(new Date(Date.UTC(year, month - 1, 1))) : key;
+}
+
+/** A bare date is a calendar day and is shown as written; an instant is shown in local time. */
+function formatDay(at: string): string {
+  const parsed = new Date(at);
+  if (Number.isNaN(parsed.getTime())) return at;
+  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: at.length <= 10 ? 'UTC' : undefined }).format(parsed);
+}
+
+function listOf(parts: string[]): string {
+  if (parts.length <= 1) return parts.join('');
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
 }
