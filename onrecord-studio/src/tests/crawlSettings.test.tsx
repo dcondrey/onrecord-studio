@@ -64,6 +64,7 @@ describe('crawl settings', () => {
     bridge.calls.length = 0;
     useAppStore.setState({ portalUrlDraft: '', portals: [], syncingPortalKeys: [], syncLogs: [] });
     render(<Header />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
   });
 
   afterEach(cleanup);

@@ -122,6 +122,7 @@ describe('StatutoryDeadlineAppeal mount', () => {
 describe('VerifiableReportExport mount', () => {
   it('renders in the findings inbox and exports only on click', async () => {
     render(<FindingsInbox />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Export…' }));
     const button = await screen.findByRole('button', { name: 'Export verifiable report', hidden: true });
     expect(bridge.calls).not.toContain('export_verifiable_report');
     fireEvent.click(button);
@@ -139,6 +140,7 @@ describe('VerifiableReportExport mount', () => {
 describe('EvidencePacketExport mount', () => {
   it('renders in the findings inbox and exports only on click', async () => {
     render(<FindingsInbox />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Export…' }));
     const button = await screen.findByRole('button', { name: 'Export evidence packet', hidden: true });
     expect(bridge.calls).not.toContain('export_evidence_packet');
     fireEvent.click(button);
