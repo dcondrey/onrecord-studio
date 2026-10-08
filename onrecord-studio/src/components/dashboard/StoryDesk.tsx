@@ -24,6 +24,7 @@ import { useCaseScope } from '../../hooks/useCaseScope';
 import { cn } from '../../utils/cn';
 import ArtifactDrafts from './ArtifactDrafts';
 import BarTable, { type BarTableColumn, type BarTableRow } from '../charts/figures/BarTable';
+import InsightCard from './InsightCard';
 import { absent, measured } from '../charts/core/nulls';
 
 type DeskState =
@@ -230,6 +231,9 @@ export default function StoryDesk() {
               </>}
             />
           )
+        )}
+        {state.status === 'READY' && visibleLeads.length > 0 && (
+          <TopLeadCards leads={visibleLeads} onOpenChain={openLeadDossier} />
         )}
         {state.status === 'READY' && visibleLeads.length > 0 && (
           <RankedLeads
@@ -495,5 +499,85 @@ function LeadDraftToggle({ findingId }: { findingId: string }) {
       </summary>
       {open && <div className="mt-3"><ArtifactDrafts findingId={findingId} /></div>}
     </details>
+  );
+}
+
+const TOP_CARDS = 3;
+
+/**
+ * The top of the desk as lead cards: rank, family and claim basis, the headline, and the attention
+ * score drawn as its factors (one violet segment per factor that contributed, on a scale shared by
+ * the three cards). The ranked figure below carries every lead and factor; these are its first rows,
+ * stated as cards. An unassessed evidence strength contributes no segment and says so.
+ */
+function TopLeadCards({ leads, onOpenChain }: { leads: readonly StoryLead[]; onOpenChain(findingId: string): void }) {
+  const top = leads.slice(0, TOP_CARDS);
+  const scoreMax = Math.max(1, ...top.map((lead) => lead.publicInterest.totalBasisPoints));
+  return (
+    <section aria-labelledby="top-leads-heading" className="grid gap-3">
+      <h3 id="top-leads-heading" className="text-overline uppercase text-muted">Top of the desk</h3>
+      <ol className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {top.map((lead, index) => (
+          <li key={lead.findingId} className={cn('min-w-0', index === 2 && 'md:hidden xl:block')}>
+            <InsightCard
+              badges={<>
+                <span className="text-caption font-medium tabular-nums text-muted">#{index + 1}</span>
+                <FamilyBadge family={findingFamily(lead.kind)} />
+                <ClaimBasisBadge kind={lead.kind} />
+              </>}
+              headline={lead.headline}
+              open={{ target: { kind: 'finding', id: lead.findingId, label: lead.headline } }}
+              body={<ScoreFactors lead={lead} scoreMax={scoreMax} />}
+              severity={lead.severity}
+              time={lead.firstSeenAt}
+              actions={(
+                <Button size="sm" onClick={() => onOpenChain(lead.findingId)} aria-label={`Open evidence chain for lead #${index + 1}`}>
+                  Open evidence chain
+                </Button>
+              )}
+            />
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+function ScoreFactors({ lead, scoreMax }: { lead: StoryLead; scoreMax: number }) {
+  const unassessed = lead.confidence.kind === 'UNASSESSED';
+  const order = (name: string) => {
+    const at = (FACTOR_ORDER as readonly string[]).indexOf(name);
+    return at < 0 ? FACTOR_ORDER.length : at;
+  };
+  const factors = lead.publicInterest.factors
+    .filter((factor) => factor.basisPoints > 0 && !(factor.name === EVIDENCE_FACTOR && unassessed))
+    .sort((a, b) => order(a.name) - order(b.name));
+  const leading = [...factors].sort((a, b) => b.basisPoints - a.basisPoints).slice(0, 2);
+  const total = points(lead.publicInterest.totalBasisPoints);
+  return (
+    <div className="mt-1 grid gap-1.5">
+      <div className="flex items-baseline justify-between gap-3 text-caption">
+        <span className="text-muted">Attention score</span>
+        <span className="font-medium tabular-nums text-fg">{total}</span>
+      </div>
+      <div
+        role="img"
+        aria-label={`Attention score ${total}: ${factors.map((factor) => `${factor.name} +${points(factor.basisPoints)}`).join(', ') || 'no contributing factor'}`}
+        className="flex h-2 gap-0.5"
+        style={{ width: `${(lead.publicInterest.totalBasisPoints / scoreMax) * 100}%` }}
+      >
+        {factors.map((factor, index) => (
+          <span
+            key={factor.name}
+            className="h-full min-w-[3px] first:rounded-l-full last:rounded-r-full"
+            style={{ flexGrow: factor.basisPoints, flexBasis: 0, background: 'var(--viz-lead)', opacity: index % 2 === 0 ? 1 : 0.55 }}
+          />
+        ))}
+      </div>
+      <p className="truncate text-caption tabular-nums text-fg-secondary">
+        {leading.map((factor) => `${factorLabel(factor.name)} +${points(factor.basisPoints)}`).join(' · ')}
+        {unassessed && <span className="text-muted">{leading.length ? ' · ' : ''}evidence not assessed</span>}
+      </p>
+    </div>
   );
 }

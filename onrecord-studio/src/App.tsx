@@ -356,18 +356,21 @@ function LicensedWorkspace() {
 
   return (
     <div className="app-theme flex h-screen w-screen overflow-hidden antialiased">
-      <Sidebar />
-      {/* From 1440px the open inspector sits beside the content instead of covering it. */}
-      <div className={`flex min-w-0 flex-1 flex-col overflow-hidden${inspectorOpen ? ' min-[1440px]:pr-[480px]' : ''}`}>
-        <Header />
-        <ErrorBoundary label="This view" resetKey={workspaceView}>
-          <AutomaticDiscoveryProvider><MainLayout /></AutomaticDiscoveryProvider>
-        </ErrorBoundary>
-      </div>
-      <Inspector />
-      <CommandPalette />
-      <HelpCenter />
-      <CollectionPlanDialog />
+      {/* Above the palette as well as the views: the command bar offers the leads the checks found. */}
+      <AutomaticDiscoveryProvider>
+        <Sidebar />
+        {/* From 1440px the open inspector sits beside the content instead of covering it. */}
+        <div className={`flex min-w-0 flex-1 flex-col overflow-hidden${inspectorOpen ? ' min-[1440px]:pr-[480px]' : ''}`}>
+          <Header />
+          <ErrorBoundary label="This view" resetKey={workspaceView}>
+            <MainLayout />
+          </ErrorBoundary>
+        </div>
+        <Inspector />
+        <CommandPalette />
+        <HelpCenter />
+        <CollectionPlanDialog />
+      </AutomaticDiscoveryProvider>
     </div>
   );
 }

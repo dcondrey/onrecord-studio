@@ -101,7 +101,7 @@ describe('StoryDesk', () => {
     expect(screen.getByRole('status').textContent).toContain('Ranking leads');
     await waitFor(() => expect(bridge.pending).toHaveLength(1));
     act(() => bridge.pending[0]([lead('a', 'Stated total does not match the table')]));
-    await screen.findByText('Stated total does not match the table');
+    await screen.findAllByText('Stated total does not match the table');
     const row = screen.getByRole('row', { name: /^#1, Stated total does not match the table, score 52:/ });
     expect(row.querySelectorAll('td')[0].textContent).toBe('52');
     expect(screen.getAllByText('pattern signal').length).toBeGreaterThan(0);
@@ -121,7 +121,7 @@ describe('StoryDesk', () => {
     render(<StoryDesk />);
     await waitFor(() => expect(bridge.pending).toHaveLength(1));
     act(() => bridge.pending[0]([unassessed, measuredZero]));
-    await screen.findByText('Unassessed lead');
+    await screen.findAllByText('Unassessed lead');
     const column = (title: string) => screen.getAllByRole('columnheader').findIndex((header) => header.getAttribute('title') === title) - 1;
     const evidence = (name: RegExp) => screen.getByRole('row', { name }).querySelectorAll('td')[column('evidence strength')];
     const notAssessed = evidence(/^#1, Unassessed lead/);
@@ -142,7 +142,7 @@ describe('StoryDesk', () => {
     render(<StoryDesk />);
     await waitFor(() => expect(bridge.pending).toHaveLength(1));
     act(() => bridge.pending[0]([unknown]));
-    await screen.findByText('Lead with a new factor');
+    await screen.findAllByText('Lead with a new factor');
     const header = screen.getAllByRole('columnheader').find((cell) => cell.getAttribute('title')?.startsWith('novel factor'));
     expect(header?.textContent).toBe('Novel factor');
   });
@@ -151,7 +151,7 @@ describe('StoryDesk', () => {
     render(<StoryDesk />);
     await waitFor(() => expect(bridge.pending).toHaveLength(1));
     act(() => bridge.pending[0]([lead('a', 'First lead'), lead('b', 'Second lead')]));
-    await screen.findByText('Second lead');
+    await screen.findAllByText('Second lead');
     fireEvent.click(within(screen.getByRole('row', { name: /^#2, Second lead/ })).getByRole('button', { name: 'Details' }));
     act(() => {
       screen.getByRole('button', { name: 'Open evidence chain: Second lead' }).click();
@@ -164,7 +164,7 @@ describe('StoryDesk', () => {
     render(<StoryDesk />);
     await waitFor(() => expect(bridge.pending).toHaveLength(1));
     act(() => bridge.pending[0]([lead('a', 'First lead'), lead('b', 'Second lead')]));
-    await screen.findByText('Second lead');
+    await screen.findAllByText('Second lead');
     await act(async () => {
       await Promise.resolve();
     });
@@ -226,14 +226,14 @@ describe('StoryDesk', () => {
     act(() => useAppStore.getState().requestFindingsRefresh());
     await waitFor(() => expect(bridge.pending).toHaveLength(2));
     act(() => bridge.pending[1]([lead('fresh', 'Fresh lead')]));
-    await screen.findByText('Fresh lead');
+    await screen.findAllByText('Fresh lead');
     await act(async () => {
       bridge.pending[0]([lead('stale', 'Stale lead')]);
       await Promise.resolve();
       await Promise.resolve();
     });
     expect(screen.queryByText('Stale lead')).toBeNull();
-    expect(screen.getByText('Fresh lead')).toBeTruthy();
+    expect(screen.getAllByText('Fresh lead').length).toBeGreaterThan(0);
   });
 
   it('finishes a briefing add that was in flight when the leads were refreshed', async () => {

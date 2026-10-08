@@ -62,6 +62,8 @@ export default {
         heading: ['0.9375rem', { lineHeight: '1.25rem', letterSpacing: '-0.006em', fontWeight: '600' }],
         // The one-sentence finding that leads every chart and data module.
         headline: ['1.0625rem', { lineHeight: '1.5rem', letterSpacing: '-0.01em', fontWeight: '500' }],
+        // The headline of a narrow canvas module, where a 17px sentence would run to five lines.
+        lede: ['0.9375rem', { lineHeight: '1.375rem', letterSpacing: '-0.006em', fontWeight: '500' }],
         body: ['0.8125rem', { lineHeight: '1.25rem' }],
         label: ['0.8125rem', { lineHeight: '1.25rem' }],
         control: ['0.8125rem', { lineHeight: '1rem', fontWeight: '500' }],

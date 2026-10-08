@@ -13,16 +13,31 @@ import { openSourceConnector } from './sourceEvents';
 import { OBJECT_ICONS } from '../objects/ObjectLink';
 import { useObjectSearch, type ObjectGroup } from './useObjectSearch';
 import { contrastCommandRegistry, motionCommandRegistry, scoreCommand, themeCommandRegistry, workspaceCommandRegistry } from '../../commands/registry';
+import { rankObservations } from '../../utils/automaticDiscovery';
+import { useAutomaticDiscovery } from './AutomaticDiscoveryProvider';
+import { discoveryObservations } from './AutomaticDiscovery';
 
 export const OPEN_COMMAND_PALETTE_EVENT = 'onrecord:open-command-palette';
 
 const INTENT_ROW_LIMIT = 10;
+const PALETTE_LEADS = 3;
+
+/**
+ * Questions the intent router answers without a name or number to fill in (analysis/intent.rs
+ * `example()`), offered before anything is typed. Each runs the same deterministic query as typing it.
+ */
+export const SUGGESTED_QUESTIONS = ['which agencies changed behavior', 'same denial language across agencies', 'show contradictions'] as const;
+
+/** Opens the palette; with a query, the palette asks it at once, exactly as if it had been typed and run. */
+export function openCommandPalette(query?: string) {
+  window.dispatchEvent(new CustomEvent(OPEN_COMMAND_PALETTE_EVENT, { detail: query ? { query } : null }));
+}
 
 interface CommandAction {
   id: string;
   label: string;
   detail: string;
-  group: 'Ask' | 'Navigate' | 'Create' | 'Help' | 'Appearance' | 'Accessibility' | ObjectGroup;
+  group: 'Leads' | 'Ask' | 'Navigate' | 'Create' | 'Help' | 'Appearance' | 'Accessibility' | ObjectGroup;
   icon: IconName;
   keywords: string;
   shortcut?: string;
@@ -30,6 +45,8 @@ interface CommandAction {
   keepOpen?: boolean;
   /** A setting row whose value is the one in force. */
   current?: boolean;
+  /** A lead the app surfaced: its icon wears the lead tint. */
+  lead?: boolean;
   perform: () => void;
 }
 
@@ -250,6 +267,39 @@ export default function CommandPalette() {
     setWorkspaceView('overview');
   };
 
+  const { controller: discovery, state: discoveryState } = useAutomaticDiscovery();
+  const leadActions = useMemo<CommandAction[]>(() => {
+    if (!discovery || !discoveryState) return [];
+    const datasets = discoveryState.schema?.datasets ?? [];
+    return rankObservations(discoveryObservations(discoveryState).filter((item) => item.kind === 'lead' && item.query), PALETTE_LEADS).map((item) => ({
+      id: `lead-${item.id}`,
+      label: item.title,
+      detail: datasets.find((dataset) => dataset.snapshotId === item.snapshotId)?.displayName ?? '',
+      group: 'Leads' as const,
+      icon: 'flag' as const,
+      keywords: '',
+      lead: true,
+      perform: () => {
+        if (!item.query) return;
+        discovery.inspect(item.query.sql);
+        setWorkspaceView('analysis');
+      },
+    }));
+  }, [discovery, discoveryState, setWorkspaceView]);
+  const suggestedAsks = useMemo<CommandAction[]>(() => SUGGESTED_QUESTIONS.map((question) => ({
+    id: `suggested-${question.replace(/\W+/g, '-')}`,
+    label: `Ask: ${question}`,
+    detail: 'Answered from stored findings',
+    group: 'Ask' as const,
+    icon: 'search' as const,
+    keywords: '',
+    keepOpen: true,
+    perform: () => {
+      askOnQuery.current = question;
+      setQuery(question);
+    },
+  })), []);
+
   const objectResults = useObjectSearch(isOpen && mode === 'commands' ? query : '');
   const inspect = useAppStore((state) => state.inspect);
   const objectActions = useMemo<CommandAction[]>(() => objectResults.map((result) => ({
@@ -265,7 +315,7 @@ export default function CommandPalette() {
   const filteredActions = useMemo(() => {
     if (mode === 'dossier') return [];
     const normalized = query.trim().toLocaleLowerCase();
-    if (!normalized) return actions.filter((action) => !SETTING_GROUPS.has(action.group));
+    if (!normalized) return [...leadActions, ...suggestedAsks, ...actions.filter((action) => !SETTING_GROUPS.has(action.group))];
     const matches = groupContiguously(actions
       .map((action) => ({ action, score: scoreCommand(normalized, action.label, `${action.detail} ${action.group}`, action.keywords) }))
       .filter((entry): entry is { action: CommandAction; score: number } => entry.score !== null)
@@ -285,10 +335,20 @@ export default function CommandPalette() {
     // A sentence is a question first; a word or two that also names a view stays a view jump.
     return normalized.split(/\s+/).length >= 3 || normalized.endsWith('?') ? [ask, ...matches, ...objectActions] : [...matches, ...objectActions, ask];
     // runIntent closes over the gate and setters only, all stable.
-  }, [actions, mode, objectActions, query]);
+  }, [actions, leadActions, mode, objectActions, query, suggestedAsks]);
 
   useEffect(() => {
-    const openFromEvent = () => openPalette();
+    const openFromEvent = (event: Event) => {
+      const asked = (event as CustomEvent<{ query?: unknown } | null>).detail?.query;
+      openPalette();
+      if (typeof asked !== 'string' || !asked.trim()) return;
+      // The same text as before would not change the query, so it is asked directly.
+      if (asked === query) runIntent(asked.trim());
+      else {
+        askOnQuery.current = asked;
+        setQuery(asked);
+      }
+    };
     window.addEventListener(OPEN_COMMAND_PALETTE_EVENT, openFromEvent);
     return () => window.removeEventListener(OPEN_COMMAND_PALETTE_EVENT, openFromEvent);
   });
@@ -496,10 +556,10 @@ export default function CommandPalette() {
                         selected ? 'command-row-selected text-fg' : 'text-fg-secondary',
                       )}
                     >
-                      <Icon name={action.icon} size="md" className="shrink-0 text-muted" />
+                      <Icon name={action.icon} size="md" className={cn('shrink-0', action.lead ? 'text-lead' : 'text-muted')} />
                       <span className="flex min-w-0 flex-1 items-baseline gap-2">
-                        <span className="shrink-0 text-control text-fg">{action.label}</span>
-                        <span className="min-w-0 truncate text-caption text-muted">{action.detail}</span>
+                        <span className={cn('text-control text-fg', action.lead ? 'min-w-0 truncate' : 'shrink-0')} title={action.lead ? action.label : undefined}>{action.label}</span>
+                        <span className={cn('min-w-0 truncate text-caption text-muted', action.lead && 'max-w-[35%] shrink-0')}>{action.detail}</span>
                       </span>
                       {action.current && <span className="shrink-0 text-caption text-muted">Current</span>}
                       {action.shortcut && <Keycap>{action.shortcut}</Keycap>}
@@ -556,7 +616,7 @@ function groupRuns(actions: CommandAction[]) {
   return runs;
 }
 
-function Keycap({ children }: { children: string }) {
+export function Keycap({ children }: { children: string }) {
   return (
     <kbd className="keycap inline-flex h-5 min-w-6 shrink-0 items-center justify-center rounded border px-1 font-sans text-caption font-medium tabular-nums text-muted">
       {children}
@@ -564,7 +624,7 @@ function Keycap({ children }: { children: string }) {
   );
 }
 
-function isApplePlatform() {
+export function isApplePlatform() {
   const platform = navigator.platform.toLocaleLowerCase();
   const userAgent = navigator.userAgent.toLocaleLowerCase();
   return platform.includes('mac') || userAgent.includes('mac os');

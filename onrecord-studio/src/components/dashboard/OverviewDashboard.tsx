@@ -20,15 +20,20 @@ import ProfessionalWorkbench from './ProfessionalWorkbench';
 import DataMaintenance from './DataMaintenance';
 import ResearchSnapshotExport from './ResearchSnapshotExport';
 import RegistrySnapshots from './RegistrySnapshots';
-import AutomaticDiscovery from './AutomaticDiscovery';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { AgencyPerformanceProfile } from '../../types';
 import AttentionFeed, { AttentionFeedSkeleton } from './AttentionFeed';
 import SinceControl from './SinceControl';
-import WatchlistPanel from './WatchlistPanel';
-import StandingSearchPanel from './StandingSearchPanel';
 import SubjectDossier from './SubjectDossier';
+import Skeleton from '../ui/Skeleton';
+import { withViewTransition } from '../../utils/viewTransition';
+import CommandBar from './canvas/CommandBar';
+import LeadsModule from './canvas/LeadsModule';
+import LedgerModule from './canvas/LedgerModule';
+import CoverageModule from './canvas/CoverageModule';
+import CollectionModule from './canvas/CollectionModule';
+import FollowingModule from './canvas/FollowingModule';
 import PostIngestBrief from './PostIngestBrief';
 import CrossCorpusExplorer from './CrossCorpusExplorer';
 import TopicPacks from './TopicPacks';
@@ -36,9 +41,13 @@ import StarterSets from './StarterSets';
 import FirstRunData from './FirstRunData';
 import { useStarterRunStore } from '../../store/useStarterRunStore';
 
+type CanvasModuleId = 'leads' | 'ledger' | 'coverage' | 'collection' | 'following';
+
 export default function OverviewDashboard() {
   const portals = useAppStore((state) => state.portals);
-  const [showAnalytics, setShowAnalytics] = useState(false);
+  // One module is expanded at a time; it spans the canvas row and the others reflow around it.
+  const [expanded, setExpanded] = useState<CanvasModuleId | null>(null);
+  const toggle = (id: CanvasModuleId) => () => withViewTransition(() => setExpanded((current) => (current === id ? null : id)));
   const [workbench, setWorkbench] = useState<{ reportId: string; review: boolean } | null>(null);
   const requestedCasework = useAppStore((state) => state.requestedCasework);
   const consumeCasework = useAppStore((state) => state.consumeCasework);
@@ -69,10 +78,6 @@ export default function OverviewDashboard() {
   const caseScoped = useAppStore((state) => state.activeCaseId !== null && state.scopeToCase);
   const inspectDepartment = useInspectDepartment();
   const portalName = usePortalName();
-  const openLedger = useCallback(() => {
-    setShowAnalytics(true);
-    requestAnimationFrame(() => document.getElementById('deadline-ledger')?.scrollIntoView({ block: 'start' }));
-  }, []);
   const openWorkbench = () => setWorkbench({ reportId: '', review: false });
 
   return (
@@ -97,11 +102,9 @@ export default function OverviewDashboard() {
         )}
 
         <FirstRunData />
-        {workspaceInitializationStatus === 'loading' ? (
-          <section aria-label="Needs attention" className="app-panel overflow-hidden"><AttentionFeedSkeleton /></section>
-        ) : workspaceInitializationStatus === 'error' ? (
+        {workspaceInitializationStatus === 'error' ? (
           <WorkspaceSourcesUnavailable detail={workspaceInitializationError} />
-        ) : portals.length === 0 || starterRunShown ? (
+        ) : workspaceInitializationStatus !== 'loading' && (portals.length === 0 || starterRunShown) ? (
           <section className="app-panel p-5"><StarterSets /></section>
         ) : null}
 
@@ -110,49 +113,67 @@ export default function OverviewDashboard() {
           <ProfessionalWorkbench key={`${workbench.reportId}:${workbench.review}`} initialReportId={workbench.reportId} initialTab={workbench.review ? 'Evidence review' : 'Cases'} />
         ) : <>
           <SubjectDossier />
-          {portals.length > 0 && <AttentionFeed onOpenLedger={openLedger} />}
-          <section aria-label="Following" className="grid grid-cols-1 items-start gap-4 2xl:grid-cols-2">
-            <WatchlistPanel />
-            <StandingSearchPanel />
-          </section>
-          <ResearchWorkspace onReview={(reportId) => setWorkbench({ reportId, review: true })} />
-
-          {portals.length > 0 && (
-            <Panel aria-labelledby="response-analytics-title" className={cn(!showAnalytics && '[&>div:first-child]:border-b-0')}>
-              <PanelHeader
-                titleId="response-analytics-title"
-                title="Response analytics"
-                description={analyticsError && !analyticsUnavailable
-                  ? (analyticsUpdatedAt ? `Stale: the last refresh failed. Last updated ${formatRelativeTime(analyticsUpdatedAt)}.` : 'Analytics couldn’t be calculated.')
-                  : analyticsUpdatedAt ? `Updated ${formatRelativeTime(analyticsUpdatedAt)}` : 'How quickly and completely agencies answer requests.'}
-                actions={(
-                  <Button aria-expanded={showAnalytics} aria-controls="response-analytics-body" aria-label={showAnalytics ? 'Hide response analytics' : 'Show response analytics'} onClick={() => setShowAnalytics((visible) => !visible)}>
-                    {showAnalytics ? 'Hide' : 'Show'}
-                  </Button>
-                )}
-              />
-              {showAnalytics && (
-                <div id="response-analytics-body" className="motion-reveal space-y-4 p-5">
-                  {analyticsUnavailable ? <MetricsGrid /> : <>
-                    <MetricsGrid />
-                    <div id="deadline-ledger" className="scroll-mt-4 rounded-lg border border-line p-4">
-                      <DepartmentLedger
-                        variant="overview"
-                        profiles={ledgerOrder(scopedProfiles)}
-                        scaleProfiles={scopedProfiles}
-                        status={caseScoped ? 'scoped-out' : profiles.length === 0 && analyticsStatus === 'pending' ? 'loading' : 'ready'}
-                        scopedOutText="Hidden while a case scope is active: these are all-time totals for every request, not the case's."
-                        portalName={portalName}
-                        onInspect={(profile) => inspectDepartment(profile.portalSubdomain, profile.agencyId)}
-                      />
-                    </div>
-                    <PeriodComparison activePortalKey={activePortalKey} />
-                    <TemporalMap />
-                  </>}
+          <div data-overview-canvas className={cn('grid items-start gap-5', (portals.length > 0 || workspaceInitializationStatus === 'loading') && 'xl:grid-cols-[minmax(0,1fr)_20rem] 2xl:grid-cols-[minmax(0,1fr)_23rem]')}>
+            <div className="grid min-w-0 grid-cols-1 gap-5">
+              <CommandBar />
+              {workspaceInitializationStatus === 'loading' ? (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+                  <Skeleton variant="chart" height={260} label="Loading the overview" className="canvas-module p-5 md:col-span-2 2xl:row-span-2" />
+                  {[1, 2, 3, 4].map((slot) => <div key={slot} aria-hidden="true" className="canvas-module p-5"><Skeleton variant="lines" lines={4} label="" /></div>)}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+                  <LeadsModule expanded={expanded === 'leads'} onToggle={toggle('leads')} span="md:col-span-2 2xl:row-span-2" />
+                  {portals.length > 0 && (
+                    <LedgerModule
+                      expanded={expanded === 'ledger'}
+                      onToggle={toggle('ledger')}
+                      onInspect={(profile) => inspectDepartment(profile.portalSubdomain, profile.agencyId)}
+                      portalName={portalName}
+                      detail={(
+                        <div className="space-y-4">
+                          {!analyticsUnavailable && (
+                            <p className="text-caption text-muted">
+                              {analyticsError
+                                ? (analyticsUpdatedAt ? `Stale: the last refresh failed. Last updated ${formatRelativeTime(analyticsUpdatedAt)}.` : 'Analytics couldn’t be calculated.')
+                                : analyticsUpdatedAt ? `Response analytics, updated ${formatRelativeTime(analyticsUpdatedAt)}.` : 'How quickly and completely agencies answer requests.'}
+                            </p>
+                          )}
+                          <MetricsGrid />
+                          {!analyticsUnavailable && <>
+                            <div id="deadline-ledger" className="scroll-mt-4 rounded-lg border border-line p-4">
+                              <DepartmentLedger
+                                variant="overview"
+                                profiles={ledgerOrder(scopedProfiles)}
+                                scaleProfiles={scopedProfiles}
+                                status={caseScoped ? 'scoped-out' : profiles.length === 0 && analyticsStatus === 'pending' ? 'loading' : 'ready'}
+                                scopedOutText="Hidden while a case scope is active: these are all-time totals for every request, not the case's."
+                                portalName={portalName}
+                                onInspect={(profile) => inspectDepartment(profile.portalSubdomain, profile.agencyId)}
+                              />
+                            </div>
+                            <PeriodComparison activePortalKey={activePortalKey} />
+                            <TemporalMap />
+                          </>}
+                        </div>
+                      )}
+                    />
+                  )}
+                  <CoverageModule expanded={expanded === 'coverage'} onToggle={toggle('coverage')} />
+                  {portals.length > 0 && <CollectionModule expanded={expanded === 'collection'} onToggle={toggle('collection')} span="2xl:col-span-2" />}
+                  <FollowingModule expanded={expanded === 'following'} onToggle={toggle('following')} />
                 </div>
               )}
-            </Panel>
-          )}
+            </div>
+            {workspaceInitializationStatus === 'loading' ? (
+              <section aria-label="Needs attention" className="app-panel overflow-hidden xl:sticky xl:top-4"><AttentionFeedSkeleton rail /></section>
+            ) : portals.length > 0 && (
+              <aside aria-label="Insights" className="min-w-0 xl:sticky xl:top-4">
+                <AttentionFeed variant="rail" />
+              </aside>
+            )}
+          </div>
+          <ResearchWorkspace onReview={(reportId) => setWorkbench({ reportId, review: true })} />
 
           <Panel aria-labelledby="more-tools-title">
             <PanelHeader titleId="more-tools-title" title="More tools" />
@@ -164,7 +185,6 @@ export default function OverviewDashboard() {
                 </div>
                 <Button onClick={openWorkbench}>Open casework and research tools</Button>
               </div>
-              <ToolDrawer label="Discoveries across your library"><AutomaticDiscovery /></ToolDrawer>
               <ToolDrawer label="Topic packs"><TopicPacks /></ToolDrawer>
               <ToolDrawer label="Shared language across sources"><CrossCorpusExplorer /></ToolDrawer>
               <ToolDrawer label="Plan an investigation or draft a request"><InvestigationDesk /></ToolDrawer>

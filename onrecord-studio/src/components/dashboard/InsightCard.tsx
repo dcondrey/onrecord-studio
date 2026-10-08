@@ -18,7 +18,7 @@ const STRETCHED =
  * One lead or item that needs a reader's attention: badges, a one-line headline, who and when.
  * The badge row says what kind of item it is; only a counted statutory violation is solid.
  */
-export default function InsightCard({ badges, severity, headline, open, body, subject, time, timeLabel, meta, chips, actions, nested = false, className }: {
+export default function InsightCard({ badges, severity, headline, open, body, subject, time, timeLabel, meta, chips, actions, nested = false, density = 'regular', className }: {
   badges: ReactNode;
   severity?: FindingSeverity;
   headline: string;
@@ -37,19 +37,23 @@ export default function InsightCard({ badges, severity, headline, open, body, su
   actions?: ReactNode;
   /** Inside a panel the card takes the nested radius. */
   nested?: boolean;
+  /** 'compact' is the insight rail's card: tighter padding, the headline held to three lines. */
+  density?: 'regular' | 'compact';
   className?: string;
 }) {
+  const compact = density === 'compact';
   return (
     <article
       className={cn(
-        'relative flex h-full flex-col gap-2 border border-line bg-panel p-4 transition-colors',
+        'relative flex h-full flex-col border border-line bg-panel transition-colors',
+        compact ? 'gap-1.5 p-3.5' : 'gap-2 p-4',
         nested ? 'rounded-lg' : 'rounded-xl shadow-panel',
         open && 'hover:border-line-strong hover:bg-raised/40',
         className,
       )}
     >
       <div className="flex flex-wrap items-center gap-2">{badges}</div>
-      <h4 className="min-w-0 text-heading text-fg">
+      <h4 className={cn('min-w-0 text-heading text-fg', compact && 'line-clamp-3')}>
         {open && 'target' in open ? (
           <ObjectLink target={open.target} className={STRETCHED}>{headline}</ObjectLink>
         ) : open ? (

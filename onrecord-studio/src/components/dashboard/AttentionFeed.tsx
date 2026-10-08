@@ -1,4 +1,5 @@
 import { useMemo, type ReactNode } from 'react';
+import { cn } from '../../utils/cn';
 import { invokeCommand } from '../../ipc';
 import { useGatedLoad } from '../../hooks/useGatedLoad';
 import { nextUpcomingMeeting } from '../../hooks/useWorkspaceBadges';
@@ -50,7 +51,12 @@ export function deadlineLedgerHeadline(profiles: readonly AgencyPerformanceProfi
   return withRequests.some((profile) => profile.statutoryViolationCount > 0) ? countedHeadline(withRequests) : null;
 }
 
-export default function AttentionFeed({ onOpenLedger }: { onOpenLedger?: () => void } = {}) {
+export default function AttentionFeed({ onOpenLedger, variant = 'panel' }: {
+  onOpenLedger?: () => void;
+  /** 'rail' is the overview canvas's right column: one card per row, its list scrolling inside the rail. */
+  variant?: 'panel' | 'rail';
+} = {}) {
+  const rail = variant === 'rail';
   const since = useSinceInstant();
   const findingsRefreshRequests = useAppStore((state) => state.findingsRefreshRequests);
   const portals = useAppStore((state) => state.portals);
@@ -88,8 +94,8 @@ export default function AttentionFeed({ onOpenLedger }: { onOpenLedger?: () => v
     : null;
 
   return (
-    <section aria-labelledby="attention-heading" className="app-panel overflow-hidden">
-      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b border-line px-5 py-4">
+    <section aria-labelledby="attention-heading" className={cn('app-panel overflow-hidden', rail && 'flex flex-col xl:max-h-[calc(100vh-5.5rem)]')}>
+      <div className={cn('flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b border-line', rail ? 'px-4 py-3.5' : 'px-5 py-4')}>
         <div className="min-w-0 flex-1">
           <h3 id="attention-heading" className="text-heading text-fg">Needs attention</h3>
           <p className="mt-1 text-caption tabular-nums text-muted">
@@ -100,7 +106,7 @@ export default function AttentionFeed({ onOpenLedger }: { onOpenLedger?: () => v
           All findings <Icon name="arrow" size="sm" />
         </Button>
       </div>
-      <div className="px-5 pt-4 empty:hidden"><CaseScopeBar state={caseScope} noun="findings" /></div>
+      <div className={cn('pt-4 empty:hidden', rail ? 'px-4' : 'px-5')}><CaseScopeBar state={caseScope} noun="findings" /></div>
       {ledger && onOpenLedger && (caseScope.status === 'off' ? (
         <div className="px-4 pt-4">
           <InsightCard
@@ -116,7 +122,7 @@ export default function AttentionFeed({ onOpenLedger }: { onOpenLedger?: () => v
         <p className="px-5 pt-3 text-caption text-muted">The deadline ledger is hidden while a case scope is active: its totals cover every request, not this case's.</p>
       ))}
       {pending ? (
-        <AttentionFeedSkeleton />
+        <AttentionFeedSkeleton rail={rail} />
       ) : shown.length === 0 ? (
         <div className="motion-reveal px-5 py-8 text-center">
           <p className="text-heading text-fg-secondary">{since ? `Nothing new since ${formatShortDate(since)}` : 'Nothing found yet'}</p>
@@ -127,16 +133,16 @@ export default function AttentionFeed({ onOpenLedger }: { onOpenLedger?: () => v
           </p>
         </div>
       ) : (
-        <ol className="motion-stagger grid gap-3 p-4 lg:grid-cols-2">
+        <ol className={cn('motion-stagger grid', rail ? 'min-h-0 gap-2 overflow-y-auto p-3 md:grid-cols-2 xl:grid-cols-1' : 'gap-3 p-4 lg:grid-cols-2')}>
           {shown.map((item) => (
             <li key={item.key} className="min-w-0">
-              <InsightCard nested badges={item.badges} severity={item.severity} headline={item.headline} open={item.open} subject={item.subject} time={item.time} timeLabel={item.timeLabel} meta={item.meta} />
+              <InsightCard nested density={rail ? 'compact' : 'regular'} badges={item.badges} severity={item.severity} headline={item.headline} open={item.open} subject={item.subject} time={item.time} timeLabel={item.timeLabel} meta={item.meta} />
             </li>
           ))}
         </ol>
       )}
       {(items.length > FEED_LIMIT || unavailable.length > 0) && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-5 py-3 text-caption text-muted">
+        <div className={cn('flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line py-3 text-caption text-muted', rail ? 'px-4' : 'px-5')}>
           {items.length > FEED_LIMIT && (
             <span className="tabular-nums">
               {(items.length - FEED_LIMIT).toLocaleString()} more {items.length - FEED_LIMIT === 1 ? 'item' : 'items'} in this window
@@ -221,9 +227,9 @@ export function meetingWhen(date: string, startTime: string | null): string {
 }
 
 /** Four cards in the feed's two-column grid, at card height, while findings load. */
-export function AttentionFeedSkeleton() {
+export function AttentionFeedSkeleton({ rail = false }: { rail?: boolean } = {}) {
   return (
-    <div className="grid gap-3 p-4 lg:grid-cols-2">
+    <div className={cn('grid', rail ? 'gap-2 p-3 md:grid-cols-2 xl:grid-cols-1' : 'gap-3 p-4 lg:grid-cols-2')}>
       <Skeleton variant="card" label="Loading what needs attention" />
       {[1, 2, 3].map((slot) => <div key={slot} aria-hidden="true"><Skeleton variant="card" label="" /></div>)}
     </div>

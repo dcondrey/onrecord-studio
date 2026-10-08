@@ -307,6 +307,7 @@ const VIEWS = [
   // Figures below the fold: each also gets an element capture at full height (`sections`).
   { view: 'compare-dispositions', steps: [nav('compare')], sections: ['section[aria-label="Dispositions by department"]'], primary: [], states: [] },
   { view: 'overview-following', steps: [nav('overview')], sections: ['section[aria-label="Following"]'], primary: [], states: [] },
+  { view: 'overview-canvas', steps: [nav('overview')], sections: ['[data-overview-canvas]'], primary: [], states: [] },
   { view: 'story-ranked-leads', steps: [nav('story')], sections: ['figure:has(h3:text-is("Ranked leads"))'], primary: [], states: [] },
   {
     view: 'organization-record',

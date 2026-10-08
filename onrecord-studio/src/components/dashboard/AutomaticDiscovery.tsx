@@ -131,7 +131,34 @@ function readableError(message: string): string {
   return text.trim().endsWith('.') ? text.trim().slice(0, -1) : text.trim();
 }
 
-export default function AutomaticDiscovery() {
+type DiscoveryState = NonNullable<ReturnType<typeof useAutomaticDiscovery>['state']>;
+
+/** Every observation the completed checks support: table metadata, each profile, and the leads read across tables. */
+export function discoveryObservations(state: DiscoveryState): DiscoveryObservation[] {
+  const datasets = state.schema?.datasets ?? [];
+  return [...datasets.flatMap((dataset) => [
+    ...metadataObservations(dataset),
+    ...(state.profiles[dataset.snapshotId] ? profileObservations(state.schema!, dataset, state.profiles[dataset.snapshotId]) : []),
+  ]), ...(state.schema ? recurringObservations(state.schema, state.profiles) : [])];
+}
+
+/**
+ * A lead's figure names every table its query read: its own first, then each one the SQL quotes or
+ * the lead says it read beside it.
+ */
+export function discoveryLeadSources(item: DiscoveryObservation, dataset: CityDatasetSummary, datasets: readonly CityDatasetSummary[]): ChartSources {
+  return {
+    tables: [dataset, ...datasets.filter((other) => other.snapshotId !== dataset.snapshotId
+      && (item.reads?.includes(other.snapshotId) || Boolean(item.query?.sql.includes(quoteIdentifier(other.tableName)))))].map((table) => table.displayName),
+    snapshot: { name: dataset.displayName, id: dataset.snapshotId, sha256: dataset.sourceSha256 },
+    retrievedAt: dataset.retrievedAt,
+  };
+}
+
+export default function AutomaticDiscovery({ embedded = false }: {
+  /** Inside a canvas module that already names it: no panel chrome or title of its own. */
+  embedded?: boolean;
+} = {}) {
   const { controller, state } = useAutomaticDiscovery();
   const [showAll, setShowAll] = useState(false);
   // Maps whose disclosure is open; a closed map reads no boundaries.
@@ -144,10 +171,7 @@ export default function AutomaticDiscovery() {
   // A schema that has not loaded, or failed to load, is not an empty library: offering the core
   // fetch then would re-download tables the library may already hold.
   const emptyLibrary = state.schema?.datasets.length === 0;
-  const observations = [...datasets.flatMap((dataset) => [
-    ...metadataObservations(dataset),
-    ...(state.profiles[dataset.snapshotId] ? profileObservations(state.schema!, dataset, state.profiles[dataset.snapshotId]) : []),
-  ]), ...(state.schema ? recurringObservations(state.schema, state.profiles) : [])];
+  const observations = discoveryObservations(state);
   // Facts about a table (its coverage, gaps, record shares) are not findings about its subject;
   // they stay available but folded away beneath the leads.
   const leads = observations.filter((item) => item.kind === 'lead');
@@ -168,14 +192,7 @@ export default function AutomaticDiscovery() {
   const stage = (url: string) => { store.getState().setPortalUrlDraft(url); focusSourceComposer(); };
   const openAnalysis = () => store.getState().setWorkspaceView('analysis');
   const getCoreData = () => { void useFirstRunDataStore.getState().run(controller); store.getState().setWorkspaceView('overview'); };
-  // A lead's figure names every table its query read: its own first, then each one the SQL quotes
-  // or the lead says it read beside it.
-  const leadSources = (item: DiscoveryObservation, dataset: CityDatasetSummary): ChartSources => ({
-    tables: [dataset, ...datasets.filter((other) => other.snapshotId !== dataset.snapshotId
-      && (item.reads?.includes(other.snapshotId) || Boolean(item.query?.sql.includes(quoteIdentifier(other.tableName)))))].map((table) => table.displayName),
-    snapshot: { name: dataset.displayName, id: dataset.snapshotId, sha256: dataset.sourceSha256 },
-    retrievedAt: dataset.retrievedAt,
-  });
+  const leadSources = (item: DiscoveryObservation, dataset: CityDatasetSummary) => discoveryLeadSources(item, dataset, datasets);
   // A family's daily counts are drawn once per table, under the first of its leads shown.
   const calendarOwner = new Map<string, { title: string; noun: string; daily: DailyCounts }>();
   const claimed = new Set<string>();
@@ -262,15 +279,8 @@ export default function AutomaticDiscovery() {
       />
     );
   };
-  return (
-    <Panel aria-labelledby="discoveries-heading">
-      <PanelHeader
-        titleId="discoveries-heading"
-        title="What stands out"
-        description="What your tables and indexed documents show that is worth raising, each with the records behind it."
-        actions={<Button size="sm" onClick={controller.refresh}>Refresh</Button>}
-      />
-      <PanelBody className="space-y-5">
+  const body = (
+    <>
         {(state.paused || (checking && datasets.length > 0)) && (
           <p role="status" className="text-caption tabular-nums text-muted">
             {state.paused ? 'Automatic checks are waiting for your current analysis.'
@@ -397,7 +407,28 @@ export default function AutomaticDiscovery() {
           </details>
         )}
         <DataMaintenance />
-      </PanelBody>
+    </>
+  );
+  if (embedded) {
+    return (
+      <div className="space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="max-w-prose text-caption text-muted">What your tables and indexed documents show that is worth raising, each with the records behind it.</p>
+          <Button size="sm" onClick={controller.refresh}>Refresh</Button>
+        </div>
+        {body}
+      </div>
+    );
+  }
+  return (
+    <Panel aria-labelledby="discoveries-heading">
+      <PanelHeader
+        titleId="discoveries-heading"
+        title="What stands out"
+        description="What your tables and indexed documents show that is worth raising, each with the records behind it."
+        actions={<Button size="sm" onClick={controller.refresh}>Refresh</Button>}
+      />
+      <PanelBody className="space-y-5">{body}</PanelBody>
     </Panel>
   );
 }
