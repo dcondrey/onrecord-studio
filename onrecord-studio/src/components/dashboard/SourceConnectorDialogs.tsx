@@ -1,3 +1,4 @@
+import type { FormEvent, ReactNode } from 'react';
 import { cn } from '../../utils/cn';
 import DialogBackdrop from '../ui/DialogBackdrop';
 import Icon from '../ui/icons';
@@ -70,6 +71,39 @@ const guidanceDateFields: { field: 'documentDateFrom' | 'documentDateTo'; label:
   { field: 'documentDateTo', label: 'Document date to', hint: 'Refuses a document dated later than this when the source reports a document-carried date.' },
 ];
 
+/** The shell every connector dialog shares: backdrop, labelled header with a close button, then the body. */
+function ConnectorDialog({ id, eyebrow, tone, title, description, closeLabel, onClose, onSubmit, width = 'max-w-md', children }: {
+  id: string;
+  eyebrow: string;
+  tone: string;
+  title: ReactNode;
+  description?: string;
+  closeLabel: string;
+  onClose: () => void;
+  onSubmit?: (event: FormEvent<HTMLFormElement>) => void;
+  width?: string;
+  children: ReactNode;
+}) {
+  const header = (
+    <div className="flex items-start justify-between border-b border-line p-4">
+      <div>
+        <div className={cn('app-eyebrow', tone)}>{eyebrow}</div>
+        <h2 id={id} className="mt-1 text-sm font-semibold text-fg">{title}</h2>
+        {description && <p className="mt-1 max-w-xl text-caption leading-relaxed text-muted">{description}</p>}
+      </div>
+      <button type="button" onClick={onClose} aria-label={closeLabel} className="focus-ring rounded-lg p-2 text-muted hover:bg-raised hover:text-fg-secondary"><Icon name="x" /></button>
+    </div>
+  );
+  const panel = cn('app-panel w-full overflow-hidden shadow-2xl shadow-black/40', width);
+  return (
+    <DialogBackdrop labelledBy={id} onClose={onClose} className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm">
+      {onSubmit
+        ? <form onSubmit={onSubmit} className={panel}>{header}{children}</form>
+        : <div className={panel}>{header}{children}</div>}
+    </DialogBackdrop>
+  );
+}
+
 /** The five modals behind the connector: remove confirmation, purge confirmation, paste-content,
  * crawl settings, and guided repair. Grouped in one component because at most one is ever open at
  * a time and they all read from the same `useSourceConnector` state. */
@@ -125,15 +159,7 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
   return (
     <>
       {pendingRemoval && (
-        <DialogBackdrop labelledBy="remove-source-title" onClose={() => setPendingRemoval(null)} className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm">
-          <div className="app-panel w-full max-w-md overflow-hidden shadow-2xl shadow-black/40">
-            <div className="flex items-start justify-between border-b border-line p-4">
-              <div>
-                <div className="app-eyebrow text-danger">Sources</div>
-                <h2 id="remove-source-title" className="mt-1 text-sm font-semibold text-fg">Remove {pendingRemoval.displayName}?</h2>
-              </div>
-              <button type="button" onClick={() => setPendingRemoval(null)} aria-label="Close removal confirmation" className="rounded-lg p-2 text-muted hover:bg-raised hover:text-fg-secondary"><Icon name="x" /></button>
-            </div>
+        <ConnectorDialog id="remove-source-title" eyebrow="Sources" tone="text-danger" title={<>Remove {pendingRemoval.displayName}?</>} closeLabel="Close removal confirmation" onClose={() => setPendingRemoval(null)}>
             <div className="space-y-2 p-4 text-label leading-relaxed text-muted">
               {/* Saying which of the two this is, is the point. A "Remove" that silently keeps
                   hundreds of ingested records and one that silently destroys them are both false
@@ -142,22 +168,13 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
               <p className="text-fg-secondary">Documents already ingested from this source are kept and stay searchable and exportable.</p>
             </div>
             <div className="flex items-center justify-end gap-2 border-t border-line px-4 py-3">
-              <button type="button" onClick={() => setPendingRemoval(null)} className="rounded-lg px-3 py-2 text-caption font-semibold text-muted hover:text-fg-secondary">Cancel</button>
+              <button type="button" onClick={() => setPendingRemoval(null)} className="focus-ring rounded-lg px-3 py-2 text-caption font-semibold text-muted hover:text-fg-secondary">Cancel</button>
               <button type="button" onClick={() => void removeSource()} className="focus-ring rounded-lg border border-danger/30 bg-danger/10 px-4 py-2 text-caption font-semibold text-danger">Remove and keep documents</button>
             </div>
-          </div>
-        </DialogBackdrop>
+        </ConnectorDialog>
       )}
       {pendingPurge && (
-        <DialogBackdrop labelledBy="purge-source-title" onClose={() => setPendingPurge(null)} className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm">
-          <div className="app-panel w-full max-w-md overflow-hidden shadow-2xl shadow-black/40">
-            <div className="flex items-start justify-between border-b border-line p-4">
-              <div>
-                <div className="app-eyebrow text-danger">Sources</div>
-                <h2 id="purge-source-title" className="mt-1 text-sm font-semibold text-fg">Delete {pendingPurge.displayName} and everything from it?</h2>
-              </div>
-              <button type="button" onClick={() => setPendingPurge(null)} aria-label="Close deletion confirmation" className="rounded-lg p-2 text-muted hover:bg-raised hover:text-fg-secondary"><Icon name="x" /></button>
-            </div>
+        <ConnectorDialog id="purge-source-title" eyebrow="Sources" tone="text-danger" title={<>Delete {pendingPurge.displayName} and everything from it?</>} closeLabel="Close deletion confirmation" onClose={() => setPendingPurge(null)}>
             <div className="space-y-2 p-4 text-label leading-relaxed text-muted">
               {/* The counts are the point. "This cannot be undone" asks the operator to approve an
                   unknown quantity of evidence loss; the numbers say what is at stake. Until they
@@ -181,23 +198,14 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
               <p className="text-fg-secondary">The registration is deleted as well, so the source can be added again from scratch afterwards.</p>
             </div>
             <div className="flex items-center justify-end gap-2 border-t border-line px-4 py-3">
-              <button type="button" onClick={() => setPendingPurge(null)} className="rounded-lg px-3 py-2 text-caption font-semibold text-muted hover:text-fg-secondary">Cancel</button>
+              <button type="button" onClick={() => setPendingPurge(null)} className="focus-ring rounded-lg px-3 py-2 text-caption font-semibold text-muted hover:text-fg-secondary">Cancel</button>
               <button type="button" disabled={purgePreview === null || isPurging} onClick={() => void purgeSource()} className="focus-ring rounded-lg border border-danger/30 bg-danger/20 px-4 py-2 text-caption font-semibold text-danger disabled:border-control disabled:bg-surface disabled:text-muted">{isPurging ? 'Deleting…' : 'Delete source and documents'}</button>
             </div>
-          </div>
-        </DialogBackdrop>
+        </ConnectorDialog>
       )}
       {isPasteOpen && (
-        <DialogBackdrop labelledBy="paste-source-title" onClose={closePasteDialog} className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm">
-          <form onSubmit={(event) => void importPaste(event)} className="app-panel w-full max-w-2xl overflow-hidden shadow-2xl shadow-black/40">
-            <div className="flex items-start justify-between border-b border-line p-4">
-              <div>
-                <div className="app-eyebrow text-accent">Add data</div>
-                <h2 id="paste-source-title" className="mt-1 text-sm font-semibold text-fg">Paste content to analyze</h2>
-                <p className="mt-1 text-caption text-muted">Text, CSV, JSON, XML, HTML, and tabular content are detected automatically. Paste a press release, agenda, minutes or budget message to check its figures against the released records.</p>
-              </div>
-              <button type="button" onClick={closePasteDialog} aria-label="Close paste dialog" className="rounded-lg p-2 text-muted hover:bg-raised hover:text-fg-secondary"><Icon name="x" /></button>
-            </div>
+        <ConnectorDialog id="paste-source-title" eyebrow="Add data" tone="text-accent" title="Paste content to analyze" closeLabel="Close paste dialog" onClose={closePasteDialog} onSubmit={(event) => void importPaste(event)} width="max-w-2xl"
+          description="Text, CSV, JSON, XML, HTML, and tabular content are detected automatically. Paste a press release, agenda, minutes or budget message to check its figures against the released records.">
             <div className="space-y-3 p-4">
               <label className="block text-caption font-semibold text-muted">
                 Source title
@@ -215,24 +223,15 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
             <div className="flex items-center justify-between border-t border-line px-4 py-3">
               <span className="font-mono text-caption text-muted">{new Blob([pasteContent]).size.toLocaleString()} / 16,777,216 bytes</span>
               <div className="flex gap-2">
-                <button type="button" onClick={closePasteDialog} className="rounded-lg px-3 py-2 text-caption font-semibold text-muted hover:text-fg-secondary">Cancel</button>
+                <button type="button" onClick={closePasteDialog} className="focus-ring rounded-lg px-3 py-2 text-caption font-semibold text-muted hover:text-fg-secondary">Cancel</button>
                 <button type="submit" disabled={isDiscovering || !pasteContent.trim() || !pasteTitle.trim()} className="focus-ring rounded-lg border border-accent/30 bg-accent/10 px-4 py-2 text-caption font-semibold text-accent disabled:opacity-40">{isDiscovering ? 'Analyzing…' : 'Add & analyze'}</button>
               </div>
             </div>
-          </form>
-        </DialogBackdrop>
+        </ConnectorDialog>
       )}
       {isCrawlSettingsOpen && (
-        <DialogBackdrop labelledBy="crawl-settings-title" onClose={() => setCrawlSettingsOpen(false)} className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm">
-          <div className="app-panel w-full max-w-2xl overflow-hidden shadow-2xl shadow-black/40">
-            <div className="flex items-start justify-between border-b border-line p-4">
-              <div>
-                <div className="app-eyebrow text-accent">Acquisition</div>
-                <h2 id="crawl-settings-title" className="mt-1 text-sm font-semibold text-fg">Crawl settings</h2>
-                <p className="mt-1 max-w-xl text-caption leading-relaxed text-muted">Applied to the next source you add, and saved with that source when it differs from the defaults. Crawl limits govern crawled websites and catalogs; request pacing governs every network source; the metadata page window governs portals with a request API, and a non-default window is remembered so a resume continues from it.</p>
-              </div>
-              <button type="button" onClick={() => setCrawlSettingsOpen(false)} aria-label="Close crawl settings" className="rounded-lg p-2 text-muted hover:bg-raised hover:text-fg-secondary"><Icon name="x" /></button>
-            </div>
+        <ConnectorDialog id="crawl-settings-title" eyebrow="Acquisition" tone="text-accent" title="Crawl settings" closeLabel="Close crawl settings" onClose={() => setCrawlSettingsOpen(false)} width="max-w-2xl"
+          description="Applied to the next source you add, and saved with that source when it differs from the defaults. Crawl limits govern crawled websites and catalogs; request pacing governs every network source; the metadata page window governs portals with a request API, and a non-default window is remembered so a resume continues from it.">
             <div className="space-y-3 p-4">
               <div className="grid gap-3 sm:grid-cols-3">
                 {selectedPreset && <p className="text-label text-accent sm:col-span-3">{selectedPreset.label}: {selectedPreset.coverage}</p>}
@@ -289,20 +288,11 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
               <button type="button" onClick={() => setCrawlDraft(DEFAULT_CRAWL_SETTINGS_DRAFT)} disabled={!crawlSettingsAreCustom} className="rounded-lg px-3 py-2 text-caption font-semibold text-muted hover:text-fg-secondary disabled:opacity-40">Reset to defaults</button>
               <button type="button" onClick={() => setCrawlSettingsOpen(false)} disabled={!crawlSettings.ok} className="focus-ring rounded-lg border border-accent/30 bg-accent/10 px-4 py-2 text-caption font-semibold text-accent disabled:opacity-40">Done</button>
             </div>
-          </div>
-        </DialogBackdrop>
+        </ConnectorDialog>
       )}
       {repairPreview && (
-        <DialogBackdrop labelledBy="repair-source-title" onClose={closeRepairDialog} className="app-backdrop fixed inset-0 z-[100] grid place-items-center p-4 backdrop-blur-sm">
-          <form onSubmit={(event) => void retryWithGuidance(event)} className="app-panel flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden shadow-2xl shadow-black/40">
-            <div className="flex items-start justify-between border-b border-line p-4">
-              <div>
-                <div className="app-eyebrow text-warning">Guided repair</div>
-                <h2 id="repair-source-title" className="mt-1 text-sm font-semibold text-fg">Show OnRecord where the data lives</h2>
-                <p className="mt-1 max-w-xl text-caption leading-relaxed text-muted">The site is reachable, but it did not expose a reliable static data link. Paste the underlying download, folder, catalog, dashboard, or API URL. This guidance is saved and reused automatically.</p>
-              </div>
-              <button type="button" onClick={closeRepairDialog} aria-label="Close repair dialog" className="rounded-lg p-2 text-muted hover:bg-raised hover:text-fg-secondary"><Icon name="x" /></button>
-            </div>
+        <ConnectorDialog id="repair-source-title" eyebrow="Guided repair" tone="text-warning" title="Show OnRecord where the data lives" closeLabel="Close repair dialog" onClose={closeRepairDialog} onSubmit={(event) => void retryWithGuidance(event)} width="flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col"
+          description="The site is reachable, but it did not expose a reliable static data link. Paste the underlying download, folder, catalog, dashboard, or API URL. This guidance is saved and reused automatically.">
             <div className="space-y-4 overflow-y-auto p-4">
               <div className="rounded-xl border border-line bg-canvas/70 p-3">
                 <div className="flex items-center justify-between gap-3">
@@ -418,11 +408,10 @@ export function SourceConnectorDialogs({ connector }: { connector: SourceConnect
               </details>
             </div>
             <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
-              <button type="button" onClick={closeRepairDialog} className="rounded-lg px-3 py-2 text-caption font-semibold text-muted hover:text-fg-secondary">Cancel</button>
+              <button type="button" onClick={closeRepairDialog} className="focus-ring rounded-lg px-3 py-2 text-caption font-semibold text-muted hover:text-fg-secondary">Cancel</button>
               <button type="submit" disabled={isDiscovering || !repairSeedUrl.trim() || !guidanceFilters.ok} className="focus-ring rounded-lg border border-accent/30 bg-accent/10 px-4 py-2 text-caption font-semibold text-accent disabled:opacity-40">{isDiscovering ? 'Testing…' : 'Use this data source'}</button>
             </div>
-          </form>
-        </DialogBackdrop>
+        </ConnectorDialog>
       )}
     </>
   );

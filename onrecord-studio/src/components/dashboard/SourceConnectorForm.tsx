@@ -31,6 +31,7 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
     setPendingRemoval,
     setPendingPurge,
   } = connector;
+  const addDisabled = isDiscovering || syncCapacityReached || (activeIsSyncing && !portalUrlDraft.trim());
 
   return (
     <form onSubmit={(event) => void startSync(event)} className="source-composer flex min-w-0 flex-1 items-center p-1">
@@ -113,10 +114,10 @@ export function SourceConnectorForm({ connector, inputId }: { connector: SourceC
       </button>
       <button
         type="submit"
-        disabled={isDiscovering || syncCapacityReached || (activeIsSyncing && !portalUrlDraft.trim())}
+        disabled={addDisabled}
         className={cn(
           'focus-ring flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border px-3 text-label font-semibold transition',
-          isDiscovering || syncCapacityReached || (activeIsSyncing && !portalUrlDraft.trim())
+          addDisabled
             ? 'border-control bg-surface text-muted'
             : 'primary-action border-transparent text-white hover:brightness-105',
         )}
