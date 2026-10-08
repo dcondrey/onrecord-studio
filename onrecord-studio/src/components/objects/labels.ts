@@ -37,9 +37,19 @@ export function confidenceLabel(confidence: FindingConfidence): string {
 
 export function formatShortDate(value: string): string {
   const date = new Date(value);
+  // A bare calendar date parses as UTC midnight; read in a zone west of UTC it would print the day before.
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
   return Number.isNaN(date.valueOf())
     ? value
-    : new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
+    : new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric', ...(dateOnly ? { timeZone: 'UTC' } : {}) }).format(date);
+}
+
+/** "Oct 7, 2026, 1:00 PM" in the reader's zone: when something was checked, to the minute. */
+export function formatDateTime(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.valueOf())
+    ? value
+    : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
 /**

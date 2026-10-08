@@ -100,7 +100,7 @@ export default function StandingSearchPanel() {
     <section className="app-panel p-4" aria-label="Standing searches">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <div className="app-eyebrow">Standing searches</div>
+          <h3 className="text-heading text-fg">Standing searches</h3>
           <p className="mt-1 text-label leading-4 text-muted">
             Saved queries re-run whenever the corpus changes. Each run names the corpus state it saw.{' '}
             <button type="button" className="underline" onClick={() => openHelp('standing-search')}>How to read a run</button>
@@ -139,7 +139,7 @@ export default function StandingSearchPanel() {
       )}
 
       <div className="mt-4 border-t border-line pt-3">
-        <div className="app-eyebrow">Missing series numbers</div>
+        <h4 className="text-heading text-fg">Missing series numbers</h4>
         <div className="mt-1 text-label text-muted">
           Gaps in numbered series of resolutions, ordinances, contracts and permits.{' '}
           <MethodNote>

@@ -84,7 +84,7 @@ describe('watchlist change detection', () => {
     bridge.invoke.mockImplementation((command: string) => Promise.resolve(command === 'list_watches' ? [summary('a', 'Alpha', [same, missing])] : []));
     render(<WatchlistPanel />);
     await screen.findByText(/No data this run: No sync run has completed since the baseline\./);
-    expect(screen.getByText(/Observed, no change since 2026-10-01T00:00:00Z/)).toBeTruthy();
+    expect(screen.getByText(/Observed, no change since (Sep 30|Oct 1), 2026/)).toBeTruthy();
     expect(describeDimension(missing).text).not.toMatch(/no change/i);
     expect(describeDimension(dimension({ outcome: 'BASELINE_RECORDED', baselineAsOf: null })).text).not.toMatch(/no change/i);
   });

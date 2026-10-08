@@ -143,7 +143,7 @@ export default function OverviewDashboard() {
 
 function ToolDrawer({ label, children }: { label: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
-  return <details className="app-panel p-4" onToggle={(event) => setOpen(event.currentTarget.open)}><summary className="text-sm font-semibold text-fg-secondary">{label}</summary>{open && <div className="mt-4">{children}</div>}</details>;
+  return <details className="app-panel p-4" onToggle={(event) => setOpen(event.currentTarget.open)}><summary className="focus-ring cursor-pointer rounded text-heading text-fg">{label}</summary>{open && <div className="mt-4">{children}</div>}</details>;
 }
 
 function PeriodComparison({ activePortalKey }: { activePortalKey: string | null }) {

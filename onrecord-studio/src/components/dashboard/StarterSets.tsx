@@ -6,6 +6,7 @@ import { useStarterRunStore, type StarterEntryStatus } from '../../store/useStar
 import type { StarterEntry, StarterSetsReport } from '../../types';
 import { entriesToAdd, entryHost, entryIsSaved } from '../../utils/starterSets';
 import MethodNote from '../ui/MethodNote';
+import { formatShortDate } from '../objects/labels';
 
 /**
  * One-click bundles of public San Diego sources. Choosing a set fetches nothing: it opens a
@@ -113,7 +114,7 @@ function EntryRow({ entry, saved, status }: { entry: StarterEntry; saved: boolea
           : status?.state === 'unavailable' ? <span role="alert" className="text-warning">Unavailable: {status.reason}</span>
           : saved ? <span className="text-muted">In your library</span> : null}
       </div>
-      <div className="text-muted">{entry.what} {entry.publisher}. Verified {entry.verifiedAsOf}.</div>
+      <div className="text-muted">{entry.what} {entry.publisher}. Verified <time dateTime={entry.verifiedAsOf} className="tabular-nums">{formatShortDate(entry.verifiedAsOf)}</time>.</div>
       <div className="text-muted">{entry.termsNote ?? 'No reuse terms were found; check the publisher before redistributing.'}</div>
     </li>
   );

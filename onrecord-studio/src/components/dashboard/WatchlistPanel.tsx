@@ -4,6 +4,8 @@ import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
 import type { DimensionResult, WatchChange, WatchDimension, WatchKind, WatchSummary } from '../../types';
 import MethodNote from '../ui/MethodNote';
+import { Field, Input, Select } from '../ui/Field';
+import { formatDateTime, formatShortDate } from '../objects/labels';
 
 const KIND_LABELS: Record<WatchKind, string> = {
   AGENCY: 'Agency',
@@ -56,11 +58,11 @@ export function describeDimension(result: DimensionResult): { text: string; tone
       return { text: `Baseline recorded${result.observedAsOf ? ` ${result.observedAsOf}` : ''}; nothing to compare yet`, tone: 'quiet' };
     case 'CHANGED':
       return {
-        text: `${result.changeCount} ${result.changeCount === 1 ? 'change' : 'changes'} since ${result.baselineAsOf ?? 'the baseline'}`,
+        text: `${result.changeCount} ${result.changeCount === 1 ? 'change' : 'changes'} since ${result.baselineAsOf ? formatShortDate(result.baselineAsOf) : 'the baseline'}`,
         tone: 'changed',
       };
     case 'UNCHANGED':
-      return { text: `Observed, no change since ${result.baselineAsOf ?? 'the baseline'}`, tone: 'quiet' };
+      return { text: `Observed, no change since ${result.baselineAsOf ? formatShortDate(result.baselineAsOf) : 'the baseline'}`, tone: 'quiet' };
   }
 }
 
@@ -155,10 +157,7 @@ export default function WatchlistPanel() {
   return (
     <section aria-label="Watchlist" className="app-panel space-y-3 p-4 text-label text-fg-secondary">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <div className="app-eyebrow">Watchlist</div>
-          <h3 className="mt-1 text-sm font-semibold text-fg">What changed for the things you follow</h3>
-        </div>
+        <h3 className="text-heading text-fg">What changed for the things you follow</h3>
         <button type="button" className="analysis-button" disabled={busy || summaries.length === 0} onClick={() => void sync(selectedId, true)}>
           {busy ? 'Checking…' : 'Check now'}
         </button>
@@ -182,20 +181,16 @@ export default function WatchlistPanel() {
           void add();
         }}
       >
-        <label className="flex flex-col gap-1">
-          <span className="analysis-label">Watch</span>
-          <select className="analysis-input" value={kind} onChange={(event) => setKind(event.target.value as WatchKind)}>
-            {(Object.keys(KIND_LABELS) as WatchKind[]).map((value) => (
-              <option key={value} value={value}>
-                {KIND_LABELS[value]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex min-w-[14rem] flex-1 flex-col gap-1">
-          <span className="analysis-label">Target</span>
-          <input className="analysis-input" value={target} onChange={(event) => setTarget(event.target.value)} placeholder={KIND_HINTS[kind]} maxLength={200} />
-        </label>
+        <Select label="Watch" value={kind} onChange={(event) => setKind(event.target.value as WatchKind)}>
+          {(Object.keys(KIND_LABELS) as WatchKind[]).map((value) => (
+            <option key={value} value={value}>
+              {KIND_LABELS[value]}
+            </option>
+          ))}
+        </Select>
+        <Field label="Target" className="min-w-[14rem] flex-1">
+          <Input value={target} onChange={(event) => setTarget(event.target.value)} placeholder={KIND_HINTS[kind]} maxLength={200} />
+        </Field>
         <button type="submit" className="analysis-button" disabled={!target.trim()}>
           Add to watchlist
         </button>
@@ -214,7 +209,7 @@ export default function WatchlistPanel() {
                 Remove
               </button>
             </div>
-            <p className="mt-1 text-muted">{lastCheckedAt ? `Last checked ${lastCheckedAt}` : 'Not checked yet'}</p>
+            <p className="mt-1 text-muted">{lastCheckedAt ? <>Last checked <time dateTime={lastCheckedAt} className="tabular-nums">{formatDateTime(lastCheckedAt)}</time></> : 'Not checked yet'}</p>
             {lastDimensions.length > 0 && (
               <ul className="mt-1 space-y-0.5">
                 {lastDimensions.map((result) => {
