@@ -66,11 +66,8 @@ export default function OverviewDashboard() {
       <div className="mx-auto w-full max-w-[1800px] space-y-4 p-4 sm:p-5 lg:p-6">
         <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
-            <div className="app-eyebrow flex items-center gap-2 text-accent">
-              <Icon name="sparkles" className="h-3.5 w-3.5" /> San Diego public records
-            </div>
-            <h2 className="mt-2 text-[26px] font-semibold tracking-[-0.035em] text-fg sm:text-[30px]">{workbench ? 'Develop the case' : 'Your investigation briefing'}</h2>
-            <p className="mt-1.5 max-w-3xl text-label leading-relaxed text-muted">
+            <h2 className="text-display text-fg">{workbench ? 'Develop the case' : 'Your investigation briefing'}</h2>
+            <p className="mt-1 max-w-3xl text-body text-muted">
               Investigate homelessness spending, encampment abatements, public bathrooms, and City budget priorities.
             </p>
           </div>
