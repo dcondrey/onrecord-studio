@@ -284,7 +284,10 @@ fn build_verified_copy(
                 .to_string(),
         ));
     }
-    fs::File::open(target)
+    // Opened for writing because Windows refuses to flush a read-only handle; nothing is written.
+    fs::OpenOptions::new()
+        .write(true)
+        .open(target)
         .and_then(|file| file.sync_all())
         .map_err(|error| AppError::Storage(format!("Failed to flush the rewrite: {error}")))?;
     Ok(verified)
@@ -594,7 +597,21 @@ fn same_file(left: &Path, right: &Path) -> Result<bool, AppError> {
     Ok(matches!((identity(left)?, identity(right)?), (Some(a), Some(b)) if a == b))
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
+fn same_file(left: &Path, right: &Path) -> Result<bool, AppError> {
+    if !exists(left)? || !exists(right)? {
+        return Ok(false);
+    }
+    same_file::is_same_file(left, right).map_err(|error| {
+        AppError::Storage(format!(
+            "Failed to compare '{}' with '{}': {error}",
+            left.display(),
+            right.display()
+        ))
+    })
+}
+
+#[cfg(not(any(unix, windows)))]
 fn same_file(_: &Path, _: &Path) -> Result<bool, AppError> {
     // Unreachable in practice: without a free-space measurement no backup is ever created here.
     Ok(false)
@@ -611,7 +628,36 @@ fn available_bytes(directory: &Path) -> Result<Option<u64>, AppError> {
     Ok(Some(stats.f_bavail.saturating_mul(stats.f_frsize)))
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
+fn available_bytes(directory: &Path) -> Result<Option<u64>, AppError> {
+    use std::os::windows::ffi::OsStrExt;
+    let wide: Vec<u16> = directory
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let mut available: u64 = 0;
+    // SAFETY: `wide` is NUL-terminated and outlives the call; the out-pointer is a live u64, and
+    // the two optional out-pointers are null, which the API documents as allowed.
+    let succeeded = unsafe {
+        windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW(
+            wide.as_ptr(),
+            &mut available,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        )
+    };
+    if succeeded == 0 {
+        return Err(AppError::Storage(format!(
+            "Failed to measure free space in '{}': {}",
+            directory.display(),
+            std::io::Error::last_os_error()
+        )));
+    }
+    Ok(Some(available))
+}
+
+#[cfg(not(any(unix, windows)))]
 fn available_bytes(_: &Path) -> Result<Option<u64>, AppError> {
     Ok(None)
 }
