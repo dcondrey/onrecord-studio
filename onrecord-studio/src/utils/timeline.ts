@@ -1,3 +1,4 @@
+import { claimBasisLabel, findingKindLabel, formatShortDate } from '../components/objects/labels';
 import type { ClaimedRequest, Finding, TimelineEventKind, WatchChange } from '../types';
 
 export type TimelineSource = 'REQUEST' | 'FINDING' | 'WATCH' | 'CASE';
@@ -69,7 +70,7 @@ export function findingItems(findings: Finding[]): TimelineItem[] {
     dateMeaning: 'LAST_SEEN' as const,
     title: finding.headline,
     detail: null,
-    provenance: `Detector ${finding.sourceDetector}; first discovered ${finding.discoveredAt.slice(0, 10)}. A pattern signal, not a legal claim.`,
+    provenance: `${findingKindLabel(finding.kind)} check · first found ${formatShortDate(finding.discoveredAt)} · ${claimBasisLabel(finding.kind)}`,
     evidence: finding.explanation,
     findingId: finding.id,
   }));

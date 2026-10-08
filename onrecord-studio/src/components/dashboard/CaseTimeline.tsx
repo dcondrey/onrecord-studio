@@ -9,6 +9,7 @@ import { cn } from '../../utils/cn';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
 import EmptyState from '../ui/EmptyState';
+import InlineError from '../ui/InlineError';
 import { Input, SearchField, Select } from '../ui/Field';
 import MethodNote from '../ui/MethodNote';
 import Skeleton from '../ui/Skeleton';
@@ -133,7 +134,7 @@ export default function CaseTimeline() {
       <div className="w-full max-w-[1100px] space-y-4 px-5 pb-10 pt-4 lg:px-6">
         <div className="app-panel grid gap-3 p-3">
           <div className="flex flex-wrap items-center gap-2">
-            <div role="group" aria-label="Show sources" className="inline-flex h-8 items-center gap-0.5 rounded-lg border border-control p-0.5">
+            <div role="group" aria-label="Show sources" className="flex flex-wrap items-center gap-1.5">
               {SOURCES.map((source) => (
                 <button
                   key={source}
@@ -148,10 +149,15 @@ export default function CaseTimeline() {
                     })
                   }
                   className={cn(
-                    'focus-ring h-full whitespace-nowrap rounded-md px-2.5 text-control transition-colors',
-                    shown.has(source) ? 'bg-accent/10 text-accent' : 'text-muted hover:text-fg',
+                    'focus-ring inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 text-control transition-colors',
+                    shown.has(source) ? 'border-accent/30 bg-accent/10 text-accent' : 'border-line-strong text-muted hover:text-fg',
                   )}
                 >
+                  {/* A tick for on, an empty box for off, so the state never rests on the fill alone. */}
+                  <svg viewBox="0 0 12 12" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+                    <rect x="0.75" y="0.75" width="10.5" height="10.5" rx="2.5" />
+                    {shown.has(source) && <path d="M3.5 6.2 5.2 7.9 8.6 4.3" />}
+                  </svg>
                   {SOURCE_LABELS[source]}
                 </button>
               ))}
@@ -163,9 +169,6 @@ export default function CaseTimeline() {
               aria-label="Filter timeline by text"
               wrapperClassName="min-w-[12rem] flex-1"
             />
-            <MethodNote label="How dates are read">
-              One timeline from your tracked requests, detector findings, watch changes and case records. An event date is when something happened. Last seen and noticed dates are when this app saw it, which can be later than the event. A due or modeled date is owed or computed, not observed. Case dates are the ones you recorded; none is read out of a document.
-            </MethodNote>
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <label className="flex items-center gap-2 text-caption text-muted">From
@@ -176,28 +179,27 @@ export default function CaseTimeline() {
             </label>
             <label className="flex items-center gap-2 text-caption text-muted">Lane
               <Select value={lane ?? ''} disabled={caseLanes.length === 0} onChange={(event) => { setLane(event.target.value || null); setLimit(PAGE); }} className="w-44">
-                {caseLanes.length === 0 ? <option value="">No lanes</option> : <option value="">All lanes</option>}
+                {!casework.loaded ? <option value="">Loading lanes…</option>
+                  : casework.error ? <option value="">Lanes not available</option>
+                    : caseLanes.length === 0 ? <option value="">No lanes</option>
+                      : <option value="">All lanes</option>}
                 {caseLanes.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
               </Select>
             </label>
+            <div className="ml-auto">
+              <MethodNote label="How dates are read">
+                One timeline from your tracked requests, detector findings, watch changes and case records. An event date is when something happened. Last seen and noticed dates are when this app saw it, which can be later than the event. A due or modeled date is owed or computed, not observed. Case dates are the ones you recorded; none is read out of a document.
+              </MethodNote>
+            </div>
           </div>
         </div>
 
         {failed.length > 0 && (
-          <div role="alert" className="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3">
-            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-              <p className="min-w-0 flex-1 text-body text-danger">
-                {listOf(failed.map((source) => SOURCE_LABELS[source]))} could not be read, so {failed.length === 1 ? 'it is' : 'they are'} missing from this timeline.
-              </p>
-              <Button size="sm" onClick={() => setReload((count) => count + 1)}>Retry</Button>
-            </div>
-            <details className="mt-2">
-              <summary className="text-caption text-muted">Details</summary>
-              <ul className="mt-1 space-y-1 break-words font-mono text-code text-fg-secondary">
-                {failed.map((source) => <li key={source}>{SOURCE_LABELS[source]}: {sources[source].error}</li>)}
-              </ul>
-            </details>
-          </div>
+          <InlineError
+            summary={`${listOf(failed.map((source) => SOURCE_LABELS[source]))} could not be read, so ${failed.length === 1 ? 'it is' : 'they are'} missing from this timeline.`}
+            detail={failed.map((source) => `${SOURCE_LABELS[source]}: ${sources[source].error}`).join(' · ')}
+            onRetry={() => setReload((count) => count + 1)}
+          />
         )}
         {SOURCES.filter((source) => sources[source].capped).map((source) => (
           <p key={source} role="status" className="text-caption text-warning">
@@ -261,7 +263,7 @@ export default function CaseTimeline() {
                     {(row.evidence || (row.findingId && findingsById?.get(row.findingId)) || row.source === 'WATCH') && (
                       <div className="mt-2 flex flex-wrap gap-2">
                         {row.evidence && (
-                          <Button size="sm" variant="ghost" aria-expanded={expanded === row.id} onClick={() => setExpanded((current) => (current === row.id ? null : row.id))}>
+                          <Button size="sm" variant="link" className="px-0" aria-expanded={expanded === row.id} onClick={() => setExpanded((current) => (current === row.id ? null : row.id))}>
                             {expanded === row.id ? 'Hide basis' : 'Show basis'}
                           </Button>
                         )}
