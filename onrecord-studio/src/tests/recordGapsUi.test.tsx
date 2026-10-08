@@ -5,7 +5,7 @@ import type { RecordGapRequestStatus } from '../types';
 import { RECORD_GAP_DEFINITIONS, type RecordGap } from '../utils/recordGaps';
 
 const bridge = vi.hoisted(() => ({ invoke: vi.fn(), open: vi.fn() }));
-vi.mock('../ipc', () => ({ invokeCommand: bridge.invoke }));
+vi.mock('../ipc', async (importOriginal) => ({ ...(await importOriginal<typeof import('../ipc')>()), invokeCommand: bridge.invoke }));
 vi.mock('../store/useAppStore', () => ({ useAppStore: Object.assign((selector: (s: unknown) => unknown) => selector({ portals: [{ registration: { displayName: 'City of Example', originUrl: 'https://example.test', canonicalUrl: 'https://example.test/requests' } }] }), { getState: () => ({ openCasework: bridge.open }) }) }));
 import RecordGaps from '../components/dashboard/RecordGaps';
 

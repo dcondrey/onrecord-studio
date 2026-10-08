@@ -13,7 +13,7 @@ const bridge = vi.hoisted(() => ({
   addBriefingEvidence: vi.fn(),
   setWorkspaceView: vi.fn(),
 }));
-vi.mock("../ipc", () => ({ invokeCommand: bridge.invoke }));
+vi.mock("../ipc", async (importOriginal) => ({ ...(await importOriginal<typeof import("../ipc")>()), invokeCommand: bridge.invoke }));
 vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => true }));
 vi.mock("../store/useAppStore", () => ({
   useAppStore: {
@@ -210,7 +210,7 @@ describe("research dossier workflow", () => {
     bridge.invoke.mockRejectedValue(new Error("Database unavailable"));
     render(<ResearchWorkspace />);
     await screen.findByRole("heading", { name: "The saved investigation catalog could not be read" });
-    expect(screen.getByText("Error: Database unavailable")).toBeTruthy();
+    expect(screen.getByText("Database unavailable")).toBeTruthy();
     expect(screen.queryByText("Building the first investigation")).toBeNull();
     expect(screen.getByRole("button", { name: "Retry research status" })).toBeTruthy();
   });
@@ -464,7 +464,7 @@ describe("research dossier workflow", () => {
     fireEvent.change(screen.getByLabelText("Follow-through case-1:finding:0"), {
       target: { value: "DONE" },
     });
-    await screen.findByText("Error: Storage unavailable");
+    await screen.findByText("Storage unavailable");
     expect(
       screen.getByLabelText("Follow-through case-1:finding:0"),
     ).toHaveProperty("value", "OPEN");

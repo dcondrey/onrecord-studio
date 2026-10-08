@@ -4,8 +4,8 @@ import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
 import { useFirstRunDataStore } from '../../store/useFirstRunDataStore';
 import { useAutomaticDiscovery } from './AutomaticDiscoveryProvider';
-import type { FindingKind, FindingSeverity, StoryLead } from '../../types';
-import { isLegalClaimKind } from '../../types/findings';
+import type { StoryLead } from '../../types';
+import { claimBasisLabel, findingKindLabel, severityLabel } from '../objects/labels';
 import { findingToBriefingEvidence } from './BriefingWorkspace';
 import FindingsInbox from './FindingsInbox';
 import PageHeader from '../ui/PageHeader';
@@ -30,8 +30,9 @@ type DeskState =
  */
 export default function StoryDesk() {
   const [state, setState] = useState<DeskState>({ status: 'PENDING' });
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ text: string; failed: boolean } | null>(null);
   const gate = useLatestRequestGate();
+  const briefingGate = useLatestRequestGate();
   const findingsRefreshRequests = useAppStore((s) => s.findingsRefreshRequests);
   const setActivePortal = useAppStore((s) => s.setActivePortal);
   const setSearchFilters = useAppStore((s) => s.setSearchFilters);
@@ -85,27 +86,27 @@ export default function StoryDesk() {
 
   const addToBriefing = useCallback(
     async (lead: StoryLead) => {
-      const token = gate.begin();
+      const token = briefingGate.begin();
       try {
         const findings = await invokeCommand('list_findings', {
           filter: { id: lead.findingId },
           limit: 1,
         });
-        if (!gate.isCurrent(token)) return;
+        if (!briefingGate.isCurrent(token)) return;
         const finding = findings.find((row) => row.id === lead.findingId);
         const evidence = finding ? findingToBriefingEvidence(finding) : null;
         if (!evidence) {
-          setNotice('This lead has no request anchor, so it cannot be added to a briefing.');
+          setNotice({ text: 'This lead has no request anchor, so it cannot be added to a briefing.', failed: true });
           return;
         }
         addBriefingEvidence(evidence);
-        setNotice(`Added to the briefing: ${lead.headline}`);
+        setNotice({ text: `Added to the briefing: ${lead.headline}`, failed: false });
       } catch (reason) {
-        if (!gate.isCurrent(token)) return;
-        setNotice(formatNativeError(reason));
+        if (!briefingGate.isCurrent(token)) return;
+        setNotice({ text: formatNativeError(reason), failed: true });
       }
     },
-    [addBriefingEvidence, gate],
+    [addBriefingEvidence, briefingGate],
   );
 
   return (
@@ -145,7 +146,7 @@ export default function StoryDesk() {
             )}
           </>}
         />
-        {notice && <p role="status" className="motion-reveal text-label text-success">{notice}</p>}
+        {notice && <p role={notice.failed ? 'alert' : 'status'} className={cn('motion-reveal text-label', notice.failed ? 'text-warning' : 'text-success')}>{notice.text}</p>}
 
         <CaseScopeBar state={caseScope} noun={mode === 'all' ? 'findings' : 'leads'} />
 
@@ -209,8 +210,7 @@ export default function StoryDesk() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="text-caption font-semibold uppercase tracking-wider text-accent">
-                      #{index + 1} · {kindLabel(lead.kind)} · {severityLabel(lead.severity)}
-                      {isLegalClaimKind(lead.kind) ? ' · counted violation' : ' · pattern signal'}
+                      #{index + 1} · {findingKindLabel(lead.kind)} · {severityLabel(lead.severity)} · {claimBasisLabel(lead.kind)}
                     </div>
                     <h3 className="mt-1 text-sm font-semibold leading-snug">
                       <ObjectLink target={{ kind: 'finding', id: lead.findingId, label: lead.headline }} className="text-fg decoration-line-strong hover:text-accent">{lead.headline}</ObjectLink>
@@ -268,10 +268,6 @@ export default function StoryDesk() {
   );
 }
 
-/**
- * Keeps the desk compact: the drafts panel mounts only once the reader opens it, so the desk does
- * not ask the backend which drafts apply to every ranked lead on load.
- */
 /** The agency a lead is about, as a link, when the analytics profile names it. */
 function AgencyReference({ lead }: { lead: StoryLead }) {
   const { agencyId, portalKey } = lead.subject;
@@ -284,6 +280,7 @@ function AgencyReference({ lead }: { lead: StoryLead }) {
   );
 }
 
+/** Mounts the drafts panel only once opened, so loading the desk does not ask which drafts apply to every lead. */
 function LeadDraftToggle({ findingId }: { findingId: string }) {
   const [open, setOpen] = useState(false);
   return (
@@ -300,12 +297,4 @@ function LeadDraftToggle({ findingId }: { findingId: string }) {
       {open && <ArtifactDrafts findingId={findingId} />}
     </details>
   );
-}
-
-function kindLabel(kind: FindingKind): string {
-  return kind.toLowerCase().replace(/_/g, ' ');
-}
-
-function severityLabel(severity: FindingSeverity): string {
-  return severity.charAt(0) + severity.slice(1).toLowerCase();
 }

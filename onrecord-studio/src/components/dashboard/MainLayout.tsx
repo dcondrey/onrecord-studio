@@ -12,7 +12,7 @@ import UnredactorPanel from '../documents/UnredactorPanel';
 import LegalAuthorityManager from '../legal/LegalAuthorityManager';
 import LegalCompliancePanel from '../legal/LegalCompliancePanel';
 import { isTauri } from '@tauri-apps/api/core';
-import { invokeCommand } from '../../ipc';
+import { formatNativeError, invokeCommand } from '../../ipc';
 import StatutoryDeadlineAppeal from './StatutoryDeadlineAppeal';
 import type {
   DocumentTextChunk,
@@ -36,6 +36,7 @@ import DialogBackdrop from '../ui/DialogBackdrop';
 import AnalysisWorkbench from './AnalysisWorkbench';
 import CaseTimeline from './CaseTimeline';
 import { formatMatchCount, MATCH_BASIS_LABELS, matchBasis, SEARCH_PAGE_SIZE } from '../../utils/searchResults';
+import { formatShortDate } from '../objects/labels';
 import VirtualList from '../ui/VirtualList';
 
 /** Fixed so the list can be windowed from the scroll offset; the row clamps its text to fit. */
@@ -106,7 +107,7 @@ export default function MainLayout() {
         if (count && stillCurrent()) store.setFilteredResultsTotal(generation, count.total);
       }
     } catch (reason) {
-      if (stillCurrent()) store.setSearchPageState(generation, { loadingMore: false, moreError: String(reason) });
+      if (stillCurrent()) store.setSearchPageState(generation, { loadingMore: false, moreError: formatNativeError(reason) });
     }
   }, []);
   const documentListGate = useLatestRequestGate();
@@ -144,7 +145,7 @@ export default function MainLayout() {
     }).then((values) => {
       if (documentListGate.isCurrent(request)) { setDocuments(values); setDocumentError(null); }
     }).catch((reason) => {
-      if (documentListGate.isCurrent(request)) setDocumentError(String(reason));
+      if (documentListGate.isCurrent(request)) setDocumentError(formatNativeError(reason));
     });
     return documentListGate.invalidate;
   }, [documentListGate, documentOpenGate, evidenceRefreshRequests, selectedRequestPortalKey, selectedRequestId]);
@@ -154,6 +155,7 @@ export default function MainLayout() {
     // The request this purge was started under, compared again on arrival before anything is
     // written. See the note on `documentOwnerRef`.
     const owner = documentOwnerRef.current;
+    const stillOwner = () => documentOwnerRef.current?.requestId === owner?.requestId && documentOwnerRef.current?.portalKey === owner?.portalKey;
     if (!summary) return;
     setDocumentError(null);
     setPurgingDocument(true);
@@ -162,8 +164,7 @@ export default function MainLayout() {
         sourceKey: summary.portalKey,
         documentId: summary.documentId,
       });
-      if (documentOwnerRef.current?.requestId !== owner?.requestId
-        || documentOwnerRef.current?.portalKey !== owner?.portalKey) return;
+      if (!stillOwner()) return;
       setDocuments((current) => current.filter((document) =>
         document.documentId !== purge.documentId || document.portalKey !== purge.sourceKey));
       setActiveDocument((current) =>
@@ -174,9 +175,8 @@ export default function MainLayout() {
           : current);
       setPendingDocumentPurge(null);
     } catch (reason) {
-      if (documentOwnerRef.current?.requestId !== owner?.requestId
-        || documentOwnerRef.current?.portalKey !== owner?.portalKey) return;
-      setDocumentError(String(reason));
+      if (!stillOwner()) return;
+      setDocumentError(formatNativeError(reason));
     } finally {
       setPurgingDocument(false);
     }
@@ -199,7 +199,7 @@ export default function MainLayout() {
       setActiveDocument({ summary, chunk });
     } catch (reason) {
       if (!documentOpenGate.isCurrent(request)) return;
-      setDocumentError(String(reason));
+      setDocumentError(formatNativeError(reason));
     }
   };
 
@@ -238,7 +238,7 @@ export default function MainLayout() {
       }
     } catch (reason) {
       if (exportGate.isCurrent(request)) {
-        setExportState({ key, isExporting: false, result: null, error: String(reason) });
+        setExportState({ key, isExporting: false, result: null, error: formatNativeError(reason) });
       }
     }
   };
@@ -312,7 +312,7 @@ export default function MainLayout() {
                 <p className="mt-0.5 text-caption text-muted">Request metadata is PII-masked before it reaches this view.</p>
               </div>
               <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setLegalLibraryOpen(true)} className="whitespace-nowrap rounded border border-highlight/30 bg-highlight/10 px-2 py-1 text-caption font-semibold text-highlight transition hover:border-highlight/30 hover:bg-highlight/10">Legal authority library</button>
+                <button type="button" onClick={() => setLegalLibraryOpen(true)} className="focus-ring whitespace-nowrap rounded border border-highlight/30 bg-highlight/10 px-2 py-1 text-caption font-semibold text-highlight transition hover:border-highlight/30 hover:bg-highlight/10">Legal authority library</button>
                 <span className="rounded border border-line bg-canvas px-2 py-1 font-mono text-caption text-muted">{formatMatchCount(resultsTotal)} records</span>
               </div>
             </div>
@@ -385,7 +385,7 @@ export default function MainLayout() {
                         </div>
                         <div className="text-right font-mono text-caption text-muted">
                           <div className="truncate text-muted">{result.agencyName}</div>
-                          <div className="mt-2">{formatDate(result.createdAt)}</div>
+                          <div className="mt-2">{formatShortDate(result.createdAt)}</div>
                           <div className="mt-1">{result.documentCount} document{result.documentCount === 1 ? '' : 's'}</div>
                         </div>
                       </button>
@@ -427,8 +427,8 @@ export default function MainLayout() {
                   <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line pt-3 text-label">
                     <CaseField label="Request ID" value={String(selected.requestId)} />
                     <CaseField label="Documents" value={String(selected.documentCount)} />
-                    <CaseField label="Created" value={formatDate(selected.createdAt)} />
-                    <CaseField label="Closed" value={selected.closedAt ? formatDate(selected.closedAt) : 'Not recorded'} />
+                    <CaseField label="Created" value={formatShortDate(selected.createdAt)} />
+                    <CaseField label="Closed" value={selected.closedAt ? formatShortDate(selected.closedAt) : 'Not recorded'} />
                   </dl>
                   <div className="mt-4 rounded-lg border border-line bg-canvas/70 p-3 text-label leading-relaxed text-muted">
                     {selected.descriptionPreview || 'No public description supplied.'}
@@ -496,7 +496,7 @@ export default function MainLayout() {
                         type="button"
                         disabled={exportState?.key === `${selected.portalKey}-${selected.requestId}` && exportState.isExporting}
                         onClick={() => void exportBrief(selected)}
-                        className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-label font-semibold text-warning transition hover:border-warning/30 hover:bg-warning/20 disabled:cursor-wait disabled:opacity-60"
+                        className="focus-ring rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-label font-semibold text-warning transition hover:border-warning/30 hover:bg-warning/20 disabled:cursor-wait disabled:opacity-60"
                       >
                         {exportState?.key === `${selected.portalKey}-${selected.requestId}` && exportState.isExporting ? 'Compiling protected draft…' : 'Generate administrative appeal draft'}
                       </button>
@@ -540,7 +540,7 @@ export default function MainLayout() {
               <p>Synchronizing this source again can download the same file back. Remove the source to stop that.</p>
             </div>
             <div className="flex items-center justify-end gap-2 border-t border-line px-4 py-3">
-              <button type="button" onClick={() => setPendingDocumentPurge(null)} className="rounded-lg px-3 py-2 text-caption font-semibold text-muted hover:text-fg-secondary">Cancel</button>
+              <button type="button" onClick={() => setPendingDocumentPurge(null)} className="focus-ring rounded-lg px-3 py-2 text-caption font-semibold text-muted hover:text-fg-secondary">Cancel</button>
               <button type="button" disabled={isPurgingDocument} onClick={() => void purgeDocument()} className="focus-ring rounded-lg border border-danger/30 bg-danger/20 px-4 py-2 text-caption font-semibold text-danger disabled:opacity-60">{isPurgingDocument ? 'Deleting…' : 'Delete this document'}</button>
             </div>
           </div>
@@ -709,11 +709,6 @@ function PolicyBadge({ flag }: { flag: string }) {
 
 function CaseField({ label, value }: { label: string; value: string }) {
   return <div><dt className="text-caption font-semibold uppercase tracking-wider text-muted">{label}</dt><dd className="mt-1 font-mono text-muted">{value}</dd></div>;
-}
-
-function formatDate(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.valueOf()) ? value : new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
 }
 
 function formatFileSize(value: number | null) {

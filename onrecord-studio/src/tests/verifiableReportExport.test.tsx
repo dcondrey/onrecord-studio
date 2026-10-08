@@ -45,13 +45,9 @@ describe('VerifiableReportExport', () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(screen.queryByText(/for-a\.html/)).toBeNull();
     expect((screen.getByRole('button', { name: /export verifiable report/i }) as HTMLButtonElement).disabled).toBe(false);
-  });
-
-  it('shows the report for the scope that is still current', async () => {
-    render(<VerifiableReportExport portalKey="portal-a" />);
     fireEvent.click(screen.getByRole('button', { name: /export verifiable report/i }));
-    await waitFor(() => expect(pending.has('portal-a')).toBe(true));
-    pending.get('portal-a')?.(result('/reports/for-a.html'));
-    expect(await screen.findByText(/for-a\.html/)).toBeTruthy();
+    await waitFor(() => expect(pending.has('portal-b')).toBe(true));
+    pending.get('portal-b')?.(result('/reports/for-b.html'));
+    expect(await screen.findByText(/for-b\.html/)).toBeTruthy();
   });
 });

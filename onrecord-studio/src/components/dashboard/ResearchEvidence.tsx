@@ -25,19 +25,39 @@ export function Citations({
     </div>
   );
 }
-function QueryTable({ text }: { text: string }) {
+type QueryResult = { columns: string[]; rows: unknown[][] };
+
+/** A stored query result, or null when the text is not one. */
+function parseQueryResult(text: string): QueryResult | null {
   try {
-    const data: { columns: unknown; rows: unknown } = JSON.parse(text);
+    const data: { columns?: unknown; rows?: unknown } = JSON.parse(text);
     if (
-      !Array.isArray(data.columns) ||
-      !data.columns.every((c) => typeof c === "string") ||
-      !Array.isArray(data.rows) ||
-      !data.rows.every(Array.isArray)
+      Array.isArray(data.columns) &&
+      data.columns.every((c) => typeof c === "string") &&
+      Array.isArray(data.rows) &&
+      data.rows.every(Array.isArray)
     )
-      throw new Error("Not tabular");
-    const columns = data.columns as string[];
-    const rows = data.rows as unknown[][];
+      return { columns: data.columns, rows: data.rows };
+  } catch {
+    // Not JSON: shown verbatim by the caller.
+  }
+  return null;
+}
+
+function QueryTable({ text }: { text: string }) {
+  const table = parseQueryResult(text);
+  if (!table) {
     return (
+      <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words">
+        {text}
+      </pre>
+    );
+  }
+  return <ResultTable {...table} />;
+}
+
+function ResultTable({ columns, rows }: QueryResult) {
+  return (
       <div className="max-h-72 max-w-full overflow-auto">
         <table className="w-full text-left text-label leading-4">
           <thead>
@@ -74,14 +94,7 @@ function QueryTable({ text }: { text: string }) {
           </tbody>
         </table>
       </div>
-    );
-  } catch {
-    return (
-      <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words">
-        {text}
-      </pre>
-    );
-  }
+  );
 }
 function CitationContent({
   citation,
@@ -90,25 +103,21 @@ function CitationContent({
   citation: ResearchCitation;
   evidence: ResearchEvidence | undefined;
 }) {
-  if (evidence?.sql) {
-    try {
-      const quote: unknown = JSON.parse(citation.quote);
-      const result = JSON.parse(evidence.text);
-      if (
-        Array.isArray(quote) &&
-        Array.isArray(result.columns) &&
-        quote.length === result.columns.length
-      )
-        return (
-          <QueryTable
-            text={JSON.stringify({ columns: result.columns, rows: [quote] })}
-          />
-        );
-    } catch {
-      /* Display other exact citations verbatim. */
-    }
-  }
+  // A query citation quotes one result row; it is shown under the result's own headers.
+  const row = evidence?.sql ? parseQuotedRow(citation.quote) : null;
+  const result = row ? parseQueryResult(evidence!.text) : null;
+  if (row && result && row.length === result.columns.length)
+    return <ResultTable columns={result.columns} rows={[row]} />;
   return <p>“{citation.quote}”</p>;
+}
+
+function parseQuotedRow(quote: string): unknown[] | null {
+  try {
+    const value: unknown = JSON.parse(quote);
+    return Array.isArray(value) ? value : null;
+  } catch {
+    return null;
+  }
 }
 
 export function EvidenceLinks({
@@ -148,33 +157,11 @@ export function EvidenceLinks({
               <p className="break-all">
                 Evidence SHA-256: {evidence.sourceSha256 || "Not recorded"}
               </p>
-              {(evidence.sourceReferences ?? []).map(
-                (source) =>
-                  /^https?:\/\//.test(source.url) && (
-                    <div key={source.snapshot} className="space-y-1 break-all">
-                      <a
-                        href={source.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-accent"
-                      >
-                        Open source for snapshot {source.snapshot}
-                      </a>
-                      <p>Source SHA-256: {source.sha256}</p>
-                    </div>
-                  ),
-              )}
-              {evidence.sourceUrl &&
-                /^https?:\/\//.test(evidence.sourceUrl) && (
-                  <a
-                    href={evidence.sourceUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-accent"
-                  >
-                    Open original source
-                  </a>
-                )}
+              {(evidence.sourceReferences ?? []).map((source) => (
+                <p key={source.snapshot} className="break-all">
+                  Source SHA-256 for snapshot {source.snapshot}: {source.sha256}
+                </p>
+              ))}
               {evidence.portalKey && evidence.requestId !== null && (
                 <button
                   type="button"

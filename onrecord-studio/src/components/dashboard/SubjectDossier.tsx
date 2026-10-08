@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { invokeCommand } from '../../ipc';
+import { formatNativeError, invokeCommand } from '../../ipc';
 import { useAppStore } from '../../store/useAppStore';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
-import { ShapeGlyph, type GlyphShape } from '../ui/shapeGlyph';
 import type { CorpusEntityNeighborhood, CorpusEntityNode } from '../../types/corpus';
-import type { Finding, FindingSeverity } from '../../types';
+import type { Finding } from '../../types';
+import SeverityGlyph from './SeverityGlyph';
 
 /**
  * The stitched view for one subject. When the user names an entity or types a name into the
@@ -24,7 +24,7 @@ export default function SubjectDossier() {
   const target = useAppStore((state) => state.subjectDossierTarget);
   const clear = useAppStore((state) => state.clearSubjectDossier);
   const open = useAppStore((state) => state.openSubjectDossier);
-  const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
+  const inspect = useAppStore((state) => state.inspect);
 
   const [resolution, setResolution] = useState<Resolution>({ status: 'RESOLVING' });
   const [neighborTotal, setNeighborTotal] = useState<number | null>(null);
@@ -67,7 +67,7 @@ export default function SubjectDossier() {
       })
       .catch((reason) => {
         if (!resolveGate.isCurrent(request)) return;
-        setResolution({ status: 'ERROR', message: String(reason) });
+        setResolution({ status: 'ERROR', message: formatNativeError(reason) });
       });
   }, [resolveGate, target]);
 
@@ -105,7 +105,7 @@ export default function SubjectDossier() {
         })
         .catch((reason) => {
           if (!neighborhoodGate.isCurrent(request)) return;
-          setNeighborhood({ status: 'ERROR', message: String(reason) });
+          setNeighborhood({ status: 'ERROR', message: formatNativeError(reason) });
         });
     },
     [neighborhoodGate],
@@ -118,9 +118,8 @@ export default function SubjectDossier() {
       invokeCommand('list_findings', { filter: null, limit: 200 })
         .then((rows) => {
           if (!findingsGate.isCurrent(request)) return;
-          // The Wave 1 filter has no entityId axis, so we surface findings that name the
-          // subject textually in an explanation or citation quote. This is looser than a
-          // schema-backed join — a namesake match is possible. Label accordingly on screen.
+          // The findings filter has no entity axis, so a finding matches when it names the subject
+          // in its text or a citation. A namesake can match; the section says so.
           const query = (label ?? '').trim().toLocaleLowerCase();
           const matches = query.length > 0
             ? rows.filter((row) => mentionsSubject(row, query))
@@ -129,7 +128,7 @@ export default function SubjectDossier() {
         })
         .catch((reason) => {
           if (!findingsGate.isCurrent(request)) return;
-          setFindings({ status: 'ERROR', message: String(reason) });
+          setFindings({ status: 'ERROR', message: formatNativeError(reason) });
         });
     },
     [findingsGate],
@@ -240,9 +239,7 @@ export default function SubjectDossier() {
                   <DossierFindingRow
                     key={finding.id}
                     finding={finding}
-                    onOpen={() => {
-                      setWorkspaceView('evidence');
-                    }}
+                    onOpen={() => inspect({ kind: 'finding', id: finding.id, label: finding.headline })}
                   />
                 ))}
                 {items.length > 5 && (
@@ -351,7 +348,6 @@ function DossierSection<T>({
 }
 
 function DossierFindingRow({ finding, onOpen }: { finding: Finding; onOpen: () => void }) {
-  const [shape, tone] = severityGlyph(finding.severity);
   return (
     <li>
       <button
@@ -360,11 +356,7 @@ function DossierFindingRow({ finding, onOpen }: { finding: Finding; onOpen: () =
         className="focus-ring flex w-full items-start gap-2 rounded-lg border border-control bg-canvas/40 p-2 text-left transition hover:border-accent/30 hover:bg-accent/5"
         aria-label={`Open finding: ${finding.headline}`}
       >
-        <span aria-hidden="true" className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded ${tone}`}>
-          <svg viewBox="-6 -6 12 12" className="h-3 w-3">
-            <ShapeGlyph shape={shape} cx={0} cy={0} radius={4.5} fill="currentColor" />
-          </svg>
-        </span>
+        <SeverityGlyph severity={finding.severity} className="mt-0.5 h-5 w-5 rounded" />
         <span className="min-w-0 flex-1">
           <span className="block text-label font-semibold text-fg">{finding.headline}</span>
           <span className="mt-0.5 block text-caption text-muted">{finding.explanation}</span>
@@ -386,17 +378,4 @@ function mentionsSubject(finding: Finding, query: string): boolean {
     if (citation.label && citation.label.toLocaleLowerCase().includes(query)) return true;
     return false;
   });
-}
-
-function severityGlyph(severity: FindingSeverity): [GlyphShape, string] {
-  switch (severity) {
-    case 'CRITICAL':
-      return ['diamond', 'text-danger'];
-    case 'SERIOUS':
-      return ['triangle', 'text-warning'];
-    case 'NOTABLE':
-      return ['circle', 'text-accent'];
-    case 'INFO':
-      return ['ring', 'text-muted'];
-  }
 }

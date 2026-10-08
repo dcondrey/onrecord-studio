@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { invokeCommand } from '../../ipc';
+import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type {
   AgendaItemChangeKind,
@@ -139,10 +139,14 @@ function Quote({ citation }: { citation: FindingCitation }) {
 }
 
 function SuggestionDetail({ suggestion, draft, onDraft }: { suggestion: MeetingSuggestion; draft: string; onDraft: (text: string) => void }) {
-  const [copied, setCopied] = useState<string | null>(null);
-  const copy = () => {
-    const id = suggestion.id;
-    void navigator.clipboard?.writeText(draft).then(() => setCopied(id)).catch(() => setCopied(null));
+  const [copy, setCopy] = useState<'idle' | 'copied' | 'blocked'>('idle');
+  const copyDraft = async () => {
+    try {
+      await navigator.clipboard.writeText(draft);
+      setCopy('copied');
+    } catch {
+      setCopy('blocked');
+    }
   };
   return (
     <div className="mt-3 flex flex-col gap-3 rounded-lg border border-line p-3" aria-label={`Suggestion ${suggestion.agendaItem}`}>
@@ -167,8 +171,9 @@ function SuggestionDetail({ suggestion, draft, onDraft }: { suggestion: MeetingS
         />
       </label>
       <div className="flex items-center gap-2">
-        <button type="button" className="analysis-button" onClick={copy}>Copy draft</button>
-        {copied === suggestion.id && <span className="text-label text-success">Copied</span>}
+        <button type="button" className="analysis-button" onClick={() => void copyDraft()}>Copy draft</button>
+        {copy === 'copied' && <span role="status" className="text-label text-success">Copied</span>}
+        {copy === 'blocked' && <span role="status" className="text-label text-warning">Copying was blocked by the system. Select the text above to copy it.</span>}
       </div>
     </div>
   );
@@ -263,7 +268,7 @@ export default function MeetingsView() {
       })
       .catch((reason: unknown) => {
         if (!gate.isCurrent(request)) return;
-        setError(String(reason));
+        setError(formatNativeError(reason));
         setLoading(false);
       });
   }, [gate]);
@@ -297,7 +302,7 @@ export default function MeetingsView() {
           {loading ? 'Reading documents…' : 'Refresh'}
         </button>
       </div>
-      {error && <p className="mt-3 text-label leading-4 text-warning">Meetings unavailable: {error}</p>}
+      {error && <p role="alert" className="mt-3 text-label leading-4 text-warning">Meetings unavailable: {error}</p>}
       {calendar && calendar.meetings.length === 0 && (
         <p className="mt-4 text-label leading-4 text-muted">No agenda, minutes or meeting video has been collected yet.</p>
       )}
@@ -324,7 +329,7 @@ export default function MeetingsView() {
       })}
       {calendar && calendar.limitations.length > 0 && (
         <details className="mt-5 text-label text-muted">
-          <summary className="">Limitations</summary>
+          <summary>Limitations</summary>
           <ul className="mt-1 list-disc pl-4">
             {calendar.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}
           </ul>

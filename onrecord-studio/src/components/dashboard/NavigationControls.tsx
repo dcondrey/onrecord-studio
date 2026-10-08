@@ -61,7 +61,7 @@ export default function NavigationControls() {
   );
 }
 
-function isApplePlatform() {
+export function isApplePlatform() {
   const platform = navigator.platform.toLocaleLowerCase();
   return platform.includes('mac') || navigator.userAgent.toLocaleLowerCase().includes('mac os');
 }

@@ -7,6 +7,7 @@ import type { TopicFindingMatch, TopicPackView, TopicPacksReport, TopicTextCover
 import { buildBriefingMarkdown, TOPIC_BASIS_LABELS, topicBriefingProject } from '../../utils/briefing';
 import { ConfidenceMeter, EvidenceTrace } from '../ui/EvidenceBasis';
 import VerifiableReportExport from './VerifiableReportExport';
+import { downloadText } from './textDownload';
 
 /** `export_verifiable_report` accepts at most this many selected findings. */
 const REPORT_SELECTION_LIMIT = 200;
@@ -85,15 +86,8 @@ function TopicDetail({ topic, report }: { topic: TopicPackView; report: TopicPac
     setSelectedRequest(requestId, portalKey);
     setWorkspaceView('evidence');
   };
-  const exportMarkdown = () => {
-    const markdown = buildBriefingMarkdown(topicBriefingProject(topic));
-    const url = URL.createObjectURL(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }));
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `onrecord-topic-${topic.id}.md`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
+  const exportMarkdown = () =>
+    downloadText(`onrecord-topic-${topic.id}.md`, buildBriefingMarkdown(topicBriefingProject(topic)), 'text/markdown;charset=utf-8');
   const reportIds = topic.findings.slice(0, REPORT_SELECTION_LIMIT).map((match) => match.finding.id);
 
   return (
@@ -119,7 +113,7 @@ function TopicDetail({ topic, report }: { topic: TopicPackView; report: TopicPac
             </div>
             {isTauri() && (
               <div className="mt-2">
-                {topic.findings.length > REPORT_SELECTION_LIMIT && <p className="mb-1 text-muted">The verifiable report holds the {REPORT_SELECTION_LIMIT} highest-ranked findings of this topic; more exist.</p>}
+                {topic.findingTotal > reportIds.length && <p className="mb-1 text-muted">The verifiable report holds the {reportIds.length} highest-ranked of this topic&apos;s {topic.findingTotal} findings.</p>}
                 <VerifiableReportExport findingIds={reportIds} />
               </div>
             )}

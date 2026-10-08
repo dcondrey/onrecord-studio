@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { invokeCommand } from '../../ipc';
+import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type {
   AnalyticalSchema, HybridSearchResult, RecordGapRequestStatus, RequestSearchResult, FilingExplanation, Form990Statement, OrganisationCheckSummary, OrganisationFilings, OrganisationMatch,
@@ -114,6 +114,8 @@ function Audits({ history }: { history: SingleAuditHistory | null }) {
   </div>;
 }
 
+type TrackedState = { status: 'reading' } | { status: 'ready'; value: RecordGapRequestStatus | undefined } | { status: 'failed'; message: string };
+
 /** What the library already holds about the organisation, and the request that would fill what it
  * does not: the same casework path the record gaps use. */
 function Library({ filings }: { filings: OrganisationFilings }) {
@@ -122,43 +124,58 @@ function Library({ filings }: { filings: OrganisationFilings }) {
   const [requests, setRequests] = useState<RequestSearchResult[] | undefined>(undefined);
   const [notes, setNotes] = useState<string[]>([]);
   const [custodianKey, setCustodianKey] = useState('');
-  const [tracked, setTracked] = useState<RecordGapRequestStatus | undefined>(undefined);
+  const [tracked, setTracked] = useState<TrackedState>({ status: 'reading' });
   const [message, setMessage] = useState('');
-  const gate = useLatestRequestGate();
+  // Separate gates: the name search, the tracked-status read and the actions resolve independently,
+  // and one superseding another would leave its section unread forever.
+  const searchGate = useLatestRequestGate();
+  const trackedGate = useLatestRequestGate();
+  const actionGate = useLatestRequestGate();
   const name = filings.name ?? '';
   const custodian = portals.find((portal) => portal.registration.portalKey === custodianKey);
   const input = custodian ? contractFileRequest(filings, custodian.registration.displayName, custodian.registration.portalKey) : undefined;
   useEffect(() => {
     if (!name) return;
-    const request = gate.begin();
+    const request = searchGate.begin();
     const found: string[] = [];
     void Promise.all([
-      invokeCommand('hybrid_search', { query: name, limit: 10 }).then((hits) => Array.isArray(hits) ? hits : [], (reason) => { found.push(`Document search: ${String(reason)}`); return []; }),
-      invokeCommand('query_audit_records_page', { searchTerm: name, pageSize: 10 }).then((page) => Array.isArray(page?.records) ? page.records : [], (reason) => { found.push(`Request search: ${String(reason)}`); return []; }),
-    ]).then(([hits, held]) => { if (!gate.isCurrent(request)) return; setDocuments(hits); setRequests(held); setNotes(found); });
-    return gate.invalidate;
-  }, [gate, name]);
+      invokeCommand('hybrid_search', { query: name, limit: 10 }).then((hits) => Array.isArray(hits) ? hits : [], (reason) => { found.push(`Document search: ${formatNativeError(reason)}`); return []; }),
+      invokeCommand('query_audit_records_page', { searchTerm: name, pageSize: 10 }).then((page) => Array.isArray(page?.records) ? page.records : [], (reason) => { found.push(`Request search: ${formatNativeError(reason)}`); return []; }),
+    ]).then(([hits, held]) => { if (!searchGate.isCurrent(request)) return; setDocuments(hits); setRequests(held); setNotes(found); });
+    return searchGate.invalidate;
+  }, [searchGate, name]);
   const gapKey = input?.gapKey;
-  useEffect(() => {
-    if (!gapKey) { setTracked(undefined); return; }
-    const request = gate.begin();
-    void invokeCommand('get_record_gap_requests', { gapKeys: [gapKey] }).then((statuses) => { if (gate.isCurrent(request)) setTracked(Array.isArray(statuses) ? statuses.find((s) => s.gapKey === gapKey) : undefined); }, () => undefined);
-  }, [gate, gapKey, message]);
+  const readTracked = useCallback(() => {
+    if (!gapKey) return;
+    const request = trackedGate.begin();
+    setTracked({ status: 'reading' });
+    invokeCommand('get_record_gap_requests', { gapKeys: [gapKey] }).then(
+      (statuses) => { if (trackedGate.isCurrent(request)) setTracked({ status: 'ready', value: Array.isArray(statuses) ? statuses.find((s) => s.gapKey === gapKey) : undefined }); },
+      (reason) => { if (trackedGate.isCurrent(request)) setTracked({ status: 'failed', message: formatNativeError(reason) }); },
+    );
+  }, [gapKey, trackedGate]);
+  useEffect(() => { readTracked(); return trackedGate.invalidate; }, [readTracked, trackedGate]);
   const track = () => {
     if (!input) return;
-    const request = gate.begin();
-    invokeCommand('request_record_gap', { input }).then(() => { if (gate.isCurrent(request)) setMessage('Tracked. Record the submission date in casework once you have filed it.'); }, (reason) => { if (gate.isCurrent(request)) setMessage(String(reason)); });
+    const request = actionGate.begin();
+    invokeCommand('request_record_gap', { input }).then(() => {
+      if (!actionGate.isCurrent(request)) return;
+      setMessage('Tracked. Record the submission date in casework once you have filed it.');
+      readTracked();
+    }, (reason) => { if (actionGate.isCurrent(request)) setMessage(formatNativeError(reason)); });
   };
   const collect = () => {
     if (!custodian || !name) return;
-    const request = gate.begin();
+    const request = actionGate.begin();
     invokeCommand('start_data_source', { url: custodian.registration.originUrl, guidance: guidanceForSubject(name) })
-      .then(() => { if (gate.isCurrent(request)) setMessage(`Collection started from ${custodian.registration.displayName} for "${name}"; the source is listed in the sidebar. The lists above are read again when you reopen this organisation.`); }, (reason) => { if (gate.isCurrent(request)) setMessage(String(reason)); });
+      .then(() => { if (actionGate.isCurrent(request)) setMessage(`Collection started from ${custodian.registration.displayName} for "${name}"; the source is listed in the sidebar. The lists above are read again when you reopen this organisation.`); }, (reason) => { if (actionGate.isCurrent(request)) setMessage(formatNativeError(reason)); });
   };
   const date = (value: string | null) => value ? value.slice(0, 10) : '';
+  const trackedRequest = tracked.status === 'ready' ? tracked.value : undefined;
   return <section aria-label="In your library" className="space-y-3">
     <h3 className="text-sm font-semibold text-fg">In your library</h3>
     {notes.map((note) => <p key={note} className="text-label leading-4 text-warning">{note}</p>)}
+    {name && documents === undefined && <p role="status" className="text-label leading-4 text-muted">Searching your library for this name…</p>}
     <div className="grid gap-4 sm:grid-cols-2">
       <div>
         <h4 className="text-label leading-4 text-muted">Documents that mention the name{documents ? ` (${documents.length}${documents.length === 10 ? ', first 10' : ''})` : ''}</h4>
@@ -174,13 +191,17 @@ function Library({ filings }: { filings: OrganisationFilings }) {
     <div className="rounded-lg border border-line-strong p-3 space-y-2">
       <h4 className="text-label leading-4 text-fg">The contract file</h4>
       <p className="text-label leading-4 text-muted">Filings and payment rows do not show what an agency contracted for, paid against, or found in monitoring. Choose the agency, then either collect what its request portal already released under this name, or track a drafted request for its contract file; you review and file it yourself.</p>
-      <label className="text-label leading-4 text-fg-secondary">Agency<select className="analysis-input ml-2" value={custodianKey} onChange={(event) => { setCustodianKey(event.target.value); setMessage(''); }}><option value="">Choose a saved source</option>{portals.map((portal) => <option key={portal.registration.portalKey} value={portal.registration.portalKey}>{portal.registration.displayName}</option>)}</select></label>
+      <label className="text-label leading-4 text-fg-secondary">Agency<select className="analysis-input ml-2" value={custodianKey} onChange={(event) => { actionGate.invalidate(); setCustodianKey(event.target.value); setMessage(''); }}><option value="">Choose a saved source</option>{portals.map((portal) => <option key={portal.registration.portalKey} value={portal.registration.portalKey}>{portal.registration.displayName}</option>)}</select></label>
       {portals.length === 0 && <p className="text-label leading-4 text-muted">No source is saved yet; add the agency's request portal in the sidebar first.</p>}
       {custodian && name && <button type="button" className="analysis-button" onClick={collect}>Search {custodian.registration.displayName} for this name</button>}
       {input && <details className="text-label leading-4"><summary className="text-accent">Drafted request</summary><pre className="mt-2 whitespace-pre-wrap text-fg-secondary">{input.draft}</pre></details>}
-      {input && (tracked
-        ? <p className="text-label leading-4 text-fg-secondary">Tracked as a casework request{tracked.submittedAt ? `, submitted ${date(tracked.submittedAt)}` : '; no submission date is recorded yet'}. <button type="button" className="text-accent underline" onClick={() => useAppStore.getState().openCasework(tracked.reportId)}>Open casework</button></p>
-        : <button type="button" className="analysis-button" onClick={track}>Track this request</button>)}
+      {input && (tracked.status === 'reading'
+        ? <p role="status" className="text-label leading-4 text-muted">Checking whether this request is already tracked…</p>
+        : tracked.status === 'failed'
+          ? <p role="alert" className="text-label leading-4 text-warning">Whether this request is already tracked could not be read: {tracked.message}</p>
+          : trackedRequest
+            ? <p className="text-label leading-4 text-fg-secondary">Tracked as a casework request{trackedRequest.submittedAt ? `, submitted ${date(trackedRequest.submittedAt)}` : '; no submission date is recorded yet'}. <button type="button" className="text-accent underline" onClick={() => useAppStore.getState().openCasework(trackedRequest.reportId)}>Open casework</button></p>
+            : <button type="button" className="analysis-button" onClick={track}>Track this request</button>)}
       {message && <p role="status" className="text-label leading-4 text-muted">{message}</p>}
     </div>
   </section>;
@@ -265,7 +286,7 @@ function BatchCheck({ auditKey, onDone }: { auditKey: string; onDone: () => void
       const added = payees.map((p) => p.vendorValue).filter((value) => !held.has(normalisedName(value)));
       setText((current) => [current.trimEnd(), ...added].filter(Boolean).join('\n'));
       if (!payees.length) setError('No payee is listed: map a payment table under "Tables searched for payments" first.');
-    }, (reason) => { if (gate.isCurrent(request)) setError(String(reason)); })
+    }, (reason) => { if (gate.isCurrent(request)) setError(formatNativeError(reason)); })
       .finally(() => { if (gate.isCurrent(request)) setBusy(''); });
   };
   const lookUp = async () => {
@@ -277,7 +298,7 @@ function BatchCheck({ auditKey, onDone }: { auditKey: string; onDone: () => void
         const candidates = (await invokeCommand('search_organisations', { query: entry })).slice(0, 5);
         const exact = candidates.filter((c) => normalisedName(c.name) === normalisedName(entry));
         found.push({ entry, candidates, chosen: exact.length === 1 ? exact[0] : null });
-      } catch (reason) { found.push({ entry, candidates: [], chosen: null }); setError(`${entry}: ${String(reason)}`); }
+      } catch (reason) { found.push({ entry, candidates: [], chosen: null }); setError(`${entry}: ${formatNativeError(reason)}`); }
       if (!gate.isCurrent(request)) return;
       setResolutions([...found]);
     }
@@ -289,7 +310,7 @@ function BatchCheck({ auditKey, onDone }: { auditKey: string; onDone: () => void
     setBusy('check'); setProgress({ done: 0, total: targets.length, failed });
     for (const [index, ein] of targets.entries()) {
       try { await invokeCommand('check_organisation_filings', { ein, auditKey: auditKey.trim() || null }); }
-      catch (reason) { failed.push(`${ein}: ${String(reason)}`); }
+      catch (reason) { failed.push(`${ein}: ${formatNativeError(reason)}`); }
       if (!gate.isCurrent(request)) return;
       setProgress({ done: index + 1, total: targets.length, failed: [...failed] });
     }
@@ -332,7 +353,7 @@ function Portfolio({ rows, onOpen }: { rows: PortfolioRow[]; onOpen: (row: Portf
       if (!outputPath) return;
       await invokeCommand('export_organisation_portfolio_csv', { outputPath, content: portfolioCsv(rows) });
       setMessage(`Written to ${outputPath}.`);
-    } catch (reason) { setMessage(String(reason)); }
+    } catch (reason) { setMessage(formatNativeError(reason)); }
   };
   return <section aria-label="Checked organisations" className="space-y-2">
     <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold text-fg">Checked organisations</h3><button type="button" className="analysis-button" onClick={() => { void exportCsv(); }}>Export CSV</button></div>
@@ -351,7 +372,7 @@ function Portfolio({ rows, onOpen }: { rows: PortfolioRow[]; onOpen: (row: Portf
   </section>;
 }
 
-function PaymentTables({ schema, mappings, onChange }: { schema: AnalyticalSchema | undefined; mappings: OrganisationPaymentMapping[]; onChange: (mappings: OrganisationPaymentMapping[]) => void }) {
+function PaymentTables({ schema, loadError, mappings, onChange }: { schema: AnalyticalSchema | undefined; loadError: string; mappings: OrganisationPaymentMapping[]; onChange: (mappings: OrganisationPaymentMapping[]) => void }) {
   const [snapshotId, setSnapshotId] = useState('');
   const [vendorColumn, setVendorColumn] = useState('');
   const [amountColumn, setAmountColumn] = useState('');
@@ -363,7 +384,7 @@ function PaymentTables({ schema, mappings, onChange }: { schema: AnalyticalSchem
   const columns = dataset ? (schema?.columns ?? []).filter((c) => c.tableName === dataset.tableName).map((c) => c.columnName) : [];
   const run = (work: Promise<OrganisationPaymentMapping[]>) => {
     const request = gate.begin();
-    work.then((saved) => { if (gate.isCurrent(request)) { onChange(saved); setError(''); } }, (reason) => { if (gate.isCurrent(request)) setError(String(reason)); });
+    work.then((saved) => { if (gate.isCurrent(request)) { onChange(saved); setError(''); } }, (reason) => { if (gate.isCurrent(request)) setError(formatNativeError(reason)); });
   };
   const nameOf = (id: string) => datasets.find((d) => d.snapshotId === id)?.displayName ?? id;
   return <details className="rounded-lg border border-line-strong p-3">
@@ -371,7 +392,9 @@ function PaymentTables({ schema, mappings, onChange }: { schema: AnalyticalSchem
     <p className="mt-2 text-label leading-4 text-muted">A table you imported in Analysis that lists payees and amounts, such as a contract or grant payment list, is searched by the organisation's name once you name its columns here. Contract, amendment and payment tables mapped under Spending and outcomes are searched as well.</p>
     {mappings.length > 0 && <ul className="mt-2 space-y-1 text-label leading-4 text-fg-secondary">{mappings.map((mapping) => <li key={mapping.snapshotId}>{nameOf(mapping.snapshotId)}: vendor {mapping.vendorColumn}, amount {mapping.amountColumn}{mapping.fiscalYearColumn ? `, fiscal year ${mapping.fiscalYearColumn}` : ''} <button type="button" className="text-accent underline" onClick={() => run(invokeCommand('remove_organisation_payment_mapping', { snapshotId: mapping.snapshotId }))}>Remove</button></li>)}</ul>}
     {error && <p role="alert" className="mt-2 text-label leading-4 text-danger">{error}</p>}
-    {datasets.length === 0 ? <p className="mt-2 text-label leading-4 text-muted">No table has been imported in Analysis yet.</p>
+    {loadError && <p role="alert" className="mt-2 text-label leading-4 text-warning">{loadError}</p>}
+    {schema === undefined ? (!loadError && <p role="status" className="mt-2 text-label leading-4 text-muted">Reading imported tables…</p>)
+      : datasets.length === 0 ? <p className="mt-2 text-label leading-4 text-muted">No table has been imported in Analysis yet.</p>
       : <form className="mt-3 flex flex-wrap items-end gap-3" onSubmit={(event) => { event.preventDefault(); run(invokeCommand('save_organisation_payment_mapping', { mapping: { snapshotId, vendorColumn, amountColumn, fiscalYearColumn: fiscalYearColumn || null } })); }}>
         <label className="text-label leading-4 text-fg-secondary">Table<select className="analysis-input mt-1 block" value={snapshotId} onChange={(e) => { setSnapshotId(e.target.value); setVendorColumn(''); setAmountColumn(''); setFiscalYearColumn(''); }}><option value="">Choose a table</option>{datasets.map((d) => <option key={d.snapshotId} value={d.snapshotId}>{d.displayName}</option>)}</select></label>
         {([['Payee or vendor column', vendorColumn, setVendorColumn, true], ['Amount column', amountColumn, setAmountColumn, true], ['Fiscal year column (optional)', fiscalYearColumn, setFiscalYearColumn, false]] as const).map(([label, value, set, required]) =>
@@ -391,6 +414,8 @@ export default function OrganisationFilingsPanel({ initialQuery = '' }: { initia
   const [portfolio, setPortfolio] = useState<PortfolioRow[]>([]);
   const [mappings, setMappings] = useState<OrganisationPaymentMapping[]>([]);
   const [schema, setSchema] = useState<AnalyticalSchema | undefined>(undefined);
+  const [tablesError, setTablesError] = useState('');
+  const [listError, setListError] = useState('');
   const [selected, setSelected] = useState<{ ein: string; name: string | null } | undefined>(undefined);
   const [filings, setFilings] = useState<OrganisationFilings | null | undefined>(undefined);
   const [busy, setBusy] = useState<'search' | 'load' | 'check' | ''>('');
@@ -401,21 +426,25 @@ export default function OrganisationFilingsPanel({ initialQuery = '' }: { initia
 
   // The portfolio is read from stored records only; a check that is still running is not in it
   // until it is saved and this runs again.
-  const loadChecked = useCallback(() => {
+  const loadChecked = useCallback(async () => {
     const request = listGate.begin();
-    invokeCommand('list_organisation_checks', {}).then(async (list) => {
+    try {
+      const list = await invokeCommand('list_organisation_checks', {});
       if (!listGate.isCurrent(request)) return;
       setChecked(list);
       const records = await Promise.all(list.map((item) => invokeCommand('get_organisation_filings', { ein: item.ein })));
       if (!listGate.isCurrent(request)) return;
       setPortfolio(records.flatMap((record) => record ? [portfolioRow(record)] : []));
-    }, () => undefined);
+      setListError('');
+    } catch (reason) {
+      if (listGate.isCurrent(request)) setListError(formatNativeError(reason));
+    }
   }, [listGate]);
-  useEffect(() => { loadChecked(); return listGate.invalidate; }, [listGate, loadChecked]);
+  useEffect(() => { void loadChecked(); return listGate.invalidate; }, [listGate, loadChecked]);
   useEffect(() => {
     let current = true;
-    void invokeCommand('list_organisation_payment_mappings', {}).then((saved) => { if (current) setMappings(saved); }, () => undefined);
-    void invokeCommand('get_analytical_schema', {}).then((read) => { if (current) setSchema(read); }, () => undefined);
+    void invokeCommand('list_organisation_payment_mappings', {}).then((saved) => { if (current) setMappings(saved); }, (reason) => { if (current) setTablesError(`Payee tables could not be read: ${formatNativeError(reason)}`); });
+    void invokeCommand('get_analytical_schema', {}).then((read) => { if (current) setSchema(read); }, (reason) => { if (current) setTablesError(`Imported tables could not be read: ${formatNativeError(reason)}`); });
     return () => { current = false; };
   }, []);
 
@@ -430,8 +459,8 @@ export default function OrganisationFilingsPanel({ initialQuery = '' }: { initia
     pending.then((result) => {
       if (!recordGate.isCurrent(request)) return;
       setFilings(result);
-      if (work === 'check') loadChecked();
-    }, (reason) => { if (recordGate.isCurrent(request)) setError(String(reason)); })
+      if (work === 'check') void loadChecked();
+    }, (reason) => { if (recordGate.isCurrent(request)) setError(formatNativeError(reason)); })
       .finally(() => { if (recordGate.isCurrent(request)) setBusy(''); });
   };
 
@@ -441,7 +470,7 @@ export default function OrganisationFilingsPanel({ initialQuery = '' }: { initia
     const request = searchGate.begin();
     setBusy('search'); setError('');
     invokeCommand('search_organisations', { query: text }).then((found) => { if (searchGate.isCurrent(request)) setMatches(found); },
-      (reason) => { if (searchGate.isCurrent(request)) setError(String(reason)); })
+      (reason) => { if (searchGate.isCurrent(request)) setError(formatNativeError(reason)); })
       .finally(() => { if (searchGate.isCurrent(request)) setBusy((current) => current === 'search' ? '' : current); });
   };
 
@@ -467,8 +496,9 @@ export default function OrganisationFilingsPanel({ initialQuery = '' }: { initia
       {matches.map((match) => <li key={match.ein}><button type="button" className="text-left text-label leading-4 text-accent underline" onClick={() => show(match, 'load')}>{match.name}</button><span className="text-label leading-4 text-muted"> {[match.city, match.state].filter(Boolean).join(', ')} · EIN {match.ein}</span></li>)}
       {matches.length > 0 && <li className="text-label leading-4 text-muted">Name search by ProPublica Nonprofit Explorer.</li>}
     </ul>}
-    <BatchCheck auditKey={auditKey} onDone={loadChecked} />
-    <PaymentTables schema={schema} mappings={mappings} onChange={(saved) => { setMappings(saved); loadChecked(); if (selected && filings) show(selected, 'load'); }} />
+    <BatchCheck auditKey={auditKey} onDone={() => void loadChecked()} />
+    <PaymentTables schema={schema} loadError={tablesError} mappings={mappings} onChange={(saved) => { setMappings(saved); void loadChecked(); if (selected && filings) show(selected, 'load'); }} />
+    {listError && <p role="alert" className="text-label leading-4 text-warning">Checked organisations could not be read: {listError}</p>}
     <Portfolio rows={portfolio} onOpen={(row) => show({ ein: row.ein, name: row.name }, 'load')} />
     {checked.length > 0 && portfolio.length === 0 && <div className="flex flex-wrap items-center gap-2 text-label leading-4"><span className="text-muted">Checked before:</span>{checked.map((item) => <button type="button" key={item.ein} className="rounded border border-control px-2 py-1 text-fg-secondary" onClick={() => show(item, 'load')}>{item.name ?? item.ein}</button>)}</div>}
     {selected && <div className="space-y-4 border-t border-line-strong pt-4">

@@ -62,7 +62,7 @@ export default function RegistrySnapshots() {
               </div>
               <p className="mt-1 break-all">
                 {snapshots === null
-                  ? 'Reading snapshots.'
+                  ? error ? 'Imported snapshots could not be read.' : 'Reading snapshots.'
                   : snapshot
                     ? `${describeSnapshot(snapshot)}${snapshot.skippedRowCount > 0 ? `; ${snapshot.skippedRowCount.toLocaleString('en-US')} rows skipped (no usable number or a repeat)` : ''}. Source: ${snapshot.sourcePath}`
                     : 'No snapshot imported. Licence numbers are shown as not checked.'}

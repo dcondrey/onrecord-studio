@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { invokeCommand } from '../../ipc';
+import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
 import { guidanceForSubject } from '../../utils/sourceGuidance';
@@ -22,7 +22,7 @@ export default function RecordGaps({ gaps }: { gaps: RecordGap[] }) {
     invokeCommand('get_record_gap_requests', { gapKeys: JSON.parse(signature) as string[] }).then((statuses) => {
       if (!gate.isCurrent(request)) return;
       setTracked(statuses); setError('');
-    }, (reason) => { if (gate.isCurrent(request)) setError(String(reason)); });
+    }, (reason) => { if (gate.isCurrent(request)) setError(formatNativeError(reason)); });
   }, [gate, signature]);
   useEffect(() => { load(); return gate.invalidate; }, [gate, load]);
   // The source's own name when it is a saved source; otherwise its host. Never a guess at an agency.
@@ -49,15 +49,14 @@ function RecordGapRow({ gap, custodian, tracked, onTracked }: { gap: RecordGap; 
   const [error, setError] = useState('');
   const gate = useLatestRequestGate();
   const input = gapRequestInput(gap, custodian);
-  const run = (work: () => Promise<string>) => {
+  const run = (work: (request: number) => Promise<string>) => {
     const request = gate.begin();
     setBusy(true); setError(''); setMessage('');
-    work().then((done) => { if (gate.isCurrent(request)) setMessage(done); }, (reason) => { if (gate.isCurrent(request)) setError(String(reason)); })
+    work(request).then((done) => { if (gate.isCurrent(request)) setMessage(done); }, (reason) => { if (gate.isCurrent(request)) setError(formatNativeError(reason)); })
       .finally(() => { if (gate.isCurrent(request)) setBusy(false); });
-    return request;
   };
   const searchHeld = () => {
-    const request = run(async () => {
+    run(async (request) => {
       const found = new Map<string, RequestSearchResult>();
       for (const term of gap.definition.searchTerms) {
         const page = await invokeCommand('query_audit_records_page', { searchTerm: term, pageSize: SEARCHED_PER_TERM });

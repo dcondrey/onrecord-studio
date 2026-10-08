@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { Form990Statement, OrganisationFilings } from '../types';
 
 const bridge = vi.hoisted(() => ({ invoke: vi.fn(), open: vi.fn() }));
-vi.mock('../ipc', () => ({ invokeCommand: bridge.invoke }));
+vi.mock('../ipc', async (importOriginal) => ({ ...(await importOriginal<typeof import('../ipc')>()), invokeCommand: bridge.invoke }));
 vi.mock('../store/useAppStore', () => ({ useAppStore: Object.assign((selector: (s: unknown) => unknown) => selector({ portals: [{ registration: { portalKey: 'sdhc', displayName: 'San Diego Housing Commission', originUrl: 'https://sdhc.test', canonicalUrl: 'https://sdhc.test/requests' } }] }), { getState: () => ({ openCasework: bridge.open }) }) }));
 import OrganisationFilingsPanel from '../components/dashboard/OrganisationFilingsPanel';
 
@@ -93,7 +93,7 @@ describe('organisation filings', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Check 3 organisations' }));
     await screen.findByText(/3 of 3 checked, 1 failed/);
     expect(checked).toEqual(['222222222', '330215585', '330580463']);
-    expect(screen.getByText(/222222222: Error: index unread/)).toBeTruthy();
+    expect(screen.getByText(/222222222: index unread/)).toBeTruthy();
     expect(lists).toBe(2);
   });
 
@@ -114,7 +114,7 @@ describe('organisation filings', () => {
     await open('111111111');
     expect(await screen.findByText('Services agreement')).toBeTruthy();
     expect(screen.getByText('First Organisation shall provide outreach.')).toBeTruthy();
-    expect(screen.getByText(/Request search: Error: no request index/)).toBeTruthy();
+    expect(screen.getByText(/Request search: no request index/)).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Agency'), { target: { value: 'sdhc' } });
     fireEvent.click(await screen.findByRole('button', { name: 'Search San Diego Housing Commission for this name' }));
     await screen.findByText(/Collection started from San Diego Housing Commission for "First Organisation"/);
@@ -124,6 +124,22 @@ describe('organisation filings', () => {
     expect(trackedInput).toMatchObject({ gapKey: 'organisation:111111111:contract-file:sdhc', custodian: 'San Diego Housing Commission' });
     fireEvent.click(await screen.findByRole('button', { name: 'Open casework' }));
     expect(bridge.open).toHaveBeenCalledWith('lead:x');
+  });
+
+  it('keeps the library search that was in flight when an agency is chosen', async () => {
+    let resolveSearch: (hits: unknown[]) => void = () => {};
+    bridge.invoke.mockImplementation((name: string) => {
+      if (name === 'get_analytical_schema') return Promise.resolve({ datasets: [], columns: [], templates: [] });
+      if (name === 'hybrid_search') return new Promise((resolve) => { resolveSearch = resolve; });
+      if (name === 'get_organisation_filings') return Promise.resolve(filings('111111111', 'First Organisation'));
+      return Promise.resolve([]);
+    });
+    render(<OrganisationFilingsPanel />);
+    await open('111111111');
+    fireEvent.change(await screen.findByLabelText('Agency'), { target: { value: 'sdhc' } });
+    await screen.findByRole('button', { name: 'Track this request' });
+    await act(async () => resolveSearch([{ stableId: 'd1', portalKey: 'sdhc', requestId: 1, documentId: 2, fileName: 'contract.pdf', title: 'Services agreement', agencyName: 'San Diego Housing Commission', jurisdiction: 'CA', documentType: null, publicationDate: null, observationDate: null, effectiveDate: null, characterStart: 0, characterEnd: 10, excerpt: '' }]));
+    expect(screen.getByText('Services agreement')).toBeTruthy();
   });
 
   it('looks a vendor value handed over from another view up as soon as it opens', async () => {

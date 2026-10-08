@@ -3,7 +3,7 @@
 // A lead list requested before a findings refresh must not render after the refreshed list: the
 // desk would rank stale findings under a "refreshed" heading.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { StoryLead } from '../types';
 
 // Node 26's flag-gated `localStorage` shadows jsdom's, so replace it before the store import.
@@ -27,6 +27,7 @@ vi.hoisted(() => {
 const bridge = vi.hoisted(() => ({
   pending: [] as ((leads: unknown) => void)[],
   availabilityRequests: [] as string[],
+  findings: null as ((rows: unknown) => void) | null,
   discovery: { controller: null, state: null } as { controller: null; state: unknown },
 }));
 
@@ -43,6 +44,7 @@ vi.mock('../ipc', () => ({
       bridge.availabilityRequests.push(args?.findingId ?? '');
       return Promise.resolve({ followup: true, appeal: false });
     }
+    if (command === 'list_findings') return new Promise((resolve) => { bridge.findings = resolve; });
     if (command !== 'list_story_leads') return Promise.resolve([]);
     return new Promise((resolve) => bridge.pending.push(resolve));
   },
@@ -78,6 +80,7 @@ afterEach(() => {
   cleanup();
   bridge.pending = [];
   bridge.availabilityRequests = [];
+  bridge.findings = null;
   bridge.discovery = { controller: null, state: null };
 });
 
@@ -101,7 +104,7 @@ describe('StoryDesk', () => {
     await screen.findByText('Stated total does not match the table');
     expect(screen.getByLabelText('Attention score').textContent).toBe('52.0');
     expect(screen.getByText(/largest figure named/)).toBeTruthy();
-    expect(screen.getByText(/pattern signal/)).toBeTruthy();
+    expect(screen.getByText(/pattern signal/i)).toBeTruthy();
     expect(screen.getByText(/1 related finding/)).toBeTruthy();
   });
 
@@ -190,5 +193,18 @@ describe('StoryDesk', () => {
     });
     expect(screen.queryByText('Stale lead')).toBeNull();
     expect(screen.getByText('Fresh lead')).toBeTruthy();
+  });
+
+  it('finishes a briefing add that was in flight when the leads were refreshed', async () => {
+    render(<StoryDesk />);
+    await waitFor(() => expect(bridge.pending).toHaveLength(1));
+    act(() => bridge.pending[0]([lead('kept', 'Kept lead')]));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add to briefing' }));
+    await waitFor(() => expect(bridge.findings).not.toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await waitFor(() => expect(bridge.pending).toHaveLength(2));
+    act(() => bridge.pending[1]([lead('kept', 'Kept lead')]));
+    await act(async () => bridge.findings!([{ id: 'kept', headline: 'Kept lead', explanation: 'x', citations: [], subject: { portalKey: 'sd-city', requestId: 7, documentId: 3 } }]));
+    expect(await screen.findByText('Added to the briefing: Kept lead')).toBeTruthy();
   });
 });

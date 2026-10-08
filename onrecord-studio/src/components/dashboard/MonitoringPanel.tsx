@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { invokeCommand } from '../../ipc';
+import { useCallback, useEffect, useState } from 'react';
+import { formatNativeError, invokeCommand } from '../../ipc';
+import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { CoverageExpectation, MonitoringEvidence, MonitoringStatus, ServiceObservation } from '../../types/monitoring';
 import { citationLocation, observationPoints, optionalMeasurement } from '../../utils/monitoring';
 
@@ -7,7 +8,7 @@ const inputClass = 'w-full rounded-lg border border-line-strong bg-canvas p-2 te
 const panelClass = 'rounded-xl border border-line-strong bg-canvas/40 p-4';
 
 function Citation({ source }: { source: MonitoringEvidence }) {
-  return <details className="mt-2 text-label leading-4 text-muted"><summary className="">Inspect source and identity</summary>
+  return <details className="mt-2 text-label leading-4 text-muted"><summary>Inspect source and identity</summary>
     <a className="mt-2 block text-accent underline" href={source.sourceUrl} target="_blank" rel="noreferrer">{source.title}</a>
     <p className="mt-1">{citationLocation(source)} · SHA-256 {source.sourceSha256.slice(0, 16)}…</p>
     <blockquote className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap border-l-2 border-line-strong pl-3 text-fg-secondary">{source.quote}</blockquote>
@@ -24,53 +25,41 @@ export default function MonitoringPanel({ caseId = null, topic = 'homelessness' 
   const [newObservation, setNewObservation] = useState(false);
   const [selectedObservation, setSelectedObservation] = useState<string | null>(null);
   const [dateFrom, setDateFrom] = useState(''); const [dateTo, setDateTo] = useState('');
-  const identity = `${topic}:${caseId ?? ''}`;
-  const identityRef = useRef(identity); identityRef.current = identity;
-  const generation = useRef(0);
+  // Every read and save begins a request on one gate, and the effect below begins a new one
+  // whenever the case or topic changes, so a result for the previous case is never written.
+  const gate = useLatestRequestGate();
 
-  async function load(refresh = false) {
-    const requestedIdentity = identityRef.current; const requestedGeneration = ++generation.current;
+  const load = useCallback(async (refresh = false) => {
+    const request = gate.begin();
     setBusy(true); setError(null);
     try {
       const next = await invokeCommand(refresh ? 'refresh_monitoring_now' : 'get_monitoring_status', { topic, caseId });
-      if (identityRef.current !== requestedIdentity || generation.current !== requestedGeneration) return;
-      setStatus(next);
+      if (gate.isCurrent(request)) setStatus(next);
     } catch (failure) {
-      if (identityRef.current !== requestedIdentity || generation.current !== requestedGeneration) return;
-      setError(String(failure));
+      if (gate.isCurrent(request)) setError(formatNativeError(failure));
     } finally {
-      if (identityRef.current === requestedIdentity && generation.current === requestedGeneration) setBusy(false);
+      if (gate.isCurrent(request)) setBusy(false);
     }
-  }
+  }, [caseId, gate, topic]);
 
   useEffect(() => {
-    setStatus(null); setError(null); setNewCoverage(false); setNewObservation(false); setSelectedObservation(null);
-    const requestedIdentity = identity; const requestedGeneration = ++generation.current;
-    setBusy(true);
-    void invokeCommand('get_monitoring_status', { topic, caseId }).then(next => {
-      if (identityRef.current !== requestedIdentity || generation.current !== requestedGeneration) return;
-      setStatus(next);
-    }).catch(failure => {
-      if (identityRef.current !== requestedIdentity || generation.current !== requestedGeneration) return;
-      setError(String(failure));
-    }).finally(() => {
-      if (identityRef.current === requestedIdentity && generation.current === requestedGeneration) setBusy(false);
-    });
-    return () => { generation.current += 1; };
-  }, [identity, topic, caseId]);
+    setStatus(null); setNewCoverage(false); setNewObservation(false); setSelectedObservation(null);
+    void load();
+    return gate.invalidate;
+  }, [gate, load]);
 
   async function save(kind: 'coverage' | 'observation', value: CoverageExpectation | ServiceObservation) {
-    const requestedIdentity = identityRef.current; const requestedGeneration = ++generation.current;
+    const request = gate.begin();
     setBusy(true); setError(null);
     try {
       if (kind === 'coverage') await invokeCommand('save_monitoring_coverage', { expectation: value as CoverageExpectation });
       else await invokeCommand('save_monitoring_observation', { observation: value as ServiceObservation });
-      if (identityRef.current !== requestedIdentity || generation.current !== requestedGeneration) return;
+      if (!gate.isCurrent(request)) return;
       setNewCoverage(false); setNewObservation(false);
       await load();
     } catch (failure) {
-      if (identityRef.current !== requestedIdentity || generation.current !== requestedGeneration) return;
-      setError(String(failure)); setBusy(false);
+      if (!gate.isCurrent(request)) return;
+      setError(formatNativeError(failure)); setBusy(false);
     }
   }
 
@@ -112,7 +101,7 @@ export default function MonitoringPanel({ caseId = null, topic = 'homelessness' 
       {status.comparisons.map((comparison, index) => <article className={panelClass} key={`${comparison.kind}:${index}`}><h4 className="font-semibold text-fg">{comparison.title}</h4><p className="mt-2 text-sm text-accent">{comparison.calculation}</p><p className="mt-2 text-sm text-fg-secondary">{comparison.implication}</p><p className="mt-2 text-label leading-4 text-muted">{comparison.limitations.join(' ')}</p>{comparison.observationIds.map(id => { const observation = status.observations.find(o => o.id === id); return observation ? <Citation key={id} source={observation.evidence} /> : null; })}</article>)}
       <div className="max-h-[36rem] space-y-3 overflow-auto">{observations.map(observation => <article className={panelClass} key={observation.id}><div className="text-label leading-4 text-muted">{observation.kind} · {observation.observedOn} · {observation.reviewed ? 'Reviewed for comparison' : 'Needs review'}</div><h4 className="mt-1 font-semibold text-fg">{observation.place}</h4><p className="mt-1 text-label leading-4 text-muted">Hours/week: {observation.hoursPerWeek ?? 'Unknown'} · Coordinates: {observation.latitude === null ? 'Unknown' : `${observation.latitude}, ${observation.longitude}`} · {observation.status}</p><Citation source={observation.evidence} /><button disabled={busy || observation.status === 'SOURCE_CHANGED'} className="analysis-button mt-3" onClick={() => void save('observation', { ...observation, caseId, topic, reviewed: !observation.reviewed })}>{observation.reviewed ? 'Exclude from comparisons' : 'Confirm source and include in this case'}</button></article>)}</div>
     </div>}
-    {status && <details className="mt-4 text-label leading-4 text-muted"><summary className="">Coverage and interpretation limits</summary>{status.limitations.map(limit => <p className="mt-2" key={limit}>{limit}</p>)}</details>}
+    {status && <details className="mt-4 text-label leading-4 text-muted"><summary>Coverage and interpretation limits</summary>{status.limitations.map(limit => <p className="mt-2" key={limit}>{limit}</p>)}</details>}
   </section>;
 }
 
@@ -126,7 +115,7 @@ function CoverageForm({ caseId, topic, busy, onSave }: { caseId: string | null; 
 function ObservationForm({ topic, caseId, sources, busy, onSave }: { topic: string; caseId: string | null; sources: MonitoringEvidence[]; busy: boolean; onSave: (value: ServiceObservation) => void }) {
   const [sourceIndex, setSourceIndex] = useState(0); const [error, setError] = useState<string | null>(null);
   const source = sources[sourceIndex];
-  return <form className={`${panelClass} grid gap-3 md:grid-cols-2`} onSubmit={event => { event.preventDefault(); if (!source) return; const data = new FormData(event.currentTarget); const get = (key: string) => String(data.get(key) ?? '').trim(); try { onSave({ id: '', caseId, topic, kind: get('kind'), place: get('place'), observedOn: get('date'), latitude: optionalMeasurement(get('latitude')), longitude: optionalMeasurement(get('longitude')), hoursPerWeek: optionalMeasurement(get('hours')), status: get('status') || 'NOT_RECORDED', evidence: source, reviewed: true }); } catch (failure) { setError(String(failure)); } }}>
+  return <form className={`${panelClass} grid gap-3 md:grid-cols-2`} onSubmit={event => { event.preventDefault(); if (!source) return; const data = new FormData(event.currentTarget); const get = (key: string) => String(data.get(key) ?? '').trim(); try { onSave({ id: '', caseId, topic, kind: get('kind'), place: get('place'), observedOn: get('date'), latitude: optionalMeasurement(get('latitude')), longitude: optionalMeasurement(get('longitude')), hoursPerWeek: optionalMeasurement(get('hours')), status: get('status') || 'NOT_RECORDED', evidence: source, reviewed: true }); } catch (failure) { setError(formatNativeError(failure)); } }}>
     <label className="text-label leading-4 text-muted md:col-span-2">Supporting public record<select className={inputClass} value={sourceIndex} onChange={event => setSourceIndex(Number(event.target.value))}>{sources.map((candidate, index) => <option value={index} key={`${candidate.portalKey}:${candidate.documentId}`}>{candidate.title}</option>)}</select></label>
     {source && <div className="md:col-span-2"><Citation source={source} /></div>}
     <label className="text-label leading-4 text-muted">Observation type<select name="kind" className={inputClass}><option value="FACILITY">Public facility access</option><option value="OPERATION">Documented operation</option><option value="OBSERVATION">Other observation / report</option></select></label>

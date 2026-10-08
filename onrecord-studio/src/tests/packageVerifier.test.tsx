@@ -5,7 +5,7 @@ import PackageVerifier from '../components/dashboard/PackageVerifier';
 import type { PackageVerificationResult } from '../types/investigation';
 
 const invoke = vi.hoisted(() => vi.fn());
-vi.mock('../ipc', () => ({ invokeCommand: invoke }));
+vi.mock('../ipc', async (importOriginal) => ({ ...(await importOriginal<typeof import('../ipc')>()), invokeCommand: invoke }));
 afterEach(() => { cleanup(); invoke.mockReset(); });
 
 const passing = (): PackageVerificationResult => ({
@@ -90,30 +90,20 @@ describe('PackageVerifier', () => {
     expect(screen.queryByText(/Overall:/)).toBeNull();
   });
 
-  it('renders a retired signer as informational and PASS, never as untrusted', async () => {
+  it.each([
+    { status: 'RETIRED', overallPassed: true, overall: /Overall: PASS/, notice: /Signer key retired/, untrusted: false },
+    { status: 'COMPROMISED', overallPassed: false, overall: /Overall: FAIL/, notice: /revoked as compromised/, untrusted: true },
+  ] as const)('words a $status signer by what it means for trust', async ({ status, overallPassed, overall, notice, untrusted }) => {
     invoke.mockResolvedValue({
       ...passing(),
-      revokedSigner: { keyId: 'abc123', revokedAt: '2026-09-29T00:00:00Z', reason: 'Routine hygiene rotation.', status: 'RETIRED' },
+      overallPassed,
+      revokedSigner: { keyId: 'abc123', revokedAt: '2026-09-29T00:00:00Z', reason: 'Rotation.', status },
     });
     render(<PackageVerifier />);
     fireEvent.click(screen.getByText('Verify a signed chain-of-custody or evidence package'));
-    upload(new File(['{}'], 'retired.json', { type: 'application/json' }));
-    await screen.findByText(/Overall: PASS/);
-    expect(screen.getByText(/Signer key retired/)).toBeTruthy();
-    expect(screen.queryByText(/treat the package as untrusted/)).toBeNull();
-  });
-
-  it('renders a compromised signer as untrusted and forces overall FAIL', async () => {
-    invoke.mockResolvedValue({
-      ...passing(),
-      overallPassed: false,
-      revokedSigner: { keyId: 'abc123', revokedAt: '2026-09-29T00:00:00Z', reason: 'Suspected compromise.', status: 'COMPROMISED' },
-    });
-    render(<PackageVerifier />);
-    fireEvent.click(screen.getByText('Verify a signed chain-of-custody or evidence package'));
-    upload(new File(['{}'], 'compromised.json', { type: 'application/json' }));
-    await screen.findByText(/Overall: FAIL/);
-    expect(screen.getByText(/revoked as compromised/)).toBeTruthy();
-    expect(screen.getByText(/treat the package as untrusted/)).toBeTruthy();
+    upload(new File(['{}'], `${status}.json`, { type: 'application/json' }));
+    await screen.findByText(overall);
+    expect(screen.getByText(notice)).toBeTruthy();
+    expect(screen.queryByText(/treat the package as untrusted/) !== null).toBe(untrusted);
   });
 });

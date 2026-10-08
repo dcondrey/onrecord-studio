@@ -1,25 +1,34 @@
 import { useEffect, useState } from 'react';
-import { invokeCommand } from '../../ipc';
+import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { InvestigationEvaluation, PilotAssessment } from '../../types';
 
 export default function InvestigationEvaluationPanel() {
   const [evaluations, setEvaluations] = useState<InvestigationEvaluation[]>([]);
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(true);
   const gate = useLatestRequestGate();
   useEffect(() => {
     const request = gate.begin(); setBusy(true);
-    void invokeCommand('get_investigation_evaluations', {}).then(value => { if (gate.isCurrent(request)) setEvaluations(value); }).catch(reason => { if (gate.isCurrent(request)) setError(String(reason)); }).finally(() => { if (gate.isCurrent(request)) setBusy(false); });
+    void invokeCommand('get_investigation_evaluations', {}).then(value => { if (gate.isCurrent(request)) setEvaluations(value); }).catch(reason => { if (gate.isCurrent(request)) setError(formatNativeError(reason)); }).finally(() => { if (gate.isCurrent(request)) setBusy(false); });
     return gate.invalidate;
   }, [gate]);
   const save = async (assessment: PilotAssessment) => {
     const request = gate.begin(); setBusy(true); setError('');
     try { const value = await invokeCommand('save_pilot_assessment', { assessment }); if (gate.isCurrent(request)) setEvaluations(value); }
-    catch (reason) { if (gate.isCurrent(request)) setError(String(reason)); }
+    catch (reason) { if (gate.isCurrent(request)) setError(formatNativeError(reason)); }
     finally { if (gate.isCurrent(request)) setBusy(false); }
   };
-  return <section aria-label="Investigative usefulness evaluation" className="space-y-4"><h3 className="text-lg font-semibold text-fg">Does this investigation help someone act?</h3><p className="max-w-3xl text-sm text-muted">Reference cases replay citation checks against retained San Diego evidence. Record what an editor, nonprofit researcher or advocate actually used, which leads failed, and the work required. These checks do not substitute for human judgment.</p>{busy && <p role="status" className="text-sm text-muted">Evaluating saved investigations…</p>}{error && <p role="alert" className="text-sm text-danger">{error}</p>}{evaluations.map(evaluation => <article key={evaluation.id} className="rounded-xl border border-line-strong p-4"><h4 className="font-semibold text-fg">{evaluation.title}</h4><ul className="mt-3 space-y-2 text-label leading-4">{evaluation.checks.map((check,i) => <li key={i} className={check.passed ? 'text-fg-secondary' : 'text-danger'}><strong>{check.passed ? 'PASS' : 'FAIL'} · {check.name}</strong><p className="mt-1 text-muted">{check.detail}</p></li>)}</ul>{evaluation.limitations.map(limit => <p key={limit} className="mt-2 text-label leading-4 text-warning">{limit}</p>)}{!evaluation.id.startsWith('reference-') && <><div className="mt-4 space-y-3">{evaluation.assessments.length === 0 ? <p className="text-sm text-muted">No human assessment recorded.</p> : evaluation.assessments.map((assessment,i) => <div key={i} className="rounded-lg border border-line p-3 text-label leading-4 text-fg-secondary"><p>{assessment.assessor}: usefulness {assessment.usefulness}/5 · {assessment.supportedDiscoveries} supported discoveries · {assessment.falseLeads} false leads</p><p className="mt-1">{assessment.minutesSpent} minutes spent · {assessment.baselineMinutes === null ? 'Time saved not estimated: no baseline' : `${assessment.baselineMinutes - assessment.minutesSpent} minutes saved against the assessor’s ${assessment.baselineMinutes}-minute estimate`}</p><p className="mt-1">{assessment.resultUsed}</p><p className="mt-1 text-muted">{assessment.notes}</p></div>)}</div><AssessmentForm reportId={evaluation.id} busy={busy} save={save} /></>}</article>)}</section>;
+  return <section aria-label="Investigative usefulness evaluation" className="space-y-4"><h3 className="text-lg font-semibold text-fg">Does this investigation help someone act?</h3><p className="max-w-3xl text-sm text-muted">Reference cases replay citation checks against retained San Diego evidence. Record what an editor, nonprofit researcher or advocate actually used, which leads failed, and the work required. These checks do not substitute for human judgment.</p>{busy && <p role="status" className="text-sm text-muted">Evaluating saved investigations…</p>}{error && <p role="alert" className="text-sm text-danger">{error}</p>}{!busy && !error && evaluations.length === 0 && <p className="text-sm text-muted">No saved investigation or reference case is available to evaluate yet.</p>}{evaluations.map(evaluation => <article key={evaluation.id} className="rounded-xl border border-line-strong p-4"><h4 className="font-semibold text-fg">{evaluation.title}</h4><ul className="mt-3 space-y-2 text-label leading-4">{evaluation.checks.map((check,i) => <li key={i} className={check.passed ? 'text-fg-secondary' : 'text-danger'}><strong>{check.passed ? 'PASS' : 'FAIL'} · {check.name}</strong><p className="mt-1 text-muted">{check.detail}</p></li>)}</ul>{evaluation.limitations.map(limit => <p key={limit} className="mt-2 text-label leading-4 text-warning">{limit}</p>)}{!evaluation.id.startsWith('reference-') && <><div className="mt-4 space-y-3">{evaluation.assessments.length === 0 ? <p className="text-sm text-muted">No human assessment recorded.</p> : evaluation.assessments.map((assessment,i) => <div key={i} className="rounded-lg border border-line p-3 text-label leading-4 text-fg-secondary"><p>{assessment.assessor}: usefulness {assessment.usefulness}/5 · {assessment.supportedDiscoveries} supported discoveries · {assessment.falseLeads} false leads</p><p className="mt-1">{assessment.minutesSpent} minutes spent · {timeAgainstBaseline(assessment.minutesSpent, assessment.baselineMinutes)}</p><p className="mt-1">{assessment.resultUsed}</p><p className="mt-1 text-muted">{assessment.notes}</p></div>)}</div><AssessmentForm reportId={evaluation.id} busy={busy} save={save} /></>}</article>)}</section>;
+}
+
+function timeAgainstBaseline(spent: number, baseline: number | null): string {
+  if (baseline === null) return 'Time saved not estimated: no baseline';
+  const difference = baseline - spent;
+  if (difference === 0) return `Same time as the assessor’s ${baseline}-minute estimate`;
+  return difference > 0
+    ? `${difference} minutes saved against the assessor’s ${baseline}-minute estimate`
+    : `${-difference} minutes more than the assessor’s ${baseline}-minute estimate`;
 }
 
 function AssessmentForm({ reportId, busy, save }: { reportId: string; busy: boolean; save: (assessment: PilotAssessment) => Promise<void> }) {

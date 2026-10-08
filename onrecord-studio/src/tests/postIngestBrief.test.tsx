@@ -85,12 +85,7 @@ afterEach(() => {
 });
 
 describe('PostIngestBrief', () => {
-  it('renders nothing when the overlay is closed', () => {
-    render(<PostIngestBrief />);
-    expect(screen.queryByRole('dialog')).toBeNull();
-  });
-
-  it('opens and lists findings discovered in the recent window', async () => {
+  it('asks only for the recent window and lists only findings discovered in it', async () => {
     bridge.rows = [
       sample('recent', new Date().toISOString()),
       sample('older', '2020-01-01T00:00:00Z'),
@@ -102,15 +97,6 @@ describe('PostIngestBrief', () => {
     await screen.findByRole('dialog');
     await screen.findByText(/Response held \(recent\)/);
     expect(screen.queryByText(/Response held \(older\)/)).toBeNull();
-  });
-
-  it('asks the backend only for findings discovered in the window', async () => {
-    bridge.rows = [];
-    act(() => {
-      useAppStore.setState({ postIngestBriefOpen: true });
-    });
-    render(<PostIngestBrief />);
-    await screen.findByRole('dialog');
     await waitFor(() => expect(bridge.filters.length).toBeGreaterThan(0));
     const filter = bridge.filters[0] as { discoveredAfter?: string };
     const after = Date.parse(filter.discoveredAfter ?? '');

@@ -15,7 +15,7 @@ import DataMaintenance from './DataMaintenance';
 import ResearchSnapshotExport from './ResearchSnapshotExport';
 import RegistrySnapshots from './RegistrySnapshots';
 import AutomaticDiscovery from './AutomaticDiscovery';
-import { invokeCommand } from '../../ipc';
+import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { AgencyPerformanceProfile } from '../../types';
 import AttentionFeed from './AttentionFeed';
@@ -168,7 +168,7 @@ function PeriodComparison({ activePortalKey }: { activePortalKey: string | null 
       setCurrent(currentProfiles.filter((profile) => !activePortalKey || profile.portalSubdomain === activePortalKey));
       setPrior(priorProfiles.filter((profile) => !activePortalKey || profile.portalSubdomain === activePortalKey));
     }).catch((reason) => {
-      if (comparisonGate.isCurrent(request)) setError(String(reason));
+      if (comparisonGate.isCurrent(request)) setError(formatNativeError(reason));
     }).finally(() => {
       if (comparisonGate.isCurrent(request)) setIsLoading(false);
     });
@@ -300,9 +300,10 @@ function SignalSummary({ criticalDepartments, monitoredDepartments }: { critical
 
 function formatRelativeTime(value: string) {
   const date = new Date(value);
-  if (Number.isNaN(date.valueOf())) return 'recently';
+  if (Number.isNaN(date.valueOf())) return value;
   const seconds = Math.max(0, Math.round((Date.now() - date.valueOf()) / 1000));
   if (seconds < 60) return 'just now';
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  return `${Math.floor(seconds / 3600)}h ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  return `${Math.floor(seconds / 86400)}d ago`;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { isTauri } from '@tauri-apps/api/core';
-import { invokeCommand } from '../../ipc';
+import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { ResearchReport } from '../../types';
 import CaseworkPanel from './CaseworkPanel';
@@ -30,7 +30,7 @@ export default function ProfessionalWorkbench({ initialReportId = '', initialTab
       if (!Array.isArray(status.reports)) throw new Error("The native research catalog returned an invalid response.");
       setReports(status.reports); setError('');
       setReportId(current => current || status.reports[0]?.id || '');
-    }).catch(reason => { if (gate.isCurrent(request)) setError(String(reason)); });
+    }).catch(reason => { if (gate.isCurrent(request)) setError(formatNativeError(reason)); });
     return gate.invalidate;
   }, [gate, refresh]);
   return <section className="app-panel p-4 sm:p-5" aria-label="Investigation workbench">

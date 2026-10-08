@@ -8,6 +8,7 @@ import { findingToBriefingEvidence } from './BriefingWorkspace';
 import ArtifactDrafts from './ArtifactDrafts';
 import EvidenceChain from '../objects/EvidenceChain';
 import ObjectLink from '../objects/ObjectLink';
+import { downloadText } from './textDownload';
 
 type DossierState =
   | { status: 'pending' }
@@ -44,14 +45,8 @@ export default function LeadDossier({ findingId }: { findingId: string }) {
     if (item) addBriefingEvidence(item);
   };
 
-  const exportMarkdown = (dossier: LeadDossierData) => {
-    const url = URL.createObjectURL(new Blob([dossierMarkdown(dossier)], { type: 'text/markdown;charset=utf-8' }));
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `lead-dossier-${dossier.finding.id}.md`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
+  const exportMarkdown = (dossier: LeadDossierData) =>
+    downloadText(`lead-dossier-${dossier.finding.id}.md`, dossierMarkdown(dossier), 'text/markdown;charset=utf-8');
 
   return (
     <section aria-label="Lead dossier" className="text-label text-fg-secondary">
@@ -206,7 +201,7 @@ function GapRequest({ gap }: { gap: DossierGap }) {
 }
 
 /** A neutral public-records request paragraph for the records that would close `gap`. */
-export function gapRequestText(gap: DossierGap): string {
+function gapRequestText(gap: DossierGap): string {
   const record = `document ${gap.documentId} held under ${gap.portalKey}`;
   if (gap.gap === 'notComputed') {
     return (
@@ -229,7 +224,7 @@ function gapLine(gap: DossierGap): string {
   return `${gap.portalKey} / document ${gap.documentId}: “${gap.claimText}” — ${gap.reason}: ${gap.detail}`;
 }
 
-export function dossierMarkdown(dossier: LeadDossierData): string {
+function dossierMarkdown(dossier: LeadDossierData): string {
   const lines = [
     `# Lead dossier: ${dossier.finding.headline}`,
     '',
