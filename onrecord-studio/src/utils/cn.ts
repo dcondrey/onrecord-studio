@@ -7,7 +7,7 @@ import { extendTailwindMerge } from "tailwind-merge";
 const twMerge = extendTailwindMerge({
   extend: {
     classGroups: {
-      "font-size": [{ text: ["display", "title", "heading", "body", "label", "control", "caption", "overline", "metric", "code"] }],
+      "font-size": [{ text: ["display", "title", "heading", "headline", "body", "label", "control", "caption", "overline", "metric", "code"] }],
       shadow: [{ shadow: ["panel", "popover", "dialog"] }],
       "max-w": [{ "max-w": ["content", "prose"] }],
       z: [{ z: ["sticky", "header", "overlay", "popover", "sheet", "dialog", "palette", "toast", "gate"] }],
@@ -16,7 +16,8 @@ const twMerge = extendTailwindMerge({
       colors: [
         "fg", "fg-secondary", "muted", "canvas", "surface", "raised", "line", "line-strong", "control",
         "accent", "on-accent", "highlight", "success", "warning", "danger", "focus", "scrim", "hatch",
-        "panel", "chrome",
+        "panel", "chrome", "bg", "lead", "lead-mark", "on-lead", "success-mark", "danger-mark", "on-danger",
+        "warning-mark",
       ],
     },
   },

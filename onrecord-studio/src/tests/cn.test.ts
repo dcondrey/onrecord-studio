@@ -5,6 +5,7 @@ describe('cn', () => {
   it('treats the custom type scale as font sizes, not colours', () => {
     expect(cn('text-caption text-danger')).toBe('text-caption text-danger');
     expect(cn('text-caption', 'text-body')).toBe('text-body');
+    expect(cn('text-headline text-lead')).toBe('text-headline text-lead');
     expect(cn('text-muted', 'text-fg')).toBe('text-fg');
   });
 });

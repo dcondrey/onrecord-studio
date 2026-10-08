@@ -8,61 +8,88 @@
   color-scheme: light;
   /* Semantic colour roles as RGB channels, so Tailwind's /alpha modifiers work. Every component
      colour comes from these; the four blocks (light, dark, and each with increased contrast) are
-     the only place a UI colour value is written. */
-  --fg: 23 32 51;
-  --fg-secondary: 51 65 85;
-  --muted: 82 97 116;
+     the only place a UI colour value is written. The canvas is achromatic and a hue means exactly
+     one thing: accent = you can act on it, lead = the app surfaced this, success = healthy,
+     danger = a failure or a statistical flag, warning = degraded, highlight = a selection or a
+     search hit. A role's plain name is its text step (4.5:1 on bg, panel and raised); `-mark` is
+     the fill and chart-mark step (3:1); `on-` is text set on the solid fill. */
+  --bg: 248 250 252;
+  --panel: 255 255 255;
   --canvas: 255 255 255;
   --surface: 248 250 252;
-  --raised: 231 237 244;
+  --raised: 238 242 247;
   --line: 220 227 236;
   --line-strong: 203 213 225;
   --control: 117 133 154;
+  --fg: 15 23 42;
+  --fg-secondary: 51 65 85;
+  --muted: 82 97 116;
   --accent: 14 116 144;
   --on-accent: 255 255 255;
+  --lead: 109 40 217;
+  --lead-mark: 124 58 237;
+  --on-lead: 255 255 255;
+  --success: 4 120 87;
+  --success-mark: 5 150 105;
+  --danger: 185 28 28;
+  --danger-mark: 239 68 68;
+  --on-danger: 255 255 255;
+  --warning: 146 64 14;
+  --warning-mark: 217 119 6;
   /* ::selection, <mark> search hits and PDF region overlays only. Never an action or a selected state. */
   --highlight: 67 56 202;
-  --success: 4 120 87;
-  --warning: 146 64 14;
-  --danger: 190 18 60;
   --focus: 3 105 161;
   --scrim: rgb(15 23 42 / 0.4);
   --hatch: rgb(148 163 184 / 0.45);
-  --shadow-panel: inset 0 1px 0 rgb(255 255 255 / 0.8), 0 1px 2px rgb(15 23 42 / 0.05);
+  --glass-alpha: 0.72;
+  --shadow-panel: 0 1px 2px rgb(15 23 42 / 0.04), inset 0 1px 0 rgb(255 255 255 / 0.8);
   --shadow-popover: 0 8px 24px rgb(15 23 42 / 0.12), 0 2px 6px rgb(15 23 42 / 0.08);
   --shadow-dialog: 0 24px 64px rgb(15 23 42 / 0.24), 0 4px 16px rgb(15 23 42 / 0.12);
-  --app-background: rgba(239, 243, 247, 0.96);
-  --app-background-effects:
-    radial-gradient(circle at 72% -18%, rgba(14, 116, 144, 0.075), transparent 34rem),
-    radial-gradient(circle at 4% 110%, rgba(67, 56, 202, 0.055), transparent 32rem);
-  --sidebar-surface: rgba(247, 249, 252, 0.93);
-  --header-surface: rgba(252, 253, 255, 0.9);
-  --panel-surface: rgba(255, 255, 255, 0.86);
-  --panel-hover: rgba(255, 255, 255, 0.98);
-  --activity-surface: rgba(250, 252, 254, 0.92);
+  --dur-instant: 80ms;
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 240ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  /* Older surface names, now aliases of the opaque roles above. */
+  --app-background: rgb(var(--bg));
+  --sidebar-surface: rgb(var(--surface));
+  --header-surface: rgb(var(--surface));
+  --panel-surface: rgb(var(--panel));
+  --panel-hover: rgb(var(--panel));
+  --activity-surface: rgb(var(--canvas));
   --hairline: rgb(var(--line));
   --hairline-strong: rgb(var(--line-strong));
   --control-border: rgb(var(--control));
-  --control-surface: rgba(255, 255, 255, 0.74);
-  --control-hover: rgba(231, 237, 244, 0.9);
+  --control-surface: rgb(var(--canvas));
+  --control-hover: rgb(var(--raised));
   --text-primary: rgb(var(--fg));
   --text-secondary: rgb(var(--fg-secondary));
   --text-muted: rgb(var(--muted));
+  /* The brand gradient appears only on the app icon and the active-nav indicator. */
   --brand-from: #0e7490;
   --brand-to: #4338ca;
-  --grid-line: rgba(100, 116, 139, 0.09);
+  --grid-line: rgb(100 116 139 / 0.09);
   --chart-background: #ffffff;
   --chart-grid: #dce3ec;
   --chart-axis: #526174;
   --chart-alert: #92400e;
   --chart-center: #f8fafc;
-  --chart-cell-end: rgba(255, 255, 255, 0.72);
-  --viz-cyan: #0e7490;
-  --viz-indigo: #4338ca;
-  --viz-purple: #7e22ce;
-  --viz-amber: #92400e;
-  --viz-red: #be123c;
-  --viz-emerald: #047857;
+  --chart-cell-end: rgb(255 255 255 / 0.72);
+  /* Chart marks. A flagged mark is crimson; every other series is slate or cyan. The `-rgb` twins
+     are channels for marks that need alpha (color-mix() postdates the macOS 13 WebKit floor).
+     `red`, `indigo` and `purple` are the older series names, kept as aliases. */
+  --viz-cyan: #0891b2;
+  --viz-cyan-rgb: 8 145 178;
+  --viz-violet: #7c3aed;
+  --viz-emerald: #059669;
+  --viz-amber: #d97706;
+  --viz-crimson: #ef4444;
+  --viz-crimson-rgb: 239 68 68;
+  --viz-slate: #64748b;
+  --viz-red: var(--viz-crimson);
+  --viz-indigo: var(--viz-slate);
+  --viz-purple: var(--viz-violet);
   --viz-on-color: #ffffff;
   --scrollbar: #cbd5e1;
   --scrollbar-hover: #94a3b8;
@@ -75,52 +102,51 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --fg: 232 238 247;
-  --fg-secondary: 203 213 225;
-  --muted: 167 180 199;
-  --canvas: 2 6 23;
+  --bg: 15 23 42;
+  --panel: 22 32 51;
+  --canvas: 11 18 34;
   --surface: 15 23 42;
   --raised: 30 41 59;
   --line: 39 52 72;
   --line-strong: 61 77 100;
   --control: 100 116 139;
+  --fg: 232 238 247;
+  --fg-secondary: 203 213 225;
+  --muted: 167 180 199;
   --accent: 103 232 249;
   --on-accent: 4 47 61;
-  --highlight: 165 180 252;
+  --lead: 196 181 253;
+  --lead-mark: 167 139 250;
+  --on-lead: 46 16 101;
   --success: 110 231 183;
+  --success-mark: 52 211 153;
+  --danger: 252 165 165;
+  --danger-mark: 239 68 68;
+  --on-danger: 69 10 10;
   --warning: 252 211 77;
-  --danger: 253 164 175;
+  --warning-mark: 245 158 11;
+  --highlight: 165 180 252;
   --focus: 56 189 248;
   --scrim: rgb(0 0 0 / 0.6);
   --hatch: rgb(148 163 184 / 0.35);
-  --shadow-panel: inset 0 1px 0 rgb(255 255 255 / 0.035), 0 1px 2px rgb(0 0 0 / 0.3);
+  --glass-alpha: 0.78;
+  --shadow-panel: 0 1px 2px rgb(0 0 0 / 0.35), inset 0 1px 0 rgb(255 255 255 / 0.04);
   --shadow-popover: 0 8px 24px rgb(0 0 0 / 0.5), 0 2px 6px rgb(0 0 0 / 0.3);
   --shadow-dialog: 0 24px 64px rgb(0 0 0 / 0.6);
-  --app-background: rgba(5, 10, 18, 0.97);
-  --app-background-effects:
-    radial-gradient(circle at 75% -20%, rgba(56, 189, 248, 0.08), transparent 34rem),
-    radial-gradient(circle at 8% 110%, rgba(99, 102, 241, 0.08), transparent 32rem);
-  --sidebar-surface: rgba(7, 15, 27, 0.96);
-  --header-surface: rgba(6, 12, 22, 0.93);
-  --panel-surface: rgba(12, 21, 36, 0.74);
-  --panel-hover: rgba(17, 29, 48, 0.88);
-  --activity-surface: rgba(5, 10, 18, 0.65);
-  --control-surface: rgba(10, 18, 31, 0.78);
-  --control-hover: rgba(25, 38, 59, 0.9);
-  --grid-line: rgba(148, 163, 184, 0.045);
-  --chart-background: #020617;
-  --chart-grid: #1e293b;
+  --grid-line: rgb(148 163 184 / 0.045);
+  --chart-background: #0b1222;
+  --chart-grid: #273448;
   --chart-axis: #a7b4c7;
-  --chart-alert: #fbbf24;
-  --chart-center: #020617;
-  --chart-cell-end: rgba(15, 23, 42, 0.4);
-  --viz-cyan: #22d3ee;
-  --viz-indigo: #818cf8;
-  --viz-purple: #c084fc;
-  --viz-amber: #fbbf24;
-  --viz-red: #fb7185;
+  --chart-alert: #fcd34d;
+  --chart-center: #0b1222;
+  --chart-cell-end: rgb(15 23 42 / 0.4);
+  --viz-cyan: #06b6d4;
+  --viz-cyan-rgb: 6 182 212;
+  --viz-violet: #a78bfa;
   --viz-emerald: #34d399;
-  --viz-on-color: #07101c;
+  --viz-amber: #f59e0b;
+  --viz-slate: #94a3b8;
+  --viz-on-color: #0b1222;
   --scrollbar: #334155;
   --scrollbar-hover: #475569;
 }
@@ -296,9 +322,8 @@ a[href] {
 
   .app-theme {
     isolation: isolate;
-    color: var(--text-primary);
-    background-color: var(--app-background);
-    background-image: var(--app-background-effects);
+    color: rgb(var(--fg));
+    background-color: rgb(var(--bg));
   }
 
   .sidebar-surface {
@@ -306,8 +331,10 @@ a[href] {
     background: var(--sidebar-surface);
   }
 
+  /* Chrome is opaque and separated from the page by its rule, not by a fill or a blur. */
   .header-surface {
     border-color: var(--hairline);
+    background: var(--header-surface);
   }
 
   .activity-stream {
@@ -323,14 +350,56 @@ a[href] {
   }
 
   .app-panel {
-    @apply rounded-xl border border-line;
-    background: var(--panel-surface);
-    box-shadow: var(--shadow-panel);
+    @apply rounded-xl border border-line bg-panel shadow-panel;
   }
 
-  /* A modal panel is opaque: the translucent panel fill would let the page read through it. */
-  [aria-modal="true"] > .app-panel {
-    background: rgb(var(--surface));
+  /* Translucent blurred glass, for floating surfaces only: the command palette, popovers and menus,
+     the inspector overlay, dialogs and the chart tooltip. Never on a scrolling region, the chrome
+     or a full-screen scrim, and at most one blurred layer on screen (a stacked lower dialog sets
+     data-stacked and goes opaque). WebKit before 18 needs the prefixed property. */
+  .glass {
+    border: 1px solid rgb(var(--line-strong) / 0.6);
+    background: rgb(var(--panel) / var(--glass-alpha));
+    box-shadow: var(--shadow-popover);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+  }
+
+  .glass[data-stacked] {
+    background: rgb(var(--panel));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass {
+      background: rgb(var(--panel));
+    }
+  }
+
+  :root[data-contrast="more"] .glass {
+    border-color: rgb(var(--line-strong));
+    background: rgb(var(--panel));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .glass {
+      border-color: rgb(var(--line-strong));
+      background: rgb(var(--panel));
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .glass {
+      border: 1px solid CanvasText;
+      background: Canvas;
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
   }
 
   .app-eyebrow,
@@ -467,29 +536,55 @@ a[href] {
     background: var(--control-hover);
   }
 
-  .command-dialog {
-    box-shadow: var(--shadow-dialog);
-  }
-
-  .command-search {
-    background: color-mix(in srgb, var(--panel-surface) 76%, var(--app-background));
-  }
-
-  .metric-icon,
-  .chart-ready-card {
+  .metric-icon {
     border-color: var(--hairline);
     background: var(--control-surface);
   }
 
+  /* A notice laid over a chart plot. It is in flow with the page, so it is opaque, not glass. */
+  .chart-ready-card {
+    border-color: rgb(var(--line));
+    background: rgb(var(--panel));
+    box-shadow: var(--shadow-popover);
+  }
+
   .onboarding-panel {
-    @apply rounded-xl border-line;
-    background: var(--panel-surface);
-    box-shadow: var(--shadow-panel);
+    @apply rounded-xl border-line bg-panel shadow-panel;
   }
 
   .chart-surface {
     background-color: var(--chart-background);
-    background-color: color-mix(in srgb, var(--chart-background) 72%, transparent);
+  }
+}
+
+/* The command palette is the one floating surface built on .app-panel; the doubled class lifts it
+   to glass over the panel fill it shares with in-flow modules. */
+.command-dialog.app-panel {
+  border-color: rgb(var(--line-strong) / 0.6);
+  background: rgb(var(--panel) / var(--glass-alpha));
+  box-shadow: var(--shadow-dialog);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+}
+
+:root[data-contrast="more"] .command-dialog.app-panel {
+  border-color: rgb(var(--line-strong));
+  background: rgb(var(--panel));
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .command-dialog.app-panel {
+    background: rgb(var(--panel));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .command-dialog.app-panel {
+    background: rgb(var(--panel));
   }
 }
 
@@ -512,24 +607,16 @@ a[href] {
   background: rgb(var(--accent) / 0.8);
 }
 
-/* A backdrop-filter makes its element the containing block for every `position: fixed`
-   descendant, which would trap any dialog opened from the header inside the header's box. The
-   blur lives on a pseudo-element, which has no descendants, and the doubled class outranks the
-   `backdrop-blur-*` utility on the element itself. */
-.header-surface.header-surface {
+/* Non-floating surfaces never blur. Each is its own compositing layer in WKWebView, and on the
+   header a backdrop-filter also becomes the containing block of every `position: fixed`
+   descendant, trapping any dialog opened from it inside the header's box. The doubled class
+   outranks a `backdrop-blur-*` utility still on the element. */
+.header-surface.header-surface,
+.sidebar-surface.sidebar-surface,
+.app-backdrop.app-backdrop,
+.chart-ready-card.chart-ready-card {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-}
-
-.header-surface::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: var(--header-surface);
-  -webkit-backdrop-filter: blur(24px);
-  backdrop-filter: blur(24px);
-  pointer-events: none;
 }
 
 /* Every cell draws its own top and left rule outside itself; the strip's overflow clips the rules
@@ -568,9 +655,9 @@ a[href] {
   transition-duration: 0.01ms !important;
 }
 
+/* Increased contrast. The dark block below must restate every name this block sets, because this
+   block outranks the plain dark theme. */
 :root[data-contrast="more"] {
-  --panel-surface: #ffffff;
-  --panel-hover: #ffffff;
   --fg: 15 23 42;
   --fg-secondary: 30 41 59;
   --muted: 51 65 85;
@@ -578,16 +665,20 @@ a[href] {
   --line-strong: 71 85 105;
   --control: 51 65 85;
   --accent: 21 94 117;
+  --lead: 91 33 182;
+  --lead-mark: 109 40 217;
   --highlight: 55 48 163;
   --success: 6 95 70;
+  --success-mark: 4 120 87;
   --warning: 120 53 15;
-  --danger: 159 18 57;
+  --warning-mark: 180 83 9;
+  --danger: 153 27 27;
+  --danger-mark: 220 38 38;
   --focus: 7 89 133;
 }
 
 :root[data-contrast="more"][data-theme="dark"] {
-  --panel-surface: #07101c;
-  --panel-hover: #0f1d30;
+  --panel: 15 23 42;
   --fg: 248 250 252;
   --fg-secondary: 226 232 240;
   --muted: 226 232 240;
@@ -595,10 +686,15 @@ a[href] {
   --line-strong: 148 163 184;
   --control: 203 213 225;
   --accent: 165 243 252;
+  --lead: 221 214 254;
+  --lead-mark: 196 181 253;
   --highlight: 199 210 254;
   --success: 167 243 208;
+  --success-mark: 110 231 183;
   --warning: 253 230 138;
-  --danger: 254 205 211;
+  --warning-mark: 252 211 77;
+  --danger: 254 202 202;
+  --danger-mark: 248 113 113;
   --focus: 125 211 252;
 }
 
@@ -626,9 +722,10 @@ a[href] {
 
 /* Motion vocabulary. Every entrance animates opacity and transform only, so it composites without
    layout, and `data-motion="reduce"` above collapses each to its final frame. Nothing here animates
-   a value: a number appears when it is measured, never counts up to it. */
+   a value: a number appears when it is measured, never counts up to it. Exits use --ease-in at
+   0.75x the entrance duration; nothing delays input. */
 @keyframes motion-reveal {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(8px); }
 }
 
 @keyframes motion-pop {
@@ -643,12 +740,12 @@ a[href] {
   from { opacity: 0; }
 }
 
-.motion-reveal { animation: motion-reveal 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-.motion-pop { animation: motion-pop 140ms cubic-bezier(0.2, 0.8, 0.2, 1) both; transform-origin: top left; }
-.motion-slide-in { animation: motion-slide-in 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-.motion-fade { animation: motion-fade 180ms ease-out both; }
+.motion-reveal { animation: motion-reveal var(--dur-slow) var(--ease-out) both; }
+.motion-pop { animation: motion-pop var(--dur-base) var(--ease-out) both; transform-origin: top left; }
+.motion-slide-in { animation: motion-slide-in var(--dur-slow) var(--ease-out) both; }
+.motion-fade { animation: motion-fade var(--dur-base) var(--ease-out) both; }
 
-.motion-stagger > * { animation: motion-reveal 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.motion-stagger > * { animation: motion-reveal var(--dur-slow) var(--ease-out) both; }
 .motion-stagger > :nth-child(2) { animation-delay: 25ms; }
 .motion-stagger > :nth-child(3) { animation-delay: 50ms; }
 .motion-stagger > :nth-child(4) { animation-delay: 75ms; }
@@ -656,20 +753,65 @@ a[href] {
 .motion-stagger > :nth-child(6) { animation-delay: 125ms; }
 .motion-stagger > :nth-child(n + 7) { animation-delay: 150ms; }
 
-.motion-press { transition: transform 120ms ease-out; }
+.motion-press { transition: transform var(--dur-instant) var(--ease-out); }
 .motion-press:active:not(:disabled) { transform: scale(0.97); }
 
-.motion-lift { transition: transform 160ms ease-out, border-color 160ms ease, background-color 160ms ease; }
-.motion-lift:hover { transform: translateY(-1px); }
+/* A module that opens something answers the pointer with a firmer border and a softer shadow, not
+   by moving. */
+.motion-lift {
+  transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+
+.motion-lift:hover {
+  border-color: rgb(var(--line-strong));
+}
+
+/* A live source breathes while it ingests and is steady otherwise; under reduced motion it is a
+   static, fully opaque dot (the iteration rule above would leave it at its first frame). */
+@keyframes breathe {
+  0%, 100% { opacity: 0.45; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.25); }
+}
+
+.motion-breathe {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: breathe 2400ms ease-in-out infinite;
+}
+
+:root[data-motion="reduce"] .motion-breathe {
+  animation: none !important;
+  opacity: 1;
+}
 
 /* A loading placeholder is a shape, never a digit, so it cannot be read as a zero. */
 .skeleton {
-  background: linear-gradient(90deg, rgb(var(--line) / 0.25), rgb(var(--line) / 0.5), rgb(var(--line) / 0.25));
+  background-color: rgb(var(--raised));
+  background-image: linear-gradient(90deg, transparent, rgb(var(--line) / 0.6), transparent);
   background-size: 200% 100%;
-  animation: skeleton-sweep 1.4s ease-in-out infinite;
+  background-repeat: no-repeat;
+  animation: skeleton-sweep 1400ms linear infinite;
+}
+
+:root[data-motion="reduce"] .skeleton {
+  animation: none !important;
+  background-image: none;
 }
 
 @keyframes skeleton-sweep {
   from { background-position: 100% 0; }
   to { background-position: -100% 0; }
+}
+
+/* Shared-element expansion (utils/viewTransition.ts). The `*` reduce rule does not reach these
+   pseudo-elements, so reduced motion turns them off here. */
+::view-transition-group(*) {
+  animation-duration: var(--dur-slow);
+  animation-timing-function: var(--ease-out);
+}
+
+:root[data-motion="reduce"]::view-transition-group(*),
+:root[data-motion="reduce"]::view-transition-old(*),
+:root[data-motion="reduce"]::view-transition-new(*) {
+  animation: none !important;
 }
