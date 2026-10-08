@@ -112,8 +112,8 @@ export default function ChangeTimeline(props: ChangeTimelineProps) {
         interactive={{ roledescription: 'change timeline' }}
         legend={[
           { key: 'added', label: 'Added (above) / removed (below)', swatch: 'rect', tone: 'mark' },
-          ...(changes.some((change) => change.changed !== null) ? [{ key: 'changed', label: 'Changed field by field', swatch: 'rect' as const, tone: 'ink' as const }] : []),
-          ...(changes.some((change) => change.changed === null) ? [{ key: 'not-separated', label: 'Changed not separated: counted in added and removed', swatch: 'slot-dashed' as const }] : []),
+          ...(changes.some((change) => change.changed !== null) ? [{ key: 'changed', label: 'Changed field by field (chg)', swatch: 'rect' as const, tone: 'ink' as const }] : []),
+          ...(changes.some((change) => change.changed === null) ? [{ key: 'not-separated', label: 'Changed not separated (n/s): counted in added and removed', swatch: 'slot-dashed' as const }] : []),
           ...(unchangedChecks > 0 ? [{ key: 'checked', label: 'Checked, unchanged', swatch: 'hollow' as const, tone: 'ink' as const }] : []),
         ]}
         autoAbsenceLegend={false}
@@ -147,14 +147,19 @@ export default function ChangeTimeline(props: ChangeTimelineProps) {
           const column = Math.max(6, Math.min(18, gap * 0.35));
           const tickX = (cx: number) => cx + column / 2 + 2;
           // Every per-column label is placed in its lane, pushed apart and kept inside the plot.
-          const aboveText = placed.map(({ change }) => `${signed('+', change.added)} · ${change.changed === null ? NOT_SEPARATED : `${change.changed.toLocaleString('en-US')} changed`}`);
+          const aboveFull = placed.map(({ change }) => `${signed('+', change.added)} · ${change.changed === null ? NOT_SEPARATED : `${change.changed.toLocaleString('en-US')} changed`}`);
+          // Too many for one lane: the short codes the legend spells out.
+          const laneRoom = width - 8 - LEFT - 4 * placed.length;
+          const aboveText = aboveFull.reduce((sum, text) => sum + measureText(text) * 1.1, 0) <= laneRoom
+            ? aboveFull
+            : placed.map(({ change }) => `${signed('+', change.added)} · ${change.changed === null ? 'n/s' : `${formatValue(change.changed, { kind: 'count', compact: true })} chg`}`);
           const belowText = placed.map(({ change }) => signed('−', change.removed));
-          const lane = (texts: string[]) => placeLabels(texts.map((text, i) => ({ key: String(i), anchor: xs[i], width: measureText(text) })), LEFT, width - 4);
+          const lane = (texts: string[]) => placeLabels(texts.map((text, i) => ({ key: String(i), anchor: xs[i], width: measureText(text) * 1.1 })), LEFT, width - 8);
           const above = lane(aboveText);
           const below = lane(belowText);
           const checkText = `${unchangedChecks} unchanged`;
           const checkX = Number.isFinite(checkedAt) ? x(checkedAt) : Number.NaN;
-          const check = unchangedChecks > 0 && Number.isFinite(checkX) ? placeLabels([{ key: 'check', anchor: checkX, width: measureText(checkText) }], LEFT, width - 4)[0] : null;
+          const check = unchangedChecks > 0 && Number.isFinite(checkX) ? placeLabels([{ key: 'check', anchor: checkX, width: measureText(checkText) * 1.1 }], LEFT, width - 8)[0] : null;
           return (
             <>
               <line x1={LEFT} x2={right} y1={base} y2={base} style={{ stroke: VIZ.baseline, strokeWidth: 1 }} />
@@ -178,9 +183,10 @@ export default function ChangeTimeline(props: ChangeTimelineProps) {
                 const bottom = y(-change.removed);
                 // A small changed count still shows: at least 3px tall, its value in the label.
                 const changedTop = change.changed === null ? base : change.changed === 0 ? base - 1 : Math.min(base - 3, y(change.changed));
-                const aboveY = Math.min(top, changedTop, change.changed === null ? base - MARKER / 2 : base) - 6;
-                const aboveX = above[i].pos + measureText(aboveText[i]) / 2;
-                const belowX = below[i].pos + measureText(belowText[i]) / 2;
+                // Clear of every mark at the baseline (a zero-length bar, the not-separated marker).
+                const aboveY = Math.min(top, changedTop, base - MARKER) - 6;
+                const aboveX = above[i].pos + (measureText(aboveText[i]) * 1.1) / 2;
+                const belowX = below[i].pos + (measureText(belowText[i]) * 1.1) / 2;
                 return (
                   <MarkGroup
                     key={`${change.previous}->${change.current}`}
@@ -194,8 +200,10 @@ export default function ChangeTimeline(props: ChangeTimelineProps) {
                       onBlurMark: tooltip.hide,
                     }}
                   >
-                    <Bar orient="vertical" band={{ pos: cx - column / 2, thickness: column }} value={measured(change.added)} scale={y} motionKey={`added-${i}`} />
-                    <Bar orient="vertical" band={{ pos: cx - column / 2, thickness: column }} value={measured(-change.removed)} scale={y} motionKey={`removed-${i}`} />
+                    {/* A measured zero is a zero-length tick; its '0' is the lane label, so Bar's own '0' is not drawn twice. */}
+                    {change.added > 0 && <Bar orient="vertical" band={{ pos: cx - column / 2, thickness: column }} value={measured(change.added)} scale={y} motionKey={`added-${i}`} />}
+                    {change.removed > 0 && <Bar orient="vertical" band={{ pos: cx - column / 2, thickness: column }} value={measured(-change.removed)} scale={y} motionKey={`removed-${i}`} />}
+                    {(change.added === 0 || change.removed === 0) && <line x1={cx - column / 2} x2={cx + column / 2} y1={base} y2={base} style={{ stroke: VIZ.mark, strokeWidth: 2 }} />}
                     {change.changed === null ? (
                       <rect data-absence="not-separated" x={tickX(cx) + 0.5} y={base - MARKER / 2 + 0.5} width={MARKER - 1} height={MARKER - 1} rx={1.5} style={{ fill: 'none', stroke: VIZ.baseline, strokeWidth: 1, strokeDasharray: '3 2' }}>
                         <title>{`Changed ${NOT_SEPARATED}: ${NOT_SEPARATED_REASON}. They are counted in added and removed.`}</title>
@@ -220,7 +228,7 @@ export default function ChangeTimeline(props: ChangeTimelineProps) {
                     title={`${unchangedChecks} ${unchangedChecks === 1 ? 'check' : 'checks'} found the file unchanged; the last on ${day(lastCheckedAt)}. Earlier check times are counted, not drawn.`}
                   />
                   {/* Below the marks, just above the axis, with a dotted leader up to its dot. */}
-                  <line x1={checkX} x2={check.pos + measureText(checkText) / 2} y1={base + 6} y2={AXIS_Y - 16} style={{ stroke: VIZ.baseline, strokeWidth: 1, strokeDasharray: '1 2' }} />
+                  <line x1={checkX} x2={check.pos + (measureText(checkText) * 1.1) / 2} y1={base + 6} y2={AXIS_Y - 16} style={{ stroke: VIZ.baseline, strokeWidth: 1, strokeDasharray: '1 2' }} />
                   <text x={check.pos} y={AXIS_Y - 6} className={MUTED_LABEL_CLASS}>{checkText}</text>
                 </>
               )}

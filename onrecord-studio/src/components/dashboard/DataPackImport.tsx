@@ -223,7 +223,7 @@ function fileCell(choice: CoverageChoice, maxRows: number, selected: boolean, im
   };
   // Imported files fill the ramp; a file only in the pack is an outline with its row count.
   if (imported === false) return { ...common, kind: 'state', tone: 'neutral', legend: 'In the pack, not imported (rows)' };
-  return { ...common, kind: 'count', value: rows, step: seqStep(rows, maxRows), legend: imported === true ? 'Imported: darker = more rows, within each table' : 'File in the pack: darker = more rows, within each table' };
+  return { ...common, kind: 'count', value: rows, step: seqStep(rows, maxRows), legend: imported === true ? 'Imported: stronger shade = more rows, within each table' : 'File in the pack: stronger shade = more rows, within each table' };
 }
 
 /** The years a lead's period names ('2023', 'FY2023-24', 'Jan 2022 to Mar 2024'), in order. */

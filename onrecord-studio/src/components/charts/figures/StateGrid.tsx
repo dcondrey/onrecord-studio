@@ -166,13 +166,15 @@ function layoutFor(width: number, props: StateGridProps): Layout {
   const cellTop = stacked ? STACKED_LABEL : 0;
   const rowHeight = (twoLines ? ROW_HEIGHT_TWO_LINES : ROW_HEIGHT) + cellTop;
   const widest = Math.max(0, ...rows.map((row) => Math.max(measureText(row.label, ROW_FONT), row.sublabel ? measureText(row.sublabel) : 0)));
-  const labelWidth = stacked ? 0 : Math.round(Math.max(88, Math.min(widest + 12, width * 0.32, 240)));
-  // Cells are sized before the trailing column: the narrowest a cell may be is what its short
-  // words need, and the trailing column gives way to that.
-  const minCell = Math.min(CELL_CAP_FOR_WORDS, Math.max(24, ...rows.flatMap((row) => row.cells.flatMap((cell) => (cell && (cell.span ?? 1) === 1 ? [measureText(cell.short ?? cell.text) + TEXT_X + 6] : [])))));
+  // Cells are sized first: the narrowest a cell may be is what its short words need (a cell's
+  // inner width is 2px less, its words start at TEXT_X and keep 4px clear), and the trailing
+  // column, then the row labels (clipped, full in their titles), give way to that.
+  const minCell = Math.min(CELL_CAP_FOR_WORDS, Math.max(24, ...rows.flatMap((row) => row.cells.flatMap((cell) => (cell && (cell.span ?? 1) === 1 ? [Math.ceil(measureText(cell.short ?? cell.text)) + TEXT_X + 7] : [])))));
   const trailingNeed = rows.some((row) => row.trailing)
     ? Math.round(Math.min(TRAILING_MAX, Math.max(40, ...rows.map((row) => (row.trailing ? measureText(row.trailing.text) : 0))) + 16))
     : 0;
+  const naturalLabel = Math.round(Math.max(88, Math.min(widest + 12, width * 0.32, 240)));
+  const labelWidth = stacked ? 0 : Math.round(Math.max(88, Math.min(naturalLabel, width - Math.min(trailingNeed, TRAILING_MIN) - minCell * cols)));
   const longest = Math.min(HEADER_MAX_LABEL, Math.max(0, ...columns.map((column) => measureText(column.label))));
   const size = (gridLeft: number) => {
     let trailingWidth = trailingNeed;
@@ -188,7 +190,8 @@ function layoutFor(width: number, props: StateGridProps): Layout {
   let sized = size(gridLeft);
   // A rotated header leans up and to the left of its column's centre, so the first column's label
   // needs that much room before the grid; the label column gives it, or, stacked, a left margin.
-  const lean = sized.rotated ? Math.ceil(COS * longest - sized.cellWidth / 2) : 0;
+  // +6: the header is drawn medium weight, a little wider than measured.
+  const lean = sized.rotated ? Math.ceil(COS * longest - sized.cellWidth / 2) + 6 : 0;
   if (lean > gridLeft) {
     gridLeft = lean;
     sized = size(gridLeft);
@@ -464,7 +467,8 @@ export default function StateGrid(props: StateGridProps) {
           return (
             <g role="grid" aria-label={props.title} aria-rowcount={rows.length + 1} aria-colcount={columns.length + 1}>
               <g role="row">
-                <g role="columnheader"><text x={0} y={headerHeight - 8} className={MUTED_LABEL_CLASS}>{props.rowHeader}</text></g>
+                {/* Stacked under rotated headers there is no label column for it to sit in: it stays a named header. */}
+                <g role="columnheader" aria-label={props.rowHeader}>{!(layout.stacked && layout.rotated) && <text x={0} y={headerHeight - 8} className={MUTED_LABEL_CLASS}>{props.rowHeader}</text>}</g>
                 {columns.map((column, j) => {
                   const cx = gridLeft + j * cellWidth;
                   const label = clip(column.label, layout.rotated ? HEADER_MAX_LABEL : cellWidth - (column.glyph ? 18 : 6));
