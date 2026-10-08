@@ -28,6 +28,8 @@
   --fg: 15 23 42;
   --fg-secondary: 51 65 85;
   --muted: 82 97 116;
+  /* The Select component's chevron for a plain <select class="analysis-input">, in --muted. */
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgb(82,97,116)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   /* Darker than cyan-700 so a count badge's accent/10 tint stacked on the selected row's tint still
      reads at 4.5:1 (4.93:1 on the sidebar). */
   --accent: 12 98 122;
@@ -170,6 +172,7 @@
   --fg: 232 238 247;
   --fg-secondary: 203 213 225;
   --muted: 167 180 199;
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgb(167,180,199)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   /* Cyan-500, not a lighter step: as a fill it must sit with the canvas, not glow over it. 6.03:1 as
      text on raised, 5.85:1 under on-accent. */
   --accent: 6 182 212;
@@ -400,6 +403,16 @@ a[href] {
      their call sites move to the components. */
   .analysis-input {
     @apply h-8 rounded-lg border border-control bg-canvas px-3 text-control font-normal text-fg placeholder:text-muted disabled:bg-raised/50 disabled:text-muted;
+  }
+
+  /* Every select wears the same chevron as the Select component, never the platform's own arrows. */
+  select.analysis-input {
+    appearance: none;
+    padding-right: 2rem;
+    background-image: var(--select-chevron);
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 12px 12px;
   }
 
   .analysis-button {

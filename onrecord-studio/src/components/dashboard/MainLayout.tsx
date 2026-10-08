@@ -40,7 +40,7 @@ import Dialog, { DialogBody, DialogFooter, DialogHeader } from '../ui/Dialog';
 import AnalysisWorkbench from './AnalysisWorkbench';
 import CaseTimeline from './CaseTimeline';
 import { formatMatchCount, MATCH_BASIS_LABELS, matchBasis, SEARCH_PAGE_SIZE } from '../../utils/searchResults';
-import { formatShortDate } from '../objects/labels';
+import { formatDateTime, formatShortDate } from '../objects/labels';
 import VirtualList from '../ui/VirtualList';
 import { displayError } from '../../utils/errorMessage';
 import PageHeader from '../ui/PageHeader';
@@ -523,8 +523,8 @@ export default function MainLayout() {
                         <CaseField label="Documents" value={String(selected.documentCount)} />
                       </dl>
                       <dl className="sr-only">
-                        <dt>Created</dt><dd>{selected.createdAt}</dd>
-                        <dt>Closed</dt><dd>{selected.closedAt ?? 'Not recorded'}</dd>
+                        <dt>Created</dt><dd>{formatDateTime(selected.createdAt)}</dd>
+                        <dt>Closed</dt><dd>{selected.closedAt ? formatDateTime(selected.closedAt) : 'Not recorded'}</dd>
                       </dl>
                       <div className="mt-4">
                         <ClockStrip

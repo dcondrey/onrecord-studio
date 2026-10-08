@@ -483,15 +483,16 @@ export default function LegalCompliancePanel({
                       : 'border-warning/30 bg-warning/10 text-warning',
                   )}
                 >
-                  {enumLabel(finding.reviewStatus)}
+                  {/* OPEN is the review state, not the request's: a closed request can carry it. */}
+                  {finding.reviewStatus === 'OPEN' ? 'Not reviewed' : enumLabel(finding.reviewStatus)}
                 </span>
               </div>
               <div className="mt-1 text-caption text-muted">{finding.statuteCitation}</div>
               <p className="mt-2 text-caption leading-relaxed text-muted">
                 {finding.evidenceSummary}
               </p>
-              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-caption text-muted">
-                <span>{Math.round(finding.confidenceBasisPoints / 100)}% rule confidence</span>
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-caption tabular-nums text-muted">
+                <span>Rule confidence {Math.round(finding.confidenceBasisPoints / 100)}%</span>
                 {finding.varianceDays !== null && <span>{finding.varianceDays} {finding.varianceDays === 1 ? 'day' : 'days'} overdue</span>}
                 {finding.supportingDocumentIds.length > 0 && (
                   <span>{finding.supportingDocumentIds.length} source {finding.supportingDocumentIds.length === 1 ? 'document' : 'documents'}</span>

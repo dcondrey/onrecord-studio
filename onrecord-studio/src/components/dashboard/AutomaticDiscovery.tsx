@@ -247,7 +247,7 @@ export default function AutomaticDiscovery() {
               </div>
             </details>
           )}
-          <p className="text-caption text-lead">Investigate: {item.question}</p>
+          <p className="text-caption text-fg-secondary">Investigate: {item.question}</p>
           <details className="text-caption text-muted">
             <summary className="focus-ring w-fit cursor-pointer rounded hover:text-fg">Evidence and method</summary>
             <div className="mt-1 space-y-0.5 break-all font-mono text-code">
