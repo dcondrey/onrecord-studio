@@ -1,8 +1,10 @@
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { scaleBand, scaleLinear, scaleLog, scaleTime, parseDate } from '../components/charts/core/scale';
-import { formatCurrencyString, formatDate, formatFiscalYear, formatValue } from '../components/charts/core/format';
+import { formatCurrencyString, formatValue } from '../components/charts/core/format';
 import { fromNullable, segmentsOf, type Measured } from '../components/charts/core/nulls';
 import { assertYardstickLabel, paintFor, VIZ, type MarkRole, type MarkVariant } from '../components/charts/core/claim';
 import { beeswarm, placeLabels } from '../components/charts/core/layout';
@@ -66,16 +68,29 @@ describe('formatters', () => {
   });
 
   it('keep a date-only value on its calendar day in a negative-offset zone', () => {
-    const previous = process.env.TZ;
-    process.env.TZ = 'America/Los_Angeles';
-    try {
-      expect(new Date(2024, 0, 1).getTimezoneOffset()).toBeGreaterThan(0);
-      expect(formatDate(parseDate('2024-03-01'), 'day')).toBe('Mar 1, 2024');
-      expect(formatFiscalYear(parseDate('2024-06-30')).label).toBe('FY24');
-      expect(formatFiscalYear(parseDate('2024-07-01'))).toEqual({ label: 'FY25', range: 'Jul 2024 to Jun 2025' });
-    } finally {
-      process.env.TZ = previous;
-    }
+    // A worker thread cannot change its zone (Node reads TZ only on the main thread), so the
+    // formatters run in a child process started in the zone. Node strips the types; the hook adds
+    // the `.ts` extension the source imports leave off.
+    const core = pathToFileURL(join(__dirname, '../components/charts/core')).href;
+    const script = `
+      import { registerHooks } from 'node:module';
+      registerHooks({ resolve: (specifier, context, next) => {
+        try { return next(specifier, context); } catch (error) { if (specifier.startsWith('.')) return next(specifier + '.ts', context); throw error; }
+      } });
+      const { parseDate } = await import(${JSON.stringify(`${core}/scale.ts`)});
+      const { formatDate, formatFiscalYear } = await import(${JSON.stringify(`${core}/format.ts`)});
+      process.stdout.write(JSON.stringify({
+        offset: new Date(2024, 0, 1).getTimezoneOffset(),
+        day: formatDate(parseDate('2024-03-01'), 'day'),
+        june: formatFiscalYear(parseDate('2024-06-30')).label,
+        july: formatFiscalYear(parseDate('2024-07-01')),
+      }));`;
+    const out = execFileSync(process.execPath, ['--no-warnings', '--input-type=module', '--eval', script], { env: { ...process.env, TZ: 'America/Los_Angeles' }, encoding: 'utf8' });
+    const result = JSON.parse(out);
+    expect(result.offset).toBeGreaterThan(0);
+    expect(result.day).toBe('Mar 1, 2024');
+    expect(result.june).toBe('FY24');
+    expect(result.july).toEqual({ label: 'FY25', range: 'Jul 2024 to Jun 2025' });
   });
 
   it('print a compact amount from the decimal string, not a float', () => {

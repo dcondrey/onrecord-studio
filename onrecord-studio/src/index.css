@@ -739,7 +739,7 @@ a[href] {
   scroll-behavior: auto !important;
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
-  transition-duration: 0.01ms !important;
+  transition-duration: 0s !important;
 }
 
 /* Increased contrast. The dark block below must restate every name this block sets, because this
