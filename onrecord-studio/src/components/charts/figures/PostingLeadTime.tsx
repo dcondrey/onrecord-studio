@@ -196,7 +196,9 @@ function Plot({ rows, upcomingCount, width, onOpen }: { rows: Row[]; upcomingCou
 export default function PostingLeadTime({ meetings, counts, onOpen }: { meetings: CalendarMeeting[]; counts: PostingCounts; onOpen(meetingId: string): void }) {
   const { upcoming, past, rail, unplotted } = postingLeadTimeData(meetings);
   const rows = [...upcoming, ...past];
-  const noTime = rail.reduce((sum, [, count]) => sum + count, 0);
+  // Only a file whose header is not recorded has no posting time; one on a meeting with no stated start or date has one but is not plotted.
+  const noTime = unplotted.filter(({ document }) => document.posting.state === 'NOT_RECORDED').length;
+  const notPlotted = unplotted.length;
   const headline = counts.agendaFilesWithBothTimes > 0
     ? `${counts.under72HoursBeforeStart} of ${counts.agendaFilesWithBothTimes} agenda files with both times recorded were posted less than 72 hours before the stated start, per Last-Modified${noTime ? `; ${noTime} ${noTime === 1 ? 'file has' : 'files have'} no posting time` : ''}.`
     : null;
@@ -205,7 +207,7 @@ export default function PostingLeadTime({ meetings, counts, onOpen }: { meetings
     columns: [{ key: 'meeting', label: 'Meeting' }, { key: 'file', label: 'Agenda file' }, { key: 'lm', label: 'Last-Modified (UTC)' }, { key: 'lead', label: 'Relative to stated start' }],
     rows: [
       ...rows.flatMap((row) => row.files.map((file) => ({ meeting: row.label, file: file.document.label, lm: utc(file.lastModified), lead: leadTimeText(file.document.minutesBeforeMeeting as number) }))),
-      ...unplotted.map(({ meeting, document, reason }) => ({ meeting: `${meeting.body} · ${meeting.date ? dateLabel(meeting.date) : 'date not recorded'}`, file: document.label, lm: absent('excluded', reason), lead: absent('excluded', reason) })),
+      ...unplotted.map(({ meeting, document, reason }) => ({ meeting: `${meeting.body} · ${meeting.date ? dateLabel(meeting.date) : 'date not recorded'}`, file: document.label, lm: document.posting.state === 'RECORDED' ? utc(document.posting.lastModified) : absent('excluded', reason), lead: absent('excluded', reason) })),
     ],
   };
   const minHeight = (width: number) => (rows.length ? layout(rows, upcoming.length, width).axisY + 28 : 80);
@@ -215,7 +217,7 @@ export default function PostingLeadTime({ meetings, counts, onOpen }: { meetings
         title="Agenda posting lead time"
         headline={headline}
         sources={{ tables: ['documents', 'document_acquisitions', 'portals'], note: 'Last-Modified is the server’s statement, not proof of public availability' }}
-        summary={`${rows.length} meetings with ${rows.reduce((sum, row) => sum + row.files.length, 0)} plotted agenda files; ${noTime} agenda files have no posting time and are not plotted.`}
+        summary={`${rows.length} meetings with ${rows.reduce((sum, row) => sum + row.files.length, 0)} plotted agenda files; ${notPlotted} agenda files are not plotted, ${noTime} of them for want of a posting time.`}
         status={rows.length ? 'ready' : 'empty'}
         emptyText="No agenda file has both a posting time and a stated start time, so nothing is plotted."
         table={table}
@@ -232,8 +234,8 @@ export default function PostingLeadTime({ meetings, counts, onOpen }: { meetings
         {({ width }) => <Plot rows={rows} upcomingCount={upcoming.length} width={width} onOpen={onOpen} />}
       </ChartFrame>
       {rail.length > 0 && (
-        <p aria-label="No posting time" className="text-caption text-muted">
-          <span className="font-medium text-fg-secondary">No posting time, not plotted: </span>
+        <p aria-label="Not plotted" className="text-caption text-muted">
+          <span className="font-medium text-fg-secondary">Not plotted: </span>
           {rail.map(([reason, count]) => `${reason} ${count}`).join(' · ')}
         </p>
       )}

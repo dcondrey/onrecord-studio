@@ -122,8 +122,10 @@ export default function CaseTimeline() {
 
   const all = useMemo(() => SOURCES.flatMap((source) => sources[source].items), [sources.REQUEST.items, sources.FINDING.items, sources.WATCH.items, sources.CASE.items]);
   const view = useMemo(() => buildTimeline(all, { sources: shown, from, to, text, lane }), [all, shown, from, to, text, lane]);
-  // The overview ignores the date range, so brushing can widen it again; the list keeps every filter.
-  const overview = useMemo(() => buildTimeline(all, { sources: shown, from: '', to: '', text, lane }), [all, shown, text, lane]);
+  // The overview ignores the date range and the lane, so brushing can widen the range again and the
+  // other lanes never read as empty; the list keeps every filter.
+  const overview = useMemo(() => buildTimeline(all, { sources: shown, from: '', to: '', text, lane: null }), [all, shown, text]);
+  const laneLabel = lane === null ? null : caseLanes.find((option) => option.id === lane)?.label ?? lane;
   const visible = view.items.slice(0, limit);
   const pending = SOURCES.filter((source) => !sources[source].loaded);
   const failed = SOURCES.filter((source) => sources[source].error);
@@ -197,6 +199,12 @@ export default function CaseTimeline() {
             <label className="flex items-center gap-2 text-caption text-muted">To
               <Input type="date" value={to} min={from || undefined} onChange={(event) => { setTo(event.target.value); setLimit(PAGE); }} className="w-40 tabular-nums" />
             </label>
+            {laneLabel !== null && (
+              <span role="status" className="inline-flex items-center gap-2 rounded-lg border border-line-strong px-2.5 py-1 text-caption text-fg-secondary">
+                {`Lane: ${laneLabel}`}
+                <Button size="sm" variant="link" className="px-0" onClick={() => { setLane(null); setLimit(PAGE); }}>Show all lanes</Button>
+              </span>
+            )}
           </div>
         </div>
 

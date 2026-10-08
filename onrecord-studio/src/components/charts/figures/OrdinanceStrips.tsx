@@ -194,6 +194,7 @@ function DistancePlot({ locations, width, onRecord }: { locations: EncampmentLoc
               {section.section}
               <tspan className={MUTED_LABEL_CLASS}>{` · ${section.notGeocoded.toLocaleString('en-US')} not geocoded${beyond > 0 ? ` · ${beyond} beyond 5,000 ft` : ''}`}</tspan>
             </text>
+            {points.length === 0 && <text x={plotX + 8} y={y + 18 + STRIP / 2} dy="0.32em" className={MUTED_LABEL_CLASS}>distance not measured for any offense in this section</text>}
             <Beeswarm
               x={x}
               cy={y + 18 + STRIP / 2}

@@ -185,7 +185,7 @@ function Plot({ groups, width, yardstick }: { groups: BulletGroup[]; width: numb
     onEscape: tooltip.hide,
   });
   // Room on the right for the longest words at a bar's end, so an overrun label is never dropped.
-  const words = Math.max(0, ...groups.flatMap((group) => group.rows.map((row) => measureText(row.overrunLabel ?? row.barLabel ?? ''))));
+  const words = Math.max(0, ...groups.flatMap((group) => group.rows.map((row) => Math.max(measureText(row.overrunLabel ?? ''), measureText(row.barLabel ?? '')))));
   const plotLeft = Math.max(0, ...blocks.map((block) => block.plotX));
   const right = Math.max(plotLeft + 80, width - Math.min(words + 12, Math.round(width * 0.55)));
   const scales = new Map<string, ContinuousScale>();

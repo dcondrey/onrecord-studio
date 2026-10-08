@@ -102,6 +102,25 @@ describe('CaseTimeline', () => {
   });
 });
 
+describe('CaseTimeline lane filter', () => {
+  it('keeps a chosen case lane visible as a chip after the sub-lanes collapse, and clears it from there', async () => {
+    const cite = { id: 'e1', reportId: 'r', evidenceId: 'e1', label: 'Agenda', quote: '', sourceUrl: null, sourceSha256: 'a', sourceReferences: [], portalKey: null, documentId: null, characterOffset: null, verification: 'SAVED_REPORT' };
+    const decision = { id: 'd1', body: 'Council', date: '2026-08-03', agendaItem: 'Item 4', proposedDecision: '', action: '', outcome: '', vote: '', state: 'PROPOSED', citationIds: ['e1'], outcomeCitationIds: [] };
+    const record = { id: 'c', reportId: 'r', topic: '', title: 'Case', owner: '', disposition: '', revision: 1, createdAt: '', updatedAt: '', notes: '', evidence: [cite], requests: [], decisions: [decision], commitments: [], questions: [{ id: 'h', question: '', hypothesis: 'Delayed on purpose', nextTest: '', disposition: 'OPEN', owner: '', citationIds: ['e1'], counterCitationIds: [] }] };
+    invoke.mockImplementation((command: string) => {
+      if (command === 'get_casework_state') return Promise.resolve({ cases: [record], events: [], leads: [], availableEvidence: [] });
+      return Promise.resolve([]);
+    });
+    render(<CaseTimeline />);
+    fireEvent.click(await screen.findByRole('button', { name: /Show case sub-lanes/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show only the Hypothesis: Delayed on purpose lane' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Hide case sub-lanes' }));
+    expect(screen.getByText('Lane: Hypothesis: Delayed on purpose')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Show all lanes' }));
+    expect(screen.queryByText(/^Lane: /)).toBeNull();
+  });
+});
+
 describe('EvidenceTimeline', () => {
   const item = (id: string, at: string, overrides: Partial<TimelineItem> = {}): TimelineItem => ({ id, source: 'WATCH', at, dateMeaning: 'OCCURRED', title: `item ${id}`, detail: null, provenance: 'watch_changes', evidence: null, findingId: null, ...overrides });
   const base = { caseLanes: [], from: '', to: '', onRange: () => {}, activeLane: null, onLane: () => {}, onOpen: () => {}, highlight: null, today: Date.parse('2026-10-08T00:00:00Z') };

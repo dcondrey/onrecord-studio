@@ -87,7 +87,7 @@ describe('meetings view', () => {
     expect(screen.getByText('72 h before start (reference; no notice rule is evaluated)')).toBeTruthy();
     expect(document.body.innerHTML).not.toMatch(/--viz-(counted|lead)/);
     // A file without a posting time is counted in the rail by reason and never plotted.
-    expect(screen.getByLabelText('No posting time').textContent).toContain('host reports request time 1');
+    expect(screen.getByLabelText('Not plotted').textContent).toContain('host reports request time 1');
     expect(screen.queryByRole('img', { name: /docket\.html/ })).toBeNull();
     expect(card.querySelector('time')?.getAttribute('dateTime')).toBe('2026-09-28T21:00:00Z');
     const docketCard = screen.getByRole('article', { name: 'Audit Committee 2026-10-08' });
@@ -129,5 +129,17 @@ describe('meetings view', () => {
     const unchanged = screen.getByRole('article', { name: 'Planning Commission 2026-10-08' }).textContent ?? '';
     expect(unchanged).toContain('No item was added, removed or changed between these copies.');
     expect(unchanged).toContain('ordered by when the app collected them');
+  });
+
+  it('lists a recorded posting on a meeting with no stated start as not plotted, never as having no posting time', async () => {
+    const noStart = meeting('nostart', 'Budget Review Committee', { documents: [agendaFile({ label: 'brc.pdf', posting: { state: 'RECORDED', lastModified: '2026-09-29T17:30:00Z' } })] });
+    const posted = meeting('posted', 'Privacy Advisory Board', { startTime: '14:00', documents: [agendaFile({ documentId: 5, posting: { state: 'RECORDED', lastModified: '2026-09-28T21:00:00Z' }, minutesBeforeMeeting: 4319 })] });
+    bridge.invoke.mockResolvedValue(calendar([noStart, posted], { agendaFilesWithBothTimes: 1, under72HoursBeforeStart: 1, afterMeetingStart: 0 }));
+    render(<MeetingsView />);
+    expect(await screen.findByText('1 of 1 agenda files with both times recorded were posted less than 72 hours before the stated start, per Last-Modified.')).toBeTruthy();
+    expect(screen.getByLabelText('Not plotted').textContent).toContain('meeting start time not recorded 1');
+    fireEvent.click(screen.getByRole('button', { name: 'View as table' }));
+    const row = screen.getByText('brc.pdf').closest('tr');
+    expect(row?.textContent).toContain('2026-09-29 17:30 UTC');
   });
 });

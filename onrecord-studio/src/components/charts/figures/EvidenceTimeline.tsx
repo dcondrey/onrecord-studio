@@ -318,7 +318,7 @@ function rowsOf(props: EvidenceTimelineProps, expanded: boolean): Row[] {
     rows.push({ key: lane.source, label: SOURCE_LABELS[lane.source], title: SOURCE_LABELS[lane.source], items, state: lane.state, cappedAt: lane.cappedAt });
     if (lane.source === 'CASE' && expanded && lane.state === 'ready') {
       for (const sub of props.caseLanes) {
-        rows.push({ key: `lane:${sub.id}`, label: sub.label, title: `${sub.kind === 'CLOCK' ? 'Clock' : 'Hypothesis'}: ${sub.label}`, items: items.filter((item) => (item.lanes ?? []).includes(sub.id)), state: 'ready', cappedAt: null, laneId: sub.id, sub: true });
+        rows.push({ key: `lane:${sub.id}`, label: sub.label, title: sub.label, items: items.filter((item) => (item.lanes ?? []).includes(sub.id)), state: 'ready', cappedAt: null, laneId: sub.id, sub: true });
       }
     }
   }
@@ -353,6 +353,14 @@ export default function EvidenceTimeline(props: EvidenceTimelineProps) {
     columns: [{ key: 'date', label: 'Date' }, { key: 'meaning', label: 'Date meaning' }, { key: 'source', label: 'Source' }, { key: 'title', label: 'Item' }],
     rows: [
       ...[...dated].sort((a, b) => Date.parse(a.at) - Date.parse(b.at)).map((item) => ({ date: formatDate(parseDate(item.at), 'day'), meaning: DATE_MEANING_LABELS[item.dateMeaning], source: SOURCE_LABELS[item.source], title: item.title })),
+      ...props.contradictions.map((entry) => ({
+        date: entry.readings.map((reading) => `${reading.date} (${reading.basis})`).join(' ≠ '),
+        meaning: 'Contradicting dates, both shown as recorded',
+        source: SOURCE_LABELS.CASE,
+        title: entry.subject,
+      })),
+      ...props.lanes.filter((lane) => lane.cappedAt !== null).map((lane) => ({ date: absent('excluded', `only the first ${lane.cappedAt} ${SOURCE_LABELS[lane.source].toLowerCase()} were loaded`), meaning: null, source: SOURCE_LABELS[lane.source], title: null })),
+      ...props.lanes.filter((lane) => lane.state === 'failed').map((lane) => ({ date: absent('not-recorded', `${SOURCE_LABELS[lane.source]} could not be read`), meaning: null, source: SOURCE_LABELS[lane.source], title: null })),
       ...(props.listed.unreadable ? [{ date: absent('excluded', `${props.listed.unreadable} items have a date that could not be read`), meaning: null, source: null, title: null }] : []),
     ],
   };
@@ -362,7 +370,7 @@ export default function EvidenceTimeline(props: EvidenceTimelineProps) {
       title="Timeline overview"
       headline={timelineHeadline(props.listed, props.contradictions.length)}
       sources={{ tables: ['tracker notebook', 'findings', 'watch_changes', 'casework_cases', 'casework_events'] }}
-      summary={`${dated.length} dated items in ${rows.length} lanes${failed ? `; ${failed} sources could not be read` : ''}${props.listed.unreadable ? `; ${props.listed.unreadable} undated items not placed` : ''}. Drag across the lanes to set the From and To dates.`}
+      summary={`${dated.length} dated items in ${rows.length} lanes${failed ? `; ${failed} sources could not be read` : ''}${props.listed.unreadable ? `; ${props.listed.unreadable} undated items not placed` : ''}${props.lanes.filter((lane) => lane.cappedAt !== null).map((lane) => `; only the first ${lane.cappedAt} ${SOURCE_LABELS[lane.source].toLowerCase()} loaded`).join('')}. Drag across the lanes to set the From and To dates.`}
       status={dated.length || failed ? 'ready' : 'empty'}
       emptyText="No dated items to place for these sources and filters."
       table={table}
