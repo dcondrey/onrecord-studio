@@ -10,7 +10,6 @@
 //! * [`duckdb::DuckDbWorkspace`] and `analysis::anomaly` can take a bounded read-only snapshot of
 //!   a SQLite file an investigator supplies, so it can be analyzed without changing the source or
 //!   downloading a platform-specific DuckDB extension.
-//! * [`fts`] carries a SQLite FTS5 query sanitizer that no core path calls; see its module docs.
 //!
 //! The core search projection, `documents_fts`, is a plain DuckDB table maintained transactionally
 //! by the repository. A versioned companion token table provides indexed all-term matching; it is
