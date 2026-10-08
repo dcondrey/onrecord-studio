@@ -578,9 +578,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       isSyncing: syncingPortalKeys.length > 0,
     };
   }),
-  setPortalRuntimesError: (portalRuntimesError) => set({ portalRuntimesStatus: 'failed', portalRuntimesError }),
+  // A failed refresh over a measured snapshot keeps that snapshot; only a failed first read is absence.
+  setPortalRuntimesError: (portalRuntimesError) =>
+    set((state) => ({ portalRuntimesStatus: state.portalRuntimesStatus === 'ready' ? 'ready' : 'failed', portalRuntimesError })),
   requestRuntimeRefresh: () =>
-    set((state) => ({ portalRuntimesStatus: 'pending', portalRuntimesError: null, runtimeRefreshRequests: state.runtimeRefreshRequests + 1 })),
+    set((state) => ({
+      portalRuntimesStatus: state.portalRuntimesStatus === 'ready' ? 'ready' : 'pending',
+      portalRuntimesError: null,
+      runtimeRefreshRequests: state.runtimeRefreshRequests + 1,
+    })),
   setActivePortal: (activePortalKey) =>
     set({
       activePortalKey,

@@ -63,10 +63,12 @@ export default function ActivityDashboard() {
           }
         />
 
-        {runtimesStatus === 'failed' && (
+        {runtimesError && (
           <InlineError
-            summary="Source runtimes couldn't be read, so this session's queue figures are not available."
-            detail={runtimesError ?? undefined}
+            summary={measured
+              ? "Source runtimes couldn't be refreshed; the figures below are from the last snapshot read."
+              : "Source runtimes couldn't be read, so this session's queue figures are not available."}
+            detail={runtimesError}
             onRetry={requestRuntimeRefresh}
           />
         )}

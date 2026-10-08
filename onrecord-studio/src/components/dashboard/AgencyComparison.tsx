@@ -70,6 +70,9 @@ const COLUMNS: readonly ColumnDefinition[] = [
 
 const DEFAULT_COLUMN: ComparisonColumn = 'averageClosureDays';
 
+/** Two-word headers wrap onto two lines, bottom-aligned, so every column fits at 1280. */
+const NUMERIC_HEADER = 'h-auto min-w-[5rem] whitespace-normal px-2 py-2 align-bottom leading-4';
+
 function isPeerLatencyOutlier(profile: AgencyPerformanceProfile): boolean {
   return profile.performanceZScore !== null && profile.performanceZScore >= PEER_LATENCY_OUTLIER_Z_SCORE;
 }
@@ -196,22 +199,22 @@ export default function AgencyComparison() {
             <Table label="Agency comparison">
               <thead>
                 <tr>
-                  <Th numeric className="sticky left-0 z-[11] w-12 min-w-12">Rank</Th>
-                  <Th className="sticky left-12 z-[11] min-w-[12rem]">Agency</Th>
+                  <Th numeric className="sticky left-0 z-[11] h-auto w-12 min-w-12 py-2 align-bottom">Rank</Th>
+                  <Th className="sticky left-12 z-[11] h-auto min-w-[12rem] py-2 align-bottom">Agency</Th>
                   {COLUMNS.map((definition) => {
                     const active = definition.key === column;
                     return (
                       <Th
                         key={definition.key}
                         numeric
-                        className="px-2"
+                        className={NUMERIC_HEADER}
                         aria-sort={active ? (direction === 'desc' ? 'descending' : 'ascending') : 'none'}
                       >
                         <button
                           type="button"
                           onClick={() => toggleSort(definition.key)}
                           title={definition.full}
-                          className={cn('focus-ring inline-flex items-center gap-1 rounded uppercase hover:text-fg', active && 'text-fg')}
+                          className={cn('focus-ring inline-flex items-end gap-1 rounded text-right uppercase hover:text-fg', active && 'text-fg')}
                         >
                           {/* The glyph leads so the label's right edge lines up with the right-aligned figures. */}
                           <span aria-hidden="true" className={cn('w-2 text-center', !active && 'invisible')}>{direction === 'desc' ? '▾' : '▴'}</span>
@@ -288,9 +291,9 @@ function ComparisonSkeleton() {
         <Table label="Agency comparison, loading">
           <thead>
             <tr>
-              <Th numeric className="w-12 min-w-12">Rank</Th>
-              <Th className="min-w-[12rem]">Agency</Th>
-              {COLUMNS.map((definition) => <Th key={definition.key} numeric className="px-2">{definition.label}</Th>)}
+              <Th numeric className="h-auto w-12 min-w-12 py-2 align-bottom">Rank</Th>
+              <Th className="h-auto min-w-[12rem] py-2 align-bottom">Agency</Th>
+              {COLUMNS.map((definition) => <Th key={definition.key} numeric className={NUMERIC_HEADER}>{definition.label}</Th>)}
             </tr>
           </thead>
           <tbody aria-hidden="true">

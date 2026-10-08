@@ -105,10 +105,10 @@ export default function DispositionCounts({ portalSubdomain }: { portalSubdomain
         <Table label="Dispositions by department">
           <thead>
             <tr>
-              <Th className="min-w-[14rem] py-2 align-bottom">Department</Th>
+              <Th className="min-w-[12rem] py-2 align-bottom">Department</Th>
               <Th numeric className="py-2 align-bottom">Requests</Th>
               {DISPOSITION_ORDER.map((disposition) => (
-                <Th key={disposition} numeric className="h-auto min-w-[6.5rem] whitespace-normal py-2 align-bottom leading-4">{DISPOSITION_LABELS[disposition]}</Th>
+                <Th key={disposition} numeric className="h-auto min-w-[5.5rem] whitespace-normal py-2 align-bottom leading-4">{DISPOSITION_LABELS[disposition]}</Th>
               ))}
             </tr>
           </thead>
@@ -121,7 +121,7 @@ export default function DispositionCounts({ portalSubdomain }: { portalSubdomain
               return (
                 <Fragment key={key}>
                   <tr>
-                    <Td className="min-w-[14rem]">
+                    <Td className="min-w-[12rem]">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         {row.agencyId === null ? (
                           <span className="text-muted">{name}</span>

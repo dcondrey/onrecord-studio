@@ -186,11 +186,6 @@ export default function CaseTimeline() {
                 {caseLanes.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
               </Select>
             </label>
-            <div className="ml-auto">
-              <MethodNote label="How dates are read">
-                One timeline from your tracked requests, detector findings, watch changes and case records. An event date is when something happened. Last seen and noticed dates are when this app saw it, which can be later than the event. A due or modeled date is owed or computed, not observed. Case dates are the ones you recorded; none is read out of a document.
-              </MethodNote>
-            </div>
           </div>
         </div>
 
@@ -245,9 +240,16 @@ export default function CaseTimeline() {
             <p className="app-panel p-5 text-center text-body text-muted">No items match these filters.</p>
           )
         ) : (
-          groups.map((group) => (
+          groups.map((group, index) => (
             <section key={group.month} aria-label={`Items from ${formatMonth(group.month)}`}>
-              <h3 className="mb-2 text-heading text-fg">{formatMonth(group.month)}</h3>
+              <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                <h3 className="text-heading text-fg">{formatMonth(group.month)}</h3>
+                {index === 0 && (
+                  <MethodNote label="How dates are read">
+                    One timeline from your tracked requests, detector findings, watch changes and case records. An event date is when something happened. Last seen and noticed dates are when this app saw it, which can be later than the event. A due or modeled date is owed or computed, not observed. Case dates are the ones you recorded; none is read out of a document.
+                  </MethodNote>
+                )}
+              </div>
               <ol className="app-panel divide-y divide-line overflow-hidden">
                 {group.rows.map((row) => (
                   <li key={row.id} className="px-4 py-3">

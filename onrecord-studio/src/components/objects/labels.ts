@@ -15,11 +15,11 @@ export function severityLabel(severity: FindingSeverity): string {
   return severity.charAt(0) + severity.slice(1).toLowerCase();
 }
 
-export function severityTone(severity: FindingSeverity): 'danger' | 'warning' | 'accent' | 'muted' {
+export function severityTone(severity: FindingSeverity): 'danger' | 'warning' | 'neutral' | 'muted' {
   switch (severity) {
     case 'CRITICAL': return 'danger';
     case 'SERIOUS': return 'warning';
-    case 'NOTABLE': return 'accent';
+    case 'NOTABLE': return 'neutral';
     case 'INFO': return 'muted';
   }
 }

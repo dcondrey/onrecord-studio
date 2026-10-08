@@ -316,7 +316,7 @@ function FindingList({ findings, empty }: { findings: Finding[]; empty: string }
         const tone = severityTone(finding.severity);
         return (
           <li key={finding.id} className="flex items-start gap-2">
-            <span className={cn('mt-0.5 shrink-0 rounded-full px-1.5 text-caption font-semibold', tone === 'danger' && 'bg-danger/10 text-danger', tone === 'warning' && 'bg-warning/10 text-warning', tone === 'accent' && 'bg-accent/10 text-accent', tone === 'muted' && 'bg-surface text-muted')}>
+            <span className={cn('mt-0.5 shrink-0 rounded-full px-1.5 text-caption font-semibold', tone === 'danger' && 'bg-danger/10 text-danger', tone === 'warning' && 'bg-warning/10 text-warning', tone === 'neutral' && 'bg-raised text-fg-secondary', tone === 'muted' && 'bg-surface text-muted')}>
               {severityLabel(finding.severity)}
             </span>
             <ObjectLink target={{ kind: 'finding', id: finding.id, label: finding.headline }}>{finding.headline}</ObjectLink>
