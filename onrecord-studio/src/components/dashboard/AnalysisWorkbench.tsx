@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import DifferenceDots from '../charts/figures/DifferenceDots';
 import { budgetComparisonLineQuery, readBudgetComparison } from '../../utils/budgetComparison';
 import { open, save } from '@tauri-apps/plugin-dialog';
@@ -30,7 +30,8 @@ import DataDiscovery from './DataDiscovery';
 import DataPackImport from './DataPackImport';
 import FacilityCoveragePanel from './FacilityCoveragePanel';
 import EncampmentOrdinancePanel from './EncampmentOrdinancePanel';
-import { useAppStore } from '../../store/useAppStore';
+import { useAppStore, type AnalysisPanel } from '../../store/useAppStore';
+import { scrollWithin } from '../../utils/scrollWithin';
 import AutomaticDiscovery from './AutomaticDiscovery';
 import { useAutomaticDiscovery } from './AutomaticDiscoveryProvider';
 
@@ -239,6 +240,10 @@ export default function AnalysisWorkbench() {
   // the instant the user acts.
   const runGatedSql = (label: string, query: string, limit = 500) => {
     const request = sqlGate.begin();
+    // The table on screen answered the previous text; it never stands under this one, even if
+    // this run fails.
+    setSqlResult(null);
+    setResultSql('');
     return run(
       label,
       () => invokeCommand('run_analytical_sql', { sql: query, limit }),
@@ -251,6 +256,50 @@ export default function AnalysisWorkbench() {
     );
   };
 
+  const scroller = useRef<HTMLElement>(null);
+  /**
+   * Budget versus actuals runs its comparison through the SQL panel, which then holds the result.
+   * Busy and failure are reported inside the comparison panel (the caller's promise), not at the top
+   * of the page; a landed result is scrolled into view within this view's own scroller.
+   */
+  const compareBudget = async (query: string) => {
+    setSql(query);
+    const request = sqlGate.begin();
+    setSqlResult(null);
+    setResultSql('');
+    const release = discovery?.hold();
+    try {
+      const result = await invokeCommand('run_analytical_sql', { sql: query, limit: 500 });
+      if (!sqlGate.isCurrent(request)) return false;
+      setSqlResult(result);
+      setResultSql(query);
+      requestAnimationFrame(() => {
+        const figure = document.getElementById('budget-difference');
+        if (figure && scroller.current) scrollWithin(scroller.current, figure, 'start');
+      });
+      return true;
+    } catch (reason) {
+      if (!sqlGate.isCurrent(request)) return false;
+      throw reason;
+    } finally {
+      release?.();
+    }
+  };
+
+  // A panel the command bar asked for: scrolled to inside this view and its heading focused, so
+  // the reader lands on it rather than at the top of the page.
+  const requestedPanel = useAppStore((state) => state.requestedAnalysisPanel);
+  const requestAnalysisPanel = useAppStore((state) => state.requestAnalysisPanel);
+  useEffect(() => {
+    if (!requestedPanel) return;
+    const heading = document.getElementById(PANEL_HEADINGS[requestedPanel]);
+    if (!heading) return;
+    requestAnalysisPanel(null);
+    if (scroller.current) scrollWithin(scroller.current, heading, 'start');
+    heading.tabIndex = -1;
+    heading.focus({ preventScroll: true });
+  }, [requestAnalysisPanel, requestedPanel, schema]);
+
   const indexing = status === 'Indexing documents' || status === 'Rebuilding semantic index';
   const indexedDocuments = indexStatus?.indexedDocumentCount ?? null;
   const pendingDocuments = indexStatus?.pendingDocumentCount ?? null;
@@ -262,7 +311,7 @@ export default function AnalysisWorkbench() {
   const unavailable = (read: StatusRead) => (read === 'failed' ? 'Unavailable' : 'Checking');
 
   return (
-    <main className="min-h-0 flex-1 overflow-y-auto">
+    <main ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto w-full max-w-content space-y-6 px-4 pb-10 pt-6 md:px-6">
         <PageHeader
           title="Analysis"
@@ -484,11 +533,8 @@ export default function AnalysisWorkbench() {
             </div>
           </Panel>
 
-          {schema && <Panel title="Budget versus actuals">
-            <BudgetComparison schema={schema} onCompare={(query) => {
-              setSql(query);
-              void runGatedSql('Comparing budget and actuals', query);
-            }} />
+          {schema && <Panel title="Budget versus actuals" titleId={PANEL_HEADINGS.budget}>
+            <BudgetComparison schema={schema} onCompare={compareBudget} />
           </Panel>}
 
           {schema && <Panel title="Facility coverage">
@@ -540,7 +586,9 @@ export default function AnalysisWorkbench() {
               </div>
             </div>
             {/* Full panel width: the result column beside the dataset list is too narrow for row labels. */}
-            {sqlResult && <BudgetDifference result={sqlResult} onInspect={(line) => { setSql(budgetComparisonLineQuery(resultSql, line)); sqlGate.invalidate(); }} />}
+            <div id="budget-difference" className="scroll-mt-4">
+              {sqlResult && <BudgetDifference result={sqlResult} onInspect={(line) => { setSql(budgetComparisonLineQuery(resultSql, line)); sqlGate.invalidate(); }} />}
+            </div>
           </Panel>
 
           {groupedColumns.length > 0 && (
@@ -563,6 +611,12 @@ export default function AnalysisWorkbench() {
     </main>
   );
 }
+
+/** The headings the command bar's Analysis rows open (`requestedAnalysisPanel`). */
+const PANEL_HEADINGS: Record<AnalysisPanel, string> = {
+  budget: 'budget-comparison-heading',
+  pack: 'data-pack-import-heading',
+};
 
 function Panel({ title, titleId, children }: { title: string; titleId?: string; children: React.ReactNode }) {
   return (

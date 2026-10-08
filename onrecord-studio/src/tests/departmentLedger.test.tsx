@@ -75,7 +75,7 @@ function renderLedger(profiles: AgencyPerformanceProfile[], onInspect = vi.fn())
   return onInspect;
 }
 
-const row = (name: string) => screen.getByRole('img', { name: new RegExp(`^${name}:`) });
+const row = (name: string) => screen.getByRole('button', { name: new RegExp(`^${name}:`) });
 const painted = (element: Element, token: string) => [...element.querySelectorAll('*')].filter((node) => (node.getAttribute('style') ?? '').includes(token));
 
 afterEach(() => {
@@ -145,7 +145,7 @@ describe('DepartmentLedger', () => {
   it('draws nothing under a case scope and says why', () => {
     render(<DepartmentLedger variant="overview" profiles={[profile({ agencyId: 1, agencyName: 'Police' })]} status="scoped-out" scopedOutText="Hidden while a case scope is active." portalName={(key) => key} onInspect={vi.fn()} />);
     expect(screen.getByText('Hidden while a case scope is active.')).toBeTruthy();
-    expect(screen.queryByRole('img', { name: /^Police:/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Police:/ })).toBeNull();
   });
 });
 

@@ -51,7 +51,7 @@ describe('workspace initialization states', () => {
     expect(screen.queryByRole('region', { name: 'San Diego research desk' })).toBeNull();
     expect(screen.queryByRole('region', { name: 'Investigation workbench' })).toBeNull();
     fireEvent.click(screen.getByRole('tab', { name: 'Tools' }));
-    expect(screen.getByRole('button', { name: 'Open casework and research tools' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Casework' })).toBeTruthy();
     const drawer = screen.getByText('Browse sources and add records').closest('details')!;
     drawer.open = true;
     fireEvent(drawer, new Event('toggle'));

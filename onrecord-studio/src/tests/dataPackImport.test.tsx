@@ -88,7 +88,7 @@ describe('DataPackImport', () => {
     await act(async () => { fireEvent.change(screen.getByRole('combobox', { name: 'Published pack' }), { target: { value: 'san-diego-reports' } }); });
 
     expect(invokeCommand).toHaveBeenCalledWith('fetch_published_pack_manifest', { pack: 'san-diego-reports' });
-    expect(screen.getByText(/Built 2026-10-06T22:59:25Z/)).toBeTruthy();
+    expect(document.querySelector('time[datetime="2026-10-06T22:59:25Z"]')).toBeTruthy();
     expect(screen.getByText('Informational only.')).toBeTruthy();
     fireEvent.click(screen.getByRole('checkbox', { name: /^2025 · 10 rows · 3 MB/ }));
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Download and import 3 MB' })); });

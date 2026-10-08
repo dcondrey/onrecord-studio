@@ -21,6 +21,8 @@ export interface MarkInteraction {
   onFocusMark?(box: DOMRect): void;
   onBlurMark?(): void;
   onClick?(): void;
+  /** `button` for a mark whose activation opens what it names; default `img`. */
+  role?: 'button';
 }
 
 export interface Box {
@@ -47,8 +49,7 @@ export function MarkGroup({ interaction, box, ringRadius = 3, children }: { inte
   const { item } = interaction;
   return (
     <g
-      // A mark that opens something is a control; one that only describes is an image.
-      role={interaction.onClick ? 'button' : 'img'}
+      role={interaction.role ?? 'img'}
       aria-label={interaction.name}
       className="viz-focusable"
       tabIndex={item ? item.tabIndex : undefined}

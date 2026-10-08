@@ -422,6 +422,7 @@ function LedgerPlot({ width, rows, scaleRows, portalName, nameNeed, onInspect }:
             interaction={{
               name: accessibleName(profile),
               item: roving.getItemProps(index),
+              role: 'button',
               onClick: () => onInspect(profile),
               onPointerMove: (event) => tooltip.show(tooltipFor(profile), event),
               onPointerLeave: tooltip.hide,
