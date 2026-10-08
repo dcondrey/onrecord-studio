@@ -17,6 +17,11 @@ import { INVESTIGATION_TOPICS } from "../../utils/investigations";
 import { useAppStore } from "../../store/useAppStore";
 import { useLatestRequestGate } from "../../hooks/useLatestRequestGate";
 import { minimumResearchCalls, researchBudgetMessage } from "../../utils/researchReadiness";
+import Icon from "../ui/icons";
+import Button from "../ui/Button";
+import Badge from "../ui/Badge";
+import { Select } from "../ui/Field";
+import { formatShortDate } from "../objects/labels";
 
 export default function ResearchWorkspace({ onReview }: { onReview?: (reportId: string) => void } = {}) {
   const [status, setStatus] = useState<ResearchStatus | null>(null);
@@ -153,33 +158,36 @@ export default function ResearchWorkspace({ onReview }: { onReview?: (reportId: 
         </p>
       </div>
     )}
-    <details ref={controlsRef} className="app-panel p-4" open={!status || status.reports.length === 0}>
-      <summary className="text-sm font-semibold text-fg-secondary">Research controls and saved dossiers</summary>
-      <div className="space-y-4 pt-4">
-        {status && status.reports.length > 0 && (
-          <label className="flex flex-wrap items-center gap-3 text-label leading-4 text-fg-secondary">
-            Open a saved dossier
-            <select aria-label="Research dossier" className="analysis-input min-w-0 flex-1" value={report?.id ?? ""} onChange={(event) => open(event.target.value, "findings")}>
-              <option value="">Choose an investigation</option>
-              {status.reports.map((item) => (
-                <option key={item.id} value={item.id}>{item.synthesis.title} · {new Date(item.createdAt).toLocaleDateString()}</option>
-              ))}
-            </select>
-          </label>
-        )}
-        <div className="flex flex-wrap items-center gap-3">
-          <label htmlFor="research-topic" className="text-label leading-4 text-fg-secondary">Investigate next</label>
-          <select id="research-topic" aria-label="Research topic" className="analysis-input" value={topic} onChange={(event) => setTopic(event.target.value)}>
+    <details ref={controlsRef} className="group app-panel" open={!status || status.reports.length === 0}>
+      <summary className="focus-ring flex h-14 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-5 text-heading text-fg [&::-webkit-details-marker]:hidden">
+        Research controls and saved dossiers
+        <Icon name="chevron" size="xs" className="text-muted transition-transform duration-base group-open:rotate-90" />
+      </summary>
+      <div className="space-y-5 border-t border-line p-5">
+        <div className="grid grid-cols-1 items-center gap-x-3 gap-y-3 sm:grid-cols-[max-content_minmax(0,28rem)_auto]">
+          {status && status.reports.length > 0 && (
+            <>
+              <label htmlFor="research-dossier" className="text-control text-fg-secondary">Open a saved dossier</label>
+              <Select id="research-dossier" value={report?.id ?? ""} onChange={(event) => open(event.target.value, "findings")}>
+                <option value="">Choose an investigation</option>
+                {status.reports.map((item) => (
+                  <option key={item.id} value={item.id}>{item.synthesis.title} · {formatShortDate(item.createdAt)}</option>
+                ))}
+              </Select>
+              <span aria-hidden="true" className="hidden sm:block" />
+            </>
+          )}
+          <label htmlFor="research-topic" className="text-control text-fg-secondary">Investigate next</label>
+          <Select id="research-topic" value={topic} onChange={(event) => setTopic(event.target.value)}>
             {INVESTIGATION_TOPICS.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
-          </select>
-          <button
-            type="button"
+          </Select>
+          <Button
+            variant="primary"
             disabled={pending || !status?.policy.enabled || !!missingCredential || !!budgetMessage || !isTauri()}
             onClick={() => void run()}
-            className="primary-action focus-ring rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
           >
             {pending ? "Starting…" : "Investigate now"}
-          </button>
+          </Button>
         </div>
         {status && (
           <ResearchSettings
@@ -192,8 +200,42 @@ export default function ResearchWorkspace({ onReview }: { onReview?: (reportId: 
         )}
       </div>
     </details>
-    {status && <details className="app-panel p-4 text-label leading-4 text-muted"><summary className="font-semibold text-fg">Collection coverage and source issues</summary><div className="mt-3 grid gap-3 md:grid-cols-2">{status.sources.map((source) => <div key={source.url}>{/^https?:\/\//.test(source.url) ? <a href={source.url} target="_blank" rel="noreferrer" className="text-accent">{source.label}</a> : <span className="text-fg-secondary">{source.label}</span>}<p className="mt-1">{source.state}: {source.detail}</p></div>)}</div><p className="mt-3">{status.sources.length === 0 ? "No collection results were returned in this status response. " : ""}Collections are bounded. Paused and removed sources remain under your control. Review Activity for extraction failures and the actual documents acquired.</p></details>}
+    {status && (
+      <details className="group app-panel">
+        <summary className="focus-ring flex h-14 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-5 text-heading text-fg [&::-webkit-details-marker]:hidden">
+          Collection coverage and source issues
+          <Icon name="chevron" size="xs" className="text-muted transition-transform duration-base group-open:rotate-90" />
+        </summary>
+        <div className="border-t border-line p-5 text-body">
+          {status.sources.length === 0 ? (
+            <p className="text-muted">No collection results were returned in this status response.</p>
+          ) : (
+            <ul className="grid gap-3 md:grid-cols-2">
+              {status.sources.map((source) => (
+                <li key={source.url} className="min-w-0">
+                  {/^https?:\/\//.test(source.url)
+                    ? <a href={source.url} target="_blank" rel="noreferrer" className="focus-ring rounded font-medium text-accent underline-offset-2 hover:underline">{source.label}<span className="sr-only"> (opens in browser)</span></a>
+                    : <span className="font-medium text-fg-secondary">{source.label}</span>}
+                  <p className="mt-1 flex flex-wrap items-center gap-2 text-caption text-muted">
+                    <SourceStateBadge state={source.state} />
+                    <span className="min-w-0">{source.detail}</span>
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+          <Button variant="link" className="mt-4" onClick={() => useAppStore.getState().setWorkspaceView("activity")}>Open Activity</Button>
+        </div>
+      </details>
+    )}
   </section>;
+}
+
+/** Backend states are upper-case words; OK reads as collected, a failure as its own word. */
+function SourceStateBadge({ state }: { state: string }) {
+  const failed = /ERROR|FAILED|BLOCKED|UNAVAILABLE/i.test(state);
+  const label = /^OK$/i.test(state) ? "Collected" : state.charAt(0) + state.slice(1).toLowerCase().split("_").join(" ");
+  return <Badge tone={/^OK$/i.test(state) ? "success" : failed ? "danger" : "warning"}>{label}</Badge>;
 }
 
 function ResearchSettings({
