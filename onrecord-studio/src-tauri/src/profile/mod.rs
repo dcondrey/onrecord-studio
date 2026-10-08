@@ -325,22 +325,11 @@ impl DisclosureContext {
     }
 
     pub fn subject_is_own(&self, subject: &FindingSubject) -> bool {
-        self.subject_parts_are_own(
-            subject.portal_key.as_deref(),
-            subject.agency_id,
-            subject.entity_id.as_deref(),
-        )
-    }
-
-    pub fn subject_parts_are_own(
-        &self,
-        portal_key: Option<&str>,
-        agency_id: Option<i64>,
-        entity_id: Option<&str>,
-    ) -> bool {
+        let portal_key = subject.portal_key.as_deref();
+        let entity_id = subject.entity_id.as_deref();
         portal_key.is_some_and(|key| self.own_portal_keys.contains(key))
             || portal_key
-                .zip(agency_id)
+                .zip(subject.agency_id)
                 .is_some_and(|(key, id)| self.own_agencies.contains(&(key.to_string(), id)))
             || entity_id.is_some_and(|id| self.own_entity_ids.contains(id))
     }

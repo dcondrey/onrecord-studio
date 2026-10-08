@@ -3,7 +3,7 @@
 //! This is deliberately not in DuckDB. The profile is a per-device preference that must be
 //! deletable as a single file, and it must survive a corpus or core database rebuild.
 
-use crate::atomic_write::sync_directory;
+use crate::atomic_write::{sync_directory, write_atomic};
 use crate::error::AppError;
 use crate::types::profile::{ProfileDeletionOutcome, UserProfile, PROFILE_SCHEMA_VERSION};
 use std::fs::{self, File};
@@ -54,7 +54,7 @@ impl ProfileStore {
         let next = change(current)?;
         let bytes = serde_json::to_vec_pretty(&next)
             .map_err(|error| AppError::Storage(format!("Failed to encode the profile: {error}")))?;
-        write_atomic(&self.path, &bytes)?;
+        write_atomic(&self.path, PROFILE_LABEL, &bytes)?;
         Ok(next)
     }
 
@@ -115,17 +115,4 @@ fn read_profile(path: &Path) -> Result<Option<UserProfile>, AppError> {
         )));
     }
     Ok(Some(profile))
-}
-
-pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), AppError> {
-    crate::atomic_write::write_atomic(path, PROFILE_LABEL, bytes)
-}
-
-/// Test seam: lets a test fail a write partway.
-#[cfg(test)]
-pub(crate) fn write_atomic_with<F>(path: &Path, write: F) -> Result<(), AppError>
-where
-    F: FnOnce(&mut File) -> io::Result<()>,
-{
-    crate::atomic_write::write_atomic_with(path, PROFILE_LABEL, write)
 }
