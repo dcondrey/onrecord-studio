@@ -91,7 +91,9 @@
   --viz-red: var(--viz-crimson);
   --viz-indigo: var(--viz-slate);
   --viz-purple: var(--viz-violet);
-  --viz-on-color: #ffffff;
+  /* Text on a chart fill: ink on cyan, amber and crimson; white only on light slate. */
+  --viz-on-color: #0f172a;
+  --viz-on-slate: #ffffff;
   --scrollbar: #cbd5e1;
   --scrollbar-hover: #94a3b8;
   font-synthesis: none;
@@ -148,6 +150,7 @@
   --viz-amber: #f59e0b;
   --viz-slate: #94a3b8;
   --viz-on-color: #0b1222;
+  --viz-on-slate: #0b1222;
   --scrollbar: #334155;
   --scrollbar-hover: #475569;
 }
@@ -765,6 +768,11 @@ a[href] {
 
 .motion-lift:hover {
   border-color: rgb(var(--line-strong));
+  box-shadow: 0 4px 12px rgb(15 23 42 / 0.06), 0 1px 3px rgb(15 23 42 / 0.04);
+}
+
+:root[data-theme="dark"] .motion-lift:hover {
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.25), 0 1px 3px rgb(0 0 0 / 0.15);
 }
 
 /* A live source breathes while it ingests and is steady otherwise; under reduced motion it is a

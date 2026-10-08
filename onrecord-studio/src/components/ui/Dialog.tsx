@@ -34,7 +34,7 @@ function useIsTopDialog(id: string) {
       stackListeners.forEach((listener) => listener());
     };
   }, [id]);
-  return useSyncExternalStore(subscribeToStack, () => openDialogs.length === 0 || openDialogs[openDialogs.length - 1] === id);
+  return useSyncExternalStore(subscribeToStack, () => !openDialogs.includes(id) || openDialogs[openDialogs.length - 1] === id);
 }
 
 function useDialogContext() {
