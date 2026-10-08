@@ -122,7 +122,7 @@ function layoutFor(width: number, props: StateGridProps): Layout {
   const widest = Math.max(0, ...rows.map((row) => Math.max(measureText(row.label, ROW_FONT), row.sublabel ? measureText(row.sublabel) : 0)));
   const labelWidth = Math.round(Math.max(88, Math.min(widest + 12, width * 0.32, 240)));
   const trailingWidth = rows.some((row) => row.trailing)
-    ? Math.round(Math.min(Math.max(...rows.map((row) => (row.trailing ? measureText(row.trailing.text) : 0)), 40) + 16, width * 0.2, 150))
+    ? Math.round(Math.min(Math.max(...rows.map((row) => (row.trailing ? measureText(row.trailing.text) : 0)), 40) + 16, width * 0.22, 190))
     : 0;
   const cellWidth = Math.max(24, Math.min(132, (width - labelWidth - trailingWidth) / Math.max(1, columns.length)));
   const headerRoom = cellWidth - (columns.some((column) => column.glyph) ? 18 : 6);
@@ -248,7 +248,7 @@ export default function StateGrid(props: StateGridProps) {
         controls={props.controls}
         storageKey={props.storageKey}
         className={props.className}
-        minHeight={layoutFor(640, props).height}
+        minHeight={layoutFor(1600, props).height}
         plotHeight={(width) => layoutFor(width, props).height}
         interactive={{ roledescription: 'state grid' }}
       >

@@ -190,8 +190,8 @@ export default function ChangeTimeline(props: ChangeTimelineProps) {
                   cy={base}
                   hollow
                   role="primary"
-                  label={`${unchangedChecks} unchanged ${unchangedChecks === 1 ? 'check' : 'checks'}, last`}
-                  labelSide={x(checkedAt) > width * 0.6 ? 'start' : 'end'}
+                  label={`${unchangedChecks} unchanged`}
+                  labelSide="above"
                   title={`${unchangedChecks} ${unchangedChecks === 1 ? 'check' : 'checks'} found the file unchanged; the last on ${day(lastCheckedAt)}. Earlier check times are counted, not drawn.`}
                 />
               )}

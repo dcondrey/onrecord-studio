@@ -223,9 +223,9 @@ export function coverageMatrix(summary: DataPackSummary, choices: readonly Cover
     const splitByYear = own.some((choice) => choice.year !== null);
     const latest = own.flatMap((choice) => choice.files).reduce<DataPackFileSummary | null>((best, file) => (!best || retrieved(file) >= retrieved(best) ? file : best), null);
     const freshness = [
-      latest ? `retrieved ${latest.retrievedAt.slice(0, 10)}` : null,
+      latest ? new Date(latest.retrievedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : null,
       table.unchangedChecks > 0 ? `${table.unchangedChecks} unchanged` : null,
-      table.changeRecords > 0 ? `${table.changeRecords} change rec.` : null,
+      table.changeRecords > 0 ? `${table.changeRecords} ${table.changeRecords === 1 ? 'change' : 'changes'}` : null,
     ].filter(Boolean).join(' · ');
     keys.push([]);
     return {
