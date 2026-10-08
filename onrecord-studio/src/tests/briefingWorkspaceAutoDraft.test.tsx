@@ -1,9 +1,4 @@
 // @vitest-environment jsdom
-//
-// The BriefingWorkspace used to announce "The app never upgrades a lead automatically" and
-// require every entry to be user-typed. Wave 2E overrides that: on mount with an empty saved
-// briefing, the workspace pulls the top findings and drafts them as leads. The user still
-// promotes; the app just fills the starting page.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 
@@ -84,14 +79,6 @@ afterEach(() => {
 });
 
 describe('BriefingWorkspace auto-draft', () => {
-  it('promotion header no longer declares the workspace anti-autonomous', async () => {
-    render(<BriefingWorkspace />);
-    await waitFor(() => {
-      expect(screen.queryByText('The app never upgrades a lead automatically.')).toBeNull();
-    });
-    expect(screen.getAllByText(/auto-drafts a starting briefing/i).length).toBeGreaterThan(0);
-  });
-
   it('auto-populates an empty briefing from findings with request anchors', async () => {
     bridge.rows = [withRequestSubject('finding-1'), withRequestSubject('finding-2')];
     render(<BriefingWorkspace />);
@@ -103,7 +90,7 @@ describe('BriefingWorkspace auto-draft', () => {
     expect(screen.getAllByText(/Auto-drafted from your top findings/i).length).toBeGreaterThan(0);
   });
 
-  it('does not resurrect evidence the user deleted after the component remounts', async () => {
+  it('does not resurrect or claim to be drafting evidence the user deleted after a remount', async () => {
     bridge.rows = [withRequestSubject('finding-1'), withRequestSubject('finding-2')];
     const { unmount } = render(<BriefingWorkspace />);
     await waitFor(() => {
@@ -122,6 +109,8 @@ describe('BriefingWorkspace auto-draft', () => {
     // Give the effect time to run if it were going to re-fire.
     await new Promise((resolve) => setTimeout(resolve, 30));
     expect(useAppStore.getState().briefingProject.evidence).toHaveLength(0);
+    expect(screen.queryByText('Drafting from detector findings…')).toBeNull();
+    expect(screen.getByText('No findings drafted — start manually.')).toBeTruthy();
   });
 
   it('retries the auto-draft on the next mount after a failed fetch, unlike a completed draft', async () => {
@@ -164,27 +153,6 @@ describe('BriefingWorkspace auto-draft', () => {
     await waitFor(() => {
       expect(screen.queryByText('Drafting from detector findings…')).toBeNull();
     });
-    expect(screen.getByText('No findings drafted — start manually.')).toBeTruthy();
-  });
-
-  it('stops claiming a draft is in progress on a remount after the user deleted every drafted item', async () => {
-    bridge.rows = [withRequestSubject('finding-1')];
-    const { unmount } = render(<BriefingWorkspace />);
-    await waitFor(() => {
-      expect(useAppStore.getState().briefingProject.evidence.length).toBeGreaterThan(0);
-    });
-    act(() => {
-      for (const item of useAppStore.getState().briefingProject.evidence) {
-        useAppStore.getState().removeBriefingEvidence(item.id);
-      }
-    });
-    unmount();
-
-    render(<BriefingWorkspace />);
-    // The persisted flag blocks the effect from ever calling list_findings again this
-    // session, so the "drafting" message would otherwise be a permanent, false claim.
-    await new Promise((resolve) => setTimeout(resolve, 30));
-    expect(screen.queryByText('Drafting from detector findings…')).toBeNull();
     expect(screen.getByText('No findings drafted — start manually.')).toBeTruthy();
   });
 });

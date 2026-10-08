@@ -69,9 +69,8 @@ export default function BriefingWorkspace() {
   );
 
   // When a user opens the briefing workspace and nothing is saved, populate a draft from the top
-  // findings the detectors have surfaced. The user can edit, promote, or delete every drafted
-  // item — the promotion checklist below still requires an operator's judgment to publish. This
-  // is the autonomy override for the workspace that previously refused to fill anything.
+  // findings the detectors have surfaced. The promotion checklist still requires an operator's
+  // judgment to publish.
   //
   // `project.autoDrafted` is the source of truth for "has this run before"; it is persisted on
   // the project itself, not component state, because deleting every drafted item drives
@@ -105,16 +104,8 @@ export default function BriefingWorkspace() {
 
   const hasAutoDraftedItems = project.evidence.some((item) => item.id.startsWith(AUTO_DRAFT_ID_PREFIX));
 
-  const readiness = useMemo(() => {
-    const checks = [
-      Boolean(project.objective.trim()),
-      Boolean(project.requestedAction.trim()),
-      project.evidence.length > 0,
-      project.evidence.some((item) => item.kind === 'DOCUMENT_EXCERPT'),
-      project.evidence.some((item) => item.readiness === 'READY' && item.note.trim()),
-    ];
-    return { completed: checks.filter(Boolean).length, total: checks.length };
-  }, [project]);
+  const checks = useMemo(() => promotionChecks(project), [project]);
+  const completedChecks = checks.filter((check) => check.done).length;
 
   const useAccountabilityStarter = () => updateProject({
     title: 'San Diego spending and services briefing',
@@ -156,7 +147,7 @@ export default function BriefingWorkspace() {
             <p className="mt-1.5 max-w-3xl text-label leading-relaxed text-muted">Start with the agenda, save traceable records or masked excerpts, record the limitation beside each claim, and end with one action the Commission can verify.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="secondary-action rounded-xl border px-3 py-2 text-caption text-muted">{readiness.completed}/{readiness.total} presentation checks complete</span>
+            <span className="secondary-action rounded-xl border px-3 py-2 text-caption text-muted">{completedChecks}/{checks.length} presentation checks complete</span>
             <button type="button" onClick={useAccountabilityStarter} className="focus-ring rounded-xl border border-highlight/30 bg-highlight/10 px-3 py-2 text-caption font-semibold text-highlight">Use accountability briefing template</button>
             <button type="button" onClick={exportOutline} className="primary-action focus-ring rounded-xl px-3 py-2 text-caption font-semibold text-white">Export outline</button>
           </div>
@@ -299,11 +290,7 @@ export default function BriefingWorkspace() {
             <section className="app-panel overflow-hidden">
               <SectionHeader step="C" title="Promotion standard" detail="The app auto-drafts a starting briefing; you still decide what gets promoted to Ready." />
               <ul className="space-y-2 p-4 text-caption leading-relaxed text-muted">
-                <Check done={project.evidence.length > 0}>At least one traceable request or excerpt is saved.</Check>
-                <Check done={project.evidence.some((item) => item.kind === 'DOCUMENT_EXCERPT')}>At least one claim reaches the underlying document, not only request metadata.</Check>
-                <Check done={project.evidence.some((item) => item.readiness === 'READY')}>A reviewed item is explicitly marked presentation ready.</Check>
-                <Check done={project.evidence.some((item) => item.readiness === 'READY' && item.note.trim())}>A ready item records its context, limitation, or counterpoint.</Check>
-                <Check done={Boolean(project.requestedAction.trim())}>The close asks for a measurable action.</Check>
+                {checks.map((check) => <Check key={check.label} done={check.done}>{check.label}</Check>)}
               </ul>
             </section>
           </aside>
@@ -365,7 +352,20 @@ function RunStep({ share, label, detail }: { share: number; label: string; detai
 }
 
 function Check({ done, children }: { done: boolean; children: React.ReactNode }) {
-  return <li className="flex gap-2"><span className={cn('mt-0.5 grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full border text-caption', done ? 'border-success/30 bg-success/10 text-success' : 'border-line-strong text-muted')}>{done ? '✓' : ''}</span><span>{children}</span></li>;
+  return <li className="flex gap-2"><span aria-hidden="true" className={cn('mt-0.5 grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full border text-caption', done ? 'border-success/30 bg-success/10 text-success' : 'border-line-strong text-muted')}>{done ? '✓' : ''}</span><span>{children}<span className="sr-only">{done ? ' (done)' : ' (not done)'}</span></span></li>;
+}
+
+/** The single checklist behind both the header count and the promotion standard panel. */
+function promotionChecks(project: { objective: string; requestedAction: string; evidence: BriefingEvidence[] }) {
+  const { evidence } = project;
+  return [
+    { label: 'The objective states what the presentation is for.', done: Boolean(project.objective.trim()) },
+    { label: 'At least one traceable request or excerpt is saved.', done: evidence.length > 0 },
+    { label: 'At least one claim reaches the underlying document, not only request metadata.', done: evidence.some((item) => item.kind === 'DOCUMENT_EXCERPT') },
+    { label: 'A reviewed item is explicitly marked presentation ready.', done: evidence.some((item) => item.readiness === 'READY') },
+    { label: 'A ready item records its context, limitation, or counterpoint.', done: evidence.some((item) => item.readiness === 'READY' && Boolean(item.note.trim())) },
+    { label: 'The close asks for a measurable action.', done: Boolean(project.requestedAction.trim()) },
+  ];
 }
 
 function sameHost(left: string, right: string) {
