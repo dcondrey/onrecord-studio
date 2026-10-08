@@ -180,10 +180,7 @@ impl LicenseGate {
             .unwrap_or_else(|error| {
                 unavailable_status(format!("The StoreKit verification worker failed: {error}"))
             });
-        *self
-            .status
-            .write()
-            .expect("license status lock must not be poisoned") = result.clone();
+        self.store_status(result.clone());
         result
     }
 
