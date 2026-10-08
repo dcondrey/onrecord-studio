@@ -62,6 +62,8 @@ interface Layout {
 }
 
 const BAR_H = 8;
+/** Longest track, px, so a count stays near its name on a wide window. */
+const TRACK_MAX = 480;
 
 function layout(edges: readonly CorpusEntityEdge[], compact: boolean): Layout {
   const heads: Layout['heads'] = [];
@@ -93,15 +95,16 @@ function NeighbourPlot({ neighborhood, width, compact, onOpen }: {
   onOpen(edge: CorpusEntityEdge, options: { shift: boolean }): void;
 }) {
   const tooltip = useTooltip();
-  // The pointer that clicks a bar last moved over it, so its modifier state is current at the click.
+  // Shift state of the click or key press now being handled, captured before the mark's own handler runs.
   const shiftHeld = useRef(false);
   const { heads, rows } = layout(neighborhood.edges, compact);
-  const roving = useRovingFocus({ shape: { rows: Math.max(1, rows.length) }, onActivate: (i) => rows[i] && onOpen(rows[i].edge, { shift: false }), onEscape: tooltip.hide });
+  const roving = useRovingFocus({ shape: { rows: Math.max(1, rows.length) }, onActivate: (i) => rows[i] && onOpen(rows[i].edge, { shift: shiftHeld.current }), onEscape: tooltip.hide });
   const total = Math.max(1, neighborhood.center.documentCount);
   const valueRoom = measureText(`${total.toLocaleString('en-US')} of ${total.toLocaleString('en-US')}`) + 14;
-  const x = scaleLinear([0, total], [0, Math.max(40, width - valueRoom)], { nice: false });
+  const x = scaleLinear([0, total], [0, Math.max(40, Math.min(TRACK_MAX, width - valueRoom))], { nice: false });
+  const captureShift = (event: { shiftKey: boolean }) => { shiftHeld.current = event.shiftKey; };
   return (
-    <g>
+    <g onKeyDownCapture={captureShift} onPointerDownCapture={captureShift}>
       {heads.map((head) => (
         <text key={head.key} x={0} y={head.y} dy="0.32em" className="fill-muted text-[11px] font-semibold uppercase tracking-wide">{fitText(head.text, width, '600 11px -apple-system, sans-serif')}</text>
       ))}
@@ -131,9 +134,9 @@ function NeighbourPlot({ neighborhood, width, compact, onOpen }: {
             key={edge.neighbor.entityId}
             box={{ x: 0, y: row.labelY - 8, width: width - 2, height: row.barY + BAR_H - row.labelY + 10 }}
             interaction={{
-              name: `${name} ${compact ? 'Opens its inspector layer.' : 'Opens its dossier; shift opens the shared documents in Evidence.'}`,
+              name: `${name} ${compact ? 'Opens its inspector layer.' : `Opens its dossier; Shift searches Evidence for documents mentioning ${edge.neighbor.displayValue}.`}`,
               item: roving.getItemProps(index),
-              onPointerMove: (event) => { shiftHeld.current = event.shiftKey; tooltip.show(tip, { clientX: event.clientX, clientY: event.clientY }); },
+              onPointerMove: (event) => tooltip.show(tip, { clientX: event.clientX, clientY: event.clientY }),
               onPointerLeave: tooltip.hide,
               onFocusMark: (box) => tooltip.show(tip, box),
               onBlurMark: tooltip.hide,
@@ -189,12 +192,13 @@ export default function NeighbourBars({ neighborhood, total, compact = false, on
           basis: edge.basis.toLowerCase(),
           shared: edge.sharedDocumentCount,
           of: neighborhood.center.documentCount,
-          dates: span(edge) ?? { state: 'not-recorded', reason: 'the segment carried no date' },
+          // Not drawn as an absence in the plot, so not listed as one: the row is simply undated.
+          dates: span(edge) ?? 'undated',
         })),
       }}
       legend={bases.size > 1 || !bases.has('OBSERVED') ? [
         ...(bases.has('OBSERVED') ? [{ key: 'observed', label: 'Observed', swatch: 'rect' as const, tone: 'mark' as const }] : []),
-        ...(bases.has('COMPUTED') || bases.has('ASSERTED') ? [{ key: 'computed', label: 'Computed or asserted (outline)', swatch: 'ring' as const, tone: 'ink' as const }] : []),
+        ...(bases.has('COMPUTED') || bases.has('ASSERTED') ? [{ key: 'computed', label: 'Computed or asserted (outline)', swatch: 'outline-rect' as const, tone: 'ink' as const }] : []),
       ] : undefined}
       minHeight={neighbourPlotHeight(edges, compact)}
       interactive={{ roledescription: 'ranked bars' }}

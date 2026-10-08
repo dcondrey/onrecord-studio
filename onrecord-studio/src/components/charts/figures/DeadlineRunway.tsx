@@ -8,7 +8,7 @@ import { Axis } from '../frame/Axis';
 import { ReferenceBand } from '../frame/ReferenceLine';
 import { TooltipContent } from '../frame/Tooltip';
 import { VIZ, type Claim } from '../core/claim';
-import { measureText } from '../core/layout';
+import { LABEL_FONT, measureText } from '../core/layout';
 import { scaleLinear } from '../core/scale';
 import { useRovingFocus } from '../hooks/useRovingFocus';
 import { useTooltip } from '../hooks/useTooltip';
@@ -94,7 +94,8 @@ export function runwayModel(claims: readonly ClaimedRequest[], deadlines: Readon
     counted > 0 ? `${plural(counted, 'violation')} counted` : null,
   ].filter(Boolean);
   const total = rows.length + offClock.length;
-  const headline = `${rows.length} of ${plural(total, 'tracked request')} ${rows.length === 1 ? 'has' : 'have'} a running clock${clauses.length > 0 ? `: ${clauses.join(', ')}` : ''}.${offClock.length > 0 ? ` ${offClock.length} not on the clock.` : ''}`;
+  const determined = rows.filter((row) => deadlines[row.claimId]?.countdown.kind === 'DETERMINATION_RECORDED').length;
+  const headline = `${rows.length} of ${plural(total, 'tracked request')} on the clock${determined > 0 ? ` (${determined} determined)` : ''}${clauses.length > 0 ? `: ${clauses.join(', ')}` : ''}.${offClock.length > 0 ? ` ${offClock.length} not on the clock.` : ''}`;
   return { rows, offClock, headline, summary: `${headline} Positions are days relative to each request's own deadline.` };
 }
 
@@ -111,6 +112,8 @@ function RunwayPlot({ rows, width, highlighted, onHover, onOpen }: {
   const extent = Math.max(5, ...rows.map((row) => Math.abs(row.position)));
   const x = scaleLinear([-extent, extent], [labelWidth + 12, width - 16], { zero: true });
   const bottom = TOP + rows.length * ROW;
+  const countedWords = 'violation counted';
+  const countedWidth = measureText(countedWords, `500 ${LABEL_FONT}`);
   const zero = Math.round(x(0)) + 0.5;
   return (
     <g>
@@ -145,7 +148,12 @@ function RunwayPlot({ rows, width, highlighted, onHover, onOpen }: {
             ) : (
               <Dot cx={cx} cy={cy} r={5} shape={row.shape} claim={row.counted ? 'counted' : 'descriptive'} role="primary" />
             )}
-            {row.counted && <text x={cx + 9} y={cy} dy="0.32em" className="fill-fg text-[11px] font-medium">violation counted</text>}
+            {row.counted && (
+              // Counted rows sit furthest right; flip the words left of the glyph rather than clip them.
+              cx + 9 + countedWidth > width - 2
+                ? <text x={cx - 9} y={cy} dy="0.32em" textAnchor="end" className="fill-fg text-[11px] font-medium">{countedWords}</text>
+                : <text x={cx + 9} y={cy} dy="0.32em" className="fill-fg text-[11px] font-medium">{countedWords}</text>
+            )}
           </MarkGroup>
         );
       })}
@@ -185,7 +193,8 @@ export default function DeadlineRunway({ model, highlighted, onHover, onOpen }: 
         }}
         legend={[
           { key: 'provisional', label: 'Provisional (no determination)', swatch: 'ring', tone: 'ink' },
-          ...(model.rows.some((row) => row.shape === 'diamond' && !row.counted) ? [{ key: 'sourced', label: 'Sourced determination', swatch: 'dot' as const, tone: 'ink' as const }] : []),
+          ...(model.rows.some((row) => row.shape === 'diamond' && !row.counted) ? [{ key: 'sourced', label: 'Sourced determination', swatch: 'diamond' as const, tone: 'ink' as const }] : []),
+          ...(model.rows.some((row) => row.shape === 'triangle') ? [{ key: 'proxy', label: 'Determination from your entry (proxy)', swatch: 'triangle' as const, tone: 'ink' as const }] : []),
           ...(model.rows.some((row) => row.counted) ? [{ key: 'counted', label: 'Violation counted', swatch: 'flag' as const, tone: 'counted' as const }] : []),
         ]}
         minHeight={height}

@@ -1,10 +1,13 @@
 import type { AgencyPerformanceProfile } from '../../../types';
 import ChartFrame from '../frame/ChartFrame';
 import { TooltipContent } from '../frame/Tooltip';
+import type { SwatchTone } from '../frame/Legend';
 import { measureText } from '../core/layout';
 import { measured } from '../core/nulls';
 import { scaleLinear } from '../core/scale';
+import { useRovingFocus } from '../hooks/useRovingFocus';
 import { useTooltip } from '../hooks/useTooltip';
+import { VIZ } from '../core/claim';
 import { Bar, StackedBar, type StackSegment } from '../marks/Bar';
 import { MUTED_LABEL_CLASS } from '../marks/shared';
 
@@ -71,9 +74,11 @@ function AccountingPlot({ profile, width, onSearchRecords }: { profile: AgencyPe
   const segmentTip = (
     <TooltipContent
       title="Requests processed"
-      rows={segments.map((segment) => ({ key: segment.key, value: segment.label, label: segment.definition, swatch: 'rect' as const, tone: 'mark' as const }))}
+      rows={segments.map((segment) => ({ key: segment.key, value: segment.label, label: segment.definition, swatch: 'rect' as const, tone: segment.tone as SwatchTone }))}
     />
   );
+  const countedTip = <TooltipContent title="Counted statutory violations" rows={[{ key: 'counted', value: countedLabel, label: 'requests with a stored, counted finding', swatch: 'flag', tone: 'counted' }]} note="Enter opens a search of this agency's records." />;
+  const roving = useRovingFocus({ shape: { rows: 2 }, onActivate: (i) => i === 1 && onSearchRecords(), onEscape: tooltip.hide });
   return (
     <g>
       <text x={0} y={10} dy="0.32em" className={ROW_LABEL_CLASS}>{`Requests processed: ${count(total)}`}</text>
@@ -86,10 +91,16 @@ function AccountingPlot({ profile, width, onSearchRecords }: { profile: AgencyPe
           name: `Requests processed: ${segments.map((segment) => `${segment.label} ${segment.definition}`).join('; ')}.`,
           onPointerMove: (event) => tooltip.show(segmentTip, { clientX: event.clientX, clientY: event.clientY }),
           onPointerLeave: tooltip.hide,
+          item: roving.getItemProps(0),
+          onFocusMark: (box) => tooltip.show(segmentTip, box),
+          onBlurMark: tooltip.hide,
         }}
       />
       <SegmentKey segments={segments} y={48} width={width - 8} />
-      <text x={0} y={68} dy="0.32em" className={ROW_LABEL_CLASS}>Counted statutory violations</text>
+      <path data-flag="" d="M0 73V63.5h8l-2 2.5 2 2.5H1.5" style={{ fill: VIZ.counted, stroke: VIZ.counted, strokeWidth: 1, strokeLinejoin: 'round' }} />
+      <text x={13} y={68} dy="0.32em" className={ROW_LABEL_CLASS}>Counted statutory violations</text>
+      {/* With no room beside the bar, the count sits on the row label's line so nothing is pushed below the frame. */}
+      {!countedRoom && <text x={width - 8} y={68} dy="0.32em" textAnchor="end" className="viz-num fill-fg-secondary text-[11px]">{countedLabel}</text>}
       <rect x={0} y={80} width={x(total)} height={10} rx={2} style={{ fill: 'var(--viz-track)' }} />
       <Bar
         band={{ pos: 80, thickness: 10 }}
@@ -101,10 +112,14 @@ function AccountingPlot({ profile, width, onSearchRecords }: { profile: AgencyPe
         interaction={{
           name: `Counted statutory violations: ${countedLabel} requests. Opens a search of this agency's records.`,
           onClick: onSearchRecords,
+          item: roving.getItemProps(1),
+          onPointerMove: (event) => tooltip.show(countedTip, { clientX: event.clientX, clientY: event.clientY }),
+          onPointerLeave: tooltip.hide,
+          onFocusMark: (box) => tooltip.show(countedTip, box),
+          onBlurMark: tooltip.hide,
         }}
       />
-      {!countedRoom && <text x={0} y={102} dy="0.32em" className="viz-num fill-fg-secondary text-[11px]">{countedLabel}</text>}
-      <text x={0} y={countedRoom ? 106 : 118} dy="0.32em" className={MUTED_LABEL_CLASS}>{`Documents released: ${count(profile.totalDocumentsReleased)} (a different unit, not on this scale)`}</text>
+      <text x={0} y={106} dy="0.32em" className={MUTED_LABEL_CLASS}>{`Documents released: ${count(profile.totalDocumentsReleased)} (a different unit, not on this scale)`}</text>
       {tooltip.node}
     </g>
   );
@@ -117,7 +132,8 @@ export default function RequestAccountingBar({ profile, onSearchRecords }: { pro
     <ChartFrame
       title="Request accounting"
       headline={headline}
-      claim="counted"
+      // The stack is descriptive; only the violations row is counted, and it carries its own flag.
+      claim="descriptive"
       sources={{ tables: ['requests', 'statutory_extensions', 'statutory_violations'], note: 'agency profile aggregate' }}
       summary={`${headline} ${segments.map((segment) => `${segment.label} ${segment.definition}`).join('; ')}. Documents released: ${count(profile.totalDocumentsReleased)}.`}
       status={profile.totalRequestsProcessed === 0 ? 'empty' : 'ready'}
@@ -137,6 +153,7 @@ export default function RequestAccountingBar({ profile, onSearchRecords }: { pro
         { key: 'counted', label: 'Counted violation', swatch: 'flag', tone: 'counted' },
       ]}
       minHeight={HEIGHT}
+      interactive={{ roledescription: 'request accounting' }}
       storageKey="inspector-agency-accounting"
     >
       {({ width }) => <AccountingPlot profile={profile} width={width} onSearchRecords={onSearchRecords} />}

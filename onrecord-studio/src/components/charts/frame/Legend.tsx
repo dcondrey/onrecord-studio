@@ -4,7 +4,8 @@ import type { LegendFocus } from '../hooks/useLegendFocus';
 import { useSvgId } from './VizDefs';
 
 export type SwatchKind = 'line' | 'dashed-line' | 'rect' | 'dot' | 'hollow' | 'ring' | 'hatch' | 'flag' | 'slot-dashed' | 'slot-dotted' | 'diamond' | 'hollow-diamond' | 'triangle' | 'outline-rect';
-export type SwatchTone = Exclude<keyof typeof VIZ, 'surface' | 'grid' | 'focus'>;
+/** A mark colour, or a step of the ordinal ramp (a stacked bar's segments). */
+export type SwatchTone = Exclude<keyof typeof VIZ, 'surface' | 'grid' | 'focus'> | 'ord-1' | 'ord-2' | 'ord-3' | 'ord-4';
 
 export interface LegendItem {
   key: string;
@@ -17,7 +18,7 @@ export interface LegendItem {
 /** A 16×12 key for one legend entry or tooltip row, drawn like the mark it stands for. */
 export function LegendSwatch({ kind, tone = 'ink' }: { kind: SwatchKind; tone?: SwatchTone }) {
   const hatchId = useSvgId('viz-legend-hatch');
-  const colour = VIZ[tone];
+  const colour = tone.startsWith('ord-') ? `var(--viz-${tone})` : VIZ[tone as keyof typeof VIZ];
   return (
     <svg width={16} height={12} viewBox="0 0 16 12" aria-hidden="true" className="shrink-0 overflow-visible">
       {kind === 'line' && <line x1={1} y1={6} x2={15} y2={6} style={{ stroke: colour, strokeWidth: 2, strokeLinecap: 'round' }} />}

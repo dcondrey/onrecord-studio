@@ -63,7 +63,8 @@ function StripPlot({ model, width, onOpenPeer }: { model: PeerStripModel; width:
   const ordered = [...peers].sort((a, b) => (a.averageClosureDays as number) - (b.averageClosureDays as number) || a.agencyName.localeCompare(b.agencyName));
   const roving = useRovingFocus({ shape: { rows: Math.max(1, ordered.length) }, onActivate: (i) => ordered[i] && onOpenPeer(ordered[i]), onEscape: tooltip.hide });
   const peerName = (peer: AgencyPerformanceProfile) => `${peer.agencyName}: ${days(peer.averageClosureDays as number)} average closure (n=${peer.validLatencySampleSize})${peer.validLatencySampleSize < SMALL_SAMPLE ? ', small sample' : ''}${peer.performanceZScore !== null ? `, ${formatValue(peer.performanceZScore, { kind: 'z' })}` : ''}. Opens its inspector layer.`;
-  const focusLabel = focus.averageClosureDays === null ? null : `${days(focus.averageClosureDays)} (n=${focus.validLatencySampleSize})`;
+  const focusSmall = focus.validLatencySampleSize < SMALL_SAMPLE;
+  const focusLabel = focus.averageClosureDays === null ? null : `${days(focus.averageClosureDays)} (n=${focus.validLatencySampleSize})${focusSmall ? ' · small sample' : ''}`;
   const focusX = focus.averageClosureDays === null ? null : x(focus.averageClosureDays);
   const labelSide = focusX !== null && focusLabel && focusX + measureText(focusLabel) + 16 > width ? 'start' : 'end';
   return (
@@ -82,7 +83,8 @@ function StripPlot({ model, width, onOpenPeer }: { model: PeerStripModel; width:
             key: `${peer.portalSubdomain}:${peer.agencyId}`,
             value: peer.averageClosureDays as number,
             role: 'comparison' as const,
-            hollow: true,
+            // Hollow is reserved for a small sample, so a thin average never reads as firm as a full one.
+            hollow: peer.validLatencySampleSize < SMALL_SAMPLE,
             title: name,
             interaction: {
               name,
@@ -98,7 +100,7 @@ function StripPlot({ model, width, onOpenPeer }: { model: PeerStripModel; width:
       />
       {focusX !== null && model.outlier && <Dot cx={focusX} cy={CY} r={9} shape="ring" claim="statistical" />}
       {focusX !== null && focusLabel && (
-        <Dot cx={focusX} cy={CY} r={5.5} role="primary" label={focusLabel} labelSide={labelSide} title={`${focus.agencyName}: ${focusLabel}`} />
+        <Dot cx={focusX} cy={CY} r={5.5} role="primary" hollow={focusSmall} label={focusLabel} labelSide={labelSide} title={`${focus.agencyName}: ${focusLabel}`} />
       )}
       {model.outlier && focusX !== null && (
         <text x={labelSide === 'end' ? focusX + 14 : focusX - 14} y={CY + 16} textAnchor={labelSide === 'end' ? 'start' : 'end'} className="fill-fg-secondary text-[11px]">slower than peers (statistical)</text>
@@ -134,7 +136,10 @@ export default function PeerStrip({ model, onOpenPeer }: { model: PeerStripModel
         }}
         legend={[
           { key: 'this', label: 'This agency', swatch: 'dot', tone: 'ink' },
-          { key: 'peers', label: 'Peer agencies', swatch: 'hollow', tone: 'context' },
+          { key: 'peers', label: 'Peer agencies', swatch: 'dot', tone: 'context' },
+          ...([focus, ...peers].some((profile) => profile.averageClosureDays !== null && profile.validLatencySampleSize < SMALL_SAMPLE)
+            ? [{ key: 'small', label: `Small sample (fewer than ${SMALL_SAMPLE} closures)`, swatch: 'hollow' as const, tone: 'ink' as const }]
+            : []),
           ...(model.outlier ? [{ key: 'z', label: 'Slower than peers (statistical)', swatch: 'ring' as const, tone: 'ink' as const }] : []),
         ]}
         minHeight={HEIGHT}

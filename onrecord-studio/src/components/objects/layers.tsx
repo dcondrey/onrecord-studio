@@ -301,7 +301,7 @@ function CaseLayer({ target }: { target: Target<'case'> }) {
               ['Questions', found.questions.length.toLocaleString()],
               ['Revision', `${found.revision} · ${formatShortDate(found.updatedAt)}`],
             ]} />
-            <MiniClocks found={found} onOpen={() => openCasework(found.reportId)} />
+            <MiniClocks found={found} onOpen={(requestId) => { openCasework(found.reportId); revealCaseworkRequest(requestId); }} />
             <Section title={`Cited sources (${found.evidence.length.toLocaleString()})`}>
               {found.evidence.length > 0 && (
                 <Meter
@@ -360,14 +360,29 @@ async function loadClockInputs(portalKey: string, requestId: number): Promise<Cl
   };
 }
 
+/** Frames to wait for the casework panel to mount the request before giving up. */
+const REVEAL_FRAMES = 60;
+
+/** Once casework has rendered, opens the requests section and scrolls the request into view. */
+function revealCaseworkRequest(requestId: string, frames = REVEAL_FRAMES) {
+  const article = document.getElementById(`casework-request-${requestId}`);
+  if (!article) {
+    if (frames > 0) requestAnimationFrame(() => revealCaseworkRequest(requestId, frames - 1));
+    return;
+  }
+  const section = article.closest('details');
+  if (section) section.open = true;
+  article.scrollIntoView?.({ block: 'start' });
+}
+
 /** Sources by verification grade, strongest first, on the ordinal ramp. */
 function gradeSegments(evidence: readonly CaseworkCitation[]) {
   const current = evidence.filter((cite) => cite.verification === 'SAVED_REPORT' || cite.verification === 'VERIFIED').length;
   const historical = evidence.filter((cite) => cite.verification === 'HISTORICAL_REPORT').length;
   const unverified = evidence.length - current - historical;
   return [
-    { key: 'current', value: current, step: 4 as const, text: `${current} current source matches` },
-    { key: 'historical', value: historical, step: 2 as const, text: `${historical} source has a newer version` },
+    { key: 'current', value: current, step: 4 as const, text: current === 1 ? '1 matches its current source' : `${current} match their current sources` },
+    { key: 'historical', value: historical, step: 2 as const, text: historical === 1 ? '1 source has a newer version' : `${historical} sources have a newer version` },
     { key: 'unverified', value: unverified, step: 1 as const, text: `${unverified} unverified` },
   ].filter((segment) => segment.value > 0);
 }

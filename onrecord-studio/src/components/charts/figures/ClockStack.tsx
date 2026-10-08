@@ -3,9 +3,10 @@ import ChartFrame from '../frame/ChartFrame';
 import { Axis } from '../frame/Axis';
 import { ReferenceLine } from '../frame/ReferenceLine';
 import { TooltipContent } from '../frame/Tooltip';
+import type { LegendItem } from '../frame/Legend';
 import { REFERENCE_PAINT, VIZ } from '../core/claim';
 import { formatDate } from '../core/format';
-import { measureText } from '../core/layout';
+import { measureText, placeLabels } from '../core/layout';
 import { parseDate, scaleLinear, scaleTime } from '../core/scale';
 import { useRovingFocus } from '../hooks/useRovingFocus';
 import { useTooltip } from '../hooks/useTooltip';
@@ -115,8 +116,17 @@ export function caseClocksHeight(found: CaseworkCase): number {
 function CaseworkPlot({ found, width, onOpenRequest }: { found: CaseworkCase; width: number; onOpenRequest(requestId: string): void }) {
   const tooltip = useTooltip();
   const { rows, lanes, height } = dateLayout(found);
-  const focusable = rows.filter((row) => row.kind === 'request');
-  const roving = useRovingFocus({ shape: { rows: Math.max(1, focusable.length) }, onActivate: (i) => focusable[i]?.request && onOpenRequest(focusable[i].request!.id), onEscape: tooltip.hide });
+  // Rows are requests and dated commitments; a request's follow-ups are the columns after it.
+  const focusable = rows.filter((row) => row.kind === 'request' || row.kind === 'commitment');
+  const cols = 1 + Math.max(0, ...focusable.map((row) => row.request?.filingPlan?.followUps.length ?? 0));
+  const roving = useRovingFocus({
+    shape: { rows: Math.max(1, focusable.length), cols },
+    onActivate: (i, j = 0) => {
+      const row = focusable[i];
+      if (j === 0 && row?.request) onOpenRequest(row.request.id);
+    },
+    onEscape: tooltip.hide,
+  });
   const instants: number[] = [];
   let today: number | null = null;
   for (const request of found.requests) {
@@ -146,18 +156,33 @@ function CaseworkPlot({ found, width, onOpenRequest }: { found: CaseworkCase; wi
         const label = <text x={0} y={row.labelY} dy="0.32em" className={ROW_LABEL_CLASS}><title>{row.label}</title>{fitText(row.label, width - 4, LABEL_FONT_12)}</text>;
         if (row.kind === 'undated') return <g key={row.key}>{label}</g>;
         if (row.kind === 'commitment' && row.commitment?.dueDate) {
+          focusIndex += 1;
           const at = t(parseDate(row.commitment.dueDate));
+          const name = `${row.label}: due ${day(row.commitment.dueDate)}, state ${row.commitment.state.toLowerCase().replace(/_/g, ' ')}.`;
+          const tip = <TooltipContent title={row.commitment.promise || 'Unstated promise'} rows={[{ key: 'due', value: day(row.commitment.dueDate), label: 'due' }]} note={name} />;
           return (
-            <g key={row.key}>
+            <MarkGroup
+              key={row.key}
+              box={{ x: 0, y: row.labelY - 8, width: width - 2, height: 28 }}
+              interaction={{
+                name,
+                item: roving.getItemProps(focusIndex),
+                onPointerMove: (event) => tooltip.show(tip, { clientX: event.clientX, clientY: event.clientY }),
+                onPointerLeave: tooltip.hide,
+                onFocusMark: (box) => tooltip.show(tip, box),
+                onBlurMark: tooltip.hide,
+              }}
+            >
               {label}
-              <Dot cx={at} cy={row.barY + 4} shape="diamond" hollow role="primary" r={4.5} title={`${row.label}: due ${day(row.commitment.dueDate)}, state ${row.commitment.state.toLowerCase().replace(/_/g, ' ')}`} />
+              <Dot cx={at} cy={row.barY + 4} shape="diamond" hollow role="primary" r={4.5} />
               <text x={at + 9} y={row.barY + 4} dy="0.32em" className={MUTED_LABEL_CLASS}>{`due ${day(row.commitment.dueDate)}`}</text>
-            </g>
+            </MarkGroup>
           );
         }
         const request = row.request!;
         const plan = request.filingPlan;
         focusIndex += 1;
+        const rowIndex = focusIndex;
         if (!plan) {
           return (
             <MarkGroup key={row.key} box={{ x: 0, y: row.labelY - 8, width: width - 2, height: 30 }} interaction={{ name: `${row.label}: ${noClockWords(request)}.`, item: roving.getItemProps(focusIndex), onClick: () => onOpenRequest(request.id) }}>
@@ -188,9 +213,16 @@ function CaseworkPlot({ found, width, onOpenRequest }: { found: CaseworkCase; wi
           />
         );
         const pastWords = past ? 'modelled: past due, no recorded response' : null;
+        const conflict = dueConflict(request) && request.responseDue ? parseDate(request.responseDue) : null;
+        // The ≠ badge and the past-due words share one row below the bar, pushed apart so neither covers the other.
+        const noteRow = placeLabels([
+          ...(conflict !== null ? [{ key: 'ne', anchor: (t(conflict) + t(due)) / 2, width: 10 }] : []),
+          ...(pastWords ? [{ key: 'past', anchor: t(endAt) + 12 + measureText(pastWords) / 2, width: measureText(pastWords) }] : []),
+        ], 0, width - 2);
+        const notePos = (key: string) => noteRow.find((placed) => placed.key === key)?.pos ?? 0;
         return (
+          <g key={row.key}>
           <MarkGroup
-            key={row.key}
             box={{ x: 0, y: row.labelY - 8, width: width - 2, height: 34 }}
             interaction={{
               name,
@@ -209,24 +241,58 @@ function CaseworkPlot({ found, width, onOpenRequest }: { found: CaseworkCase; wi
             {request.productions.filter((production) => production.receivedAt).map((production) => (
               <Dot key={production.id} cx={t(parseDate(production.receivedAt))} cy={row.barY + 3} shape="diamond" role="primary" r={4.5} title={`Production received ${day(production.receivedAt)}: ${production.description || 'no description'}`} />
             ))}
-            {plan.followUps.map((followUp) => (
-              <Dot key={`${followUp.trigger}-${followUp.scheduledFor}`} cx={t(parseDate(followUp.scheduledFor))} cy={row.barY + 3} hollow role="primary" r={3.5} title={`Follow-up scheduled ${day(followUp.scheduledFor)}: ${followUp.rationale}`} />
-            ))}
-            {dueConflict(request) && request.responseDue && (
-              <g>
+            {conflict !== null && request.responseDue && (
+              <g data-due-conflict="">
                 <title>{`Recorded response due ${day(request.responseDue)} differs from the modelled ${day(plan.determinationDueOn)}`}</title>
-                <line x1={t(parseDate(request.responseDue))} x2={t(due)} y1={row.barY + 14} y2={row.barY + 14} style={{ stroke: VIZ.ink, strokeWidth: 1, strokeDasharray: '3 2' }} />
-                <text x={(t(parseDate(request.responseDue)) + t(due)) / 2} y={row.barY + 14} dy="0.32em" textAnchor="middle" className="fill-fg text-[11px] font-semibold" style={{ paintOrder: 'stroke', stroke: VIZ.surface, strokeWidth: 3 }}>≠</text>
+                <line x1={Math.round(t(conflict)) + 0.5} x2={Math.round(t(conflict)) + 0.5} y1={row.barY - 5} y2={row.barY + 11} style={{ stroke: VIZ.ink, strokeWidth: 1, strokeDasharray: '2 2' }} />
+                <line x1={t(conflict)} x2={t(due)} y1={row.barY + 11} y2={row.barY + 11} style={{ stroke: VIZ.ink, strokeWidth: 1, strokeDasharray: '3 2' }} />
+                <text x={notePos('ne')} y={row.barY + 19} dy="0.32em" className="fill-fg text-[11px] font-semibold">≠</text>
               </g>
             )}
-            {pastWords && <text x={Math.min(width - measureText(pastWords) - 2, t(endAt) + 12)} y={row.barY + 20} dy="0.32em" className="fill-fg-secondary text-[11px]">{pastWords}</text>}
+            {pastWords && <text x={notePos('past')} y={row.barY + 19} dy="0.32em" className="fill-fg-secondary text-[11px]">{pastWords}</text>}
           </MarkGroup>
+          {plan.followUps.map((followUp, j) => {
+            const at = t(parseDate(followUp.scheduledFor));
+            const followName = `Follow-up on ${row.label}, scheduled ${day(followUp.scheduledFor)}: ${followUp.rationale}`;
+            const followTip = <TooltipContent title={`Follow-up ${day(followUp.scheduledFor)}`} rows={[]} note={followUp.rationale} />;
+            return (
+              <MarkGroup
+                key={`${followUp.trigger}-${followUp.scheduledFor}`}
+                box={{ x: at - 5, y: row.barY - 2, width: 10, height: 10 }}
+                interaction={{
+                  name: followName,
+                  item: roving.getItemProps(rowIndex, j + 1),
+                  onPointerMove: (event) => tooltip.show(followTip, { clientX: event.clientX, clientY: event.clientY }),
+                  onPointerLeave: tooltip.hide,
+                  onFocusMark: (box) => tooltip.show(followTip, box),
+                  onBlurMark: tooltip.hide,
+                }}
+              >
+                <Dot cx={at} cy={row.barY + 3} hollow role="primary" r={3.5} />
+              </MarkGroup>
+            );
+          })}
+          </g>
         );
       })}
       <Axis time={t} orient="bottom" offset={axisY} />
       {tooltip.node}
     </g>
   );
+}
+
+function stackLegend(found: CaseworkCase): LegendItem[] {
+  const plans = found.requests.map((request) => request.filingPlan).filter((plan) => plan !== null);
+  const items: LegendItem[] = [];
+  if (plans.length > 0) {
+    items.push({ key: 'elapsed', label: 'Elapsed', swatch: 'rect', tone: 'ink' }, { key: 'allowed', label: 'Allowed period (modelled)', swatch: 'rect', tone: 'track' });
+  }
+  if (plans.some((plan) => plan.deadlinePassedWithoutRecordedResponse)) items.push({ key: 'past', label: 'Past due (modelled, not counted)', swatch: 'dashed-line', tone: 'ink' });
+  if (found.requests.some((request) => request.filingPlan && request.productions.some((production) => production.receivedAt))) items.push({ key: 'production', label: 'Production received', swatch: 'diamond', tone: 'ink' });
+  if (found.commitments.some((commitment) => commitment.dueDate)) items.push({ key: 'commitment', label: 'Commitment due', swatch: 'hollow-diamond', tone: 'ink' });
+  if (plans.some((plan) => plan.followUps.length > 0)) items.push({ key: 'followup', label: 'Follow-up', swatch: 'hollow', tone: 'ink' });
+  if (found.requests.some(dueConflict)) items.push({ key: 'conflict', label: 'Recorded due ≠ modelled', swatch: 'dashed-line', tone: 'ink' });
+  return items;
 }
 
 export default function ClockStack({ found, onOpenRequest }: { found: CaseworkCase; onOpenRequest(requestId: string): void }) {
@@ -261,12 +327,7 @@ export default function ClockStack({ found, onOpenRequest }: { found: CaseworkCa
           })),
         ],
       }}
-      legend={[
-        { key: 'elapsed', label: 'Elapsed', swatch: 'rect', tone: 'ink' },
-        { key: 'allowed', label: 'Allowed period (modelled)', swatch: 'rect', tone: 'track' },
-        { key: 'past', label: 'Past due (modelled, not counted)', swatch: 'dashed-line', tone: 'ink' },
-        { key: 'followup', label: 'Follow-up', swatch: 'hollow', tone: 'ink' },
-      ]}
+      legend={stackLegend(found)}
       minHeight={caseClocksHeight(found)}
       interactive={{ roledescription: 'request clocks' }}
       storageKey="casework-clock-stack"
@@ -279,6 +340,17 @@ export default function ClockStack({ found, onOpenRequest }: { found: CaseworkCa
 // ---- Inspector: mini clocks on a shared day axis ----------------------------------------------
 
 const MINI_ROW = 22;
+/** Below this width a title sits on its own line above its bar rather than beside it. */
+const MINI_STACK_BELOW = 380;
+const MINI_STACKED_ROW = 36;
+
+function miniRowHeight(width: number): number {
+  return width < MINI_STACK_BELOW ? MINI_STACKED_ROW : MINI_ROW;
+}
+
+function miniLabel(request: CaseworkRequest): string {
+  return request.title || request.custodian || 'Untitled request';
+}
 
 /** The words after a mini clock's bar: elapsed of allowed, and its state. */
 function miniEndText(request: CaseworkRequest): string {
@@ -289,7 +361,6 @@ function miniEndText(request: CaseworkRequest): string {
     `${plan.calendarDaysElapsed}/${plan.allowedCalendarDays} d`,
     plan.deadlinePassedWithoutRecordedResponse ? 'modelled' : null,
     received ? 'received' : null,
-    dueConflict(request) ? '≠ recorded due' : null,
   ].filter(Boolean).join(' · ');
 }
 
@@ -298,24 +369,36 @@ export function miniClocksHeadline(found: CaseworkCase): string {
   const open = found.requests.filter((request) => !isClosed(request)).length;
   const past = found.requests.filter((request) => request.filingPlan?.deadlinePassedWithoutRecordedResponse).length;
   const unfiled = found.requests.filter((request) => request.filingPlan === null).length;
-  return `${open} of ${plural(total, 'request')} open; ${past} past the modelled determination date; ${unfiled} without a clock.`;
+  const strongest = found.evidence.filter((cite) => cite.verification === 'SAVED_REPORT' || cite.verification === 'VERIFIED').length;
+  const clauses = [
+    `${open} of ${plural(total, 'request')} open`,
+    past > 0 ? `${past} past the modelled determination date` : null,
+    unfiled > 0 ? `${unfiled} without a clock` : null,
+    found.evidence.length > 0 ? `${plural(found.evidence.length, 'source')} cited, ${strongest} at the strongest grade` : null,
+  ].filter(Boolean);
+  return `${clauses.join('; ')}.`;
 }
 
-function MiniPlot({ found, width, onOpen }: { found: CaseworkCase; width: number; onOpen(): void }) {
+function MiniPlot({ found, width, onOpen }: { found: CaseworkCase; width: number; onOpen(requestId: string): void }) {
   const tooltip = useTooltip();
   const requests = found.requests;
-  const roving = useRovingFocus({ shape: { rows: Math.max(1, requests.length) }, onActivate: onOpen, onEscape: tooltip.hide });
-  const labelColumn = Math.min(130, Math.round(width * 0.36));
+  const roving = useRovingFocus({ shape: { rows: Math.max(1, requests.length) }, onActivate: (i) => requests[i] && onOpen(requests[i].id), onEscape: tooltip.hide });
+  const stacked = width < MINI_STACK_BELOW;
+  const rowHeight = miniRowHeight(width);
+  const labelColumn = stacked ? 0 : Math.min(Math.round(width * 0.45), Math.max(40, ...requests.map((request) => measureText(miniLabel(request), LABEL_FONT_12))) + 4);
+  const barLeft = stacked ? 0 : labelColumn + 8;
   const max = Math.max(1, ...requests.map((request) => request.filingPlan ? Math.max(request.filingPlan.allowedCalendarDays, request.filingPlan.calendarDaysElapsed) : 0));
   const endRoom = Math.max(40, ...requests.map((request) => measureText(miniEndText(request)))) + 26;
-  const x = scaleLinear([0, max * 1.08], [labelColumn + 8, Math.max(labelColumn + 48, width - endRoom)], { zero: true });
-  const axisY = requests.length * MINI_ROW + 6;
+  const x = scaleLinear([0, max * 1.08], [barLeft, Math.max(barLeft + 48, width - endRoom)], { zero: true });
+  const axisY = requests.length * rowHeight + 6;
   return (
     <g>
       {requests.map((request, index) => {
-        const cy = index * MINI_ROW + MINI_ROW / 2;
+        const top = index * rowHeight;
+        const cy = stacked ? top + 24 : top + rowHeight / 2;
+        const labelY = stacked ? top + 8 : cy;
         const plan = request.filingPlan;
-        const label = request.title || request.custodian || 'Untitled request';
+        const label = miniLabel(request);
         const received = isClosed(request) || request.productions.some((production) => production.receivedAt);
         const name = plan
           ? `${label}: ${plan.calendarDaysElapsed} of ${plan.allowedCalendarDays} allowed days elapsed as of ${day(plan.evaluatedAt)}${plan.deadlinePassedWithoutRecordedResponse ? ', past the modelled date' : ''}${received ? ', production received' : ''}.`
@@ -324,7 +407,7 @@ function MiniPlot({ found, width, onOpen }: { found: CaseworkCase; width: number
         return (
           <MarkGroup
             key={request.id}
-            box={{ x: 0, y: cy - MINI_ROW / 2 + 1, width: width - 2, height: MINI_ROW - 2 }}
+            box={{ x: 0, y: top + 1, width: width - 2, height: rowHeight - 2 }}
             interaction={{
               name,
               item: roving.getItemProps(index),
@@ -332,13 +415,27 @@ function MiniPlot({ found, width, onOpen }: { found: CaseworkCase; width: number
               onPointerLeave: tooltip.hide,
               onFocusMark: (box) => tooltip.show(tip, box),
               onBlurMark: tooltip.hide,
-              onClick: onOpen,
+              onClick: () => onOpen(request.id),
             }}
           >
-            <text x={0} y={cy} dy="0.32em" className={ROW_LABEL_CLASS}><title>{label}</title>{fitText(label, labelColumn, LABEL_FONT_12)}</text>
+            <text x={0} y={labelY} dy="0.32em" className={ROW_LABEL_CLASS}><title>{label}</title>{fitText(label, stacked ? width - 4 : labelColumn, LABEL_FONT_12)}</text>
             {plan ? (
               <>
                 <line x1={Math.round(x(plan.allowedCalendarDays)) + 0.5} x2={Math.round(x(plan.allowedCalendarDays)) + 0.5} y1={cy - 7} y2={cy + 7} style={{ stroke: REFERENCE_PAINT.statute.stroke, strokeWidth: 1 }} />
+                {dueConflict(request) && request.responseDue && (() => {
+                  // The recorded due date as its own day on this request's axis, tied to the model's tick by the ≠ connector.
+                  const recordedDay = (parseDate(request.responseDue) - parseDate(plan.filedOn)) / DAY;
+                  const rx = Math.round(x(Math.max(0, recordedDay))) + 0.5;
+                  const mx = Math.round(x(plan.allowedCalendarDays)) + 0.5;
+                  return (
+                    <g data-due-conflict="">
+                      <title>{`Recorded response due ${day(request.responseDue)} differs from the modelled ${day(plan.determinationDueOn)}`}</title>
+                      <line x1={rx} x2={rx} y1={cy - 7} y2={cy + 7} style={{ stroke: VIZ.ink, strokeWidth: 1, strokeDasharray: '2 2' }} />
+                      <line x1={Math.min(rx, mx)} x2={Math.max(rx, mx)} y1={cy - 8.5} y2={cy - 8.5} style={{ stroke: VIZ.ink, strokeWidth: 1, strokeDasharray: '3 2' }} />
+                      <text x={(rx + mx) / 2} y={cy - 8.5} dy="0.32em" textAnchor="middle" className="fill-fg text-[10px] font-semibold" style={{ paintOrder: 'stroke', stroke: VIZ.surface, strokeWidth: 3 }}>≠</text>
+                    </g>
+                  );
+                })()}
                 <ClockBar x={x} y={cy - 3} thickness={6} endDay={plan.calendarDaysElapsed} deadlineDay={plan.deadlinePassedWithoutRecordedResponse ? plan.allowedCalendarDays : null} past="uncounted" open={plan.measuredTo === null} />
                 {received && <Dot cx={x(plan.calendarDaysElapsed) + (plan.measuredTo === null ? 14 : 6)} cy={cy} r={3} role="positive" title="Production received" />}
                 <text x={x(plan.calendarDaysElapsed) + (plan.measuredTo === null ? 14 : 6) + (received ? 8 : 0)} y={cy} dy="0.32em" className="viz-num fill-fg-secondary text-[11px]">
@@ -346,7 +443,7 @@ function MiniPlot({ found, width, onOpen }: { found: CaseworkCase; width: number
                 </text>
               </>
             ) : (
-              <AbsentSlot absence={absent('not-recorded', noClockWords(request))} box={{ x: labelColumn + 8, y: cy - 7, width: Math.max(40, width - labelColumn - 12), height: 14 }} text={request.submittedAt === null ? 'not filed: no clock' : 'no clock yet'} />
+              <AbsentSlot absence={absent('not-recorded', noClockWords(request))} box={{ x: barLeft, y: cy - 7, width: Math.max(40, Math.min(200, width - barLeft - 4)), height: 14 }} text={request.submittedAt === null ? 'not filed: no clock' : 'no clock yet'} />
             )}
           </MarkGroup>
         );
@@ -357,7 +454,7 @@ function MiniPlot({ found, width, onOpen }: { found: CaseworkCase; width: number
   );
 }
 
-export function MiniClocks({ found, onOpen }: { found: CaseworkCase; onOpen(): void }) {
+export function MiniClocks({ found, onOpen }: { found: CaseworkCase; onOpen(requestId: string): void }) {
   const headline = miniClocksHeadline(found);
   const citation = found.requests.find((request) => request.filingPlan)?.filingPlan?.statuteCitation;
   return (
@@ -380,6 +477,7 @@ export function MiniClocks({ found, onOpen }: { found: CaseworkCase; onOpen(): v
         })),
       }}
       minHeight={Math.max(1, found.requests.length) * MINI_ROW + (found.requests.some((request) => request.filingPlan) ? 30 : 4)}
+      plotHeight={(width) => Math.max(1, found.requests.length) * miniRowHeight(width) + (found.requests.some((request) => request.filingPlan) ? 30 : 4)}
       interactive={{ roledescription: 'request clocks' }}
       storageKey="inspector-case-clocks"
     >

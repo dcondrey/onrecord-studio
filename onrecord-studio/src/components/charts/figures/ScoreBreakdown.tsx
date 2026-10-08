@@ -6,6 +6,7 @@ import { measured } from '../core/nulls';
 import { useRovingFocus } from '../hooks/useRovingFocus';
 import { useTooltip } from '../hooks/useTooltip';
 import { Segments } from '../marks/Segments';
+import { MarkGroup } from '../marks/shared';
 
 /*
  * F4 ScoreBreakdown: why each casework lead ranks where it does. Each factor is a segment as wide
@@ -15,7 +16,7 @@ import { Segments } from '../marks/Segments';
  */
 
 const ROW_LABEL_CLASS = 'fill-fg text-[12px] font-medium';
-const ROW = 46;
+const ROW = 60;
 const BAR_H = 12;
 
 interface LeadRow {
@@ -56,25 +57,40 @@ export function scoreHeadline(leads: readonly CaseworkLead[]): string {
   return `${rows.length} lead${rows.length === 1 ? '' : 's'} ranked; top: ${top.title} (${top.score} of ${top.maximum})${driver ? `, driven by ${driver.label.toLowerCase()}` : ''}.`;
 }
 
+/** Most px the widest lead's bar may take, so its score stays near its title at any width. */
+const MAX_BAR = 480;
+const SEGMENT_GAP = 2;
+const FACTOR_LABEL_CLASS = 'fill-fg-secondary text-[11px]';
+
+/** Factor labels in first-seen order; a label that does not fit its segment prints this ordinal. */
+function factorOrder(rows: readonly LeadRow[]): string[] {
+  return [...new Set(rows.flatMap((row) => row.factors.map((factor) => factor.label)))];
+}
+
 function BreakdownPlot({ rows, width, onOpen }: { rows: readonly LeadRow[]; width: number; onOpen(index: number): void }) {
   const tooltip = useTooltip();
-  const roving = useRovingFocus({ shape: { rows: Math.max(1, rows.length) }, onActivate: onOpen, onEscape: tooltip.hide });
+  const cols = Math.max(1, ...rows.map((row) => row.factors.length));
+  const roving = useRovingFocus({ shape: { rows: Math.max(1, rows.length), cols }, onActivate: (i) => onOpen(i), onEscape: tooltip.hide });
   const widest = Math.max(1, ...rows.map((row) => row.maximum));
   const scoreRoom = Math.max(...rows.map((row) => measureText(`${row.score} of ${row.maximum}`)), 40) + 12;
-  const unit = Math.max(4, (width - scoreRoom - 4 - 2 * Math.max(0, ...rows.map((row) => row.factors.length - 1))) / widest);
+  const gaps = SEGMENT_GAP * Math.max(0, cols - 1);
+  const unit = Math.max(4, Math.min((MAX_BAR - gaps) / widest, (width - scoreRoom - 4 - gaps) / widest));
+  const order = factorOrder(rows);
   return (
     <g>
       {rows.map((row, index) => {
         const y = index * ROW;
-        const name = `${row.title}: review priority ${row.score} of ${row.maximum}: ${row.factors.map((factor) => `${factor.label} ${factor.score} of ${factor.maximum}`).join(', ')}.`;
-        const tip = (
-          <TooltipContent
-            title={row.title}
-            rows={row.factors.map((factor) => ({ key: factor.label, value: `${factor.score}/${factor.maximum}`, label: factor.label }))}
-            note={row.factors.map((factor) => `${factor.label}: ${factor.reason}`).join(' ')}
-          />
-        );
-        const barWidth = row.maximum * unit + 2 * Math.max(0, row.factors.length - 1);
+        const barY = y + 22;
+        let cursor = 0;
+        const placed = row.factors.map((factor) => {
+          const left = cursor;
+          const segmentWidth = factor.maximum * unit;
+          cursor += segmentWidth + SEGMENT_GAP;
+          const full = fitText(factor.label, segmentWidth - 2);
+          const text = full.length >= 4 ? full : String(order.indexOf(factor.label) + 1);
+          return { factor, left, segmentWidth, text };
+        });
+        const barWidth = Math.max(0, cursor - SEGMENT_GAP);
         return (
           <g key={row.key}>
             <text x={0} y={y + 10} dy="0.32em" className={ROW_LABEL_CLASS}>
@@ -83,27 +99,50 @@ function BreakdownPlot({ rows, width, onOpen }: { rows: readonly LeadRow[]; widt
             </text>
             <Segments
               x={0}
-              y={y + 22}
+              y={barY}
               height={BAR_H}
               unit={unit}
               segments={row.factors.map((factor) => ({ key: factor.label, max: factor.maximum, value: measured(Math.max(0, Math.min(factor.maximum, factor.score))), label: `${factor.label}: ${factor.score} of ${factor.maximum}. ${factor.reason}` }))}
-              interaction={{
-                name,
-                item: roving.getItemProps(index),
-                onPointerMove: (event) => tooltip.show(tip, { clientX: event.clientX, clientY: event.clientY }),
-                onPointerLeave: tooltip.hide,
-                onFocusMark: (box) => tooltip.show(tip, box),
-                onBlurMark: tooltip.hide,
-                onClick: () => onOpen(index),
-              }}
             />
-            <text x={barWidth + 8} y={y + 22 + BAR_H / 2} dy="0.32em" className="viz-num fill-fg-secondary text-[11px]">{`${row.score} of ${row.maximum}`}</text>
+            {placed.map(({ factor, left, segmentWidth, text }, j) => {
+              const name = `${row.title}: ${factor.label} ${factor.score} of ${factor.maximum}: ${factor.reason}`;
+              const tip = <TooltipContent title={`${factor.label}: ${factor.score} of ${factor.maximum}`} rows={[]} note={`${row.title}. ${factor.reason}`} />;
+              return (
+                <g key={factor.label}>
+                  <MarkGroup
+                    box={{ x: left, y: barY, width: segmentWidth, height: BAR_H }}
+                    interaction={{
+                      name,
+                      item: roving.getItemProps(index, j),
+                      onPointerMove: (event) => tooltip.show(tip, { clientX: event.clientX, clientY: event.clientY }),
+                      onPointerLeave: tooltip.hide,
+                      onFocusMark: (box) => tooltip.show(tip, box),
+                      onBlurMark: tooltip.hide,
+                      onClick: () => onOpen(index),
+                    }}
+                  >
+                    <rect x={left} y={barY} width={segmentWidth} height={BAR_H} style={{ fill: 'transparent' }} />
+                  </MarkGroup>
+                  <text x={left} y={barY + BAR_H + 9} dy="0.32em" className={FACTOR_LABEL_CLASS} aria-hidden="true">{text}</text>
+                </g>
+              );
+            })}
+            <text x={barWidth + 8} y={barY + BAR_H / 2} dy="0.32em" className="viz-num fill-fg-secondary text-[11px]">{`${row.score} of ${row.maximum}`}</text>
           </g>
         );
       })}
       {tooltip.node}
     </g>
   );
+}
+
+/** The ordinal key, shown only when some factor label did not fit its segment. */
+function ordinalKey(rows: readonly LeadRow[], width: number): string[] | null {
+  const order = factorOrder(rows);
+  const widest = Math.max(1, ...rows.map((row) => row.maximum));
+  const unit = Math.max(4, Math.min((MAX_BAR - SEGMENT_GAP * 3) / widest, width / widest));
+  const truncated = rows.some((row) => row.factors.some((factor) => fitText(factor.label, factor.maximum * unit - 2).length < 4));
+  return truncated ? order.map((label, index) => `${index + 1} ${label}`) : null;
 }
 
 export default function ScoreBreakdown({ leads, onOpen }: { leads: readonly CaseworkLead[]; onOpen(index: number): void }) {
@@ -123,11 +162,19 @@ export default function ScoreBreakdown({ leads, onOpen }: { leads: readonly Case
         rows: rows.flatMap((row) => row.factors.map((factor) => ({ lead: row.title, factor: factor.label, score: factor.score, maximum: factor.maximum, reason: factor.reason }))),
       }}
       legend={[{ key: 'scored', label: 'Factor score (a lead the app surfaced)', swatch: 'rect', tone: 'lead' }, { key: 'room', label: 'Room to the factor\'s maximum', swatch: 'rect', tone: 'track' }]}
-      minHeight={Math.max(1, rows.length) * ROW}
+      minHeight={Math.max(1, rows.length) * ROW + 14}
       interactive={{ roledescription: 'score breakdown' }}
       storageKey="casework-score-breakdown"
     >
-      {({ width }) => <BreakdownPlot rows={rows} width={width} onOpen={onOpen} />}
+      {({ width }) => {
+        const key = ordinalKey(rows, width);
+        return (
+          <>
+            <BreakdownPlot rows={rows} width={width} onOpen={onOpen} />
+            {key && <text x={0} y={rows.length * ROW + 4} dy="0.32em" className={FACTOR_LABEL_CLASS}>{key.join(' · ')}</text>}
+          </>
+        );
+      }}
     </ChartFrame>
   );
 }
