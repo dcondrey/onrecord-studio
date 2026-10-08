@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useProfileLensStore } from '../../store/useProfileLensStore';
 import {
   PROFILE_LIMITS,
@@ -9,7 +9,9 @@ import {
   type EntityValidationGrade,
   type UserProfile,
 } from '../../types';
-import { useDialogFocus } from '../licensing/useDialogFocus';
+import Button from '../ui/Button';
+import Dialog, { DialogBody, DialogFooter, DialogHeader } from '../ui/Dialog';
+import { Input } from '../ui/Field';
 import { useProfile } from './useProfile';
 import WorkEmailVerification from './WorkEmailVerification';
 
@@ -74,9 +76,9 @@ function CandidateRow({
   onReject: () => void;
 }) {
   return (
-    <li className="rounded-lg border border-line p-2 text-label">
-      <div className="font-semibold text-fg">{candidate.displayValue}</div>
-      <div className="text-muted">
+    <li className="rounded-lg border border-line p-3 text-body">
+      <div className="font-medium text-fg">{candidate.displayValue}</div>
+      <div className="mt-0.5 text-caption text-muted">
         {candidate.kind === 'PORTAL'
           ? 'Registered source'
           : candidate.kind === 'AGENCY'
@@ -88,30 +90,20 @@ function CandidateRow({
           : 'registered source, not extracted'}
         {candidate.documentCount !== null && ` · ${candidate.documentCount} documents`}
       </div>
-      <div className="mt-1 flex items-center gap-2">
-        <span className="text-fg-secondary">
+      <div className="mt-2 flex items-center gap-2">
+        <span className="mr-auto text-caption text-fg-secondary">
           {candidate.decision === 'PENDING'
             ? 'Undecided'
             : candidate.decision === 'CONFIRMED'
               ? 'Confirmed'
               : 'Rejected'}
         </span>
-        <button
-          type="button"
-          disabled={disabled || candidate.decision === 'CONFIRMED'}
-          onClick={onConfirm}
-          className="focus-ring rounded border border-control px-2 py-0.5"
-        >
+        <Button size="sm" disabled={disabled || candidate.decision === 'CONFIRMED'} onClick={onConfirm}>
           Confirm
-        </button>
-        <button
-          type="button"
-          disabled={disabled || candidate.decision === 'REJECTED'}
-          onClick={onReject}
-          className="focus-ring rounded border border-control px-2 py-0.5"
-        >
+        </Button>
+        <Button size="sm" disabled={disabled || candidate.decision === 'REJECTED'} onClick={onReject}>
           Reject
-        </button>
+        </Button>
       </div>
     </li>
   );
@@ -124,12 +116,23 @@ export default function ProfileSettings() {
   return <ProfileSettingsDialog onClose={() => setOpen(false)} />;
 }
 
+function sameDraft(left: ReturnType<typeof draftFromProfile>, right: ReturnType<typeof draftFromProfile>): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+/** A field's character count, under the field so it is not part of the field's name. */
+function Counter({ id, used, limit }: { id: string; used: number; limit: number }) {
+  return <p id={id} className="mt-1 text-right text-caption tabular-nums text-muted">{used}/{limit}</p>;
+}
+
 export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
   const profile = useProfile();
-  const dialogFocus = useDialogFocus(onClose);
   const setSelfReviewOpen = useProfileLensStore((state) => state.setSelfReviewOpen);
   const [draft, setDraft] = useState(() => draftFromProfile(null));
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const savedTimer = useRef<number | null>(null);
+  const ids = useId();
   const stored = profile.state?.profile ?? null;
   const bumpProfileRevision = useProfileLensStore((state) => state.bumpProfileRevision);
   const refreshProfile = profile.refresh;
@@ -142,219 +145,226 @@ export function ProfileSettingsDialog({ onClose }: { onClose: () => void }) {
     if (profile.state) setDraft(draftFromProfile(profile.state.profile));
   }, [profile.state]);
 
+  useEffect(() => () => {
+    if (savedTimer.current !== null) window.clearTimeout(savedTimer.current);
+  }, []);
+
   const updateAffiliation = (index: number, next: AffiliationInput) =>
     setDraft((current) => ({
       ...current,
       affiliations: current.affiliations.map((a, i) => (i === index ? next : a)),
     }));
 
+  // Saving before the stored profile is read would write an empty profile over it.
+  const dirty = profile.loaded && !sameDraft(draft, draftFromProfile(stored));
+  const save = async () => {
+    const ok = await profile.save({
+      displayName: draft.displayName.trim() === '' ? null : draft.displayName,
+      affiliations: draft.affiliations,
+    });
+    if (!ok) return;
+    setSaved(true);
+    if (savedTimer.current !== null) window.clearTimeout(savedTimer.current);
+    savedTimer.current = window.setTimeout(() => setSaved(false), 2000);
+  };
+
   return (
-    <div role="dialog" aria-modal="true" aria-label="Local profile" className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onKeyDown={dialogFocus.onKeyDown} onMouseDown={dialogFocus.onOverlayMouseDown}>
-      <div ref={dialogFocus.ref} tabIndex={-1} className="app-panel max-h-[90vh] w-full max-w-2xl overflow-y-auto p-4 text-label text-fg-secondary outline-none">
-        <div className="flex items-center justify-between">
-          <h2 className="text-label font-semibold text-fg">Local profile</h2>
-          <button type="button" onClick={onClose} className="focus-ring rounded border border-control px-2 py-1">
-            Close
-          </button>
-        </div>
-        <p className="mt-2 text-label leading-relaxed text-muted">
-          Affiliation is self-declared: you type the name and nothing checks it against a list. It
-          is stored only on this device and never transmitted. It never changes any finding,
-          confidence, severity, statutory result or ranking. It only filters, highlights and adds a
-          disclosure to what you export.
-        </p>
-        {profile.error && (
-          <div role="alert" className="mt-2 text-danger">
-            {profile.error}
+    <Dialog onClose={onClose} size="lg">
+      <DialogHeader
+        title="Profile"
+        description="Affiliation is self-declared and stored only on this Mac. It never changes a finding, confidence, severity, statutory result or ranking; it only filters, highlights and adds a disclosure to what you export."
+      />
+      <DialogBody className="text-body text-fg-secondary">
+        {!profile.loaded && profile.error ? (
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3">
+            <p className="text-danger">Your profile could not be read. {profile.error}</p>
+            <Button size="sm" onClick={profile.refresh}>Try again</Button>
           </div>
-        )}
-        {profile.state?.status === 'UNSET' && <p className="mt-2">No profile is set.</p>}
-
-        <label className="mt-3 block">
-          Display name ({draft.displayName.length}/{PROFILE_LIMITS.displayName})
-          <input
-            value={draft.displayName}
-            maxLength={PROFILE_LIMITS.displayName}
-            onChange={(event) => setDraft({ ...draft, displayName: event.target.value })}
-            className="mt-1 w-full rounded border border-control bg-canvas px-2 py-1"
-          />
-        </label>
-
-        <h3 className="mt-4 font-semibold text-fg">
-          Organizations ({draft.affiliations.length}/{PROFILE_LIMITS.affiliations})
-        </h3>
-        {draft.affiliations.map((affiliation, index) => (
-          <fieldset key={affiliation.id ?? `new-${index}`} className="mt-2 rounded-lg border border-line p-2">
-            <label className="block">
-              Organization name ({affiliation.name.length}/{PROFILE_LIMITS.affiliationName})
-              <input
-                value={affiliation.name}
-                maxLength={PROFILE_LIMITS.affiliationName}
-                onChange={(event) => updateAffiliation(index, { ...affiliation, name: event.target.value })}
-                className="mt-1 w-full rounded border border-control bg-canvas px-2 py-1"
-              />
-            </label>
-            <div className="mt-1 text-muted">
-              Aliases ({affiliation.aliases.length}/{PROFILE_LIMITS.aliasesPerAffiliation})
-            </div>
-            {affiliation.aliases.map((alias, aliasIndex) => (
-              <div key={aliasIndex} className="mt-1 flex gap-1">
-                <input
-                  aria-label={`Alias ${aliasIndex + 1} of ${affiliation.name || 'organization'}`}
-                  value={alias}
-                  maxLength={PROFILE_LIMITS.alias}
-                  onChange={(event) =>
-                    updateAffiliation(index, {
-                      ...affiliation,
-                      aliases: affiliation.aliases.map((a, i) => (i === aliasIndex ? event.target.value : a)),
-                    })
-                  }
-                  className="w-full rounded border border-control bg-canvas px-2 py-1"
-                />
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateAffiliation(index, {
-                      ...affiliation,
-                      aliases: affiliation.aliases.filter((_, i) => i !== aliasIndex),
-                    })
-                  }
-                  className="focus-ring rounded border border-control px-2"
-                >
-                  Remove alias
-                </button>
-              </div>
-            ))}
-            <div className="mt-2 flex gap-2">
-              <button
-                type="button"
-                disabled={affiliation.aliases.length >= PROFILE_LIMITS.aliasesPerAffiliation}
-                onClick={() => updateAffiliation(index, { ...affiliation, aliases: [...affiliation.aliases, ''] })}
-                className="focus-ring rounded border border-control px-2 py-0.5"
-              >
-                Add alias
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setDraft((current) => ({
-                    ...current,
-                    affiliations: current.affiliations.filter((_, i) => i !== index),
-                  }))
-                }
-                className="focus-ring rounded border border-control px-2 py-0.5"
-              >
-                Remove organization
-              </button>
-            </div>
-            <WorkEmailVerification
-              affiliation={stored?.affiliations.find((a) => a.id === affiliation.id) ?? null}
-              verifiedDomains={stored?.verifiedDomains ?? []}
-              onProfileChanged={onVerificationChanged}
-            />
-          </fieldset>
-        ))}
-        <div className="mt-2 flex gap-2">
-          <button
-            type="button"
-            disabled={draft.affiliations.length >= PROFILE_LIMITS.affiliations}
-            onClick={() =>
-              setDraft((current) => ({
-                ...current,
-                affiliations: [...current.affiliations, { id: null, name: '', aliases: [] }],
-              }))
-            }
-            className="focus-ring rounded border border-control px-2 py-1"
-          >
-            Add organization
-          </button>
-          <button
-            type="button"
-            disabled={profile.isBusy}
-            onClick={() =>
-              void profile.save({
-                displayName: draft.displayName.trim() === '' ? null : draft.displayName,
-                affiliations: draft.affiliations,
-              })
-            }
-            className="focus-ring profile-save rounded border border-accent/30 px-2 py-1 text-accent"
-          >
-            Save profile
-          </button>
-        </div>
-
-        <h3 className="mt-4 font-semibold text-fg">Matches</h3>
-        {profile.matches && (
+        ) : !profile.loaded ? (
+          <div role="status" aria-busy="true" className="flex flex-col gap-3">
+            <span className="sr-only">Loading your profile</span>
+            <div className="skeleton h-9 rounded-lg" aria-hidden="true" />
+            <div className="skeleton h-9 rounded-lg" aria-hidden="true" />
+          </div>
+        ) : (
           <>
-            <MatchStatusNotice list={profile.matches} />
-            <ul className="mt-2 flex flex-col gap-2" aria-label="Affiliation match candidates">
-              {profile.matches.candidates.map((candidate) => {
-                const input = {
-                  affiliationId: candidate.affiliationId,
-                  kind: candidate.kind,
-                  normalizedName: candidate.normalizedName,
-                };
-                return (
-                  <CandidateRow
-                    key={`${candidate.affiliationId}:${candidate.kind}:${candidate.normalizedName}`}
-                    candidate={candidate}
-                    disabled={profile.isBusy}
-                    onConfirm={() => void profile.confirm(input)}
-                    onReject={() => void profile.reject(input)}
-                  />
-                );
-              })}
-            </ul>
-            {profile.matches.limitations.length > 0 && (
-              <ul className="mt-2 list-disc pl-4 text-label text-muted" aria-label="Match limitations">
-                {profile.matches.limitations.map((line) => (
-                  <li key={line}>{line}</li>
+            {profile.error && <p role="alert" className="mb-3 text-danger">{profile.error}</p>}
+            {profile.state?.status === 'UNSET' && <p className="mb-3 text-muted">No profile is set.</p>}
+            <label htmlFor={`${ids}-name`} className="text-control text-fg-secondary">Display name</label>
+            <Input
+              id={`${ids}-name`}
+              value={draft.displayName}
+              maxLength={PROFILE_LIMITS.displayName}
+              aria-describedby={`${ids}-name-count`}
+              onChange={(event) => setDraft({ ...draft, displayName: event.target.value })}
+              className="mt-1.5"
+            />
+            <Counter id={`${ids}-name-count`} used={draft.displayName.length} limit={PROFILE_LIMITS.displayName} />
+
+            <div className="mt-4 flex items-baseline justify-between">
+              <h3 className="text-heading text-fg">Organizations</h3>
+              <span className="text-caption tabular-nums text-muted">{draft.affiliations.length}/{PROFILE_LIMITS.affiliations}</span>
+            </div>
+            {draft.affiliations.map((affiliation, index) => (
+              <fieldset key={affiliation.id ?? `new-${index}`} className="mt-2 rounded-lg border border-line p-3">
+                <label htmlFor={`${ids}-org-${index}`} className="text-control text-fg-secondary">Organization name</label>
+                <Input
+                  id={`${ids}-org-${index}`}
+                  value={affiliation.name}
+                  maxLength={PROFILE_LIMITS.affiliationName}
+                  aria-describedby={`${ids}-org-${index}-count`}
+                  onChange={(event) => updateAffiliation(index, { ...affiliation, name: event.target.value })}
+                  className="mt-1.5"
+                />
+                <Counter id={`${ids}-org-${index}-count`} used={affiliation.name.length} limit={PROFILE_LIMITS.affiliationName} />
+                <div className="flex items-baseline justify-between text-control text-fg-secondary">
+                  <span>Aliases</span>
+                  <span className="text-caption tabular-nums text-muted">{affiliation.aliases.length}/{PROFILE_LIMITS.aliasesPerAffiliation}</span>
+                </div>
+                {affiliation.aliases.map((alias, aliasIndex) => (
+                  <div key={aliasIndex} className="mt-1.5 flex items-center gap-1">
+                    <Input
+                      aria-label={`Alias ${aliasIndex + 1} of ${affiliation.name || 'organization'}`}
+                      value={alias}
+                      maxLength={PROFILE_LIMITS.alias}
+                      onChange={(event) =>
+                        updateAffiliation(index, {
+                          ...affiliation,
+                          aliases: affiliation.aliases.map((a, i) => (i === aliasIndex ? event.target.value : a)),
+                        })
+                      }
+                    />
+                    <Button
+                      variant="ghost"
+                      iconOnly
+                      icon="x"
+                      aria-label={`Remove alias ${aliasIndex + 1}`}
+                      onClick={() =>
+                        updateAffiliation(index, {
+                          ...affiliation,
+                          aliases: affiliation.aliases.filter((_, i) => i !== aliasIndex),
+                        })
+                      }
+                    />
+                  </div>
                 ))}
-              </ul>
+                <div className="mt-2 flex gap-2">
+                  <Button
+                    size="sm"
+                    disabled={affiliation.aliases.length >= PROFILE_LIMITS.aliasesPerAffiliation}
+                    onClick={() => updateAffiliation(index, { ...affiliation, aliases: [...affiliation.aliases, ''] })}
+                  >
+                    Add alias
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      setDraft((current) => ({
+                        ...current,
+                        affiliations: current.affiliations.filter((_, i) => i !== index),
+                      }))
+                    }
+                  >
+                    Remove organization
+                  </Button>
+                </div>
+                <WorkEmailVerification
+                  affiliation={stored?.affiliations.find((a) => a.id === affiliation.id) ?? null}
+                  verifiedDomains={stored?.verifiedDomains ?? []}
+                  onProfileChanged={onVerificationChanged}
+                />
+              </fieldset>
+            ))}
+            <Button
+              size="sm"
+              disabled={draft.affiliations.length >= PROFILE_LIMITS.affiliations}
+              onClick={() =>
+                setDraft((current) => ({
+                  ...current,
+                  affiliations: [...current.affiliations, { id: null, name: '', aliases: [] }],
+                }))
+              }
+              className="mt-2"
+            >
+              Add organization
+            </Button>
+
+            <h3 className="mt-5 text-heading text-fg">Matches</h3>
+            {profile.matches && (
+              <div className="mt-1">
+                <MatchStatusNotice list={profile.matches} />
+                <ul className="mt-2 flex flex-col gap-2" aria-label="Affiliation match candidates">
+                  {profile.matches.candidates.map((candidate) => {
+                    const input = {
+                      affiliationId: candidate.affiliationId,
+                      kind: candidate.kind,
+                      normalizedName: candidate.normalizedName,
+                    };
+                    return (
+                      <CandidateRow
+                        key={`${candidate.affiliationId}:${candidate.kind}:${candidate.normalizedName}`}
+                        candidate={candidate}
+                        disabled={profile.isBusy}
+                        onConfirm={() => void profile.confirm(input)}
+                        onReject={() => void profile.reject(input)}
+                      />
+                    );
+                  })}
+                </ul>
+                {profile.matches.limitations.length > 0 && (
+                  <ul className="mt-2 list-disc pl-4 text-caption text-muted" aria-label="Match limitations">
+                    {profile.matches.limitations.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
+
+            <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-line pt-4">
+              <Button
+                size="sm"
+                onClick={() => {
+                  setSelfReviewOpen(true);
+                  onClose();
+                }}
+              >
+                Open records self-review
+              </Button>
+              {!confirmingDelete ? (
+                <Button variant="danger" size="sm" disabled={!stored} onClick={() => setConfirmingDelete(true)} className="ml-auto">
+                  Delete local profile
+                </Button>
+              ) : (
+                <div className="ml-auto flex flex-wrap items-center gap-2" role="group" aria-label="Confirm profile deletion">
+                  <span className="text-caption">Delete the profile file and every confirmed or rejected match on this device?</span>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => {
+                      setConfirmingDelete(false);
+                      void profile.remove();
+                    }}
+                  >
+                    Yes, delete
+                  </Button>
+                  <Button size="sm" onClick={() => setConfirmingDelete(false)}>
+                    Keep
+                  </Button>
+                </div>
+              )}
+            </div>
           </>
         )}
-
-        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-3">
-          <button
-            type="button"
-            onClick={() => {
-              setSelfReviewOpen(true);
-              onClose();
-            }}
-            className="focus-ring rounded border border-control px-2 py-1"
-          >
-            Open records self-review
-          </button>
-          {!confirmingDelete ? (
-            <button
-              type="button"
-              disabled={!stored}
-              onClick={() => setConfirmingDelete(true)}
-              className="focus-ring ml-auto rounded border border-danger/30 px-2 py-1 text-danger"
-            >
-              Delete local profile
-            </button>
-          ) : (
-            <div className="ml-auto flex flex-wrap items-center gap-2" role="alertdialog" aria-label="Confirm profile deletion">
-              <span>Delete the profile file and every confirmed or rejected match on this device?</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setConfirmingDelete(false);
-                  void profile.remove();
-                }}
-                className="focus-ring rounded border border-danger/60 px-2 py-1 text-danger"
-              >
-                Yes, delete
-              </button>
-              <button type="button" onClick={() => setConfirmingDelete(false)} className="focus-ring rounded border border-control px-2 py-1">
-                Keep
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+      </DialogBody>
+      <DialogFooter>
+        {saved && <p role="status" className="mr-auto text-caption text-success">Saved</p>}
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="primary" disabled={!dirty || profile.isBusy} onClick={() => void save()}>
+          Save
+        </Button>
+      </DialogFooter>
+    </Dialog>
   );
 }

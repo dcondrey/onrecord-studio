@@ -121,8 +121,10 @@ export function useProfile() {
         await operation();
         bumpProfileRevision();
         refresh();
+        return true;
       } catch (reason) {
         setError(formatNativeError(reason));
+        return false;
       } finally {
         setIsBusy(false);
       }
@@ -132,6 +134,8 @@ export function useProfile() {
 
   return {
     state,
+    /** False until the stored profile has been read; an unread profile is not an empty one. */
+    loaded: state !== null,
     matches,
     error,
     isBusy,

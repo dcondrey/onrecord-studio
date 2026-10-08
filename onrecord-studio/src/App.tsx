@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { setTheme as setNativeTheme } from '@tauri-apps/api/app';
 import { isTauri } from '@tauri-apps/api/core';
 import Header from './components/dashboard/Header';
 import MainLayout from './components/dashboard/MainLayout';
@@ -10,18 +9,12 @@ import HelpCenter from './components/help/HelpCenter';
 import CollectionPlanDialog from './components/dashboard/CollectionPlanDialog';
 import Inspector from './components/objects/Inspector';
 import { useAppStore } from './store/useAppStore';
-import { invokeCommand } from './ipc';
+import { formatNativeError, invokeCommand } from './ipc';
 import type { IngestionTelemetry } from './types';
 import { shouldReportFailure, type ReportedFailure } from './utils/repeatedFailure';
-import { resolveTheme, THEME_STORAGE_KEY } from './utils/theme';
-import {
-  CONTRAST_STORAGE_KEY,
-  MOTION_STORAGE_KEY,
-  resolveContrast,
-  resolveMotion,
-  systemAccessibilityPreferences,
-} from './utils/accessibility';
+import { displayError } from './utils/errorMessage';
 import { useAudioAlerts } from './hooks/useAudioAlerts';
+import { useAppearance } from './hooks/useAppearance';
 import { contrastCommandRegistry, motionCommandRegistry, themeCommandRegistry, workspaceCommandRegistry } from './commands/registry';
 import { openHelp } from './components/help/helpEvents';
 import LicenseSwitch from './components/licensing/LicenseSwitch';
@@ -32,6 +25,7 @@ import { AutomaticDiscoveryProvider } from './components/dashboard/AutomaticDisc
 const RUNTIME_FAILURE_REMINDER_MILLISECONDS = 60_000;
 
 export default function App() {
+  useAppearance();
   return (
     <ErrorBoundary label="OnRecord Studio" fullScreen>
       <LicenseProvider>
@@ -44,14 +38,7 @@ export default function App() {
 }
 
 function LicensedWorkspace() {
-  const theme = useAppStore((state) => state.theme);
   const workspaceView = useAppStore((state) => state.workspaceView);
-  const motion = useAppStore((state) => state.motion);
-  const contrast = useAppStore((state) => state.contrast);
-  const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(() =>
-    window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
-  );
-  const [systemAccessibility, setSystemAccessibility] = useState(systemAccessibilityPreferences);
   const appendSyncLog = useAppStore((state) => state.appendSyncLog);
   const incrementMetric = useAppStore((state) => state.incrementMetric);
   const addBytesTransferred = useAppStore((state) => state.addBytesTransferred);
@@ -60,6 +47,9 @@ function LicensedWorkspace() {
   const setOcrCapability = useAppStore((state) => state.setOcrCapability);
   const upsertPortal = useAppStore((state) => state.upsertPortal);
   const setPortalRuntimes = useAppStore((state) => state.setPortalRuntimes);
+  const setPortalRuntimesFailed = useAppStore((state) => state.setPortalRuntimesFailed);
+  const workspaceInitializationAttempt = useAppStore((state) => state.workspaceInitializationAttempt);
+  const inspectorOpen = useAppStore((state) => state.inspectorStack.length > 0);
   const setPortalSyncState = useAppStore((state) => state.setPortalSyncState);
   const setAnalyticsData = useAppStore((state) => state.setAnalyticsData);
   const setAnalyticsError = useAppStore((state) => state.setAnalyticsError);
@@ -72,51 +62,6 @@ function LicensedWorkspace() {
   const runtimeRefreshFailure = useRef<ReportedFailure | null>(null);
   const audioAlertsEnabled = useAppStore((state) => state.audioAlertsEnabled);
   const { triggerFailureAlert, triggerSuccessAlert } = useAudioAlerts(audioAlertsEnabled);
-
-  const resolvedTheme = resolveTheme(theme, systemTheme === 'dark');
-  const resolvedMotion = resolveMotion(motion, systemAccessibility.prefersReducedMotion);
-  const resolvedContrast = resolveContrast(contrast, systemAccessibility.prefersMoreContrast);
-
-  useEffect(() => {
-    const appearance = window.matchMedia('(prefers-color-scheme: dark)');
-    const updateSystemTheme = () => setSystemTheme(appearance.matches ? 'dark' : 'light');
-    updateSystemTheme();
-    appearance.addEventListener('change', updateSystemTheme);
-    return () => appearance.removeEventListener('change', updateSystemTheme);
-  }, []);
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = resolvedTheme;
-    document.documentElement.dataset.themePreference = theme;
-    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-    if (isTauri()) void setNativeTheme(theme === 'auto' ? null : theme);
-  }, [resolvedTheme, theme]);
-
-  useEffect(() => {
-    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const contrastQuery = window.matchMedia('(prefers-contrast: more)');
-    const update = () =>
-      setSystemAccessibility({
-        prefersReducedMotion: motionQuery.matches,
-        prefersMoreContrast: contrastQuery.matches,
-      });
-    update();
-    motionQuery.addEventListener('change', update);
-    contrastQuery.addEventListener('change', update);
-    return () => {
-      motionQuery.removeEventListener('change', update);
-      contrastQuery.removeEventListener('change', update);
-    };
-  }, []);
-
-  useEffect(() => {
-    document.documentElement.dataset.motion = resolvedMotion;
-    document.documentElement.dataset.motionPreference = motion;
-    document.documentElement.dataset.contrast = resolvedContrast;
-    document.documentElement.dataset.contrastPreference = contrast;
-    window.localStorage.setItem(MOTION_STORAGE_KEY, motion);
-    window.localStorage.setItem(CONTRAST_STORAGE_KEY, contrast);
-  }, [contrast, motion, resolvedContrast, resolvedMotion]);
 
   const refreshAnalytics = useCallback(async () => {
     try {
@@ -133,8 +78,8 @@ function LicensedWorkspace() {
     } catch (error) {
       // The log alone is not enough: without this the panels keep rendering an empty result,
       // which reads as "examined, nothing found" rather than "never ran".
-      setAnalyticsError(String(error));
-      appendSyncLog(`Analytics refresh failed: ${String(error)}`);
+      setAnalyticsError(displayError(error).message);
+      appendSyncLog(`Analytics refresh failed: ${formatNativeError(error)}`);
     }
   }, [appendSyncLog, setAnalyticsData, setAnalyticsError]);
 
@@ -147,7 +92,8 @@ function LicensedWorkspace() {
       }
       setPortalRuntimes(runtimes);
     } catch (error) {
-      const message = String(error);
+      const message = formatNativeError(error);
+      setPortalRuntimesFailed(displayError(error).message);
       const now = Date.now();
       if (
         shouldReportFailure(
@@ -161,7 +107,7 @@ function LicensedWorkspace() {
         appendSyncLog(`Portal runtime refresh failed: ${message}`);
       }
     }
-  }, [appendSyncLog, setPortalRuntimes, setPortalSyncState]);
+  }, [appendSyncLog, setPortalRuntimes, setPortalRuntimesFailed]);
 
   useEffect(() => {
     let active = true;
@@ -174,9 +120,8 @@ function LicensedWorkspace() {
       })
       .catch((error) => {
         if (!active) return;
-        const message = String(error);
-        setWorkspaceInitialization('error', message);
-        appendSyncLog(`Workspace initialization failed: ${message}`);
+        setWorkspaceInitialization('error', displayError(error).message);
+        appendSyncLog(`Workspace initialization failed: ${formatNativeError(error)}`);
       });
     // Runtime and analytics failures have their own visible/logged states and must not decide
     // whether an empty saved-source list is genuine.
@@ -195,12 +140,12 @@ function LicensedWorkspace() {
       .catch((error) => {
         if (!active) return;
         setOcrCapability(null);
-        appendSyncLog(`OCR capability probe failed: ${String(error)}`);
+        appendSyncLog(`OCR capability probe failed: ${formatNativeError(error)}`);
       });
     return () => {
       active = false;
     };
-  }, [appendSyncLog, refreshAnalytics, refreshRuntimes, setOcrCapability, setPortals, setWorkspaceInitialization]);
+  }, [appendSyncLog, refreshAnalytics, refreshRuntimes, setOcrCapability, setPortals, setWorkspaceInitialization, workspaceInitializationAttempt]);
 
   // A surface that writes what the aggregates read asks for this rather than re-running the
   // queries itself, so the analytics refresh stays owned in one place.
@@ -334,7 +279,7 @@ function LicensedWorkspace() {
           // and bump the inbox counter so `FindingsInbox` re-reads the ranked list.
           void invokeCommand('refresh_findings', {})
             .catch((error: unknown) => {
-              appendSyncLog(`Findings refresh failed: ${String(error)}`);
+              appendSyncLog(`Findings refresh failed: ${formatNativeError(error)}`);
             })
             .finally(() => {
               requestFindingsRefresh();
@@ -404,9 +349,10 @@ function LicensedWorkspace() {
   }, [addBytesTransferred, appendSyncLog, incrementMetric, refreshAnalytics, refreshRuntimes, requestEvidenceRefresh, requestFindingsRefresh, setPendingSourceRepair, setPortalSyncState, setPostIngestBriefOpen, triggerFailureAlert, triggerSuccessAlert, upsertPortal]);
 
   return (
-    <div data-theme={resolvedTheme} className="app-theme flex h-screen w-screen overflow-hidden antialiased">
+    <div className="app-theme flex h-screen w-screen overflow-hidden antialiased">
       <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      {/* From 1440px the open inspector sits beside the content instead of covering it. */}
+      <div className={`flex min-w-0 flex-1 flex-col overflow-hidden${inspectorOpen ? ' min-[1440px]:pr-[480px]' : ''}`}>
         <Header />
         <ErrorBoundary label="This view" resetKey={workspaceView}>
           <AutomaticDiscoveryProvider><MainLayout /></AutomaticDiscoveryProvider>

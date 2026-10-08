@@ -17,8 +17,8 @@ export function isDirectChannel(status: LicenseStatus | null): boolean {
 }
 
 export function daysLeftLabel(daysLeft: number): string {
-  if (daysLeft <= 0) return 'Your trial ends today';
-  return daysLeft === 1 ? '1 day left in your trial' : `${daysLeft} days left in your trial`;
+  if (daysLeft <= 0) return 'Ends today';
+  return daysLeft === 1 ? '1 day left' : `${daysLeft} days left`;
 }
 
 /**

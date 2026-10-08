@@ -1,19 +1,15 @@
 import { useEffect, useRef } from 'react';
 import DeleteAccountResult from '../account/DeleteAccountResult';
 import UpdatePrompt from '../updates/UpdatePrompt';
-import { PRODUCT_BYLINE, PRODUCT_NAME } from '../../config/brand';
+import Button from '../ui/Button';
+import { PRODUCT_NAME } from '../../config/brand';
+import { cn } from '../../utils/cn';
 import { isDirectChannel } from '../../utils/licenseState';
 import type { LicenseState, LicenseStatus } from '../../types';
-import { type LicenseController, type SignInProvider } from './LicenseProvider';
+import { type LicenseController } from './LicenseProvider';
 import DeviceLimitPanel from './DeviceLimitPanel';
 import UpgradePanel from './UpgradePanel';
-
-const PROVIDERS: ReadonlyArray<{ id: SignInProvider; label: string }> = [
-  { id: 'google', label: 'Google' },
-  { id: 'apple', label: 'Apple' },
-  { id: 'linkedin', label: 'LinkedIn' },
-  { id: 'github', label: 'GitHub' },
-];
+import { PROVIDERS, ProviderMark, providerLabel } from './providers';
 
 interface Copy {
   heading: string;
@@ -56,7 +52,7 @@ const DIRECT_COPY: Partial<Record<LicenseState, Copy>> = {
     sentence: 'Cannot reach the license server. Your last verified license has expired.',
   },
   DEVICE_LIMIT_REACHED: {
-    heading: 'This account is active on the maximum number of Macs',
+    heading: 'Signed in on too many Macs',
     sentence:
       'Your account is already signed in on the most Macs it allows. To use this Mac, sign your oldest Mac out of the account, or sign out here.',
   },
@@ -93,6 +89,24 @@ function copyFor(status: LicenseStatus | null): Copy {
 
 const SHOWS_SIGN_IN: ReadonlySet<LicenseState> = new Set(['SIGN_IN_REQUIRED', 'UNVERIFIED', 'BUNDLE_MISMATCH']);
 
+function sameWords(left: string, right: string): boolean {
+  const normalize = (text: string) => text.trim().toLowerCase().split('.').join('');
+  return normalize(left) === normalize(right);
+}
+
+/** The server counts "devices"; everything this screen says counts Macs. */
+function inMacs(message: string): string {
+  return message.split(' devices').join(' Macs').split(' device').join(' Mac');
+}
+
+/** The backend's own message, only when it says something the heading and sentence do not. */
+function detailFor(status: LicenseStatus | null, copy: Copy): string | null {
+  if (!status || !isDirectChannel(status) || status.state === 'SIGN_IN_REQUIRED') return null;
+  const message = status.state === 'DEVICE_LIMIT_REACHED' ? inMacs(status.message) : status.message;
+  if (!message.trim() || sameWords(message, copy.heading) || sameWords(message, copy.sentence)) return null;
+  return message;
+}
+
 export default function LicenseGate({ controller }: { controller: LicenseController }) {
   const { status, error, refreshing, signInProvider, signInNotice, signingOut, activating } = controller;
   const loading = status === null;
@@ -112,66 +126,64 @@ export default function LicenseGate({ controller }: { controller: LicenseControl
   // second subscription for an account that already has one.
   const showUpgrade = direct && (status?.state === 'TRIAL_EXPIRED' || status?.state === 'REVOKED');
   const showVerify = status !== null && (!direct || status.state !== 'SIGN_IN_REQUIRED');
-  const detail = direct && status && status.message !== copy.sentence && status.state !== 'SIGN_IN_REQUIRED'
-    ? status.message
-    : null;
+  const detail = detailFor(status, copy);
+  // Verify is the primary action only when nothing else on the card is.
+  const verifyIsPrimary = !showUpgrade && !showDeviceLimit;
 
   return (
     // A bug that denies every license check (like the Keychain allow-list bug fixed in beta.3)
     // can only reach an affected user through a signed update offered here, since LicenseSwitch
     // never mounts the workspace's own UpdatePrompt while the gate is showing.
-    <main className="app-theme flex h-screen w-screen items-center justify-center overflow-y-auto bg-canvas px-6 text-fg">
+    <main className="app-theme flex h-screen w-screen items-center justify-center overflow-y-auto bg-bg px-6 text-fg">
       <UpdatePrompt />
-      <section className="my-auto w-full max-w-lg rounded-2xl border border-line-strong bg-surface/70 p-8 shadow-2xl" aria-labelledby="license-gate-heading">
-        <p className="text-label leading-4 font-semibold uppercase tracking-[0.24em] text-accent">{PRODUCT_NAME}</p>
-        <p className="mt-1 text-caption text-muted">{PRODUCT_BYLINE}</p>
-        <h1 id="license-gate-heading" ref={headingRef} tabIndex={-1} className="mt-3 text-2xl font-semibold outline-none">
+      <section className="my-8 max-h-[calc(100vh-4rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-line bg-panel p-8 shadow-dialog" aria-labelledby="license-gate-heading">
+        <div className="flex items-center gap-2">
+          <img src="/brand-mark.png" alt="" className="h-6 w-6 rounded-md" />
+          <p className="text-heading text-fg">{PRODUCT_NAME}</p>
+        </div>
+        <h1 id="license-gate-heading" ref={headingRef} tabIndex={-1} className="mt-6 text-title text-fg outline-none">
           {copy.heading}
         </h1>
-        <p className="mt-4 text-sm leading-6 text-fg-secondary">{copy.sentence}</p>
-        {detail ? <p className="mt-2 text-label leading-5 text-muted">Detail: {detail}</p> : null}
+        <p className="mt-2 text-body text-fg-secondary">{copy.sentence}</p>
+        {detail ? <p className="mt-2 text-caption text-muted">{detail}</p> : null}
         {direct && status?.accountEmail && !showDeviceLimit ? (
-          <p className="mt-3 text-label leading-4 text-fg-secondary">
-            Signed in as {status.accountEmail}
-            {status.signInProvider ? ` with ${status.signInProvider}` : ''}.{' '}
-            <button
-              type="button"
-              disabled={busy}
-              onClick={controller.signOut}
-              className="focus-ring inline-flex min-h-[24px] items-center rounded px-1.5 font-semibold text-accent underline disabled:opacity-50"
-            >
-              Sign out
-            </button>
+          <p className="mt-3 flex flex-wrap items-center gap-x-2 text-caption text-fg-secondary">
+            <span>
+              Signed in as {status.accountEmail}
+              {status.signInProvider ? ` with ${providerLabel(status.signInProvider)}` : ''}.
+            </span>
+            <Button variant="link" disabled={busy} onClick={controller.signOut} className="text-caption">Sign out</Button>
           </p>
         ) : null}
         {error ? (
-          <p role="alert" className="mt-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+          <p role="alert" className="mt-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-body text-danger">
             {error}
           </p>
         ) : null}
         {signInNotice ? (
-          <p role="alert" className="mt-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+          <p role="alert" className="mt-4 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-body text-danger">
             Sign-in did not complete. {signInNotice}
           </p>
         ) : null}
         {signInProvider ? (
-          <p role="status" className="mt-4 text-sm text-fg-secondary">Waiting for {providerLabel(signInProvider)} sign-in in your browser window...</p>
+          <p role="status" className="mt-4 text-body text-fg-secondary">Waiting for {providerLabel(signInProvider)} sign-in in your browser window…</p>
         ) : null}
         <DeleteAccountResult report={controller.deleteReport} error={controller.deleteError} onDismiss={controller.dismissDeleteResult} />
 
         {showSignIn ? (
-          <div className="mt-6 grid grid-cols-2 gap-2" role="group" aria-label="Sign in with">
+          <div className="mt-6 flex flex-col gap-2" role="group" aria-label="Sign in with">
             {PROVIDERS.map((provider) => (
-              <button
+              <Button
                 key={provider.id}
-                type="button"
+                size="lg"
                 disabled={busy}
                 aria-busy={signInProvider === provider.id}
                 onClick={() => controller.signIn(provider.id)}
-                className="focus-ring rounded-lg border border-control px-3 py-2.5 text-sm font-semibold text-fg hover:bg-raised disabled:cursor-wait disabled:opacity-50"
+                className={cn('w-full', provider.id === 'apple' && 'border-transparent bg-fg text-bg hover:bg-fg/90')}
               >
-                {signInProvider === provider.id ? `Signing in with ${provider.label}...` : `Continue with ${provider.label}`}
-              </button>
+                <ProviderMark provider={provider.id} />
+                {signInProvider === provider.id ? `Signing in with ${provider.label}…` : `Continue with ${provider.label}`}
+              </Button>
             ))}
           </div>
         ) : null}
@@ -188,41 +200,38 @@ export default function LicenseGate({ controller }: { controller: LicenseControl
         {showUpgrade ? <UpgradePanel checkout={controller.checkout} onStartCheckout={controller.startCheckout} /> : null}
 
         {!loading && !direct ? (
-          <div className="mt-5 space-y-2 rounded-lg bg-canvas/70 px-4 py-3 text-label leading-5 text-muted">
+          <div className="mt-5 space-y-2 rounded-lg bg-raised px-4 py-3 text-caption text-fg-secondary">
             <p>Open the Mac App Store and sign in with the Apple Account that purchased this app.</p>
             <p>This is a one-time paid app; no subscription or separate license key is required.</p>
           </div>
         ) : null}
 
         {showVerify || loading ? (
-          <button
-            type="button"
+          <Button
+            variant={verifyIsPrimary ? 'primary' : showUpgrade ? 'link' : 'secondary'}
+            size="lg"
             disabled={busy || (loading && !error)}
             onClick={controller.refresh}
-            className="focus-ring mt-6 w-full rounded-lg bg-accent px-4 py-3 text-sm font-semibold text-canvas transition hover:bg-accent disabled:cursor-wait disabled:opacity-50"
+            className={showUpgrade ? 'mx-auto mt-4 flex' : 'mt-6 w-full'}
           >
             {refreshing || (loading && !error)
               ? direct || loading
-                ? 'Checking license...'
-                : 'Checking purchase...'
+                ? 'Checking license…'
+                : 'Checking purchase…'
               : direct || loading
                 ? 'Verify license again'
                 : 'Verify purchase again'}
-          </button>
+          </Button>
         ) : null}
         {refreshing ? <p role="status" className="sr-only">Checking license</p> : null}
-        <p className="mt-4 text-center text-label leading-4 text-muted">
-          {loading
-            ? 'Workspace commands stay locked until the license check finishes. Local evidence on this Mac is not deleted.'
-            : direct
-              ? 'Workspace commands stay locked until a license is verified. Local evidence on this Mac is not deleted.'
+        {showVerify || loading ? (
+          <p className="mt-4 text-center text-caption text-muted">
+            {direct || loading
+              ? 'Your local evidence stays on this Mac.'
               : 'Workspace commands and local evidence remain locked until StoreKit verifies the paid app transaction.'}
-        </p>
+          </p>
+        ) : null}
       </section>
     </main>
   );
-}
-
-function providerLabel(id: SignInProvider): string {
-  return PROVIDERS.find((provider) => provider.id === id)?.label ?? id;
 }

@@ -66,7 +66,7 @@ describe('LicenseGate, direct build', () => {
 
   it('shows busy on the clicked provider only and disables the others', () => {
     render(<LicenseGate controller={controller({ signInProvider: 'apple' })} />);
-    expect(screen.getByRole('button', { name: 'Signing in with Apple...' }).getAttribute('aria-busy')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Signing in with Apple…' }).getAttribute('aria-busy')).toBe('true');
     expect((screen.getByRole('button', { name: 'Continue with Google' }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByRole('status').textContent).toMatch(/Apple/);
   });
@@ -138,7 +138,7 @@ describe('LicenseGate, device limit', () => {
   it('explains the limit and never revokes without a second, explicit confirmation', () => {
     const c = controller({ status: limited() });
     render(<LicenseGate controller={c} />);
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(/maximum number of Macs/);
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(/Signed in on too many Macs/);
     expect(grantsAccess(limited())).toBe(false);
 
     fireEvent.click(screen.getByRole('button', { name: 'Use this Mac and sign out my oldest Mac' }));
