@@ -67,7 +67,8 @@ static HEADER_DATE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\b(?P<weekday>Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+(?P<month>January|February|March|April|May|June|July|August|September|October|November|December)\s+(?P<day>[0-9]{1,2}),\s+(?P<year>20[0-9]{2})\b").unwrap()
 });
 
-fn official_url(url: &str) -> bool {
+/// Plain https on a City of San Diego host or one of its two agenda publishers.
+pub(crate) fn official_url(url: &str) -> bool {
     reqwest::Url::parse(url).ok().is_some_and(|u| {
         u.scheme() == "https"
             && u.username().is_empty()
