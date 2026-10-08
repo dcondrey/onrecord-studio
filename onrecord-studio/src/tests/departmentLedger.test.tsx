@@ -25,18 +25,24 @@ vi.hoisted(() => {
   });
 });
 
-const bridge = vi.hoisted(() => ({ pending: [] as ((value: unknown) => void)[] }));
+const bridge = vi.hoisted(() => ({
+  pending: [] as ((value: unknown) => void)[],
+  windows: [] as { created_from: string; created_to: string }[],
+}));
 
 vi.mock('@tauri-apps/api/core', () => ({
   isTauri: () => false,
-  invoke: (command: string) =>
-    command === 'get_agency_performance_profiles'
-      ? new Promise((resolve) => bridge.pending.push(resolve))
-      : Promise.resolve(null),
+  invoke: (command: string, args?: { config?: { created_from: string; created_to: string } }) => {
+    if (command !== 'get_agency_performance_profiles') return Promise.resolve(null);
+    if (args?.config) bridge.windows.push(args.config);
+    return new Promise((resolve) => bridge.pending.push(resolve));
+  },
 }));
 
 import DepartmentLedger, { ledgerOrder, NO_MEASURABLE_CLOSURE, PEER_LATENCY_OUTLIER_Z_SCORE, peerHeadline } from '../components/charts/figures/DepartmentLedger';
-import { PeriodComparison } from '../components/dashboard/OverviewDashboard';
+import Dumbbells from '../components/charts/figures/Dumbbells';
+import { measured as value } from '../components/charts/core/nulls';
+import { PERIOD_MATURITY_DAYS, PeriodComparison } from '../components/dashboard/OverviewDashboard';
 
 function profile(overrides: Partial<AgencyPerformanceProfile> & { agencyId: number; agencyName: string }): AgencyPerformanceProfile {
   return {
@@ -73,6 +79,7 @@ const painted = (element: Element, token: string) => [...element.querySelectorAl
 afterEach(() => {
   cleanup();
   bridge.pending = [];
+  bridge.windows = [];
 });
 
 describe('DepartmentLedger', () => {
@@ -117,6 +124,16 @@ describe('DepartmentLedger', () => {
     expect(order.map((p) => p.agencyName)).toEqual(['Police', 'Library', 'Parks']);
   });
 
+  it('labels every non-zero bar, including the largest in its column', () => {
+    renderLedger([
+      profile({ agencyId: 1, agencyName: 'Finance', totalRequestsProcessed: 187, statutoryViolationCount: 31, statutoryViolationRate: 31 / 187, suspiciousFastClosureCount: 5 }),
+      profile({ agencyId: 2, agencyName: 'Police', totalRequestsProcessed: 302, statutoryViolationCount: 302, statutoryViolationRate: 1, suspiciousFastClosureCount: 2 }),
+    ]);
+    const texts = (name: string) => [...row(name).querySelectorAll('text')].map((node) => node.textContent);
+    expect(texts('Finance')).toEqual(expect.arrayContaining([expect.stringMatching(/^31 of 187/), '5']));
+    expect(texts('Police')).toEqual(expect.arrayContaining([expect.stringMatching(/^302 of 302/), '2']));
+  });
+
   it('opens a department with Enter', () => {
     const onInspect = renderLedger([profile({ agencyId: 7, agencyName: 'Police' })]);
     fireEvent.keyDown(row('Police'), { key: 'Enter' });
@@ -146,8 +163,21 @@ describe('PeriodComparison', () => {
       bridge.pending[1](window(99));
     });
     const headline = screen.getByText(/Counted deadline-miss rate/);
-    expect(headline.textContent).toContain('10 requests created in the last 7 days');
+    expect(headline.textContent).toContain('10 requests created');
     expect(headline.textContent).not.toContain('99');
+  });
+
+  it('compares a deadline measure only over requests whose statutory clock has run out', () => {
+    const now = Date.now();
+    render(<PeriodComparison activePortalKey={null} />);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Interval' }), { target: { value: '7' } });
+    const day = 86_400_000;
+    // Each 7-day window's requests would all still be within a 10-to-24-day clock if it ended today.
+    for (const window of bridge.windows) expect(Date.parse(window.created_to)).toBeLessThanOrEqual(now - PERIOD_MATURITY_DAYS * day + 1000);
+    expect(bridge.windows.length).toBe(4);
+    // The request count is not censored, so it reads the latest days.
+    fireEvent.click(screen.getByRole('radio', { name: 'Requests' }));
+    expect(Date.parse(bridge.windows[4].created_to)).toBeGreaterThanOrEqual(now);
   });
 
   it('reads a window with no requests as absent, never as a 0% rate', async () => {
@@ -157,5 +187,33 @@ describe('PeriodComparison', () => {
       bridge.pending[1]([]);
     });
     expect(screen.getByText(/Counted deadline-miss rate/).textContent).toContain('no comparable prior window');
+  });
+});
+
+describe('Dumbbells', () => {
+  const renderPairs = (rows: { label: string; prior: number; current: number }[]) => render(
+    <Dumbbells
+      title="Pairs"
+      headline={null}
+      sources={{ tables: ['requests'] }}
+      status="ready"
+      kind="count"
+      priorLabel="Before"
+      currentLabel="After"
+      rows={rows.map((r) => ({ key: r.label, label: r.label, prior: value(r.prior), current: value(r.current), onActivate: () => undefined }))}
+    />,
+  );
+
+  it('rings an unchanged prior around the current dot instead of hiding it, and says no change', () => {
+    renderPairs([{ label: 'Same', prior: 40, current: 40 }, { label: 'Apart', prior: 5, current: 90 }]);
+    const same = screen.getByRole('img', { name: /^Same:/ });
+    expect(same.querySelector('[data-pair]')?.getAttribute('data-pair')).toBe('coincident');
+    expect(same.textContent).toContain('no change');
+    const apart = screen.getByRole('img', { name: /^Apart:/ });
+    expect(apart.querySelector('[data-pair]')?.getAttribute('data-pair')).toBe('apart');
+    expect(apart.querySelectorAll('line')).toHaveLength(1);
+    // The prior's outline is a data role, never the recessive context grey.
+    expect(painted(same, '--viz-mark').length).toBeGreaterThan(0);
+    expect(painted(same, '--viz-context')).toHaveLength(0);
   });
 });

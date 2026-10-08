@@ -202,11 +202,25 @@ const PERIOD_MEASURES: { value: PeriodMeasure; label: string }[] = [
 
 const NO_REQUESTS = 'no requests in window';
 
+/**
+ * A request's statutory clock can still be running this many days after it was created: 10 days to
+ * determine plus a 14-day extension (statute.rs CPRA_INITIAL_DETERMINATION_DAYS and
+ * CPRA_MAXIMUM_EXTENSION_DAYS), a last day carried past a weekend and holidays, and one more day
+ * because a miss is counted only once the elapsed days exceed the entitlement. A window ending
+ * sooner would count its young requests as on time and show an improvement that is only censoring.
+ */
+export const PERIOD_MATURITY_DAYS = 30;
+
+/** Every measure but the request count depends on how a request ended, so it waits for maturity. */
+const maturityLag = (measure: PeriodMeasure) => (measure === 'requests' ? 0 : PERIOD_MATURITY_DAYS);
+
 interface PeriodWindows {
   current: AgencyPerformanceProfile[];
   prior: AgencyPerformanceProfile[];
   /** Window bounds, ms: start of prior, start of current, end of current. */
   bounds: [number, number, number];
+  /** Days the windows end before today; 0 when they end today. */
+  lag: number;
 }
 
 /**
@@ -223,10 +237,11 @@ export function PeriodComparison({ activePortalKey }: { activePortalKey: string 
   const comparisonGate = useLatestRequestGate();
   const inspectDepartment = useInspectDepartment();
   const portalName = usePortalName();
+  const lag = maturityLag(measure);
 
   useEffect(() => {
     const request = comparisonGate.begin();
-    const end = Date.now();
+    const end = Date.now() - lag * 86_400_000;
     const middle = end - days * 86_400_000;
     const start = end - days * 2 * 86_400_000;
     setIsLoading(true);
@@ -237,17 +252,21 @@ export function PeriodComparison({ activePortalKey }: { activePortalKey: string 
       invokeCommand('get_agency_performance_profiles', { config: { created_from: new Date(start).toISOString(), created_to: new Date(middle).toISOString() } }),
     ]).then(([currentProfiles, priorProfiles]) => {
       if (!comparisonGate.isCurrent(request)) return;
-      setWindows({ current: currentProfiles.filter(inScope), prior: priorProfiles.filter(inScope), bounds: [start, middle, end] });
+      setWindows({ current: currentProfiles.filter(inScope), prior: priorProfiles.filter(inScope), bounds: [start, middle, end], lag });
     }).catch((reason) => {
       if (comparisonGate.isCurrent(request)) setError(formatNativeError(reason));
     }).finally(() => {
       if (comparisonGate.isCurrent(request)) setIsLoading(false);
     });
     return comparisonGate.invalidate;
-  }, [activePortalKey, comparisonGate, days]);
+  }, [activePortalKey, comparisonGate, days, lag]);
 
-  const model = windows ? periodModel(windows, measure, days, portalName, inspectDepartment) : null;
+  // A read for the other lag is still the last result while the new one loads; it never stands for
+  // the selected measure.
+  const current = windows && windows.lag === lag ? windows : null;
+  const model = current ? periodModel(current, measure, days, portalName, inspectDepartment) : null;
   const status = error ? 'error' : !model ? 'loading' : isLoading ? 'stale' : model.empty ? 'empty' : 'ready';
+  const range = current ? { prior: formatDateRange(current.bounds[0], current.bounds[1]), current: formatDateRange(current.bounds[1], current.bounds[2]) } : null;
   return (
     <section className="rounded-lg border border-line p-4" aria-label="Response behavior period comparison">
       <Dumbbells
@@ -257,16 +276,20 @@ export function PeriodComparison({ activePortalKey }: { activePortalKey: string 
         claim={measure === 'counted' ? 'counted' : undefined}
         sources={{
           tables: ['requests', 'statutory_extensions', 'agencies'],
-          note: windows ? `requests created ${formatDateRange(windows.bounds[1], windows.bounds[2])} vs ${formatDateRange(windows.bounds[0], windows.bounds[1])}` : undefined,
+          note: range
+            ? `requests created ${range.current} vs ${range.prior}${lag > 0 ? `; both windows end ${lag} days ago, so every request in them is past its longest statutory deadline (10 days plus a 14-day extension, carried to a court day)` : ''}`
+            : undefined,
         }}
         status={status}
         error={error}
-        emptyText={`No requests were created in the last ${days * 2} days, so there is nothing to compare.`}
+        emptyText={lag > 0
+          ? `No requests were created in the ${days * 2} days before ${lag} days ago, so there is nothing to compare.`
+          : `No requests were created in the last ${days * 2} days, so there is nothing to compare.`}
         kind={model?.kind ?? 'rate'}
         rows={model?.rows ?? []}
         tooFew={model?.tooFew}
-        priorLabel={`Prior ${days} days`}
-        currentLabel={`Last ${days} days`}
+        priorLabel={lag > 0 ? (range ? `Created ${range.prior}` : `Earlier ${days} days`) : `Prior ${days} days`}
+        currentLabel={lag > 0 ? (range ? `Created ${range.current}` : `Later ${days} days`) : `Last ${days} days`}
         controls={<>
           <SegmentedControl<PeriodMeasure> label="Measure" mode="filter" size="sm" value={measure} onChange={setMeasure} options={PERIOD_MEASURES} />
           <Select size="sm" aria-label="Interval" value={days} onChange={(event) => setDays(Number(event.target.value))} className="w-auto tabular-nums">
@@ -308,7 +331,10 @@ function sideValue(side: PeriodSide, measure: PeriodMeasure): Measured {
 
 function sideBasis(side: PeriodSide, measure: PeriodMeasure): string {
   const plural = (n: number, word: string) => `${n.toLocaleString('en-US')} ${word}${n === 1 ? '' : 's'}`;
-  if (measure === 'latency') return plural(side.closures, 'closure');
+  if (measure === 'latency') {
+    const open = side.requests - side.closed;
+    return `${plural(side.closures, 'closure')}${open > 0 ? `; ${open.toLocaleString('en-US')} still open, not measured` : ''}`;
+  }
   if (measure === 'counted') return `${side.violations.toLocaleString('en-US')} of ${plural(side.requests, 'request')}`;
   if (measure === 'closure') return `${side.closed.toLocaleString('en-US')} of ${plural(side.requests, 'request')}`;
   return plural(side.requests, 'request');
@@ -318,7 +344,7 @@ function sideBasis(side: PeriodSide, measure: PeriodMeasure): string {
 const PERIOD_MINIMUM = SMALL_SAMPLE_CLOSURES;
 
 function periodModel(
-  { current, prior }: Pick<PeriodWindows, 'current' | 'prior'>,
+  { current, prior, bounds, lag }: PeriodWindows,
   measure: PeriodMeasure,
   days: number,
   portalName: (portalKey: string) => string,
@@ -372,14 +398,14 @@ function periodModel(
     rows,
     empty,
     tooFew: { labels: tooFew.sort((x, y) => x.localeCompare(y)), reason: `fewer than ${PERIOD_MINIMUM} ${measure === 'latency' ? 'closures' : 'requests'} in a window` },
-    headline: periodHeadline(totalPrior, totalCurrent, measure, days),
+    headline: periodHeadline(totalPrior, totalCurrent, measure, lag > 0 ? `created ${formatDateRange(bounds[1], bounds[2])}` : `created in the last ${days} days`, days),
   };
 }
 
-function periodHeadline(prior: PeriodSide, current: PeriodSide, measure: PeriodMeasure, days: number): string {
-  const requests = `${current.requests.toLocaleString('en-US')} request${current.requests === 1 ? '' : 's'} created in the last ${days} days`;
+function periodHeadline(prior: PeriodSide, current: PeriodSide, measure: PeriodMeasure, created: string, days: number): string {
+  const requests = `${current.requests.toLocaleString('en-US')} request${current.requests === 1 ? '' : 's'} ${created}`;
   if (measure === 'requests') return `${requests}, against ${prior.requests.toLocaleString('en-US')} in the ${days} days before.`;
-  if (current.requests === 0) return `No requests were created in the last ${days} days, so there is no current rate to compare.`;
+  if (current.requests === 0) return `No requests were ${created}, so there is no current rate to compare.`;
   const kind: DumbbellKind = measure === 'latency' ? 'days' : 'rate';
   const now = sideValue(current, measure);
   const before = sideValue(prior, measure);

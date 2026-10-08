@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { VIZ, type Claim } from '../core/claim';
 import { formatValue } from '../core/format';
-import { fitsInside, measureText } from '../core/layout';
+import { measureText } from '../core/layout';
 import { ABSENCE_LABEL, isValue, type Absence, type Measured } from '../core/nulls';
 import { scaleLinear, type ContinuousScale } from '../core/scale';
 import { Axis } from '../frame/Axis';
@@ -14,7 +14,6 @@ import type { TwinTable } from '../frame/TableTwin';
 import { useRovingFocus } from '../hooks/useRovingFocus';
 import { useTooltip } from '../hooks/useTooltip';
 import { Dot } from '../marks/Dot';
-import { Dumbbell } from '../marks/Dumbbell';
 import { LABEL_CLASS, MarkGroup, MUTED_LABEL_CLASS } from '../marks/shared';
 
 /** 'rate' is a 0–1 share drawn on a fixed 0–100% axis, and its change is in percentage points. */
@@ -52,9 +51,16 @@ export interface DumbbellsProps {
 }
 
 const ROW_LABEL_FONT = '12px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif';
+const ROW_TOTAL_FONT = `600 ${ROW_LABEL_FONT}`;
 const STEP = 28;
 const NARROW_STEP = 42;
 const AXIS = 26;
+const DELTA_ROOM = 84;
+/** The plot keeps at least this much width beside an inline label column. */
+const MIN_PLOT = 220;
+const DOT_R = 4;
+/** A prior drawn closer than this to the current dot would hide under it, so it becomes a ring. */
+const COINCIDENT_PX = 2 * DOT_R + 2;
 
 function valueText(value: number, kind: DumbbellKind): string {
   return kind === 'rate' ? formatValue(value, { kind: 'percent' }) : formatValue(value, { kind: kind === 'days' ? 'days' : 'count' });
@@ -81,9 +87,18 @@ export function dumbbellOrder(rows: readonly DumbbellRow[]): DumbbellRow[] {
   });
 }
 
-function rowLayout(width: number) {
-  const labelColumn = width < 480 ? 0 : Math.min(220, Math.round(width * 0.3));
+/**
+ * Row labels sit in a column as wide as the longest label when the plot keeps enough room beside
+ * it; otherwise every label goes on its own line above its row. A label is never cut.
+ */
+function rowLayout(width: number, longestLabel: number) {
+  const column = Math.ceil(longestLabel) + 16;
+  const labelColumn = width < 480 || column > width * 0.45 || width - column - DELTA_ROOM < MIN_PLOT ? 0 : column;
   return { labelColumn, step: labelColumn === 0 ? NARROW_STEP : STEP };
+}
+
+function longestLabelOf(rows: readonly DumbbellRow[]): number {
+  return Math.max(0, ...rows.map((row) => measureText(row.label, row.total ? ROW_TOTAL_FONT : ROW_LABEL_FONT)));
 }
 
 /**
@@ -94,9 +109,10 @@ function rowLayout(width: number) {
  */
 export default function Dumbbells(props: DumbbellsProps) {
   const ordered = dumbbellOrder(props.rows);
+  const longest = longestLabelOf(ordered);
   const tooFew = props.tooFew && props.tooFew.labels.length > 0 ? props.tooFew : null;
   const legend: LegendItem[] = [
-    { key: 'prior', label: props.priorLabel, swatch: 'hollow', tone: 'context' },
+    { key: 'prior', label: props.priorLabel, swatch: 'hollow', tone: 'mark' },
     { key: 'current', label: props.currentLabel, swatch: 'dot', tone: 'ink' },
   ];
   const table: TwinTable = {
@@ -134,17 +150,18 @@ export default function Dumbbells(props: DumbbellsProps) {
       legend={legend}
       controls={props.controls}
       minHeight={140}
-      plotHeight={(width) => ordered.length * rowLayout(width).step + AXIS + (tooFew ? 22 : 0) + 6}
+      plotHeight={(width) => ordered.length * rowLayout(width, longest).step + AXIS + (tooFew ? 22 : 0) + 6}
       interactive={{ roledescription: 'paired comparison' }}
     >
-      {({ width }) => <DumbbellPlot width={width} rows={ordered} kind={props.kind} tooFew={tooFew} priorLabel={props.priorLabel} currentLabel={props.currentLabel} />}
+      {({ width }) => <DumbbellPlot width={width} rows={ordered} longest={longest} kind={props.kind} tooFew={tooFew} priorLabel={props.priorLabel} currentLabel={props.currentLabel} />}
     </ChartFrame>
   );
 }
 
-function DumbbellPlot({ width, rows, kind, tooFew, priorLabel, currentLabel }: {
+function DumbbellPlot({ width, rows, longest, kind, tooFew, priorLabel, currentLabel }: {
   width: number;
   rows: readonly DumbbellRow[];
+  longest: number;
   kind: DumbbellKind;
   tooFew: { labels: readonly string[]; reason: string } | null;
   priorLabel: string;
@@ -152,8 +169,8 @@ function DumbbellPlot({ width, rows, kind, tooFew, priorLabel, currentLabel }: {
 }) {
   const tooltip = useTooltip();
   const roving = useRovingFocus({ shape: { rows: rows.length }, onActivate: (i) => rows[i].onActivate?.(), onEscape: tooltip.hide });
-  const { labelColumn, step } = rowLayout(width);
-  const deltaRoom = 84;
+  const { labelColumn, step } = rowLayout(width, longest);
+  const deltaRoom = DELTA_ROOM;
   const values = rows.flatMap((row) => [row.prior, row.current]).filter(isValue).map((value) => value.value);
   const x: ContinuousScale = kind === 'rate'
     ? scaleLinear([0, 1], [labelColumn + 8, width - deltaRoom])
@@ -169,7 +186,7 @@ function DumbbellPlot({ width, rows, kind, tooFew, priorLabel, currentLabel }: {
     <TooltipContent
       title={row.label}
       rows={[
-        { key: 'prior', value: isValue(row.prior) ? valueText(row.prior.value, kind) : 'not measured', label: `${priorLabel}${row.priorBasis ? `, ${row.priorBasis}` : ''}`, swatch: 'hollow', tone: 'context' },
+        { key: 'prior', value: isValue(row.prior) ? valueText(row.prior.value, kind) : 'not measured', label: `${priorLabel}${row.priorBasis ? `, ${row.priorBasis}` : ''}`, swatch: 'hollow', tone: 'mark' },
         { key: 'current', value: isValue(row.current) ? valueText(row.current.value, kind) : 'not measured', label: `${currentLabel}${row.currentBasis ? `, ${row.currentBasis}` : ''}`, swatch: 'dot', tone: 'ink' },
       ]}
       note={!isValue(row.prior) ? row.prior.reason : !isValue(row.current) ? row.current.reason : undefined}
@@ -184,8 +201,6 @@ function DumbbellPlot({ width, rows, kind, tooFew, priorLabel, currentLabel }: {
         const inline = labelColumn > 0;
         const y = inline ? top + step / 2 : top + 28;
         const labelY = inline ? y : top + 10;
-        const labelWidth = inline ? labelColumn - 8 : width;
-        const label = fitsInside(row.label, labelWidth + 8, ROW_LABEL_FONT) ? row.label : row.label.slice(0, Math.max(4, Math.floor(labelWidth / 7))) + '…';
         const both = isValue(row.prior) && isValue(row.current);
         const absentSide = !isValue(row.prior) ? row.prior : !isValue(row.current) ? row.current : null;
         const presentX = isValue(row.current) ? x(row.current.value) : isValue(row.prior) ? x(row.prior.value) : null;
@@ -205,13 +220,13 @@ function DumbbellPlot({ width, rows, kind, tooFew, priorLabel, currentLabel }: {
           >
             <text x={0} y={labelY} dy="0.32em" className={row.total ? 'fill-fg text-[12px] font-semibold' : 'fill-fg-secondary text-[12px]'}>
               <title>{row.label}</title>
-              {label}
+              {row.label}
             </text>
             {both ? (
-              <Dumbbell y={y} scale={x} from={row.prior} to={row.current} deltaLabel={changeText((row.prior as { value: number }).value, (row.current as { value: number }).value, kind)} />
+              <Pair y={y} fx={x((row.prior as { value: number }).value)} tx={x((row.current as { value: number }).value)} prior={(row.prior as { value: number }).value} current={(row.current as { value: number }).value} kind={kind} />
             ) : (
               <>
-                {isValue(row.prior) && <Dot cx={x(row.prior.value)} cy={y} role="comparison" hollow />}
+                {isValue(row.prior) && <Dot cx={x(row.prior.value)} cy={y} role="default" hollow />}
                 {isValue(row.current) && <Dot cx={x(row.current.value)} cy={y} role="primary" />}
                 {absentSide && (
                   <text x={(presentX ?? x.range[0]) + (presentX === null ? 0 : 10)} y={y} dy="0.32em" className={MUTED_LABEL_CLASS}>
@@ -234,6 +249,30 @@ function DumbbellPlot({ width, rows, kind, tooFew, priorLabel, currentLabel }: {
       )}
       <line x1={x.range[0] + 0.5} x2={x.range[0] + 0.5} y1={0} y2={plotBottom} style={{ stroke: VIZ.baseline, strokeWidth: 1 }} />
       {tooltip.node}
+    </g>
+  );
+}
+
+/**
+ * Hollow prior (mark stroke, at least 3:1 on the surface) and solid current joined by a connector,
+ * then the change. When the two would overlap, the prior is drawn as a ring around the current dot
+ * so an unchanged value never looks like a missing prior.
+ */
+function Pair({ y, fx, tx, prior, current, kind }: { y: number; fx: number; tx: number; prior: number; current: number; kind: DumbbellKind }) {
+  const coincident = Math.abs(tx - fx) < COINCIDENT_PX;
+  const right = Math.max(fx, tx) + (coincident ? 8 : DOT_R);
+  return (
+    <g data-pair={coincident ? 'coincident' : 'apart'}>
+      {coincident ? (
+        <Dot cx={fx} cy={y} r={DOT_R + 3.5} shape="ring" role="default" />
+      ) : (
+        <>
+          <line x1={fx + Math.sign(tx - fx) * 5} x2={tx - Math.sign(tx - fx) * 5} y1={y} y2={y} style={{ stroke: VIZ.context, strokeWidth: 2, strokeLinecap: 'round' }} />
+          <Dot cx={fx} cy={y} role="default" hollow />
+        </>
+      )}
+      <Dot cx={tx} cy={y} role="primary" />
+      <text x={right + 8} y={y} dy="0.32em" className={LABEL_CLASS}>{prior === current ? 'no change' : changeText(prior, current, kind)}</text>
     </g>
   );
 }

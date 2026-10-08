@@ -17,7 +17,7 @@ import { useRovingFocus } from '../hooks/useRovingFocus';
 import { useTooltip } from '../hooks/useTooltip';
 import { Bar } from '../marks/Bar';
 import { Dot } from '../marks/Dot';
-import { MarkGroup, MUTED_LABEL_CLASS } from '../marks/shared';
+import { hBarPath, LABEL_CLASS, MarkGroup, MUTED_LABEL_CLASS } from '../marks/shared';
 
 /**
  * Mirrors `STATUTORY_DEADLINE_Z_SCORE` in `src-tauri/src/analysis/anomaly.rs`, which is not
@@ -97,15 +97,21 @@ export interface DepartmentLedgerProps {
   controls?: ReactNode;
 }
 
-const NAME_FONT = '12px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif';
+const NAME_FONT = '500 12px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif';
+const HEADER_FONT = '500 11px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif';
 const NAME_CLASS = 'fill-fg text-[12px] font-medium';
 const NOTE_CLASS = 'fill-muted text-[11px]';
 const HEADER_CLASS = 'fill-fg-secondary text-[11px] font-medium';
 const BAND = 14;
-const HEADER = 34;
+/** The requests extent beyond the counted bar: a thinner bar, so it never reads as more misses. */
+const REQUESTS_BAND = 6;
 const MEAN_STRIP = 16;
 const FOOT = 40;
 const GUTTER = 20;
+/** The three columns' least usable width beside an inline name column; below it names go above. */
+const MIN_COLUMNS = 440;
+const COLUMN_TITLES = { a: 'Counted deadline misses', b: 'Rapid closures', c: 'Closure time vs peers' } as const;
+const FLAG_INDENT = 18;
 
 function truncate(text: string, width: number, font?: string): string {
   if (width <= 0) return '';
@@ -115,32 +121,66 @@ function truncate(text: string, width: number, font?: string): string {
   return `${text.slice(0, end).trimEnd()}…`;
 }
 
+/** A column title on one line, or split at a word onto two; never cut. */
+export function wrapTitle(title: string, width: number): string[] {
+  if (measureText(title, HEADER_FONT) <= width) return [title];
+  const words = title.split(' ');
+  let first = words[0];
+  let index = 1;
+  while (index < words.length && measureText(`${first} ${words[index]}`, HEADER_FONT) <= width) first += ` ${words[index++]}`;
+  return index < words.length ? [first, words.slice(index).join(' ')] : [first];
+}
+
 interface Layout {
   narrow: boolean;
   nameWidth: number;
   rowStep: number;
+  header: number;
+  titles: { a: string[]; b: string[]; c: string[] };
   cols: { a: [number, number]; b: [number, number]; c: [number, number] };
   height(rows: number): number;
 }
 
 /**
- * Three columns, each on its own x-scale, beside a name column; below 640px the names move onto
- * their own line above the bars so every column keeps a usable width down to 340px.
+ * Three columns, each on its own x-scale, beside a name column sized to the longest name (and its
+ * notes). When that column would leave the bars too little room, every name moves onto its own
+ * line above its bars instead of being cut. `nameNeed` must be the same for the frame's height and
+ * the plot, so both agree on the row step.
  */
-function ledgerLayout(width: number): Layout {
-  const narrow = width < 640;
-  const nameWidth = narrow ? 0 : Math.min(260, Math.max(216, Math.round(width * 0.24)));
+function ledgerLayout(width: number, nameNeed: number): Layout {
+  const inlineName = Math.max(140, Math.ceil(nameNeed) + 4);
+  const narrow = width < 640 || inlineName > width * 0.4 || width - inlineName - 12 - 2 * GUTTER < MIN_COLUMNS;
+  const nameWidth = narrow ? width : inlineName;
   const start = narrow ? 0 : nameWidth + 12;
   const rest = width - start - 2 * GUTTER;
-  const a = Math.round(rest * 0.36);
+  const a = Math.round(rest * 0.38);
   const b = Math.round(rest * 0.2);
   const cols = {
     a: [start, start + a] as [number, number],
     b: [start + a + GUTTER, start + a + GUTTER + b] as [number, number],
     c: [start + a + b + 2 * GUTTER, width] as [number, number],
   };
+  const titles = {
+    a: wrapTitle(COLUMN_TITLES.a, cols.a[1] - cols.a[0] - FLAG_INDENT),
+    b: wrapTitle(COLUMN_TITLES.b, cols.b[1] - cols.b[0]),
+    c: wrapTitle(COLUMN_TITLES.c, cols.c[1] - cols.c[0]),
+  };
+  const header = Math.max(titles.a.length, titles.b.length, titles.c.length) > 1 ? 47 : 34;
   const rowStep = narrow ? 54 : 38;
-  return { narrow, nameWidth, rowStep, cols, height: (rows) => HEADER + MEAN_STRIP + rows * rowStep + FOOT };
+  return { narrow, nameWidth, rowStep, header, titles, cols, height: (rows) => header + MEAN_STRIP + rows * rowStep + FOOT };
+}
+
+/** The widest name or note line a row puts in the name column. */
+function nameNeedOf(rows: readonly AgencyPerformanceProfile[], portalName: ((key: string) => string) | null): number {
+  return Math.max(0, ...rows.map((row) => Math.max(
+    measureText(row.agencyName, NAME_FONT),
+    measureText(rowNotes(row, portalName ? portalName(row.portalSubdomain) : null).join(' · ')),
+  )));
+}
+
+/** As many ticks as fit with their widest label and a gap, from two to `most`. */
+function tickCountFor(length: number, widestLabel: string, most: number): number {
+  return Math.max(2, Math.min(most, Math.floor(length / (measureText(widestLabel) + 40))));
 }
 
 function rowNotes(profile: AgencyPerformanceProfile, portal: string | null): string[] {
@@ -193,7 +233,7 @@ function twinTable(rows: readonly AgencyPerformanceProfile[], portalName: (key: 
 
 const LEGEND: LegendItem[] = [
   { key: 'counted', label: 'Counted deadline miss', swatch: 'flag', tone: 'counted' },
-  { key: 'requests', label: 'Requests processed', swatch: 'rect', tone: 'track' },
+  { key: 'requests', label: 'Requests processed', swatch: 'rect', tone: 'mark' },
   { key: 'average', label: 'Average closure', swatch: 'dot', tone: 'ink' },
   { key: 'small', label: `Fewer than ${SMALL_SAMPLE_CLOSURES} closures (small sample)`, swatch: 'hollow', tone: 'ink' },
   { key: 'slower', label: 'Slower than peers (statistical)', swatch: 'ring', tone: 'ink' },
@@ -217,6 +257,8 @@ export default function DepartmentLedger({ variant, profiles, scaleProfiles, sta
     : null;
   const unmeasured = all.filter((profile) => profile.averageClosureDays === null).length;
   const small = all.filter(isSmallSample).length;
+  const portalNameFn = spansPortals ? portalName : null;
+  const nameNeed = nameNeedOf(shown, portalNameFn);
   const summary = `${plural(all.length, 'department')} with requests${shown.length < all.length ? `, the first ${shown.length} shown` : ''}. `
     + `${all.filter(isSlowerThanPeers).length} slower than peers at z ≥ ${PEER_LATENCY_OUTLIER_Z_SCORE} (statistical). `
     + `${unmeasured} with ${NO_MEASURABLE_CLOSURE}; ${small} resting on fewer than ${SMALL_SAMPLE_CLOSURES} closures.`;
@@ -230,7 +272,7 @@ export default function DepartmentLedger({ variant, profiles, scaleProfiles, sta
         claim="mixed"
         sources={{
           tables: ['requests', 'statutory_extensions', 'agencies'],
-          note: 'misses counted under Cal. Gov. Code § 7922.535; rapid closures and closure time are statistical comparisons, not legal findings',
+          note: 'misses counted under Cal. Gov. Code § 7922.535; rapid closures and closure time are statistical comparisons, not legal findings; peers are every closed request in the workspace, all portals, not only the departments shown',
         }}
         summary={summary}
         status={empty ? 'empty' : status}
@@ -240,8 +282,8 @@ export default function DepartmentLedger({ variant, profiles, scaleProfiles, sta
         table={twinTable(shown, portalName)}
         legend={LEGEND}
         controls={controls}
-        minHeight={ledgerLayout(640).height(Math.max(1, Math.min(shown.length, 3)))}
-        plotHeight={(width) => ledgerLayout(width).height(shown.length)}
+        minHeight={ledgerLayout(640, nameNeed).height(Math.max(1, Math.min(shown.length, 3)))}
+        plotHeight={(width) => ledgerLayout(width, nameNeed).height(shown.length)}
         interactive={{ roledescription: 'department ledger' }}
       >
         {({ width }) => (
@@ -249,7 +291,8 @@ export default function DepartmentLedger({ variant, profiles, scaleProfiles, sta
             width={width}
             rows={shown}
             scaleRows={scaleProfiles && scaleProfiles.length > 0 ? scaleProfiles : all}
-            portalName={spansPortals ? portalName : null}
+            portalName={portalNameFn}
+            nameNeed={nameNeed}
             onInspect={onInspect}
           />
         )}
@@ -265,8 +308,8 @@ export default function DepartmentLedger({ variant, profiles, scaleProfiles, sta
   );
 }
 
-function ColumnHeader({ x, title, note, width, flag = false }: { x: number; title: string; note: string; width: number; flag?: boolean }) {
-  const titleX = flag ? x + 18 : x;
+function ColumnHeader({ x, lines, note, width, flag = false }: { x: number; lines: readonly string[]; note: string; width: number; flag?: boolean }) {
+  const titleX = flag ? x + FLAG_INDENT : x;
   return (
     <g aria-hidden="true">
       {flag && (
@@ -275,31 +318,35 @@ function ColumnHeader({ x, title, note, width, flag = false }: { x: number; titl
         </g>
       )}
       <text x={titleX} y={11} className={HEADER_CLASS}>
-        <title>{`${title}: ${note}`}</title>
-        {truncate(title, width - (titleX - x))}
+        <title>{`${lines.join(' ')}: ${note}`}</title>
+        {lines.map((line, i) => <tspan key={line} x={titleX} dy={i === 0 ? 0 : 13}>{line}</tspan>)}
       </text>
-      <text x={x} y={25} className={NOTE_CLASS}>{truncate(note, width)}</text>
+      <text x={x} y={11 + (lines.length - 1) * 13 + 14} className={NOTE_CLASS}>{truncate(note, width)}</text>
     </g>
   );
 }
 
-function LedgerPlot({ width, rows, scaleRows, portalName, onInspect }: {
+function LedgerPlot({ width, rows, scaleRows, portalName, nameNeed, onInspect }: {
   width: number;
   rows: readonly AgencyPerformanceProfile[];
   scaleRows: readonly AgencyPerformanceProfile[];
   portalName: ((key: string) => string) | null;
+  nameNeed: number;
   onInspect(profile: AgencyPerformanceProfile): void;
 }) {
   const tooltip = useTooltip();
   const roving = useRovingFocus({ shape: { rows: rows.length }, onActivate: (i) => onInspect(rows[i]), onEscape: tooltip.hide });
-  const layout = ledgerLayout(width);
-  const { cols, rowStep, narrow } = layout;
-  const top = HEADER + MEAN_STRIP;
+  const layout = ledgerLayout(width, nameNeed);
+  const { cols, rowStep, narrow, header } = layout;
+  const top = header + MEAN_STRIP;
   const bottom = top + rows.length * rowStep;
 
   const withRate = cols.a[1] - cols.a[0] >= 220;
   const longestLabel = Math.max(...scaleRows.map((row) => measureText(countedLabel(row, withRate))), 0);
-  const a: ContinuousScale = scaleLinear([0, Math.max(1, ...scaleRows.map((row) => row.totalRequestsProcessed))], [cols.a[0], Math.max(cols.a[0] + 24, cols.a[1] - longestLabel - 8)], { nice: false });
+  const requestsMax = Math.max(1, ...scaleRows.map((row) => row.totalRequestsProcessed));
+  // Each column's scale stops short of its end by its widest value label, which is drawn after the
+  // row's longest mark (requests, in column a), so every label fits and none sits on a mark.
+  const a: ContinuousScale = scaleLinear([0, requestsMax], [cols.a[0], Math.max(cols.a[0] + 24, cols.a[1] - longestLabel - 8)], { nice: false });
   const rapidMax = Math.max(1, ...scaleRows.map((row) => row.suspiciousFastClosureCount));
   const b: ContinuousScale = scaleLinear([0, rapidMax], [cols.b[0], Math.max(cols.b[0] + 12, cols.b[1] - measureText(rapidMax.toLocaleString('en-US')) - 8)], { nice: false });
 
@@ -324,21 +371,21 @@ function LedgerPlot({ width, rows, scaleRows, portalName, onInspect }: {
         },
         ...(profile.performanceZScore === null ? [] : [{ key: 'z', value: formatValue(profile.performanceZScore, { kind: 'z', digits: 2 }), label: 'vs peers (statistical)' }]),
       ]}
-      note={mean !== null && sd !== null ? `Peer mean ${days(mean)}, sd ${days(sd)}. Enter opens the department.` : 'Enter opens the department.'}
+      note={mean !== null && sd !== null ? `Mean of all closures, all portals ${days(mean)}, sd ${days(sd)}. Enter opens the department.` : 'Enter opens the department.'}
     />
   );
 
   return (
     <g>
-      <ColumnHeader x={cols.a[0]} width={cols.a[1] - cols.a[0]} title="Counted deadline misses" note="Counted · of requests" flag />
-      <ColumnHeader x={cols.b[0]} width={cols.b[1] - cols.b[0]} title="Rapid closures" note="statistical" />
-      <ColumnHeader x={cols.c[0]} width={cols.c[1] - cols.c[0]} title="Closure time vs peers" note="statistical · days" />
+      <ColumnHeader x={cols.a[0]} width={cols.a[1] - cols.a[0]} lines={layout.titles.a} note="Counted · of requests" flag />
+      <ColumnHeader x={cols.b[0]} width={cols.b[1] - cols.b[0]} lines={layout.titles.b} note="statistical" />
+      <ColumnHeader x={cols.c[0]} width={cols.c[1] - cols.c[0]} lines={layout.titles.c} note="statistical · days · peers: all portals" />
 
       {mean !== null && sd !== null && sd > 0 && (
-        <ReferenceBand axis="x" from={c(Math.max(0, mean - 2 * sd))} to={c(mean + 2 * sd)} extent={[top - 4, bottom + 16]} label="typical range (within 2 sd)" />
+        <ReferenceBand axis="x" from={c(Math.max(0, mean - 2 * sd))} to={c(mean + 2 * sd)} extent={[top - 4, bottom + 16]} label="within 2 sd of all closures" />
       )}
       {mean !== null && (
-        <ReferenceLine kind="peer-mean" axis="x" at={c(mean)} extent={[HEADER + 2, bottom + 2]} label={`peer mean ${days(mean)}`} labelSide={c(mean) > cMid ? 'start' : 'end'} />
+        <ReferenceLine kind="peer-mean" axis="x" at={c(mean)} extent={[header + 2, bottom + 2]} label={`mean of all closures ${days(mean)}`} labelSide={c(mean) > cMid ? 'start' : 'end'} />
       )}
 
       {rows.map((profile, index) => {
@@ -347,7 +394,11 @@ function LedgerPlot({ width, rows, scaleRows, portalName, onInspect }: {
         const notes = rowNotes(profile, portalName ? portalName(profile.portalSubdomain) : null).join(' · ');
         const key = `${profile.portalSubdomain}-${profile.agencyId}`;
         const average = profile.averageClosureDays;
-        const nameWidth = narrow ? width : layout.nameWidth;
+        const nameWidth = layout.nameWidth;
+        const misses = profile.statutoryViolationCount;
+        const requestsEnd = a(profile.totalRequestsProcessed);
+        const missEnd = a(misses);
+        const rapid = profile.suspiciousFastClosureCount;
         return (
           <MarkGroup
             key={key}
@@ -364,18 +415,24 @@ function LedgerPlot({ width, rows, scaleRows, portalName, onInspect }: {
           >
             <text x={0} y={narrow ? y + 10 : notes ? barY + 2 : barY + BAND / 2} dy="0.32em" className={NAME_CLASS}>
               <title>{profile.agencyName}</title>
-              {truncate(profile.agencyName, nameWidth - (narrow ? measureText(notes) + 12 : 0), NAME_FONT)}
+              {truncate(profile.agencyName, nameWidth, NAME_FONT)}
             </text>
             {notes && (
               narrow
-                ? <text x={width} y={y + 10} dy="0.32em" textAnchor="end" className={NOTE_CLASS}>{truncate(notes, width / 2)}</text>
+                ? <NarrowNotes notes={notes} x={width} y={y + 10} room={width - measureText(profile.agencyName, NAME_FONT) - 12} />
                 : <text x={0} y={barY + 18} dy="0.32em" className={NOTE_CLASS}>{truncate(notes, nameWidth)}</text>
             )}
 
-            <rect x={a(0)} y={barY} width={a(profile.totalRequestsProcessed) - a(0)} height={BAND} rx={2} style={{ fill: VIZ.track }} />
-            <Bar band={{ pos: barY, thickness: BAND }} value={measured(profile.statutoryViolationCount)} scale={a} claim="counted" label={countedLabel(profile, withRate)} motionKey={`ledger-a-${key}`} />
+            {requestsEnd - missEnd > (misses > 0 ? 4 : 0) && (
+              <path d={hBarPath(misses > 0 ? missEnd + 2 : a(0), requestsEnd, barY + (BAND - REQUESTS_BAND) / 2, REQUESTS_BAND, 2)} style={{ fill: VIZ.mark }} />
+            )}
+            {misses > 0
+              ? <Bar band={{ pos: barY, thickness: BAND }} value={measured(misses)} scale={a} claim="counted" motionKey={`ledger-a-${key}`} />
+              : <line x1={a(0)} x2={a(0)} y1={barY} y2={barY + BAND} style={{ stroke: VIZ.counted, strokeWidth: 1.5 }} />}
+            <text x={Math.max(requestsEnd, missEnd) + 6} y={barY + BAND / 2} dy="0.32em" className={LABEL_CLASS}>{countedLabel(profile, withRate)}</text>
 
-            <Bar band={{ pos: barY, thickness: BAND }} value={measured(profile.suspiciousFastClosureCount)} scale={b} claim="statistical" label={profile.suspiciousFastClosureCount.toLocaleString('en-US')} motionKey={`ledger-b-${key}`} />
+            <Bar band={{ pos: barY, thickness: BAND }} value={measured(rapid)} scale={b} claim="statistical" motionKey={`ledger-b-${key}`} />
+            {rapid > 0 && <text x={b(rapid) + 6} y={barY + BAND / 2} dy="0.32em" className={LABEL_CLASS}>{rapid.toLocaleString('en-US')}</text>}
 
             {average === null ? (
               <text x={cols.c[0] + 4} y={barY + BAND / 2} dy="0.32em" className={`${MUTED_LABEL_CLASS} italic`}>{NO_MEASURABLE_CLOSURE}</text>
@@ -389,10 +446,22 @@ function LedgerPlot({ width, rows, scaleRows, portalName, onInspect }: {
         );
       })}
 
-      <Axis scale={a} kind="count" orient="bottom" offset={bottom + 18} tickCount={Math.max(2, Math.min(4, Math.floor((cols.a[1] - cols.a[0]) / 70)))} />
+      <Axis scale={a} kind="count" orient="bottom" offset={bottom + 18} tickCount={tickCountFor(a.range[1] - a.range[0], requestsMax.toLocaleString('en-US'), 4)} />
       <Axis scale={b} kind="count" orient="bottom" offset={bottom + 18} tickCount={2} />
-      <Axis scale={c} kind="days" orient="bottom" offset={bottom + 18} tickCount={Math.max(2, Math.min(5, Math.floor((cols.c[1] - cols.c[0]) / 70)))} />
+      <Axis scale={c} kind="days" orient="bottom" offset={bottom + 18} tickCount={tickCountFor(cols.c[1] - cols.c[0], days(dayMax), 5)} />
       {tooltip.node}
     </g>
+  );
+}
+
+/** Notes on the name's line in the narrow layout, right-aligned in whatever the name leaves. */
+function NarrowNotes({ notes, x, y, room }: { notes: string; x: number; y: number; room: number }) {
+  const text = truncate(notes, room);
+  if (!text) return null;
+  return (
+    <text x={x} y={y} dy="0.32em" textAnchor="end" className={NOTE_CLASS}>
+      {text !== notes && <title>{notes}</title>}
+      {text}
+    </text>
   );
 }
