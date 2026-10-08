@@ -31,6 +31,22 @@ export interface DataPackTable {
   lastCheckedAt: string | null;
   /** Change records between the table's snapshots; listed, never imported. */
   changeRecords: number;
+  /** What each change record compares and counts, oldest pair first. */
+  changes: DataPackChange[];
+}
+
+/** One change record between two retrievals of a table's publisher file. */
+export interface DataPackChange {
+  previous: string;
+  /** `null` when the manifest no longer lists the earlier original. */
+  previousRetrievedAt: string | null;
+  current: string;
+  currentRetrievedAt: string | null;
+  added: number;
+  removed: number;
+  /** `null` when `wholeRecords`: changed records were listed as removed and added, not separated. */
+  changed: number | null;
+  wholeRecords: boolean;
 }
 
 export interface DataPackFileSummary {
