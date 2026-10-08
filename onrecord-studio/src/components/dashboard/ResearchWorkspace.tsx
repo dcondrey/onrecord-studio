@@ -256,7 +256,7 @@ function CollectionRuntimes({ sources }: { sources: ResearchSourceStatus[] }) {
     const portalKey = portalKeyFor(portals, source.url);
     if (!portalKey) return [];
     const runtime = runtimes.find((candidate) => candidate.portal.portalKey === portalKey) ?? null;
-    return [{ key: source.url, label: source.label, state: runtime ? (runtime.isRunning ? "Running" : "Idle") : undefined, runtime }];
+    return [{ key: source.url, label: source.label, state: runtime ? (runtime.isRunning ? "Running" : "Idle") : `research run: ${source.state.toLowerCase().split("_").join(" ")}${source.detail ? `, ${source.detail}` : ""}`, runtime }];
   });
   if (rows.length === 0) return null;
   return (

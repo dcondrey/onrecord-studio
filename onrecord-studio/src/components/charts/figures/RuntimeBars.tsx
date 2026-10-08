@@ -153,7 +153,7 @@ function RuntimePlot({ width, rows, onShowFailures }: { width: number; rows: rea
         const heading = row.state ? `${row.label} · ${row.state}` : row.label;
         const name = runtime
           ? `${row.label}: ${countsLine(runtime)} of ${plural(total(runtime), 'task')}.${runtime.failedTasks > 0 && onShowFailures ? ' Enter shows the problems.' : ''}`
-          : `${row.label}: ${NOT_RUN}.`;
+          : `${row.label}: ${NOT_RUN}${row.state ? `; ${row.state}` : ''}.`;
         const tip = runtime && (
           <TooltipContent
             title={row.label}
