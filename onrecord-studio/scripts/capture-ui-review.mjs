@@ -328,6 +328,8 @@ const VIEWS = [
   // Figures below the fold: each also gets an element capture at full height (`sections`).
   { view: 'compare-dispositions', steps: [nav('compare')], sections: ['section[aria-label="Dispositions by department"]'], primary: [], states: [] },
   { view: 'overview-following', steps: [nav('overview'), overviewTab('Following')], sections: ['section[aria-label="Following"]'], primary: [], states: [] },
+  // The More tools drawers live on the Tools tab; discovery opens each from there.
+  { view: 'overview-tools', steps: [nav('overview'), overviewTab('Tools')], primary: [], states: [], discover: true },
   { view: 'story-ranked-leads', steps: [nav('story'), click('tab "Factor table"', (page) => page.getByRole('main').getByRole('tab', { name: 'Factor table', exact: true }))], sections: ['figure:has(h3:text-is("Ranked leads"))'], primary: [], states: [] },
   {
     view: 'organization-record',
