@@ -712,6 +712,16 @@ fn sql_templates() -> Vec<SqlTemplate> {
     ]
 }
 
+fn micros(unit: duckdb::types::TimeUnit, value: i64) -> Option<i64> {
+    use duckdb::types::TimeUnit;
+    match unit {
+        TimeUnit::Second => value.checked_mul(1_000_000),
+        TimeUnit::Millisecond => value.checked_mul(1_000),
+        TimeUnit::Microsecond => Some(value),
+        TimeUnit::Nanosecond => Some(value.div_euclid(1_000)),
+    }
+}
+
 fn duckdb_value_to_json(row: &duckdb::Row<'_>, index: usize) -> duckdb::Result<serde_json::Value> {
     use duckdb::types::ValueRef;
     Ok(match row.get_ref(index)? {
@@ -747,6 +757,22 @@ fn duckdb_value_to_json(row: &duckdb::Row<'_>, index: usize) -> duckdb::Result<s
         ValueRef::Blob(value) | ValueRef::Geometry(value) => {
             serde_json::Value::String(format!("[binary:{} bytes]", value.len()))
         }
+        // Without a zone: a TIMESTAMP column holds a local reading, and the cell carries no type
+        // that would say otherwise. An instant chrono cannot represent is absent, not invented.
+        ValueRef::Timestamp(unit, value) => serde_json::json!(micros(unit, value)
+            .and_then(chrono::DateTime::from_timestamp_micros)
+            .map(|instant| instant
+                .naive_utc()
+                .format("%Y-%m-%dT%H:%M:%S%.f")
+                .to_string())),
+        ValueRef::Time64(unit, value) => serde_json::json!(micros(unit, value)
+            .and_then(|micros| {
+                chrono::NaiveTime::from_num_seconds_from_midnight_opt(
+                    u32::try_from(micros.div_euclid(1_000_000)).ok()?,
+                    u32::try_from(micros.rem_euclid(1_000_000) * 1000).ok()?,
+                )
+            })
+            .map(|time| time.format("%H:%M:%S%.f").to_string())),
         other => serde_json::Value::String(format!("{other:?}")),
     })
 }
@@ -866,6 +892,33 @@ mod semantic_analysis_tests {
 
 #[cfg(test)]
 mod tests {
+    /// Time cells reach the table as readable values, not engine debug text.
+    #[test]
+    fn time_cells_are_iso_text_without_a_zone() {
+        let conn = duckdb::Connection::open_in_memory().unwrap();
+        let cells: Vec<serde_json::Value> = conn
+            .query_row(
+                "SELECT TIMESTAMP '2025-01-02 03:04:05.5', TIMESTAMP '2025-01-02 03:04:05', \
+                 TIME '23:59:01', CAST(NULL AS TIMESTAMP)",
+                [],
+                |row| {
+                    (0..4)
+                        .map(|index| duckdb_value_to_json(row, index))
+                        .collect()
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            cells,
+            [
+                serde_json::json!("2025-01-02T03:04:05.500"),
+                serde_json::json!("2025-01-02T03:04:05"),
+                serde_json::json!("23:59:01"),
+                serde_json::Value::Null,
+            ]
+        );
+    }
+
     use super::*;
 
     // Header and two rows as published in pd_calls_for_service_2025_datasd.csv.
