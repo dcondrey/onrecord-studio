@@ -213,12 +213,24 @@ const select = (description, locate, value) => async (page, log) => {
 const event = (name, detail) => store(`dispatch window event '${name}'`, ([eventName, eventDetail]) => window.dispatchEvent(new CustomEvent(eventName, { detail: eventDetail })), [name, detail]);
 const inspect = (target) => store(`store.inspect(${JSON.stringify(target)})`, (t) => window.__uiReview.store.getState().inspect(t), target);
 
-// The overview's perspectives (Leads, Following, Analytics, Tools) are tabs in the main pane.
+// The overview's perspectives (Leads, Following, Analytics, Casework, Tools) are tabs in the main pane.
 const overviewTab = (name) => click(`tab "${name}"`, (page) => page.getByRole('main').getByRole('tab', { name, exact: true }));
+const casework = [nav('overview'), overviewTab('Casework')];
+/** Opens the Watching pane when it is folded (its toggle's name starts with "Watching"). */
+const openWatching = async (page, log) => {
+  const toggle = page.getByRole('button', { name: /^Watching/ }).filter({ visible: true }).first();
+  if ((await toggle.getAttribute('aria-expanded', { timeout: 8_000 })) === 'false') {
+    await toggle.click({ timeout: 8_000 });
+    log.push('click "Watching" (unfold)');
+  }
+};
+const press = (key) => async (page, log) => {
+  await page.keyboard.press(key);
+  log.push(`press ${key}`);
+};
 
 const spendingTab = [
-  nav('overview'),
-  overviewTab('Tools'), click('"Open casework and research tools"', (page) => page.getByRole('button', { name: 'Open casework and research tools' })),
+  ...casework,
   click('tab "Spending"', (page) => page.getByRole('main').getByRole('tab', { name: 'Spending', exact: true })),
 ];
 const spendingChains = click('"Spending chains"', (page) => page.getByRole('button', { name: 'Spending chains', exact: true }));
@@ -255,12 +267,12 @@ const VIEWS = [
   { view: 'evidence-document-viewer', steps: [nav('evidence'), selectRequest, openDocument], primary: ['get_document_text_chunk'], states: ['loading', 'error'] },
   { view: 'evidence-authority-library', steps: [nav('evidence'), selectRequest, click('"Authority library"', (page) => page.getByRole('button', { name: 'Authority library' }))], primary: ['list_legal_authorities'], states: ['error'] },
   { view: 'overview-response-analytics', steps: [nav('overview'), overviewTab('Analytics')], primary: ['get_agency_performance_profiles', 'get_cross_agency_correlations'], states: ['error'] },
-  { view: 'overview-casework-tools', steps: [nav('overview'), overviewTab('Tools'), click('"Open casework and research tools"', (page) => page.getByRole('button', { name: 'Open casework and research tools' }))], primary: ['get_casework_state', 'get_research_status'], states: ['empty', 'error'], discover: true },
+  { view: 'overview-casework-tools', steps: casework, primary: ['get_casework_state', 'get_research_status'], states: ['empty', 'error'], discover: true },
   // Discovery does not look inside a drawer or a tab, so surfaces nested there are named here.
-  { view: 'overview-casework-tools-drawer-assess-usefulness', steps: [nav('overview'), overviewTab('Tools'), click('"Open casework and research tools"', (page) => page.getByRole('button', { name: 'Open casework and research tools' })), click('tab "Evidence review"', (page) => page.getByRole('main').getByRole('tab', { name: 'Evidence review', exact: true })), click('drawer "Assess usefulness"', (page) => page.getByRole('main').locator('details > summary', { hasText: 'Assess usefulness' }))], primary: [], states: [] },
+  { view: 'overview-casework-tools-drawer-assess-usefulness', steps: [...casework, click('tab "Evidence review"', (page) => page.getByRole('main').getByRole('tab', { name: 'Evidence review', exact: true })), click('drawer "Assess usefulness"', (page) => page.getByRole('main').locator('details > summary', { hasText: 'Assess usefulness' }))], primary: [], states: [] },
   { view: 'patterns-tab-ledger-history', steps: [nav('patterns'), click('drawer "Resolve entities"', (page) => page.getByRole('main').locator('details.app-panel > summary', { hasText: 'Resolve entities' })), click('tab "Ledger history"', (page) => page.getByRole('main').getByRole('tab', { name: 'Ledger history', exact: true }))], primary: [], states: [] },
   { view: 'patterns-tab-import-and-export', steps: [nav('patterns'), click('drawer "Resolve entities"', (page) => page.getByRole('main').locator('details.app-panel > summary', { hasText: 'Resolve entities' })), click('tab "Import and export"', (page) => page.getByRole('main').getByRole('tab', { name: 'Import and export', exact: true }))], primary: [], states: [] },
-  { view: 'overview-casework-case', steps: [nav('overview'), overviewTab('Tools'), click('"Open casework and research tools"', (page) => page.getByRole('button', { name: 'Open casework and research tools' })), async (page, log) => {
+  { view: 'overview-casework-case', steps: [...casework, async (page, log) => {
     await page.getByRole('combobox', { name: 'Open saved case' }).filter({ visible: true }).first().selectOption('case-storage', { timeout: 8_000 });
     log.push('select saved case "Storage contract ceiling"');
     await page.getByText('Request determination clocks').first().scrollIntoViewIfNeeded({ timeout: 8_000 });
@@ -278,6 +290,12 @@ const VIEWS = [
   { view: 'inspector-case', steps: [nav('overview'), inspect({ kind: 'case', caseId: 'case-storage', label: 'Storage contract ceiling' })], primary: ['get_casework_state'], states: ['error'] },
 
   { view: 'command-palette', steps: [nav('overview'), event('onrecord:open-command-palette', null)], primary: [], states: [] },
+  // The passage search never answers, so every capture shows the palette while it searches.
+  { view: 'command-palette-pending', scenario: { hang: ['hybrid_search'] }, steps: [nav('overview'), event('onrecord:open-command-palette', null), type('command palette search', (page) => page.getByRole('dialog').getByRole('combobox'), 'harborview')], primary: [], states: [] },
+  { view: 'overview-ledger-stage', steps: [nav('overview'), openWatching, click('Watching "Deadline ledger"', (page) => page.getByRole('button', { name: /^Deadline ledger/ }))], primary: [], states: [] },
+  { view: 'overview-lead-3', steps: [nav('overview'), press('j'), press('j')], primary: [], states: [] },
+  { view: 'overview-watching-collapsed', steps: [nav('overview')], widths: [1024], primary: [], states: [] },
+  { view: 'story-desk-workbench', steps: [nav('story')], primary: [], states: [] },
   { view: 'command-palette-question', steps: [nav('overview'), event('onrecord:open-command-palette', null), type('command palette search', (page) => page.getByRole('dialog').getByRole('combobox').or(page.getByRole('dialog').getByRole('textbox')), 'findings for Environmental Services'), async (page, log) => { await page.keyboard.press('Enter'); log.push('press Enter'); }], primary: ['run_intent_query'], states: ['error'] },
   { view: 'help-center', steps: [nav('overview'), event('onrecord:open-help', {})], primary: [], states: [] },
   { view: 'my-requests', steps: [nav('overview'), click('"Open my requests"', (page) => page.getByRole('button', { name: 'Open my requests' }))], primary: ['list_claimed_requests'], states: ['empty', 'error'] },
@@ -313,7 +331,7 @@ const VIEWS = [
   { view: 'story-ranked-leads', steps: [nav('story'), click('tab "Factor table"', (page) => page.getByRole('main').getByRole('tab', { name: 'Factor table', exact: true }))], sections: ['figure:has(h3:text-is("Ranked leads"))'], primary: [], states: [] },
   {
     view: 'organization-record',
-    steps: [nav('overview'), overviewTab('Tools'), click('"Open casework and research tools"', (page) => page.getByRole('button', { name: 'Open casework and research tools' })), click('tab "Organization filings"', (page) => page.getByRole('main').getByRole('tab', { name: 'Organization filings', exact: true })), click('portfolio row "Harborview Shelter Partners"', (page) => page.getByRole('main').getByRole('button', { name: 'Harborview Shelter Partners', exact: true }))],
+    steps: [...casework, click('tab "Organization filings"', (page) => page.getByRole('main').getByRole('tab', { name: 'Organization filings', exact: true })), click('portfolio row "Harborview Shelter Partners"', (page) => page.getByRole('main').getByRole('button', { name: 'Harborview Shelter Partners', exact: true }))],
     sections: ['section[aria-label="Organization filings"]'],
     primary: ['get_organisation_filings'],
     states: [],
@@ -507,6 +525,8 @@ let vite;
 let browser;
 let cacheDirectory;
 const index = {
+  /** Steps after which document.scrollingElement.scrollTop was not 0; any entry fails the run. */
+  shellScrolled: [],
   label,
   generatedAt: new Date().toISOString(),
   gitHead,
@@ -599,6 +619,9 @@ try {
       for (const step of definition.steps) {
         await step(page, steps);
         await settle(page);
+        // The shell never scrolls: a step that moved the document carried the title bar off screen.
+        const shellTop = await page.evaluate(() => document.scrollingElement?.scrollTop ?? 0);
+        if (shellTop !== 0) index.shellScrolled.push({ view: definition.view, state, after: steps.at(-1), scrollTop: shellTop });
       }
     } catch (error) {
       const reason = String(error?.message ?? error).split('\n')[0];
@@ -614,7 +637,7 @@ try {
     const records = [];
     for (const theme of THEMES) {
       await applyTheme(page, theme);
-      for (const [width, height] of SIZES) {
+      for (const [width, height] of SIZES.filter(([size]) => !definition.widths || definition.widths.includes(size))) {
         await page.setViewportSize({ width, height });
         const settled = await settle(page);
         if (definition.anchor) await definition.anchor(page).first().evaluate((element) => element.scrollIntoView({ block: 'start' })).catch(() => {});
@@ -720,6 +743,9 @@ try {
 }
 
 index.finishedAt = new Date().toISOString();
+if (index.shellScrolled.length > 0 && !harnessFailure) {
+  harnessFailure = new Error(`The app shell scrolled: ${index.shellScrolled.map((entry) => `${entry.view} (${entry.state}) after "${entry.after}": scrollTop ${entry.scrollTop}`).join('; ')}`);
+}
 // Per view, one entry per rule and target node across all its states, themes and widths, so the six
 // captures of a state do not count one defect six times. `nodes` is the number of distinct targets
 // (bounded by the AXE_TARGETS_KEPT kept per capture); `instances` sums axe's own node counts.

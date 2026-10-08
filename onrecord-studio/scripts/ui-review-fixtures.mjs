@@ -978,7 +978,7 @@ const full = {
   ],
   list_story_leads: ({ limit }) => STORY_LEADS.slice(0, limit ?? 50),
   build_lead_dossier: ({ findingId }) => {
-    const f = FINDINGS.find((x) => x.id === findingId) ?? FINDINGS[0];
+    const f = findingOrThrow(FINDINGS, findingId);
     return {
       finding: f,
       evidence: f.citations.map((c) => ({ portalKey: c.portalKey, documentId: c.documentId, fileName: documentName(c.documentId), requestId: documentRequest(c.documentId), agencyLabel: request(documentRequest(c.documentId)).agencyName, rawFileSha256: hex(`raw${c.documentId}`), characterStart: c.characterStart, characterEnd: c.characterEnd, quote: c.quote, label: c.label })),
@@ -992,9 +992,9 @@ const full = {
     };
   },
   draft_availability_for_finding: () => ({ followup: true, appeal: true }),
-  draft_followup_from_finding: ({ findingId }) => drafted(findingId, 'FOLLOWUP_REQUEST'),
-  draft_appeal_from_finding: ({ findingId }) => drafted(findingId, 'APPEAL'),
-  draft_appeal_from_statutory_deadline: () => drafted('f-policy-esd', 'APPEAL'),
+  draft_followup_from_finding: ({ findingId }) => drafted(FINDINGS, findingId, 'FOLLOWUP_REQUEST'),
+  draft_appeal_from_finding: ({ findingId }) => drafted(FINDINGS, findingId, 'APPEAL'),
+  draft_appeal_from_statutory_deadline: () => drafted(FINDINGS, 'f-policy-esd', 'APPEAL'),
   query_audit_records_page: ({ searchTerm, portalKey, agencyId, pageSize }) => {
     const term = searchTerm.trim().toLowerCase();
     const records = REQUESTS.filter((r) => (!term || r.title.toLowerCase().includes(term) || r.descriptionPreview.toLowerCase().includes(term)) && (!portalKey || r.portalKey === portalKey) && (agencyId == null || r.agencyId === agencyId));
@@ -1043,7 +1043,7 @@ const full = {
   get_analytical_schema: () => SCHEMA,
   list_analytical_import_candidates: () => [{ documentId: 9041, portalKey: 'sandiego', fileName: 'Homelessness_Budget_FY2024_Adopted_vs_Actual.xlsx', localPath: '/Users/reporter/Library/Application Support/OnRecord Studio/evidence/9041.xlsx', sourceUri: 'https://sandiego.nextrequest.com/documents/9041', sourceSha256: hex('raw9041') }],
   run_analytical_sql: ({ sql }) => sqlResult(sql),
-  hybrid_search: ({ query, limit }) => DOCUMENTS.slice(0, Math.min(limit ?? 10, 8)).map((d, index) => ({
+  hybrid_search: ({ query, limit }) => passageMatches(query).slice(0, Math.min(limit ?? 10, 8)).map((d, index) => ({
     stableId: `hs-${d.documentId}`, portalKey: d.portalKey, requestId: documentRequest(d.documentId), documentId: d.documentId, fileName: d.fileName, title: request(documentRequest(d.documentId)).title,
     agencyName: request(documentRequest(d.documentId)).agencyName, jurisdiction: 'San Diego', documentType: 'letter', publicationDate: day(30 + index), observationDate: null, effectiveDate: null,
     characterStart: 330, characterEnd: 510, excerpt: `…${LETTER.slice(330, 480)}… (${query})`, lexicalRank: index + 1, semanticScore: 0.82 - index * 0.04, fusedScore: 0.9 - index * 0.05, retrievalStatus: 'HYBRID',
@@ -1100,7 +1100,7 @@ const full = {
   get_signing_key_revocations: () => ({ schemaVersion: '1', entries: [] }),
   preview_shareable_bundle: ({ request: { findingIds } }) => ({ schemaVersion: 2, included: FINDINGS.filter((f) => findingIds.includes(f.id)).map((f) => ({ findingId: f.id, headline: f.headline, severity: f.severity, basisLabel: 'Counted', sourceCount: 1, excerptCount: f.citations.length, maskedValueCount: 0 })), excluded: [], sourceNames: ['City of San Diego'], contentSha256: hex('bundle') }),
   preview_packet_annotations: () => ({ included: 1, orphaned: 0, notPublicOmitted: 0 }),
-  draft_overdue_follow_up: () => ({ artifact: drafted('f-policy-esd', 'FOLLOWUP_REQUEST'), agencyRecord: null, agencyParagraphIncluded: false, agencyOptions: [] }),
+  draft_overdue_follow_up: () => ({ artifact: drafted(FINDINGS, 'f-policy-esd', 'FOLLOWUP_REQUEST'), agencyRecord: null, agencyParagraphIncluded: false, agencyOptions: [] }),
   verify_evidence_package: () => ({ schemaVersion: '3', canonicalBytesHashMatches: true, signatureValid: true, manifestMatchesCanonicalBytes: true, overallPassed: true, identityAssurance: 'LOCAL_KEY', unverifiedCitationLabels: [], withheldCitationLabels: [], ledgerSequence: 4, previousExportSha256: hex('prev'), revokedSigner: null, parseError: null }),
   reconstruct_document_context: ({ documentId, portalKey }) => ({ analysisVersion: 'reconstruct/2', documentId, portalKey, sourceSha256: hex(`raw${documentId}`), corpusFingerprint: hex('corpus'), documentsCompared: 1842, passagesCompared: 61_220, findings: [], limitations: ['Only text-layer documents were compared.'], searchTerms: ['February 12', 'Imperial'] }),
   infer_redaction: () => ({ candidates: [], corroboratingDocs: [], confidenceCeiling: { kind: 'UNASSESSED' }, semanticRankingUsed: false, contextSnippet: '' }),
@@ -1110,12 +1110,38 @@ const full = {
   fetch_city_dataset: ({ dataset }) => ({ snapshotId: `snap-${dataset.toLowerCase()}`, datasetKind: 'REGIONAL_DATA', displayName: dataset, tableName: `analysis_${dataset.toLowerCase()}`, importedRows: 0, rejectedRows: 0, malformedRows: 0, duplicateKeyRows: 0, unconvertedCells: 0, schemaWarnings: [], sourceSha256: hex(dataset) }),
 };
 
-/** @param {string} findingId @param {import('../src/types').ArtifactKind} kind @returns {import('../src/types').DraftedArtifact} */
-function drafted(findingId, kind) {
-  const f = FINDINGS.find((x) => x.id === findingId) ?? FINDINGS[0];
+/**
+ * The finding a command names, as the native side answers it: an id it does not hold is an error,
+ * never another finding's record standing in for it.
+ * @param {import('../src/types').Finding[]} findings @param {string} findingId
+ */
+function findingOrThrow(findings, findingId) {
+  const f = findings.find((x) => x.id === findingId);
+  if (!f) throw { errorType: 'NOT_FOUND', message: `No finding with id ${findingId}` };
+  return f;
+}
+
+/**
+ * The documents whose text holds every word of the query: a passage search answers only from
+ * passages that contain what was asked, and nothing when none does.
+ * @param {string} query
+ */
+function passageMatches(query) {
+  const words = query.toLowerCase().split(' ').filter(Boolean);
+  if (words.length === 0) return [];
+  const text = LETTER.toLowerCase();
+  return DOCUMENTS.filter((d) => words.every((word) => text.includes(word) || d.fileName.toLowerCase().includes(word)));
+}
+
+/** @param {import('../src/types').Finding[]} findings @param {string} findingId @param {import('../src/types').ArtifactKind} kind @returns {import('../src/types').DraftedArtifact} */
+function drafted(findings, findingId, kind) {
+  const f = findingOrThrow(findings, findingId);
+  const requestId = f.subject.requestId;
+  // A lead computed from tables has no request or agency: the draft names neither.
+  const agency = requestId === null ? null : request(requestId).agencyName;
   return {
     id: `draft-${findingId}-${kind}`, kind, subjectFindingId: f.id, jurisdiction: 'CA_CPRA', templateId: kind === 'APPEAL' ? 'cpra-appeal-v2' : 'cpra-followup-v3',
-    generatedText: `To the Records Coordinator, ${request(f.subject.requestId ?? 26_0412).agencyName}:\n\nRegarding request ${f.subject.requestId}: ${f.headline}. Under Government Code section 7922.535, please provide a written determination and the records described below within 10 days.\n\n[Your name]`,
+    generatedText: `To the Records Coordinator${agency ? `, ${agency}` : ''}:\n\n${requestId === null ? '' : `Regarding request ${requestId}: `}${f.headline}. Under Government Code section 7922.535, please provide a written determination and the records described below within 10 days.\n\n[Your name]`,
     disclosure: 'The author is affiliated with Voice of the Bay Newsroom.', citedAuthorities: [{ statute: 'Gov. Code § 7922.535', quote: 'within 10 days from receipt of the request' }],
     evidenceBasis: 'COUNTED_STATUTORY_DEADLINE', confidence: f.confidence, citations: f.citations, unknownFacts: ['Date the agency received the request'], generatedAt: iso(0.1),
   };
@@ -1231,6 +1257,7 @@ function realHandlers(real) {
   const requests = REQUESTS.map((r) => ({ ...r, descriptionPreview: REQUEST_TEXT[r.requestId] ?? r.descriptionPreview }));
   const matches = (/** @type {string} */ term) => (/** @type {import('../src/types').RequestSearchResult} */ r) => !term || r.title.toLowerCase().includes(term) || r.descriptionPreview.toLowerCase().includes(term);
   const latestYear = real.FINANCE.fiscalYears.length ? real.FINANCE.fiscalYears[real.FINANCE.fiscalYears.length - 1] : null;
+  const figureLead = real.LEAD_FINDINGS.find((f) => f.kind === 'POLICE_CALL_LEAD' && f.headline.includes('SLEEPER')) ?? real.LEAD_FINDINGS.find((f) => f.kind === 'POLICE_CALL_LEAD');
   return {
     get_analytical_schema: () => real.SCHEMA,
     run_analytical_sql: ({ sql, limit }) => {
@@ -1241,14 +1268,23 @@ function realHandlers(real) {
       return { columns: entry.columns, rows: entry.rows.slice(0, cap), rowCount: Math.min(entry.rows.length, cap), truncated: entry.rows.length > cap, elapsedMs: entry.elapsedMs, provenance: entry.provenance };
     },
     refresh_findings: () => ({ detectorsRun: 28, findingsRecorded: findings.length, staleCleared: 0 }),
-    list_findings: ({ filter, limit }) => filterFindings(filter, findings).slice(0, limit ?? 500),
+    // A lookup by id carries a stored figure: the SLEEPER call-outcome figure on the real police-call
+    // lead, so the stage's stored-figure path is captured on real data.
+    list_findings: ({ filter, limit }) => filterFindings(filter, findings).slice(0, limit ?? 500)
+      .map((item) => (filter?.id && item.id === figureLead?.id ? { ...item, figure: LEAD_FIGURES['f-call-lead'] } : item)),
     count_findings: ({ filter }) => filterFindings(filter, findings).length,
     list_story_leads: ({ limit }) => storyLeads.slice(0, limit ?? 50),
     build_lead_dossier: (args) => {
-      const dossier = /** @type {NonNullable<Handlers['build_lead_dossier']>} */ (full.build_lead_dossier)(args);
       const lead = real.LEAD_FINDINGS.find((f) => f.id === args.findingId);
-      return lead ? { ...dossier, finding: lead, evidence: [], related: [], gaps: [] } : dossier;
+      if (!lead) return /** @type {NonNullable<Handlers['build_lead_dossier']>} */ (full.build_lead_dossier)(args);
+      return {
+        finding: lead, evidence: [], evidenceTruncated: false, related: [], relatedTruncated: false,
+        falsification: { statement: 'This lead is wrong if the published table was revised after it was retrieved, or if the rows it counts were miscoded at the source.', recordsToSeek: ['The current published table', 'The publisher’s field definitions'] },
+        gaps: [], gapsTruncated: false, assembledAt: iso(0.1),
+      };
     },
+    draft_followup_from_finding: ({ findingId }) => drafted(findings, findingId, 'FOLLOWUP_REQUEST'),
+    draft_appeal_from_finding: ({ findingId }) => drafted(findings, findingId, 'APPEAL'),
     query_audit_records_page: ({ searchTerm, portalKey, agencyId, pageSize }) => {
       const records = requests.filter((r) => matches(searchTerm.trim().toLowerCase())(r) && (!portalKey || r.portalKey === portalKey) && (agencyId == null || r.agencyId === agencyId));
       return { records: records.slice(0, pageSize), nextCursor: null, total: records.length };
