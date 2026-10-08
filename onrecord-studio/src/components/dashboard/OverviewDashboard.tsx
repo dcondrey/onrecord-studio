@@ -11,7 +11,6 @@ import PageHeader from '../ui/PageHeader';
 import Panel, { PanelHeader } from '../ui/Panel';
 import Button from '../ui/Button';
 import InlineError from '../ui/InlineError';
-import Skeleton from '../ui/Skeleton';
 import { Select } from '../ui/Field';
 import { cn } from '../../utils/cn';
 import SanDiegoWorkspace from './SanDiegoWorkspace';
@@ -58,6 +57,10 @@ export default function OverviewDashboard() {
   const analyticsUpdatedAt = useAppStore((state) => state.analyticsUpdatedAt);
   const analyticsError = useAppStore((state) => state.analyticsError);
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
+  const correlationCount = useAppStore((state) => state.crossAgencyCorrelations.length);
+  // With no result at all, one retryable error stands for the whole panel; the comparison and the
+  // charts below would each restate the same failure.
+  const analyticsUnavailable = analyticsError !== null && profiles.length === 0 && correlationCount === 0;
   const scopedProfiles = useMemo(
     () => profiles.filter((profile) => !activePortalKey || profile.portalSubdomain === activePortalKey),
     [activePortalKey, profiles],
@@ -91,7 +94,7 @@ export default function OverviewDashboard() {
 
         <FirstRunData />
         {workspaceInitializationStatus === 'loading' ? (
-          <Skeleton variant="block" height={120} label="Loading saved sources" />
+          <SourcesSkeleton />
         ) : workspaceInitializationStatus === 'error' ? (
           <WorkspaceSourcesUnavailable detail={workspaceInitializationError} />
         ) : portals.length === 0 || starterRunShown ? (
@@ -115,7 +118,7 @@ export default function OverviewDashboard() {
               <PanelHeader
                 titleId="response-analytics-title"
                 title="Response analytics"
-                description={analyticsError
+                description={analyticsError && !analyticsUnavailable
                   ? (analyticsUpdatedAt ? `Stale: the last refresh failed. Last updated ${formatRelativeTime(analyticsUpdatedAt)}.` : 'Analytics couldn’t be calculated.')
                   : analyticsUpdatedAt ? `Updated ${formatRelativeTime(analyticsUpdatedAt)}` : 'How quickly and completely agencies answer requests.'}
                 actions={(
@@ -126,17 +129,19 @@ export default function OverviewDashboard() {
               />
               {showAnalytics && (
                 <div id="response-analytics-body" className="motion-reveal space-y-4 p-5">
-                  <PeriodComparison activePortalKey={activePortalKey} />
-                  <MetricsGrid />
-                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
-                    <PerformanceScatter />
-                    <SignalSummary outlierDepartments={outlierDepartments} monitoredDepartments={monitoredDepartments} />
-                  </div>
-                  <section aria-label="Investigative analytics" className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-[1.15fr_.8fr_1.05fr]">
-                    <AnomalyRadar />
-                    <LifecycleFunnel />
-                    <div className="lg:col-span-2 2xl:col-span-1"><TemporalMap /></div>
-                  </section>
+                  {analyticsUnavailable ? <MetricsGrid /> : <>
+                    <PeriodComparison activePortalKey={activePortalKey} />
+                    <MetricsGrid />
+                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+                      <PerformanceScatter />
+                      <SignalSummary outlierDepartments={outlierDepartments} monitoredDepartments={monitoredDepartments} />
+                    </div>
+                    <section aria-label="Investigative analytics" className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-[1.15fr_.8fr_1.05fr]">
+                      <AnomalyRadar />
+                      <LifecycleFunnel />
+                      <div className="lg:col-span-2 2xl:col-span-1"><TemporalMap /></div>
+                    </section>
+                  </>}
                 </div>
               )}
             </Panel>
@@ -276,19 +281,39 @@ function WorkspaceSourcesUnavailable({ detail }: { detail: string | null }) {
           <p className="mt-1 max-w-prose text-body text-muted">
             The local evidence store is busy or unavailable. Your sources and documents are not affected.
           </p>
-          {detail && <p className="mt-2 break-words text-caption text-muted">{displayError(detail)}</p>}
+          {detail && (
+            <details className="mt-2">
+              <summary className="text-caption text-muted">Technical details</summary>
+              <p className="mt-1 break-words font-mono text-code text-fg-secondary">{detail}</p>
+            </details>
+          )}
         </div>
       </div>
     </section>
   );
 }
 
-/** The code prefix ("DATABASE_UNAVAILABLE: ") is for the activity log, not the reader. */
-function displayError(detail: string): string {
-  const separator = detail.indexOf(': ');
-  if (separator <= 0) return detail;
-  const prefix = detail.slice(0, separator);
-  return /^[A-Z_]+$/.test(prefix) || /^[A-Za-z]+Error$/.test(prefix) ? displayError(detail.slice(separator + 2)) : detail;
+/** Rows shaped like the attention feed, so the first answer replaces them without a shift. */
+function SourcesSkeleton() {
+  return (
+    <Panel>
+      <div role="status" aria-busy="true">
+        <span className="sr-only">Loading saved sources</span>
+        <div aria-hidden="true" className="divide-y divide-line">
+          {[0, 1, 2].map((row) => (
+            <div key={row} className="flex items-center gap-3 px-5 py-3">
+              <div className="skeleton h-8 w-8 shrink-0 rounded-lg" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className={cn('skeleton h-3.5 rounded', row === 1 ? 'w-1/2' : 'w-2/3')} />
+                <div className="skeleton h-3 w-1/3 rounded" />
+              </div>
+              <div className="skeleton h-3 w-16 rounded" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </Panel>
+  );
 }
 
 function SignalSummary({ outlierDepartments, monitoredDepartments }: { outlierDepartments: number; monitoredDepartments: number }) {

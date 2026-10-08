@@ -16,7 +16,6 @@ interface MetricCard {
 }
 
 export default function MetricsGrid() {
-  const metrics = useAppStore((state) => state.metrics);
   const profiles = useAppStore((state) => state.agencyProfiles);
   const correlations = useAppStore((state) => state.crossAgencyCorrelations);
   const analyticsError = useAppStore((state) => state.analyticsError);
@@ -53,7 +52,7 @@ export default function MetricsGrid() {
     {
       label: 'Requests reviewed',
       value: values.requests.toLocaleString(),
-      detail: `${values.closed.toLocaleString()} closed · ${metrics.pagesProcessed.toLocaleString()} pages ingested`,
+      detail: `${values.closed.toLocaleString()} closed`,
       ratio: values.requests === 0 ? null : values.closed / values.requests,
       attention: false,
       status: null,
@@ -99,7 +98,7 @@ export default function MetricsGrid() {
             setSearchFilters(searchTerm, selectedAgencyId, card.status, card.policy);
             setWorkspaceView('evidence');
           }}
-          className="focus-ring group min-w-0 p-4 text-left transition-colors duration-fast hover:bg-raised/60 focus-visible:ring-inset"
+          className="focus-ring group flex min-w-0 flex-col justify-start p-4 text-left transition-colors duration-fast hover:bg-raised/60 focus-visible:ring-inset"
         >
           <span className="block truncate text-caption text-muted" title={card.label}>{card.label}</span>
           <span className={cn('mt-1 block text-metric tabular-nums', card.attention ? 'text-warning' : 'text-fg')}>{card.value}</span>
