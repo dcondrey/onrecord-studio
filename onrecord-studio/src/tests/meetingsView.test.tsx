@@ -81,7 +81,14 @@ describe('meetings view', () => {
     bridge.invoke.mockResolvedValue(calendar([posted, docket], { agendaFilesWithBothTimes: 1, under72HoursBeforeStart: 1, afterMeetingStart: 0 }));
     render(<MeetingsView />);
     const card = await screen.findByRole('article', { name: 'Privacy Advisory Board 2026-10-01' });
-    expect(card.textContent).toContain('per the file’s Last-Modified header · 2 days 23 hours before the start');
+    expect(card.textContent).toContain('per the file’s Last-Modified header');
+    // The lead time is plotted, not printed on the card: 71 h 59 min sits left of the 72 h yardstick, in the one dot colour.
+    expect(screen.getByRole('img', { name: /Privacy Advisory Board · Oct 1, 2026, agenda\.pdf: Last-Modified 2026-09-28 21:00 UTC, 71 h 59 min before stated start/ })).toBeTruthy();
+    expect(screen.getByText('72 h before start (reference; no notice rule is evaluated)')).toBeTruthy();
+    expect(document.body.innerHTML).not.toMatch(/--viz-(counted|lead)/);
+    // A file without a posting time is counted in the rail by reason and never plotted.
+    expect(screen.getByLabelText('No posting time').textContent).toContain('host reports request time 1');
+    expect(screen.queryByRole('img', { name: /docket\.html/ })).toBeNull();
     expect(card.querySelector('time')?.getAttribute('dateTime')).toBe('2026-09-28T21:00:00Z');
     const docketCard = screen.getByRole('article', { name: 'Audit Committee 2026-10-08' });
     expect(docketCard.textContent).toContain('Posting time not recorded: this host reports the time of the request as Last-Modified');
