@@ -119,8 +119,6 @@ export default function AgencyComparison() {
     <main className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto w-full max-w-[1400px] space-y-4 p-4 lg:p-6">
         <PageHeader
-          icon="bars"
-          eyebrow="Agency comparison"
           title="Compare agencies"
           summary="Every agency with an analytics profile, ranked on one measured column at a time."
           method={<>

@@ -1,4 +1,5 @@
 import type { SVGProps } from 'react';
+import { cn } from '../../utils/cn';
 
 export type IconName =
   | 'activity'
@@ -22,6 +23,7 @@ export type IconName =
   | 'eject'
   | 'filePlus'
   | 'globe'
+  | 'help'
   | 'grid'
   | 'menu'
   | 'moon'
@@ -38,11 +40,23 @@ export type IconName =
   | 'volume'
   | 'x';
 
+export type IconSize = 'xs' | 'sm' | 'md' | 'lg';
+
+const SIZE: Record<IconSize, string> = {
+  xs: 'h-3 w-3',
+  sm: 'h-3.5 w-3.5',
+  md: 'h-4 w-4',
+  lg: 'h-5 w-5',
+};
+
 interface IconProps extends SVGProps<SVGSVGElement> {
   name: IconName;
+  /** 12 / 14 / 16 / 20px. `className` is for colour and position. */
+  size?: IconSize;
 }
 
-export default function Icon({ name, className = 'h-4 w-4', ...props }: IconProps) {
+export default function Icon({ name, size = 'md', className, ...props }: IconProps) {
+  const chevron = <path d="m9 18 6-6-6-6" />;
   const paths: Record<IconName, JSX.Element> = {
     activity: <><path d="M3 12h3l2.2-6 4.1 12 2.2-6H21" /><path d="M4 4v16h16" opacity=".25" /></>,
     back: <path d="m15 18-6-6 6-6" />,
@@ -52,12 +66,12 @@ export default function Icon({ name, className = 'h-4 w-4', ...props }: IconProp
     calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /><path d="M8 14h3v3H8z" /></>,
     clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
     flag: <><path d="M5 21V4" /><path d="M5 4h11l-2 4 2 4H5" /></>,
-    forward: <path d="m9 18 6-6-6-6" />,
+    forward: chevron,
     link: <><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></>,
     presentation: <><rect x="3" y="4" width="18" height="12" rx="1.5" /><path d="M12 16v4M8 20h8M7 12l3-3 2 2 4-4" /></>,
     tag: <><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z" /><circle cx="7.5" cy="7.5" r="1.5" /></>,
     arrow: <><path d="M5 12h14" /><path d="m14 7 5 5-5 5" /></>,
-    chevron: <path d="m9 18 6-6-6-6" />,
+    chevron,
     clipboard: <><rect x="6" y="4" width="12" height="17" rx="2" /><path d="M9 4.5V3h6v1.5M9 9h6M9 13h6M9 17h4" /></>,
     collapse: <><path d="M9 18 3 12l6-6" /><path d="M21 6v12" /></>,
     database: <><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5" /><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" /></>,
@@ -65,6 +79,7 @@ export default function Icon({ name, className = 'h-4 w-4', ...props }: IconProp
     eject: <><path d="M9 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3" /><path d="m15 16 5-4-5-4" /><path d="M20 12H10" /></>,
     filePlus: <><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v5h5M9 14h6M12 11v6" /></>,
     globe: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" /></>,
+    help: <><circle cx="12" cy="12" r="9" /><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.4c-.6.3-1 .8-1 1.5v.4" /><path d="M12 17h.01" /></>,
     grid: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,
     menu: <><path d="M4 7h16M4 12h16M4 17h16" /></>,
     moon: <path d="M20.2 15.2A8.5 8.5 0 0 1 8.8 3.8 8.5 8.5 0 1 0 20.2 15.2Z" />,
@@ -87,10 +102,10 @@ export default function Icon({ name, className = 'h-4 w-4', ...props }: IconProp
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.7"
+      strokeWidth="1.75"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={className}
+      className={cn('shrink-0', SIZE[size], className)}
       aria-hidden="true"
       {...props}
     >
