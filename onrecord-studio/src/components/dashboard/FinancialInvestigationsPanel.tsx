@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { isTauri } from '@tauri-apps/api/core';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
+import { Select } from '../ui/Field';
 import type { FinancialCitation, FinancialMapping, FinancialReport, FinancialScenario, FinancialScope, FinancialWorkspace } from '../../types/financial';
 import { financialAmount, financialReportMarkdown, rankFinancialLines, suggestFinancialMapping } from '../../utils/financial';
 
@@ -58,9 +59,9 @@ export default function FinancialInvestigationsPanel({ onCheckOrganisation }: { 
     {workspace&&<>
       {workspace.warnings.map(w=><p key={w} className="text-body text-warning">{w} <button type="button" className="focus-ring rounded text-accent underline-offset-2 hover:underline" onClick={openConnections}>Open record connections</button></p>)}
       <div className="flex flex-wrap items-end gap-3">
-        <label className="text-control text-fg-secondary">Fiscal year<select aria-label="Financial fiscal year" className="analysis-input block" value={scope.fiscalYear??''} onChange={e=>changeScope({...scope,fiscalYear:e.target.value?Number(e.target.value):null})}><option value="">Choose year</option>{workspace.fiscalYears.map(y=><option key={y}>{y}</option>)}</select></label>
-        <label className="text-control text-fg-secondary">Fund<select aria-label="Financial fund" className="analysis-input block" value={scope.fund??''} onChange={e=>changeScope({...scope,fund:e.target.value||null})}><option value="">Choose fund</option>{workspace.funds.map(f=><option key={f}>{f}</option>)}</select></label>
-        <label className="text-control text-fg-secondary">Department<select aria-label="Financial department" className="analysis-input block" value={scope.department??''} onChange={e=>changeScope({...scope,department:e.target.value||null})}><option value="">All departments</option>{workspace.departments.map(d=><option key={d}>{d}</option>)}</select></label>
+        <Select label="Fiscal year" aria-label="Financial fiscal year" className="min-w-[9rem]" value={scope.fiscalYear??''} onChange={e=>changeScope({...scope,fiscalYear:e.target.value?Number(e.target.value):null})}><option value="">Choose year</option>{workspace.fiscalYears.map(y=><option key={y}>{y}</option>)}</Select>
+        <Select label="Fund" aria-label="Financial fund" className="min-w-[12rem]" value={scope.fund??''} onChange={e=>changeScope({...scope,fund:e.target.value||null})}><option value="">Choose fund</option>{workspace.funds.map(f=><option key={f}>{f}</option>)}</Select>
+        <Select label="Department" aria-label="Financial department" className="min-w-[12rem]" value={scope.department??''} onChange={e=>changeScope({...scope,department:e.target.value||null})}><option value="">All departments</option>{workspace.departments.map(d=><option key={d}>{d}</option>)}</Select>
         <button className="analysis-button" disabled={pending||saving||needsScope} onClick={()=>void run(scope)}>{pending?'Recomputing cited comparisons…':'Investigate these records'}</button>
       </div>
       {needsScope&&<p className="-mt-2 text-caption text-muted">Choose a fiscal year and fund.</p>}
