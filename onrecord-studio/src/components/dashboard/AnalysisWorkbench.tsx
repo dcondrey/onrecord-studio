@@ -16,7 +16,13 @@ import type {
   SqlExportResult,
   SqlTemplate,
 } from '../../types';
-import Icon from '../ui/icons';
+import { formatNativeError } from '../../ipc';
+import Button from '../ui/Button';
+import EmptyState from '../ui/EmptyState';
+import { Field, Input, Select } from '../ui/Field';
+import InlineError from '../ui/InlineError';
+import PageHeader from '../ui/PageHeader';
+import UiPanel, { PanelBody, PanelHeader } from '../ui/Panel';
 import BudgetComparison from './BudgetComparison';
 import DataDiscovery from './DataDiscovery';
 import DataPackImport from './DataPackImport';
@@ -26,16 +32,28 @@ import { useAppStore } from '../../store/useAppStore';
 import AutomaticDiscovery from './AutomaticDiscovery';
 import { useAutomaticDiscovery } from './AutomaticDiscoveryProvider';
 
-const datasetKinds: AnalyticalDatasetKind[] = [
-  'REGIONAL_DATA',
-  'RIPA_STOPS',
-  'RIPA_SEARCH_BASIS',
-  'CALLS_FOR_SERVICE',
-  'CALLS_CODEBOOK',
-  'NIBRS_OFFENSES',
-  'OPERATING_BUDGET',
-  'BUDGET_DIMENSION',
-];
+const DATASET_KIND_LABELS: Record<AnalyticalDatasetKind, string> = {
+  REGIONAL_DATA: 'General regional data',
+  RIPA_STOPS: 'Police stop records (RIPA)',
+  RIPA_SEARCH_BASIS: 'Police stop search basis (RIPA)',
+  CALLS_FOR_SERVICE: 'Police calls for service',
+  CALLS_CODEBOOK: 'Calls for service code list',
+  NIBRS_OFFENSES: 'Reported offenses (NIBRS)',
+  OPERATING_BUDGET: 'Operating budget',
+  BUDGET_DIMENSION: 'Budget reference table',
+};
+
+const datasetKinds = Object.keys(DATASET_KIND_LABELS) as AnalyticalDatasetKind[];
+
+/** The commands that report on the embedding model and index; a failure of either is not "Checking". */
+type StatusRead = 'pending' | 'ready' | 'failed';
+
+/** One sentence for the reader; the transport messages stay under "Technical details". */
+function workspaceErrorSummary(messages: string[]): string {
+  return messages.some((message) => message.includes('DATABASE_UNAVAILABLE'))
+    ? 'The local evidence store is busy. Try again in a moment.'
+    : 'Part of the analysis workspace could not be loaded.';
+}
 
 /** `yearly` marks the tables the publisher splits by year; the fetch refuses a year for any other. */
 const cityDatasets: { value: CityDataset; label: string; yearly?: true }[] = [
@@ -87,6 +105,8 @@ export default function AnalysisWorkbench() {
   const [modelStatus, setModelStatus] = useState<EmbeddingModelStatus | null>(null);
   const [indexStatus, setIndexStatus] = useState<EmbeddingIndexStatus | null>(null);
   const [indexReport, setIndexReport] = useState<EmbeddingIndexReport | null>(null);
+  const [modelRead, setModelRead] = useState<StatusRead>('pending');
+  const [indexRead, setIndexRead] = useState<StatusRead>('pending');
   const [hybridQuery, setHybridQuery] = useState('homelessness spending shelter outcomes contract amendments');
   const [jurisdiction, setJurisdiction] = useState('');
   const [hybridResults, setHybridResults] = useState<HybridSearchResult[]>([]);
@@ -141,14 +161,21 @@ export default function AnalysisWorkbench() {
     const [model, index, analytical, acquired] = results;
     if (model.status === 'fulfilled') setModelStatus(model.value);
     if (index.status === 'fulfilled') setIndexStatus(index.value);
+    setModelRead(model.status === 'fulfilled' ? 'ready' : 'failed');
+    setIndexRead(index.status === 'fulfilled' ? 'ready' : 'failed');
     if (analytical.status === 'fulfilled') setSchema(analytical.value);
     if (acquired.status === 'fulfilled') setCandidates(acquired.value);
-    const failures = results.filter((result) => result.status === 'rejected');
-    if (failures.length) setError(failures.map((result) => String(result.reason)).join('; '));
+    const failures = [...new Set(results.flatMap((result) => (result.status === 'rejected' ? [formatNativeError(result.reason)] : [])))];
+    if (failures.length) setError(failures.join('\n'));
+  };
+
+  const retryRefresh = () => {
+    setError(null);
+    void refresh().catch((reason) => setError(formatNativeError(reason)));
   };
 
   useEffect(() => {
-    void refresh().catch((reason) => setError(String(reason)));
+    void refresh().catch((reason) => setError(formatNativeError(reason)));
   }, []);
 
   const inspection = automatic?.inspection;
@@ -165,7 +192,7 @@ export default function AnalysisWorkbench() {
     setStatus('Loading supporting records');
     void invokeCommand('run_analytical_sql', { sql: inspection.sql, limit: 500 }).then((result) => {
       if (sqlGate.isCurrent(request)) setSqlResult(result);
-    }).catch((reason) => { if (sqlGate.isCurrent(request)) setError(String(reason)); }).finally(() => { release?.(); if (active) setStatus(null); });
+    }).catch((reason) => { if (sqlGate.isCurrent(request)) setError(formatNativeError(reason)); }).finally(() => { release?.(); if (active) setStatus(null); });
     window.requestAnimationFrame(() => document.getElementById('analytical-sql-editor')?.focus());
     return () => {
       active = false;
@@ -192,7 +219,7 @@ export default function AnalysisWorkbench() {
       onSuccess?.(value);
       await refresh();
     } catch (reason) {
-      if (isCurrent()) setError(String(reason));
+      if (isCurrent()) setError(formatNativeError(reason));
     } finally {
       if (isCurrent()) setStatus(null);
       release?.();
@@ -216,73 +243,113 @@ export default function AnalysisWorkbench() {
     );
   };
 
+  const indexing = status === 'Indexing documents' || status === 'Rebuilding semantic index';
+  const indexedDocuments = indexStatus?.indexedDocumentCount ?? null;
+  const pendingDocuments = indexStatus?.pendingDocumentCount ?? null;
+  const indexLine = indexRead === 'failed'
+    ? 'Semantic search: index status unavailable'
+    : indexStatus
+      ? `Semantic search: ${indexStatus.indexedDocumentCount.toLocaleString()} of ${(indexStatus.indexedDocumentCount + indexStatus.pendingDocumentCount).toLocaleString()} documents indexed`
+      : null;
+  const unavailable = (read: StatusRead) => (read === 'failed' ? 'Unavailable' : 'Checking');
+
   return (
     <main className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto grid w-full max-w-[1800px] gap-4 p-4 lg:grid-cols-[minmax(360px,0.9fr)_minmax(0,1.3fr)] lg:p-5">
-        <div className="lg:col-span-2"><AutomaticDiscovery /></div>
+      <div className="mx-auto w-full max-w-content space-y-6 px-4 pb-10 pt-6 md:px-6">
+        <PageHeader
+          title="Analysis"
+          summary="Imported tables, document search and SQL over what you have collected."
+        />
+        {error && <InlineError summary={workspaceErrorSummary(error.split('\n'))} detail={error} onRetry={retryRefresh} />}
+        {status && !error && <p role="status" className="text-caption text-muted">{status}</p>}
+        <AutomaticDiscovery />
+        <div className="grid gap-4 lg:grid-cols-[minmax(360px,0.9fr)_minmax(0,1.3fr)]">
         <section className="min-w-0 space-y-4">
-          <Panel title="Semantic Index" icon="sparkles">
-            <div className="grid gap-2 text-label text-fg-secondary">
-              <Metric label="Model" value={modelStatus ? modelStatus.modelId : 'Checking'} />
-              <Metric label="State" value={modelStatus?.ready ? 'Ready' : modelStatus?.installed ? 'Installed' : 'Not installed'} />
-              <Metric label="Vectors" value={indexStatus ? `${indexStatus.indexedChunkCount.toLocaleString()} chunks` : 'Checking'} />
-              <Metric label="Coverage" value={indexStatus ? `${indexStatus.indexedDocumentCount.toLocaleString()} indexed / ${indexStatus.pendingDocumentCount.toLocaleString()} pending` : 'Checking'} />
-              {modelStatus?.artifactManifestSha256 && <Metric label="Manifest" value={modelStatus.artifactManifestSha256.slice(0, 16)} />}
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button className="analysis-button" type="button" onClick={() => void run('Installing model', () => invokeCommand('initialize_embedding_model', {}), setModelStatus)}>
-                Initialize model
-              </button>
-              <button className="analysis-button" type="button" onClick={() => void run('Indexing documents', () => invokeCommand('rebuild_embedding_index', { rebuild: false }), setIndexReport)}>
-                Index missing
-              </button>
-              <button className="analysis-button" type="button" onClick={() => void run('Rebuilding semantic index', () => invokeCommand('rebuild_embedding_index', { rebuild: true }), setIndexReport)}>
-                Rebuild
-              </button>
-              <button className="analysis-button" type="button" onClick={() => void run('Cancelling indexing', () => invokeCommand('cancel_embedding_index', {}))}>
-                Cancel
-              </button>
-            </div>
-            {indexReport && (
-              <p className="mt-2 text-label text-muted">
-                Indexed {indexReport.indexedDocuments.toLocaleString()} documents, {indexReport.indexedChunks.toLocaleString()} chunks; skipped {indexReport.skippedDocuments.toLocaleString()}.
-              </p>
-            )}
-          </Panel>
+          <UiPanel aria-labelledby="semantic-search-heading">
+            <PanelHeader
+              titleId="semantic-search-heading"
+              title="Semantic search"
+              description={indexLine ?? <span className="skeleton inline-block h-3 w-48 rounded align-middle" aria-label="Checking the index" />}
+              actions={
+                modelRead === 'ready' && !modelStatus?.installed ? (
+                  <Button variant="primary" size="sm" disabled={Boolean(status)} onClick={() => void run('Installing model', () => invokeCommand('initialize_embedding_model', {}), setModelStatus)}>Set up</Button>
+                ) : pendingDocuments !== null && pendingDocuments > 0 ? (
+                  <Button variant="primary" size="sm" disabled={Boolean(status)} onClick={() => void run('Indexing documents', () => invokeCommand('rebuild_embedding_index', { rebuild: false }), setIndexReport)}>
+                    Index {pendingDocuments.toLocaleString()} new document{pendingDocuments === 1 ? '' : 's'}
+                  </Button>
+                ) : null
+              }
+            />
+            <PanelBody dense>
+              {indexReport && (
+                <p className="mb-3 text-body tabular-nums text-muted">
+                  Indexed {indexReport.indexedDocuments.toLocaleString()} documents, {indexReport.indexedChunks.toLocaleString()} chunks; skipped {indexReport.skippedDocuments.toLocaleString()}.
+                </p>
+              )}
+              <details className="group">
+                <summary className="focus-ring w-fit cursor-pointer rounded text-caption text-muted hover:text-fg">Technical details</summary>
+                <dl className="mt-2 grid gap-1 text-caption">
+                  <Metric label="Model" value={modelStatus ? modelStatus.modelId : unavailable(modelRead)} mono={Boolean(modelStatus)} />
+                  <Metric label="State" value={modelStatus ? (modelStatus.ready ? 'Ready' : modelStatus.installed ? 'Installed' : 'Not installed') : unavailable(modelRead)} />
+                  <Metric label="Passages" value={indexStatus ? indexStatus.indexedChunkCount.toLocaleString() : unavailable(indexRead)} />
+                  <Metric label="Documents" value={indexedDocuments !== null && pendingDocuments !== null ? `${indexedDocuments.toLocaleString()} indexed, ${pendingDocuments.toLocaleString()} pending` : unavailable(indexRead)} />
+                  {modelStatus?.artifactManifestSha256 && <Metric label="Manifest" value={modelStatus.artifactManifestSha256} mono />}
+                </dl>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button size="sm" disabled={Boolean(status) || !modelStatus?.installed} onClick={() => void run('Rebuilding semantic index', () => invokeCommand('rebuild_embedding_index', { rebuild: true }), setIndexReport)}>
+                    Rebuild index
+                  </Button>
+                  <Button size="sm" variant="ghost" disabled={!indexing} onClick={() => void run('Cancelling indexing', () => invokeCommand('cancel_embedding_index', {}))}>
+                    Cancel indexing
+                  </Button>
+                </div>
+              </details>
+            </PanelBody>
+          </UiPanel>
 
-          <Panel title="Analytical Import" icon="database">
-            <p className="mb-3 text-label leading-relaxed text-muted">Choose an acquired table or a local CSV, TSV, JSON, GeoJSON, JSONL, XLSX, XLS, or ODS export. General regional data infers numeric columns while preserving codes and suppression markers.</p>
-            <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
-              <select aria-label="Acquired table" value={selectedCandidate ? `${selectedCandidate.portalKey}:${selectedCandidate.documentId}` : ''} onChange={(event) => {
-                const candidate = candidates.find((item) => `${item.portalKey}:${item.documentId}` === event.target.value) ?? null;
-                setSelectedCandidate(candidate);
-                setSourcePath(candidate?.localPath ?? '');
-                setSourceUri(candidate?.sourceUri ?? '');
-                setDisplayName(candidate?.fileName ?? '');
-              }} className="analysis-input">
-                <option value="">Choose from the latest 500 acquired tables, or browse files</option>
-                {candidates.map((candidate) => <option key={`${candidate.portalKey}:${candidate.documentId}`} value={`${candidate.portalKey}:${candidate.documentId}`}>{candidate.fileName} · {candidate.sourceUri ?? candidate.portalKey}</option>)}
-              </select>
-              <button type="button" className="analysis-button w-fit" onClick={() => void run('Refreshing acquired tables', refresh)}>Refresh acquired tables</button>
-              <select aria-label="Dataset type" value={datasetKind} onChange={(event) => setDatasetKind(event.target.value as AnalyticalDatasetKind)} className="analysis-input">
-                {datasetKinds.map((kind) => <option key={kind} value={kind}>{kind.split('_').join(' ')}</option>)}
-              </select>
-              <input aria-label="Dataset name" className="analysis-input" value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="Dataset name" />
-              <div className="flex gap-2">
-                <input aria-label="Table file path" className="analysis-input min-w-0 flex-1" value={sourcePath} onChange={(event) => { setSourcePath(event.target.value); setSelectedCandidate(null); }} placeholder="/path/to/local.csv" />
-                <button type="button" className="analysis-button" onClick={() => void run('Choosing table', async () => {
+          <Panel title="Import a table" titleId="analysis-import-heading">
+            <p className="mb-4 text-body text-muted">Choose an acquired table or a local CSV, TSV, JSON, GeoJSON, JSONL, XLSX, XLS or ODS export. General regional data infers numeric columns while preserving codes and suppression markers.</p>
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
+              <div className="flex items-end gap-2">
+                <Select label="Acquired table" aria-label="Acquired table" value={selectedCandidate ? `${selectedCandidate.portalKey}:${selectedCandidate.documentId}` : ''} onChange={(event) => {
+                  const candidate = candidates.find((item) => `${item.portalKey}:${item.documentId}` === event.target.value) ?? null;
+                  setSelectedCandidate(candidate);
+                  setSourcePath(candidate?.localPath ?? '');
+                  setSourceUri(candidate?.sourceUri ?? '');
+                  setDisplayName(candidate?.fileName ?? '');
+                }}>
+                  <option value="">Choose from the latest 500 acquired tables</option>
+                  {candidates.map((candidate) => <option key={`${candidate.portalKey}:${candidate.documentId}`} value={`${candidate.portalKey}:${candidate.documentId}`}>{candidate.fileName} · {candidate.sourceUri ?? candidate.portalKey}</option>)}
+                </Select>
+                <Button variant="ghost" iconOnly icon="sync" aria-label="Refresh acquired tables" title="Refresh acquired tables" onClick={() => void run('Refreshing acquired tables', refresh)} />
+              </div>
+              <Select label="Dataset type" aria-label="Dataset type" value={datasetKind} onChange={(event) => setDatasetKind(event.target.value as AnalyticalDatasetKind)}>
+                {datasetKinds.map((kind) => <option key={kind} value={kind}>{DATASET_KIND_LABELS[kind]}</option>)}
+              </Select>
+              <Field label="Dataset name">
+                <Input aria-label="Dataset name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="e.g. Shelter beds by year" />
+              </Field>
+              <div className="flex items-end gap-2">
+                <Field label="Table file" className="min-w-0 flex-1">
+                  <Input aria-label="Table file path" value={sourcePath} onChange={(event) => { setSourcePath(event.target.value); setSelectedCandidate(null); }} placeholder="/path/to/local.csv" />
+                </Field>
+                <Button onClick={() => void run('Choosing table', async () => {
                   const path = await open({ multiple: false, filters: [{ name: 'Tables', extensions: ['csv', 'tsv', 'json', 'geojson', 'jsonl', 'ndjson', 'xlsx', 'xls', 'ods'] }] });
                   if (typeof path === 'string') { setSourcePath(path); setSelectedCandidate(null); setSourceUri(''); setDisplayName(path.split(/[\\/]/).pop() ?? 'Dataset'); }
-                })}>Browse files</button>
+                })}>Browse…</Button>
               </div>
-              <input aria-label="Original source URL" className="analysis-input" value={sourceUri} onChange={(event) => setSourceUri(event.target.value)} placeholder="Original source URL (including FTP or SFTP export paths)" />
-              <input aria-label="Worksheet name" className="analysis-input" value={worksheet} onChange={(event) => setWorksheet(event.target.value)} placeholder="Worksheet name (required for a workbook with several sheets)" />
-              <div className="grid grid-cols-2 gap-2">
-                <label className="text-label leading-4 text-muted">Observation start<input aria-label="Observation start" type="date" className="analysis-input mt-1 w-full" value={observationStart} onChange={(event) => setObservationStart(event.target.value)} /></label>
-                <label className="text-label leading-4 text-muted">Observation end<input aria-label="Observation end" type="date" className="analysis-input mt-1 w-full" value={observationEnd} onChange={(event) => setObservationEnd(event.target.value)} /></label>
+              <Field label="Original source URL" help="Including FTP or SFTP export paths.">
+                <Input aria-label="Original source URL" value={sourceUri} onChange={(event) => setSourceUri(event.target.value)} placeholder="https://data.sandiego.gov/…" />
+              </Field>
+              <Field label="Worksheet" help="Required for a workbook with several sheets.">
+                <Input aria-label="Worksheet name" value={worksheet} onChange={(event) => setWorksheet(event.target.value)} placeholder="e.g. FY2025" />
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Observation start"><Input aria-label="Observation start" type="date" value={observationStart} onChange={(event) => setObservationStart(event.target.value)} /></Field>
+                <Field label="Observation end"><Input aria-label="Observation end" type="date" value={observationEnd} onChange={(event) => setObservationEnd(event.target.value)} /></Field>
               </div>
-              <label className="flex items-center gap-2 text-label leading-4 text-fg-secondary"><input type="checkbox" checked={partialDataset} onChange={(event) => setPartialDataset(event.target.checked)} />Partial export or completeness not established</label>
-              <button className="analysis-button w-fit" type="button" disabled={Boolean(status) || !sourcePath.trim() || !displayName.trim()} onClick={() => void run('Importing table', () => invokeCommand('import_analytical_dataset', {
+              <label className="flex items-center gap-2 text-body text-fg-secondary"><input type="checkbox" className="accent-[rgb(var(--accent))]" checked={partialDataset} onChange={(event) => setPartialDataset(event.target.checked)} />Partial export or completeness not established</label>
+              <Button variant="primary" className="w-fit" disabled={Boolean(status) || !sourcePath.trim() || !displayName.trim()} onClick={() => void run('Importing table', () => invokeCommand('import_analytical_dataset', {
                 input: {
                   datasetKind,
                   displayName,
@@ -297,35 +364,44 @@ export default function AnalysisWorkbench() {
                 },
               }), setImportResult)}>
                 Import table
-              </button>
+              </Button>
             </div>
-            <div className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-2 border-t border-line pt-3">
-              <p className="text-label leading-relaxed text-muted">Fetch a published City or SANDAG table directly. A Get It Done closed-year file is larger than one import: it is kept either for the Encampment service or for the reports already seen in an imported open copy, and the snapshot records the publisher file’s digest beside the subset’s.</p>
-              <div className="flex gap-2">
-                <select aria-label="City dataset" value={cityDataset} onChange={(event) => setCityDataset(event.target.value as CityDataset)} className="analysis-input min-w-0 flex-1">
+            <div className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-3 border-t border-line pt-4">
+              <h3 className="text-heading text-fg">Fetch a published table</h3>
+              <p className="text-body text-muted">Fetch a City or SANDAG table directly. A Get It Done closed-year file is larger than one import: it is kept either for the Encampment service or for the reports already seen in an imported open copy, and the snapshot records the publisher file’s digest beside the subset’s.</p>
+              <div className="flex items-end gap-2">
+                <Select label="City dataset" aria-label="City dataset" value={cityDataset} onChange={(event) => setCityDataset(event.target.value as CityDataset)} className="min-w-0">
                   {cityDatasets.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
-                </select>
-                {cityDatasetIsYearly && <input aria-label="City dataset year" type="number" className="analysis-input w-24" value={cityYear} onChange={(event) => setCityYear(event.target.value)} />}
+                </Select>
+                {cityDatasetIsYearly && <Input aria-label="City dataset year" type="number" className="w-24 tabular-nums" value={cityYear} onChange={(event) => setCityYear(event.target.value)} />}
               </div>
-              <button className="analysis-button w-fit" type="button" disabled={Boolean(status) || (cityDatasetIsYearly && !/^\d{4}$/.test(cityYear))} onClick={() => void run('Fetching City dataset', () => invokeCommand('fetch_city_dataset', {
+              <Button className="w-fit" disabled={Boolean(status) || (cityDatasetIsYearly && !/^\d{4}$/.test(cityYear))} onClick={() => void run('Fetching City dataset', () => invokeCommand('fetch_city_dataset', {
                 dataset: cityDataset,
                 year: cityDatasetIsYearly ? Number(cityYear) : null,
               }), setImportResult)}>
                 Fetch and import
-              </button>
+              </Button>
             </div>
             {importResult && (
-              <div className="mt-2 text-label leading-4 text-muted" role="status">
-                <p>{importResult.importedRows.toLocaleString()} rows imported to {importResult.tableName}; {importResult.rejectedRows.toLocaleString()} rejected.{importResult.unconvertedCells > 0 && ` ${importResult.unconvertedCells.toLocaleString()} cells did not convert and are kept as written in the row ledger.`}{importResult.datasetKind !== 'REGIONAL_DATA' && ` ${importResult.duplicateKeyRows.toLocaleString()} duplicate keys.`}</p>
+              <div className="mt-3 text-body text-muted" role="status">
+                <p className="tabular-nums">{importResult.importedRows.toLocaleString()} rows imported to <code className="font-mono text-code">{importResult.tableName}</code>; {importResult.rejectedRows.toLocaleString()} rejected.{importResult.unconvertedCells > 0 && ` ${importResult.unconvertedCells.toLocaleString()} cells did not convert and are kept as written in the row ledger.`}{importResult.datasetKind !== 'REGIONAL_DATA' && ` ${importResult.duplicateKeyRows.toLocaleString()} duplicate keys.`}</p>
                 {importResult.schemaWarnings.map((warning, index) => <p key={index} className="mt-1 text-warning">{warning}</p>)}
               </div>
             )}
           </Panel>
-          <DataPackImport onImported={() => void refresh().catch((reason) => setError(String(reason)))} />
+          <DataPackImport onImported={() => void refresh().catch((reason) => setError(formatNativeError(reason)))} />
         </section>
 
         <section className="space-y-4">
-          {schema && <Panel title="Data discovery" icon="sparkles">
+          {schema && schema.datasets.length === 0 && (
+            <EmptyState
+              icon="database"
+              title="Import a table to explore it"
+              body="Data discovery summarizes each imported table: its columns, coverage and the questions it can answer."
+              actions={<Button onClick={() => document.getElementById('analysis-import-heading')?.scrollIntoView({ block: 'start' })}>Import a table</Button>}
+            />
+          )}
+          {schema && schema.datasets.length > 0 && <Panel title="Data discovery">
             <DataDiscovery schema={schema} onInspect={(query) => {
               setSql(query);
               setSqlResult(null);
@@ -335,8 +411,8 @@ export default function AnalysisWorkbench() {
               window.requestAnimationFrame(() => document.getElementById('analytical-sql-editor')?.focus());
             }} />
           </Panel>}
-          <Panel title="Hybrid Retrieval" icon="search">
-            <p className="mb-2 text-label leading-4 text-muted">Search extracted text across reports, budgets, minutes, and articles. Exact search requires every word in the document; excerpts show the closest matching passage. Semantic matches are added when the model is ready. Text indexing covers the first four million characters per document.</p>
+          <Panel title="Search documents">
+            <p className="mb-3 text-body text-muted">Search extracted text across reports, budgets, minutes, and articles. Exact search requires every word in the document; excerpts show the closest matching passage. Semantic matches are added when the model is ready. Text indexing covers the first four million characters per document.</p>
             <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_220px_auto]">
               <input aria-label="Document evidence query" className="analysis-input" value={hybridQuery} onChange={(event) => setHybridQuery(event.target.value)} />
               <select aria-label="Source jurisdiction" className="analysis-input" value={jurisdiction} onChange={(event) => setJurisdiction(event.target.value)}>
@@ -392,7 +468,7 @@ export default function AnalysisWorkbench() {
                   </div>
                   <h3 className="mt-1 text-label leading-4 font-semibold text-fg">{result.fileName}{result.title && ` · ${result.title}`}</h3>
                   <p className="mt-1 whitespace-pre-wrap text-label leading-relaxed text-fg-secondary">{result.excerpt}</p>
-                  <div className="mt-1 font-mono text-caption text-muted">source chars {result.characterStart}-{result.characterEnd} · detected personal identifiers masked</div>
+                  <div className="mt-1 text-caption tabular-nums text-muted">Characters {result.characterStart}–{result.characterEnd} · detected personal identifiers masked</div>
                   <button type="button" className="analysis-button mt-2" onClick={() => reviewSearchResult(result)}>Review source record</button>
                 </div>
               ))}
@@ -400,20 +476,20 @@ export default function AnalysisWorkbench() {
             </div>
           </Panel>
 
-          {schema && <Panel title="Budget versus actuals" icon="database">
+          {schema && <Panel title="Budget versus actuals">
             <BudgetComparison schema={schema} onCompare={(query) => {
               setSql(query);
               void runGatedSql('Comparing budget and actuals', query);
             }} />
           </Panel>}
 
-          {schema && <Panel title="Facility coverage" icon="database">
+          {schema && <Panel title="Facility coverage">
             <FacilityCoveragePanel schema={schema} />
           </Panel>}
 
           <EncampmentOrdinancePanel />
 
-          <Panel title="SQL Analysis" icon="database">
+          <Panel title="SQL analysis">
             <div className="grid gap-3 xl:grid-cols-[280px_minmax(0,1fr)]">
               <div className="space-y-3">
                 <div>
@@ -458,11 +534,11 @@ export default function AnalysisWorkbench() {
           </Panel>
 
           {groupedColumns.length > 0 && (
-            <Panel title="Schema Browser" icon="sliders">
+            <Panel title="Schema browser">
               <div className="grid gap-2 md:grid-cols-2">
                 {groupedColumns.map(([table, columns]) => (
                   <div key={table} className="rounded border border-line p-2">
-                    <div className="font-mono text-label text-accent">{table}</div>
+                    <div className="font-mono text-code text-fg">{table}</div>
                     <div className="mt-1 flex flex-wrap gap-1">
                       {columns.map((column) => <span key={`${table}-${column.columnName}`} className="rounded bg-surface px-1.5 py-0.5 text-caption text-fg-secondary">{column.columnName}:{column.logicalType}</span>)}
                     </div>
@@ -472,30 +548,28 @@ export default function AnalysisWorkbench() {
             </Panel>
           )}
         </section>
-      </div>
-      {(status || error) && (
-        <div className="fixed bottom-4 right-4 z-50 rounded border border-line bg-canvas px-3 py-2 text-label text-fg shadow-xl">
-          {error ? <span className="text-danger">{error}</span> : status}
         </div>
-      )}
+      </div>
     </main>
   );
 }
 
-function Panel({ title, icon, children }: { title: string; icon: Parameters<typeof Icon>[0]['name']; children: React.ReactNode }) {
+function Panel({ title, titleId, children }: { title: string; titleId?: string; children: React.ReactNode }) {
   return (
-    <section className="app-panel p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <Icon name={icon} className="h-4 w-4 text-accent" />
-        <h2 className="text-sm font-semibold text-fg">{title}</h2>
-      </div>
-      {children}
-    </section>
+    <UiPanel aria-labelledby={titleId}>
+      <PanelHeader title={title} titleId={titleId} />
+      <PanelBody>{children}</PanelBody>
+    </UiPanel>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return <div className="flex justify-between gap-3 border-b border-line pb-1"><span className="text-muted">{label}</span><span className="min-w-0 truncate text-right font-mono">{value}</span></div>;
+function Metric({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex justify-between gap-3 border-b border-line pb-1">
+      <dt className="text-muted">{label}</dt>
+      <dd className={mono ? 'min-w-0 break-all text-right font-mono text-code text-fg-secondary' : 'min-w-0 text-right tabular-nums text-fg-secondary'}>{value}</dd>
+    </div>
+  );
 }
 
 function TemplateList({ templates, onChoose }: { templates: SqlTemplate[]; onChoose: (sql: string) => void }) {
