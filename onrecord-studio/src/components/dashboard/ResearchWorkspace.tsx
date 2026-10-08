@@ -86,7 +86,7 @@ export default function ResearchWorkspace({ onReview }: { onReview?: (reportId: 
     : missingCredential ? "Model access is unavailable. Configure a credential to run another investigation."
     : status.phase;
   return <section ref={workspaceRef} aria-label="Autonomous research" className="space-y-4">
-    <div className="flex flex-wrap items-center justify-between gap-3 text-label leading-4 text-muted">
+    <div className="flex flex-wrap items-center justify-between gap-3 text-body text-muted">
       <p role="status">{stage}</p>
       {status && (
         <p className={status.policy.provider === "ollama" ? "text-success" : "text-warning"}>
@@ -105,7 +105,7 @@ export default function ResearchWorkspace({ onReview }: { onReview?: (reportId: 
     {error && <div role="alert" className="rounded-lg border border-danger p-3 text-sm text-danger"><p>Research status could not be refreshed{status ? "; showing the last loaded saved records" : ""}.</p><p className="mt-1">{error}</p><button type="button" className="analysis-button mt-2" onClick={() => void refresh()}>Retry research status</button></div>}
     {status?.lastError && <div role="alert" className="rounded-lg border border-warning p-3 text-sm text-warning"><p>Latest research attempt needs attention</p><p className="mt-1">{status.lastError}</p></div>}
     {sourceIssues.length > 0 && (
-      <details className="rounded-lg border border-warning p-3 text-label leading-4 text-warning">
+      <details className="rounded-lg border border-warning p-3 text-body text-warning">
         <summary>
           Collection gaps affect the available evidence: {sourceIssues.map((source) => source.label).slice(0, 3).join("; ")}
           {sourceIssues.length > 3 ? "; additional sources" : ""}
@@ -282,7 +282,7 @@ function ResearchSettings({
     }
   };
   return (
-    <details ref={settingsRef} className="mt-4 text-label leading-4 text-muted">
+    <details ref={settingsRef} className="mt-4 text-body text-muted">
       <summary>Research settings</summary>
       <fieldset disabled={saving} className="mt-3 space-y-3">
         <div className="flex flex-wrap gap-4">
@@ -452,8 +452,8 @@ function Dossier({
         <h3 className="mt-2 text-xl font-semibold text-fg">
           {tab === "findings" ? report.synthesis.title : tab === "requests" ? "Request the records that can move this case forward" : "Follow the decision and establish its outcome"}
         </h3>
-        {tab === "findings" ? <p className="mt-2 text-sm leading-relaxed text-fg-secondary">{report.synthesis.summary}</p> : <details className="mt-2 text-label leading-4 text-muted"><summary>Investigation context</summary><p className="mt-2 font-semibold text-fg-secondary">{report.synthesis.title}</p><p className="mt-2 leading-relaxed">{report.synthesis.summary}</p></details>}
-        <p className="mt-2 text-label leading-4 text-muted">
+        {tab === "findings" ? <p className="mt-2 text-sm leading-relaxed text-fg-secondary">{report.synthesis.summary}</p> : <details className="mt-2 text-body text-muted"><summary>Investigation context</summary><p className="mt-2 font-semibold text-fg-secondary">{report.synthesis.title}</p><p className="mt-2 leading-relaxed">{report.synthesis.summary}</p></details>}
+        <p className="mt-2 text-body text-muted">
           {new Date(report.createdAt).toLocaleString()} · {report.model} · Saved evidence is reproduced below; source versions and interpretations need review.
         </p>
       </div>
@@ -504,7 +504,7 @@ function Dossier({
               <Citations citations={finding.citations} report={report} />
               {finding.counterEvidence.length > 0 && (
                 <div>
-                  <h5 className="text-label leading-4 font-semibold text-fg-secondary">
+                  <h5 className="text-body font-medium text-fg-secondary">
                     Counter-evidence
                   </h5>
                   <Citations
@@ -513,7 +513,7 @@ function Dossier({
                   />
                 </div>
               )}
-              <div className="text-label leading-relaxed text-muted">
+              <div className="text-body text-muted">
                 <span className="font-semibold text-fg-secondary">
                   Other explanations to test
                 </span>
@@ -558,7 +558,7 @@ function Dossier({
               {report.synthesis.questions.map((question, index) => (
                 <div key={index}>
                   <p className="text-sm text-fg">{question.question}</p>
-                  <p className="mt-1 text-label leading-4 text-muted">{question.why}</p>
+                  <p className="mt-1 text-body text-muted">{question.why}</p>
                   <EvidenceLinks ids={question.evidenceIds} report={report} />
                 </div>
               ))}
@@ -582,7 +582,7 @@ function Dossier({
               <h4 className="text-base font-semibold text-fg">
                 {request.title}
               </h4>
-              <p className="text-label leading-4 text-accent">
+              <p className="text-body text-accent">
                 Suggested custodian: {request.custodian}
               </p>
               <p className="text-sm text-fg-secondary">
@@ -610,14 +610,14 @@ function Dossier({
                 >
                   Download draft
                 </button>
-                <p className="mt-2 text-label leading-4 text-muted">
+                <p className="mt-2 text-body text-muted">
                   Review scope and recipient before submitting. No request has
                   been sent.
                 </p>
               </details>
-              <details className="text-label leading-4 text-muted"><summary className="text-accent">Evidence behind this request</summary><div className="mt-3 space-y-3">
+              <details className="text-body text-muted"><summary className="text-accent">Evidence behind this request</summary><div className="mt-3 space-y-3">
               {relatedFindings[index].length > 0 && (
-                <div className="text-label leading-4 text-muted">
+                <div className="text-body text-muted">
                   <p className="font-semibold text-fg-secondary">Related findings sharing cited sources</p>
                   <ul className="mt-1 list-disc space-y-1 pl-4">
                     {relatedFindings[index].map((finding) => (
@@ -660,7 +660,7 @@ function Dossier({
               key={index}
               className="space-y-3 rounded-xl border border-line-strong p-4"
             >
-              <div className="text-label leading-4 text-accent">
+              <div className="text-body text-accent">
                 {meeting.date < localDateInput(new Date())
                   ? "Historical meeting · follow-through"
                   : "Upcoming or current meeting · confirm agenda"}
@@ -676,7 +676,7 @@ function Dossier({
                 Recommended action: {meeting.action}
               </p>
               <Citations citations={meeting.citations} report={report} />
-              <p className="text-label leading-4 text-muted">
+              <p className="text-body text-muted">
                 Confirm the latest agenda, participation instructions, and any
                 deadline at the official source.
               </p>
@@ -690,7 +690,7 @@ function Dossier({
         </div>
       )}
       <ResearchExport report={report} actionStates={actionStates} />
-      <details className="text-label leading-4 text-muted">
+      <details className="text-body text-muted">
         <summary>
           Coverage, limitations, and investigation trail
         </summary>
@@ -774,7 +774,7 @@ function ActionState({
   };
   return (
     <div>
-      <label className="text-label leading-4 text-muted">
+      <label className="text-body text-muted">
         Follow-through{" "}
         <select
           aria-label={`Follow-through ${actionKey}`}
@@ -790,7 +790,7 @@ function ActionState({
         </select>
       </label>
       {error && (
-        <p role="alert" className="mt-2 text-label leading-4 text-danger">
+        <p role="alert" className="mt-2 text-body text-danger">
           {error}
         </p>
       )}
