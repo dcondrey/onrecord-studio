@@ -1,5 +1,3 @@
-use std::fs::File;
-use std::io::Read;
 use std::path::Path;
 
 use crate::error::AppError;
@@ -38,27 +36,7 @@ struct RtfState {
 
 pub fn extract_rtf_text<P: AsRef<Path>>(file_path: P) -> Result<String, AppError> {
     let path = file_path.as_ref();
-    let metadata = std::fs::metadata(path).map_err(|error| {
-        AppError::Internal(format!(
-            "RTF_INSPECTION_FAILED: failed to inspect '{}': {error}",
-            path.display()
-        ))
-    })?;
-    if !metadata.is_file() || metadata.len() > MAX_RTF_BYTES {
-        return Err(AppError::DataParsing(format!(
-            "RTF_SOURCE_INVALID: '{}' must be a regular file no larger than {MAX_RTF_BYTES} bytes",
-            path.display()
-        )));
-    }
-    let mut bytes = Vec::new();
-    File::open(path)
-        .and_then(|file| file.take(MAX_RTF_BYTES + 1).read_to_end(&mut bytes))
-        .map_err(|error| {
-            AppError::Internal(format!(
-                "RTF_READ_FAILED: failed to read '{}': {error}",
-                path.display()
-            ))
-        })?;
+    let bytes = read_regular_file(path, "RTF", MAX_RTF_BYTES)?;
     extract_rtf_bytes(&bytes, path)
 }
 
