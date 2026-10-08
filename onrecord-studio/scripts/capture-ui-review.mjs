@@ -440,6 +440,8 @@ const VIEWS = [
 ];
 
 const TOP_LEVEL = new Set(Object.keys(NAV_LABELS).concat('evidence-timeline'));
+/** The viewport sizes a definition is captured at in this run: its own, or the run's within its widths. */
+const sizesFor = (definition) => definition.sizes ?? SIZES.filter(([size]) => !definition.widths || definition.widths.includes(size));
 /** The states captured for a definition under --states. */
 const statesFor = (definition) => ['populated', ...definition.states].filter((state) =>
   statesFlag === 'top' ? state === 'populated' || TOP_LEVEL.has(definition.view) : !stateFilter || stateFilter.includes(state));
@@ -647,6 +649,8 @@ const index = {
   axe: {},
   sqlMisses: [],
   unreachable: [],
+  /** Views pinned to widths this run leaves out (--widths): not run, and not owed to the baseline. */
+  outOfScope: [],
 };
 let harnessFailure = null;
 
@@ -738,7 +742,7 @@ try {
     const records = [];
     for (const theme of THEMES) {
       await applyTheme(page, theme);
-      for (const [width, height] of definition.sizes ?? SIZES.filter(([size]) => !definition.widths || definition.widths.includes(size))) {
+      for (const [width, height] of sizesFor(definition)) {
         await page.setViewportSize({ width, height });
         let settled = await settle(page);
         // Steps that act on the layout (a scroll to a target) run again at each size, as a reader
@@ -836,7 +840,11 @@ try {
     }
   }
 
-  const queue = VIEWS.filter((definition) => !only || only.some((filter) => definition.view === filter || definition.view.startsWith(`${filter}-`) || definition.view.startsWith(filter)));
+  const selected = VIEWS.filter((definition) => !only || only.some((filter) => definition.view === filter || definition.view.startsWith(`${filter}-`) || definition.view.startsWith(filter)));
+  for (const definition of selected) {
+    if (sizesFor(definition).length === 0) index.outOfScope.push({ view: definition.view, reason: `captured only at ${definition.widths.join(', ')} px, outside --widths` });
+  }
+  const queue = selected.filter((definition) => sizesFor(definition).length > 0);
   const workers = Array.from({ length: concurrency }, async () => {
     const context = await browser.newContext({ deviceScaleFactor: 1, colorScheme: 'light', reducedMotion: 'reduce' });
     await context.addInitScript(initScript, FIXTURE_NOW);

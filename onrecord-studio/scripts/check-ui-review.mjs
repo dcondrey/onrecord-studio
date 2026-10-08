@@ -88,7 +88,9 @@ if (!existsSync(baselineFile)) {
 }
 const baseline = JSON.parse(await readFile(baselineFile, 'utf8'));
 const runViews = new Set(index.captures.map((capture) => capture.view));
-if (!index.only) for (const view of baseline.views) if (!runViews.has(view)) problems.push(`baselined view ${view} was not captured`);
+// A view pinned to widths the run left out (--widths) was never attempted, so it is not missing.
+const outOfScope = new Set((index.outOfScope ?? []).map((entry) => entry.view));
+if (!index.only) for (const view of baseline.views) if (!runViews.has(view) && !outOfScope.has(view)) problems.push(`baselined view ${view} was not captured`);
 
 const accepted = new Map();
 for (const [view, rules] of Object.entries(baseline.violations)) {
