@@ -158,10 +158,8 @@ pub fn classify_ooxml(props: &OoxmlDocProps) -> NonC2paProvenanceSignal {
 
     let core_dates_ordered = order_holds(props.created, props.modified);
 
-    // Corroboration: Application + Company + a well-ordered core.xml date pair. The presence of
-    // an Application string that names a known Office producer, combined with a modified date
-    // that is at least as recent as created, is the strongest signal an OOXML document supplies
-    // without cryptographic backing.
+    // An Application string and a revision counter beside a well-ordered core.xml date pair is
+    // the strongest signal an OOXML document supplies without cryptographic backing.
     if core_dates_ordered
         && props.modified.is_some()
         && props.created.is_some()
@@ -203,78 +201,67 @@ mod tests {
     }
 
     #[test]
-    fn no_signals_when_pdf_has_no_metadata_at_all() {
-        let classification = classify_pdf(&PdfMetadataSignals::default());
-        assert_eq!(classification.rung, NonC2paRung::NoSignals);
-        assert_eq!(classification.confidence_basis_points, 0);
+    fn pdf_signals_climb_the_ladder_only_as_far_as_they_corroborate() {
+        for (signals, rung) in [
+            (PdfMetadataSignals::default(), NonC2paRung::NoSignals),
+            (
+                PdfMetadataSignals {
+                    info_producer: Some("Some Producer".into()),
+                    ..Default::default()
+                },
+                NonC2paRung::MetadataPresentUncorroborated,
+            ),
+            (
+                PdfMetadataSignals {
+                    info_creation_date: Some(dt("2024-03-01T10:00:00Z")),
+                    info_mod_date: Some(dt("2024-04-01T10:00:00Z")),
+                    ..Default::default()
+                },
+                NonC2paRung::SelfConsistentMetadata,
+            ),
+            (
+                PdfMetadataSignals {
+                    info_mod_date: Some(dt("2024-04-01T10:00:00Z")),
+                    xmp_modify_date: Some(dt("2024-04-01T10:30:00Z")),
+                    ..Default::default()
+                },
+                NonC2paRung::CorroboratedAcrossFormats,
+            ),
+        ] {
+            let classification = classify_pdf(&signals);
+            assert_eq!(classification.rung, rung);
+            assert_eq!(
+                classification.confidence_basis_points,
+                rung.confidence_basis_points()
+            );
+        }
     }
 
     #[test]
-    fn metadata_present_uncorroborated_when_only_producer_string_exists() {
-        let signals = PdfMetadataSignals {
-            info_producer: Some("Some Producer".into()),
+    fn ooxml_corroboration_needs_application_and_revision_beside_ordered_dates() {
+        let dated = OoxmlDocProps {
+            created: Some(dt("2024-03-01T10:00:00Z")),
+            modified: Some(dt("2024-04-01T10:00:00Z")),
             ..Default::default()
         };
-        let classification = classify_pdf(&signals);
         assert_eq!(
-            classification.rung,
-            NonC2paRung::MetadataPresentUncorroborated
+            classify_ooxml(&dated).rung,
+            NonC2paRung::SelfConsistentMetadata
+        );
+        let corroborated = OoxmlDocProps {
+            application: Some("Microsoft Office Word".into()),
+            rev_num: Some(47),
+            ..dated
+        };
+        assert_eq!(
+            classify_ooxml(&corroborated).rung,
+            NonC2paRung::CorroboratedAcrossFormats
         );
     }
 
     #[test]
-    fn self_consistent_metadata_when_info_dates_are_ordered_but_xmp_missing() {
-        let signals = PdfMetadataSignals {
-            info_creation_date: Some(dt("2024-03-01T10:00:00Z")),
-            info_mod_date: Some(dt("2024-04-01T10:00:00Z")),
-            ..Default::default()
-        };
-        let classification = classify_pdf(&signals);
-        assert_eq!(classification.rung, NonC2paRung::SelfConsistentMetadata);
-    }
-
-    #[test]
-    fn corroborated_across_formats_when_info_and_xmp_moddate_agree() {
-        let signals = PdfMetadataSignals {
-            info_mod_date: Some(dt("2024-04-01T10:00:00Z")),
-            xmp_modify_date: Some(dt("2024-04-01T10:30:00Z")),
-            ..Default::default()
-        };
-        let classification = classify_pdf(&signals);
-        assert_eq!(classification.rung, NonC2paRung::CorroboratedAcrossFormats);
-        assert_eq!(classification.confidence_basis_points, 7500);
-    }
-
-    #[test]
-    fn ooxml_self_consistent_when_core_dates_ordered_without_extras() {
-        let props = OoxmlDocProps {
-            created: Some(dt("2024-03-01T10:00:00Z")),
-            modified: Some(dt("2024-04-01T10:00:00Z")),
-            ..Default::default()
-        };
-        let classification = classify_ooxml(&props);
-        assert_eq!(classification.rung, NonC2paRung::SelfConsistentMetadata);
-    }
-
-    #[test]
-    fn ooxml_corroborated_when_dates_ordered_plus_application_plus_rev_num() {
-        let props = OoxmlDocProps {
-            created: Some(dt("2024-03-01T10:00:00Z")),
-            modified: Some(dt("2024-04-01T10:00:00Z")),
-            application: Some("Microsoft Office Word".into()),
-            rev_num: Some(47),
-            ..Default::default()
-        };
-        let classification = classify_ooxml(&props);
-        assert_eq!(classification.rung, NonC2paRung::CorroboratedAcrossFormats);
-    }
-
-    #[test]
     fn ordering_never_reaches_a_c2pa_verified_signature_equivalent() {
-        // Invariant: the top confidence a non-C2PA rung yields is 7500 bp, always below the
-        // fully-verified C2PA signature the canonical ladder can produce. This test is worth
-        // its weight against future edits — the whole point of the parallel ladder is to
-        // preserve that ceiling.
+        // The strongest non-C2PA rung stays below what a verified C2PA signature can produce.
         assert!(NonC2paRung::CorroboratedAcrossFormats.confidence_basis_points() < 10_000);
     }
 }
