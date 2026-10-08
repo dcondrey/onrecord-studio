@@ -2155,6 +2155,19 @@ fn validate_success_status(
             format!("{operation} '{url}' returned HTTP {status}"),
         )));
     }
+    // 202 accepts a request without answering it, so its body is not the resource. HUD User's
+    // bot challenge answers this way with an empty body, which would otherwise be kept as the
+    // file.
+    if status == StatusCode::ACCEPTED {
+        let challenge = if response.headers().contains_key("x-amzn-waf-action") {
+            " (a web application firewall challenge)"
+        } else {
+            ""
+        };
+        return Err(RetryDisposition::Terminal(AppError::PortalDiscovery(
+            format!("{operation} '{url}' returned HTTP {status}{challenge}, not the resource"),
+        )));
+    }
     Ok(())
 }
 
@@ -3763,6 +3776,32 @@ fn parse_retry_after(headers: &HeaderMap) -> Option<Duration> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// An accepted-but-unanswered request is refused rather than kept as an empty file; a 200
+    /// with the same empty body is the publisher's own answer and passes.
+    #[test]
+    fn an_accepted_but_unanswered_request_is_not_a_download() {
+        let url = Url::parse("https://www.huduser.gov/lihtc/lihtcpub.zip").unwrap();
+        let response = |status: u16| {
+            reqwest::Response::from(
+                tauri::http::Response::builder()
+                    .status(status)
+                    .header("x-amzn-waf-action", "challenge")
+                    .body(Vec::<u8>::new())
+                    .unwrap(),
+            )
+        };
+        match validate_success_status("GET", &url, &response(202)) {
+            Err(RetryDisposition::Terminal(error)) => assert!(
+                error
+                    .to_string()
+                    .contains("HTTP 202 Accepted (a web application firewall"),
+                "{error}"
+            ),
+            _ => panic!("a 202 must be refused"),
+        }
+        assert!(validate_success_status("GET", &url, &response(200)).is_ok());
+    }
 
     #[test]
     fn recorded_source_shapes_replay_without_network_access() {

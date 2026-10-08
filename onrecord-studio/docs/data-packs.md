@@ -39,6 +39,11 @@ Source details and what was actually seen of each file are in `docs/data-sources
 | Parties | `agency_recorded`, `agency_id`, `department_recorded`, `department_id`, `organisation_recorded`, `organisation_id` |
 | Money | `amount`, `amount_basis` (adopted, revised, actual, awarded, obligated, paid), `fund`, `account` |
 
+A publisher column whose name is a standard column's (Cal ICH's `calendar_year`, the State
+Controller's `Fiscal Year`) keeps its values as `<name>_as_published`, with `_as_published`
+appended again until the name is free. The standard column keeps its meaning: it is derived only
+from the table's time column and is never filled from the publisher's column of that name.
+
 ## Reference tables
 
 - `departments`: canonical id, every recorded spelling, valid-from and valid-to (renames and
@@ -340,6 +345,63 @@ rules above already need:
 - Its investigations I06 (encampment interventions beyond report closure) and I08/I09 (contract
   lifecycle, payment timing) use the Enforcement and Money packs; its records that are documents
   (DS-450 forms, Housing Commission packets, audit reports) are collected sources, not pack tables.
+
+## Held registry entries
+
+Removed from `src-tauri/src/packs/sources.json` until their publisher serves them to the builder.
+Every `www.huduser.gov` URL answers a non-browser client (curl, the builder) with
+`HTTP/2 202`, `content-length: 0`, `x-amzn-waf-action: challenge` (probed 2026-10-07): an AWS WAF
+JavaScript challenge, not the file. A browser User-Agent is served the file, but posing as a
+browser to pass a bot challenge is not something the builder does. `files.hudexchange.info` is not
+challenged and stays.
+
+| Pack | Table | URL |
+|---|---|---|
+| ca-housing | `hud_fair_market_rents_history` | `https://www.huduser.gov/portal/datasets/FMR/FMR_All_1983_2027.csv` |
+| ca-housing | `hud_small_area_fair_market_rents` | `https://www.huduser.gov/portal/datasets/fmr/fmr2027/FY27_safmrs.xlsx` (sheet `SAFMRs`) |
+| ca-housing | `hud_picture_subsidized_households_pha` | `https://www.huduser.gov/portal/datasets/pictures/files/PHA_{year}_2020census.xlsx`, 2022 to 2025 (sheet `PHA_EXTRACT`) |
+| ca-housing | `hud_picture_subsidized_households_project` | `https://www.huduser.gov/portal/datasets/pictures/files/PROJECT_{year}_2020census.xlsx`, 2022 to 2025 (sheet `PROJECT_EXTRACT`) |
+| ca-housing | `hud_lihtc_properties` | `https://www.huduser.gov/lihtc/lihtcpub.zip` (sheet `Data`) |
+| ca-homelessness-system | `hud_hic_counts_by_coc` | `https://www.huduser.gov/portal/sites/default/files/xls/2007-2025-HIC-Counts-by-CoC.xlsx` (sheet `2025`) |
+| ca-homelessness-system | `hud_pit_veteran_counts_by_coc` | `https://www.huduser.gov/portal/sites/default/files/xls/2011-2025-PIT-Veteran-Counts-by-CoC.xlsx` (sheet `2025`) |
+| ca-homelessness-system | `hud_hic_projects` | `https://www.huduser.gov/portal/sites/default/files/xls/2025-HIC-Counts-by-State.csv` |
+
+The app's client refuses a 202 rather than keeping its empty body as the file.
+
+`usaspending_hud_assistance` is held for another reason: the archive names each file by the date
+it was generated, and the registry substitutes only `{year}`, so the URL keeps a literal
+`{yyyymmdd}` and answers 404. It needs the current file names resolved from the archive listing.
+
+| Pack | Table | URL |
+|---|---|---|
+| ca-public-money | `usaspending_hud_assistance` | `https://files.usaspending.gov/award_data_archive/FY{year}_086_Assistance_Full_{yyyymmdd}.zip`, 2007 to 2026 |
+
+The FAC files are held because `app.fac.gov/robots.txt` is `User-agent: * / Disallow: /`, which
+the app's client honours ("Portal security policy rejected the operation: 'app.fac.gov' excludes
+this path through robots.txt rule '/'"):
+
+| Pack | Table | URL |
+|---|---|---|
+| ca-public-money | `fac_general` | `https://app.fac.gov/dissemination/public-data/gsa/federal-fiscal-year/{year}-ffy-general.csv`, 2016 to 2027 |
+| ca-public-money | `fac_federal_awards` | `https://app.fac.gov/dissemination/public-data/gsa/federal-fiscal-year/{year}-ffy-federal_awards.csv`, 2016 to 2027 |
+| ca-public-money | `fac_findings` | `https://app.fac.gov/dissemination/public-data/gsa/federal-fiscal-year/{year}-ffy-findings.csv`, 2016 to 2027 |
+
+The HCD dashboard worksheets are held because their header is not the sheet's first row: one or
+two rows of explanatory text (or, in `ERF 2R `, a transposed layout) sit above it, and the
+worksheet reader takes the first row of the box its values span as the header. Built as listed,
+the first column of each `hcd_hhap<n>_fiscal_snapshot` was named after the banner text ("Per
+Health and Safety Code 50220 ...") and `hcd_hhap4_alternative_disbursement_plans` had no key
+column. They need a header-row setting in the registry.
+
+| Pack | Table | Worksheet of `hhap-dashboard-fiscal-snapshot.xlsx` / `erf-all-rounds-encampment-projections-and-status.xlsx` |
+|---|---|---|
+| ca-homelessness-system | `hcd_hhap1_fiscal_snapshot` ... `hcd_hhap6_fiscal_snapshot` | `HHAP 1` ... `HHAP 6` |
+| ca-homelessness-system | `hcd_hhap4_alternative_disbursement_plans` | `HHAP 4 ADPs` |
+| ca-homelessness-system | `hcd_erf_active_projects_persons_served` | `All Active Projects` |
+| ca-homelessness-system | `hcd_erf_status_by_round` | `ERF 2R ` |
+| ca-homelessness-system | `hcd_erf_persons_served_by_county` | `Summary - by County` |
+
+The full entries (licence evidence, headers, sizes) are in `sources.json` at commit `3a6b013`.
 
 ## Open
 

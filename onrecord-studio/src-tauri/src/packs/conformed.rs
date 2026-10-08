@@ -276,6 +276,29 @@ fn column_alias(conn: &Connection, snapshot_id: &str, header: &str) -> Result<St
     })
 }
 
+/// The publisher columns whose alias is a standard column's name, each with the name it keeps:
+/// the alias followed by `_as_published` as many times as it takes to name no other column. The
+/// rename happens before the standard columns are derived, since their expressions refer to one
+/// another by name and would otherwise read the publisher's column.
+fn renamed_publisher_columns(aliases: &[String]) -> Vec<(String, String)> {
+    let mut taken = aliases
+        .iter()
+        .map(|alias| alias.to_ascii_lowercase())
+        .chain(STANDARD_COLUMNS.iter().map(|column| (*column).to_owned()))
+        .collect::<std::collections::BTreeSet<_>>();
+    aliases
+        .iter()
+        .filter(|alias| STANDARD_COLUMNS.contains(&alias.to_ascii_lowercase().as_str()))
+        .map(|alias| {
+            let mut kept = format!("{alias}_as_published");
+            while !taken.insert(kept.to_ascii_lowercase()) {
+                kept.push_str("_as_published");
+            }
+            (alias.clone(), kept)
+        })
+        .collect()
+}
+
 /// A SELECT of every typed column of `snapshot_id` plus the standard columns, for `table`.
 pub fn conformed_select(
     conn: &Connection,
@@ -316,20 +339,40 @@ fn select_for(
     let mut aliases = conn
         .prepare("SELECT column_name FROM analytical_columns WHERE snapshot_id = ?1")
         .map_err(storage("Conformed columns"))?;
-    let clashes = aliases
+    let aliases = aliases
         .query_map(params![snapshot_id], |row| row.get::<_, String>(0))
         .map_err(storage("Conformed columns"))?
         .collect::<Result<Vec<_>, _>>()
-        .map_err(storage("Conformed columns"))?
-        .into_iter()
-        .filter(|alias| STANDARD_COLUMNS.contains(&alias.as_str()) || alias.starts_with("__"))
+        .map_err(storage("Conformed columns"))?;
+    let internal = aliases
+        .iter()
+        .filter(|alias| alias.starts_with("__"))
+        .map(String::as_str)
         .collect::<Vec<_>>();
-    if !clashes.is_empty() {
+    if !internal.is_empty() {
         return Err(AppError::DataParsing(format!(
-            "Snapshot {snapshot_id} has publisher columns named like standard columns: {}",
-            clashes.join(", ")
+            "Snapshot {snapshot_id} has publisher columns named like internal columns: {}",
+            internal.join(", ")
         )));
     }
+    let renamed = renamed_publisher_columns(&aliases);
+    let publisher_columns = if renamed.is_empty() {
+        "t.*".to_owned()
+    } else {
+        format!(
+            "t.* EXCLUDE ({}), {}",
+            renamed
+                .iter()
+                .map(|(alias, _)| quote_ident(alias))
+                .collect::<Vec<_>>()
+                .join(", "),
+            renamed
+                .iter()
+                .map(|(alias, kept)| format!("t.{} AS {}", quote_ident(alias), quote_ident(kept)))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    };
     let key = match spec.key {
         Some(header) => format!(
             "NULLIF(trim(s.{}), '')",
@@ -401,7 +444,7 @@ fn select_for(
             CASE WHEN COALESCE(fiscal_year, calendar_year) IS NOT NULL THEN {time_basis} END
                 AS time_basis
          FROM (
-            SELECT t.*, s._row_hash AS __row_hash, s.__row_ordinal, {key} AS __key,
+            SELECT {publisher_columns}, s._row_hash AS __row_hash, s.__row_ordinal, {key} AS __key,
                    {time} AS __time
             FROM {typed} t JOIN (
                 SELECT *, row_number() OVER (PARTITION BY _row_hash ORDER BY _row) AS __row_ordinal
@@ -902,17 +945,26 @@ mod tests {
         assert!(error.contains("predates stored original cells"), "{error}");
     }
 
+    /// The publisher's own `calendar_year` keeps its values under another name, and the standard
+    /// `calendar_year` comes from the time column alone: empty where the time is.
     #[tokio::test]
-    async fn a_publisher_column_named_like_a_standard_column_is_refused() {
-        let error = refusal(
+    async fn a_publisher_column_named_like_a_standard_column_is_kept_under_another_name() {
+        let (_, rows) = conformed(
+            AnalyticalDatasetKind::CallsForService,
             "police_calls",
-            "INCIDENT_NUM,DATE_TIME,record_id\nE1,2025-01-01 00:00:00.000,x\n",
-            "SELECT 1",
+            "INCIDENT_NUM,DATE_TIME,calendar_year,calendar_year_as_published\n\
+             E1,2025-01-01 00:00:00.000,1999,a\nE2,,2020,b\n",
+            "calendar_year, time_basis,
+             CAST(calendar_year_as_published_as_published AS VARCHAR),
+             CAST(calendar_year_as_published AS VARCHAR)",
         )
         .await;
-        assert!(
-            error.contains("named like standard columns: record_id"),
-            "{error}"
+        assert_eq!(
+            rows,
+            [
+                [json!(2025), json!("date_time"), json!("1999"), json!("a")],
+                [json!(null), json!(null), json!("2020"), json!("b")],
+            ]
         );
     }
 }

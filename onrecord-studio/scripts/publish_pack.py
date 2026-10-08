@@ -123,6 +123,8 @@ def common_sections(signed: dict, kid: str) -> str:
 - `occurred_at` (as recorded, no time zone: the City publishes Pacific wall-clock time),
   `occurred_on`, `calendar_year`, `fiscal_year` (City fiscal year, named by the June it ends in),
   `time_basis` (the publisher column the time came from). Absent or unreadable values are NULL.
+- A publisher column named like one of these keeps its values as `<name>_as_published`
+  (`_as_published` repeated until the name is free); the standard column never takes its values.
 
 ## Verifying
 
