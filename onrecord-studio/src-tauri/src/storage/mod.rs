@@ -7,9 +7,9 @@
 //! SQLite appears only at boundaries, never in the core:
 //!
 //! * [`legacy_import`] upgrades a pre-DuckDB core written by an earlier release.
-//! * [`duckdb::DuckDbWorkspace`] and `analysis::anomaly` can take a bounded read-only snapshot of
-//!   a SQLite file an investigator supplies, so it can be analyzed without changing the source or
-//!   downloading a platform-specific DuckDB extension.
+//! * In tests only, `sqlite_snapshot` copies a SQLite fixture into [`duckdb::DuckDbWorkspace`]
+//!   and `analysis::anomaly` without a DuckDB extension. No shipped command attaches a SQLite
+//!   file.
 //!
 //! The core search projection, `documents_fts`, is a plain DuckDB table maintained transactionally
 //! by the repository. A versioned companion token table provides indexed all-term matching; it is
