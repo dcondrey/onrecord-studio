@@ -56,7 +56,9 @@ fn likely_utf16(bytes: &[u8], little_endian: bool) -> bool {
     let expected_zero_index = usize::from(little_endian);
     let pairs = bytes.len() / 2;
     let zero_count = bytes
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .filter(|pair| pair[expected_zero_index] == 0)
         .count();
     zero_count * 10 >= pairs * 6
@@ -69,8 +71,7 @@ fn decode_utf16(bytes: &[u8], little_endian: bool, path: &Path) -> Result<String
             path.display()
         )));
     }
-    let words = bytes.chunks_exact(2).map(|pair| {
-        let pair = [pair[0], pair[1]];
+    let words = bytes.as_chunks::<2>().0.iter().map(|&pair| {
         if little_endian {
             u16::from_le_bytes(pair)
         } else {
@@ -90,9 +91,10 @@ fn decode_utf32(bytes: &[u8], little_endian: bool, path: &Path) -> Result<String
         )));
     }
     Ok(bytes
-        .chunks_exact(4)
-        .map(|chunk| {
-            let chunk = [chunk[0], chunk[1], chunk[2], chunk[3]];
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|&chunk| {
             let scalar = if little_endian {
                 u32::from_le_bytes(chunk)
             } else {

@@ -289,8 +289,10 @@ fn decode_pdf_string(bytes: &[u8]) -> Option<String> {
 
 fn decode_utf16(bytes: &[u8], from_bytes: fn([u8; 2]) -> u16) -> String {
     let units: Vec<u16> = bytes
-        .chunks_exact(2)
-        .map(|pair| from_bytes([pair[0], pair[1]]))
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|pair| from_bytes(*pair))
         .collect();
     String::from_utf16_lossy(&units)
 }

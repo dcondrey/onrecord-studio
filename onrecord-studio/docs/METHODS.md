@@ -269,6 +269,523 @@ The finding states that two releases made different redaction decisions about th
 * `src/tests/plainLanguage.test.tsx` rejects accusatory wording for every kind, rejects wording of violation or breach for a kind or state that is not a legal claim, and requires the `LatencyOutlier` explanation to say it is a comparison with peers.
 * An evidence gap is an untested route. It is never explained as a finding and never as evidence of compliance or non-compliance.
 
+## 15. Rolling Productions
+
+`analysis/detectors/rolling_production.rs`; findings carry the kind `ROLLING_PRODUCTION`. Release events are stored in `request_release_events` (`storage/sqlite/release_events.rs`).
+
+### A. What is stored
+Every `Document(s) Released` and `Document(s) Released to Requester` event on a hosted NextRequest timeline (`ingestion/hosted_nextrequest.rs::decode_timeline`) becomes one row: the byline exactly as given, its wall-clock time at the US Pacific offset in force that day (the same conversion the opened and closed dates use), the portal's event id, and the file names the event lists, one per `<br>` line. The count of listed names is NULL when the event lists none: an event without a list is not a release of zero documents. A re-crawl replaces the request's rows. A timeline longer than `MAXIMUM_TIMELINE_PAGES` is read in part, so a stored history is a lower bound.
+
+### B. What fires
+An installment is a calendar date, in the portal's time, with at least one release event; several uploads on one day count once. A request with at least 3 installments whose first and last are more than 90 days apart yields one finding listing every installment date and the files listed on it.
+
+The thresholds were measured on 142 sandiego.nextrequest.com requests matching "encampment" (timelines read 2026-10-03): 126 have a release event, 24 have two or more, 23 on two or more dates. Spans of the multi-date requests, longest first: 810, 558, 524, 479, 283, 184, 172, 160, 132, 74, 68, 47, 44, 34, 32, 28, 27, 21, 13, 12, 12, 7, 7 days. Two dates are most often a release and one supplement (25-1161: two dates, 160 days, does not fire); the 90-day threshold sits in the gap between 74 and 132, so a day's drift does not move a request across it. With both thresholds, 8 of the 142 requests fire (20-2226: 27 dates over 810 days, from 30 release events).
+
+### C. What a finding does and does not claim
+The finding restates recorded dates: the request's records were released on N separate dates over D days. It is a pattern signal (`is_legal_claim` false) with confidence unassessed, since nothing is inferred to score. It does not say a deadline was missed: records may be produced in stages, and the requester may have agreed to a schedule or changed the request. No release date is used as `determination_at`; the timeline does not record a determination.
+
+## 16. Denials Checked Against Earlier Releases
+
+`analysis/detectors/no_records_contradicted.rs`; findings carry the kind `NO_RECORDS_CONTRADICTED_BY_RELEASE`.
+
+### A. Which denials are tested
+A public document whose text states a plain denial ("no responsive records", "no responsive documents", "no records exist", "unable to locate any records", ...; the shared `extract_denial` pattern) on a request with a stated description or title. A denial limited to a year or fiscal year within 120 characters of the phrase is not tested: a release from outside that scope does not contradict it.
+
+### B. Candidate recall
+The on-device embedding model (`bge-small-en-v1.5`, unit vectors) scores every embedded document of the same portal by the cosine of its closest chunk against the denied request's description (the title only when there is no description; NextRequest titles are a truncated copy of it). The model proposes candidates and decides nothing.
+
+### C. Deterministic checks
+A candidate is cited only when all hold: cosine at or above `SIMILARITY_THRESHOLD`; public; same portal; a different request; that request was assigned the same `agency_id` as the denying request (exact id: a multi-department assignment is its own agency id and is not matched, and a request with no recorded agency matches nothing); its `created_at` is strictly before the denying request's `closed_at`, both parsed as RFC 3339 instants (an unparseable or absent date fails the check); and its own text is not a denial. `SIMILARITY_THRESHOLD` is 0.86: on the San Diego collection the highest cosine of any release judged not to contradict its denial was 0.8531 (see ROADMAP, "Findings on real collections"). It is a precision floor; recall is unmeasured.
+
+### D. Not run
+Without an installed embedding model, or with no embedded document, the detector reports not-run with the reason (`RefreshSummary::not_run`) and leaves its earlier findings in place. It never falls back to word overlap, which matched every San Diego denial to unrelated releases. The benchmark harness and `live_evaluation` run without the semantic index and so report this detector as not run.
+
+### E. What a finding does and does not claim
+The finding states that the agency had already released a document, before closing the request with a denial, whose text is near the request's own at the stated cosine, and cites the closest passage with its character range. Cosine measures closeness of subject and wording, not responsiveness, so the finding carries no confidence score (`Unassessed`) and is a pattern signal (`is_legal_claim` false). It does not show the search was inadequate: the release may fall outside what was asked.
+
+## 17. Service-Report Leads
+
+`src/utils/serviceAccountability.ts`, run by automatic discovery through the restricted SQL boundary and shown under What stands out. Verified natively by `tests/data_discovery.rs::service_report_checks_run_on_real_imported_rows`, which imports two copies of one source and a closed-reports table.
+
+### A. Which tables are read
+A table is treated as service reports when its columns include, by the publisher's own names, a service type (`service_name`, `request_type`, …), a close date (`date_closed`, …) and either an opened date or a recorded age (`case_age_days`, …). A status column, a place column and up to two area columns (a district and a community) are used when present. Other tables get no service checks.
+
+### B. What is counted
+* **Open** means no close date and, where a status exists, a status that does not name a referral. **Closed** means a close date and no referral. Referred reports are counted apart: they often carry no close date and have left the table rather than stayed open in it.
+* **Age** is the publisher's recorded age when the table has one, otherwise the days from the opened date to the close date, or to the snapshot's retrieval date for an open report. A negative recorded age (the publisher's -999) is an unrecorded age: the report is still counted, its age is not.
+* **Backlog**: open reports per service, how many are older than 365 days, and the earliest opened date. Reported at 25 or more reports older than a year.
+* **Owner and budget**: where the table has a staff-group column (`case_record_type`, which the publisher's dictionary defines as the City staff group responsible for responding), the backlog check reports the group most of a service's open reports carry and how many carry it; a group is named only when more than half do. The group is a label, not a department code: of the nine values in the 2026-09-14 open file only "Parks & Recreation" is spelled as an operating-budget `dept_name`. A fixed table in `serviceAccountability.ts` reads TSW and TSW ROW as Transportation and Stormwater, Storm Water Code Enforcement as Stormwater, DSD as Development Services, ESD Complaint/Report as Environmental Services and Neighborhood Policing as Police, and the lead says "read here as"; Parking and Traffic Engineering are left unassigned and the lead says so. When a table with the operating budget's columns is imported, `service_budget` sums `amount` per department for the two latest fiscal years that have rows marked `adopted`, counting only accounts beginning with 5. The publisher's file also carries revenue under accounts beginning with 4 (Transportation, FY 25 adopted: 190.6 million expense, 185.2 million revenue), a `proposed` cycle, and a latest year (FY 26) with no cycle at all, which is not called adopted. A department with an unreadable amount, or with no row, gets no figure. The amount is the whole department's, not the service's.
+* **Areas**: the median age of open reports, and the median days to close, per service and area against the median for that service across all areas. An area is listed with at least 30 reports, at least three areas reporting, and a median at least 1.5 times the all-area median (and, for closure, at least seven days slower). For open reports the all-area median must be 30 days or more, unless the area's own median is over 365 days: Encampment reports are a median 10 days old citywide and 904 in Council District 4 (158 open, 2026-09-14 copy). The two areas with the most reports older than a year are shown, plus up to two for services named encampment, homeless, shelter or restroom, which larger services would otherwise outrank. Area names are compared without regard to letter case, because publishers change case between years.
+* **Repeated places**: ten or more open reports with the same service and the same recorded place text, the oldest open more than 90 days.
+* **Referrals**: per service, reports whose status names a referral; reported where a service has at least 100, making up at least a quarter of its reports.
+* **Recurring**: a service and area listed as slower to close in three or more imported tables.
+* **Backlog change**: when the same source URI was imported on two retrieval dates, the count of open reports older than a year in the earliest and latest copies, with the three services that moved most. A report leaves an open file when it is closed or referred; the comparison does not say which.
+* **Movement**: for the same two copies, where both have a report id (`service_request_id`, …): reports open in the earliest copy and not open in the latest (left), and reports open in the latest and not open in the earliest (arrived), per service. What became of a report that left is read from the latest copy and from up to eight other service-report tables with a report id retrieved on or after the earliest copy's date: a close date, a referral without a close date, or no record in any of them. When no table could hold such a record the lead says the outcome is not in the source, rather than reporting a count of "no record".
+
+### C. Tables the app fetches for itself
+`src/utils/dataGaps.ts` names a published table that would answer what the imported ones cannot, and `DiscoveryController` fetches it through `fetch_city_dataset`: one at a time, after every table is profiled, automatically only when Data upkeep is enabled with Recheck sources on (otherwise on "Fetch it now"), with a six-hour wait after a failure and the managed-file budget checked before the download. Three gaps are recognized, all for Get It Done:
+* the latest copy of the open-reports file is seven or more days old: fetch the file again, which becomes a second copy (a different file is a new snapshot; the earlier one is kept);
+* reports that left the open file have no close or referral record: fetch the closed-reports file for each year between the two copies (`GET_IT_DONE_OUTCOMES`). That file exceeds the import limit, so only rows whose `service_request_id` appears in an imported open copy are kept; the snapshot records the publisher file's digest and the filter. An Encampment-only subset, or a closed file retrieved before the latest open copy, does not close the gap;
+* a backlog names a staff group read as a budget department and no table with the operating budget's columns is imported: fetch the City operating budget (`OPERATING_BUDGET`, one file of about 64 MB covering every published year).
+
+### D. What a lead does and does not claim
+A lead is a count of the publisher's records and carries no legal claim. An open report does not prove the problem persists, since the table records no inspections or work. A difference between areas can reflect what was reported as well as how it was handled. Several reports at one place can describe one fault, and a street name without a number can cover many blocks. Tables are compared as imported and can overlap. Every threshold above is a display threshold stated in the lead's method line.
+
+### E. Leads stored as findings
+Once every imported table has been profiled, `DiscoveryController` sends the feed's leads to `record_service_leads` (`analysis/service_leads.rs`), which stores each as a finding of kind `SERVICE_REPORT_LEAD` under the detector slug `service_report_leads`. The native side does not recount: it refuses a lead naming any snapshot that is not in the catalog, writes one source line per table the lead read (display name, source address, retrieval date, full SHA-256) from the catalog's own record, appends the SQL as sent, and stores the lead with no confidence score (`Unassessed`) and `is_legal_claim` false. The finding id covers the snapshot, its digest, the lead's key, title and detail, so changed counts make a new finding. Earlier leads that are not sent again are removed only when every imported table was checked without error; an unfinished or failed pass leaves them in place, and a dismissed lead stays dismissed. A set is sent once per change; a failed store is retried after five minutes. These findings name no portal agency, so `research::meetings` (§11) does not yet match them to agenda items.
+
+Each lead is sent with the SQL whose result it was read from and the list of every table read, its own first: the tables the SQL names, and for a lead built from several tables' results (a recurring area, a backlog between two copies) the other tables as well (`automaticDiscovery.ts::storedLeads`). At most 40 tables and 40,000 characters of SQL are accepted; a lead that lists a table twice, or does not list its own table first, is refused. The explanation text ends with "Tables read:" and "SQL:", which the Findings inbox shows as written and the dossier's Markdown export carries.
+
+## 18. Police Stop Leads
+
+`src/utils/stopLeads.ts`, run by automatic discovery like §17 and stored as `POLICE_STOP_LEAD` findings (§17 E; `ServiceLeadInput.family` selects the kind). Verified natively by `tests/data_discovery.rs::stop_record_checks_run_on_imported_tables_with_the_publishers_headers`, which imports four tables with the publisher's upper-case headers.
+
+### A. Which tables are read
+A persons table is one with `id`, `pid` and `perceivedunhoused` columns (SDPD's RIPA stops file). Companion tables carry `id`, `pid` and one of `result`, `reasonforstopcodetext` or `basisforpropertyseizure`, and no `perceivedunhoused`; the latest imported of each is used. Persons are matched on stop and person number, compared as whole numbers because the tables import them with different types. Without a results table nothing is computed. `dataGaps.ts` asks for each missing companion (`RIPA_STOP_RESULTS`, `RIPA_STOP_REASONS`, `RIPA_PROPERTY_SEIZURE_BASIS`), and for the persons table (`RIPA_STOPS`) when an open Get It Done copy lists Encampment reports and no persons table is imported.
+
+### B. What is counted
+* **Groups**: `perceivedunhoused` true or false. Any other value (the publisher's older `0`) is a third group that is counted and left out of every rate.
+* **Outcomes**: per group, persons; persons with a result naming a custodial arrest; of those on an outstanding warrant and without a warrant, each counted apart; persons with a citation or an in-field cite and release; persons with a property-seizure row; persons with no result row. A lead needs 100 persons in each group. The first stop date ignores dates before 2000 (the file has a year-23 entry).
+* **Reasons**: the forty reason code texts with the most persons perceived as unhoused, with both groups' persons and arrests without a warrant for each. A reason is compared when both groups have 100 persons, and called higher at 1.5 times the other group's rate and at least three percentage points, tested by cross-multiplication. Warrant arrests are left out of this comparison because a warrant arrest follows from the warrant, not the stop.
+* **Property**: persons perceived as unhoused per recorded basis for seizure.
+
+### C. What a lead does and does not claim
+Perception is the officer's entry, not housing status. A person can have several results and several reasons and is counted under each. Rates are not adjusted for where officers were assigned. A difference in rates is not a finding of unequal treatment, and the lead says so. The property table records a basis, not where property was kept or whether it was returned or discarded.
+
+## 19. Abatement Log Leads
+
+`src/utils/abatementLeads.ts`, run by automatic discovery and stored as `ABATEMENT_LOG_LEAD` findings (§17 E). Verified natively by `tests/data_discovery.rs::abatement_logs_pair_one_notice_with_one_abatement_in_the_released_format`, which imports two tables with the headers and the `7/1/2025, 8:00 AM` time format of the logs San Diego released to requests 25-5806 and 26-772.
+
+### A. Which tables are read
+A notice log has a posting-time column (`date_posted`, …), an address column and latitude and longitude columns. A completion log has a closing-time column (`date_time_closed`, …) and the same place columns, and no posting-time column. A table with service-report roles (§17 A) is neither. The check runs on a notice log when a completion log is imported, using the latest one. Released spreadsheets import as general tables whose types are inferred from values, so the time text is kept as recorded and parsed in the query.
+
+### B. What is counted
+Rows are keyed by the address text (trimmed, lower case) and the coordinates rounded to five decimal places. Hours from posting to closing are counted only at places with exactly one notice and exactly one abatement, so a notice is never paired with another notice's abatement: completed before posting, within 3 hours, within 24 hours, from 24 to 72 hours, 72 hours or more, and the median of the non-negative values. Also counted: abatements dated between the first and last posting at a place with no notice in the log, and notices with no coordinates or no readable time. A lead needs 30 paired places.
+
+### C. What a lead does and does not claim
+The logs record a posting time and a closing time. They do not record the notice period that applied, so 24 and 72 hours are yardsticks and the lead is not a finding that notice fell short; `ENCAMPMENT_NOTICE_SHORTFALL` (a notice document against a stated minimum) is the kind that makes that comparison. Notice may have been given by a route the posting log does not record, and two rows at one place can be different events. Neither log records whether anyone was present or what was done with belongings.
+
+
+### D. Reports around an abatement
+`abatementLeads.ts` also runs on a completion log alone (`abatement_reports_nearby`), stored under the same kind. Verified natively by `tests/data_discovery.rs::reports_around_abatements_are_counted_once_per_report_inside_the_complete_period`. It needs the open Get It Done copy and every closed-year file from some year to the open copy's year (`encampmentReportCoverage`, §21), each with `lat` and `lng`: closed files are keyed by close year, so those tables hold every Encampment report filed since that earliest year began. Abatements are counted once per place and day (coordinates rounded to four decimal places) and only when the 14 days before and after fall inside that period. Reports are counted once per report number. A report is near within 150 metres and in the ring from 150 to 800 metres, by straight-line distance on the recorded coordinates (a degree of latitude taken as 110,540 metres, a degree of longitude as 111,320 metres times the cosine of the latitude). Counted: report and abatement pairs before, on the day, and after, in each band; reports with no coordinates or date. Per abatement, the ring is compared before and after only when it held at least 10 reports beforehand: how many had more afterwards, how many fewer, how many rose by half or more (after × 2 ≥ before × 3) and how many fell by a third or more (after × 3 ≤ before × 2), the same ratio in each direction. A lead needs 30 counted abatement place-days.
+
+The same before-and-after count is also taken 28 days earlier at the same places, for abatements whose earlier fortnights are inside the period, and shown beside the actual one when 30 abatements are behind it: it shows how the counts were already moving, and is not a period without abatements, since many places are abated repeatedly.
+
+The counts are pairs, so a report near several abatements is counted for each; in a dense area the pair counts exceed the number of reports many times over. Reports are complaints, not people. Abatements are often scheduled because reports were filed, so more reports before than after is expected whatever the abatement did. The lead does not say anyone moved and does not use the word displacement.
+
+### E. Places abated on many days
+`abatement_repeat_places`, on a completion log alone. A place is the coordinates rounded to four decimal places (about eleven metres); an abatement is counted once per place and day; the address shown is the text written most often for that place. Counted: places, place-days, places abated on one day only, places abated on 20 or more separate days and their place-days, and rows with no coordinates or readable time. The lead needs one place at 20 days and names up to five. The log records that an abatement was completed, not who was there or whether the same people returned.
+
+## 20. Arrest and Citation Log Leads
+
+`src/utils/chargeLeads.ts`, run by automatic discovery and stored as `CHARGE_LOG_LEAD` findings (§17 E). Verified natively by `tests/data_discovery.rs::charge_log_checks_count_arrests_and_citations_not_charge_rows`, which imports a table with the headers and values of the logs SDPD released to requests 25-7080 and 26-6187.
+
+### A. Which tables are read
+A table with `activitynumber`, `activitytype` and `violationsection` columns. `activitydate` and `race` are read when present. Each row is a charge; rows sharing an activity number are one arrest or citation, and every count is of arrests and citations, not rows.
+
+### B. What is counted
+An arrest or citation is counted when any of its rows cites San Diego Municipal Code 63.0404 (encampment), 54.0110 (encroachment; also released as 54.011 because spreadsheets drop a trailing zero), Penal Code 647(e) (lodging) or Municipal Code 56.55 (urinating or defecating in public). Sections are compared in upper case with spaces removed, by prefix or exact value, so 647(F) is not 647(E). Counted: all arrests and citations in the file, those citing a listed section, of those arrests and citations, arrests in which every row cites a listed section, and the count per section. A lead needs 30. Where race is recorded, the twelve most frequent races among the counted are returned with their counts among the counted and among all; entries that are blank or the publisher's `NULL` are left out of both. The lead names at most three races, each with 30 of the counted, and none when the file holds only listed sections.
+
+### C. What a lead does and does not claim
+The log records a section, not housing status. The listed sections are also charged against people who are housed, and encroachment covers objects as well as people. The log does not record whether shelter was offered, where a restroom was open, or what became of the charge. The race comparison is with other arrests and citations in the same file, is not adjusted for where officers were assigned, and is not a finding of unequal treatment; the lead says so. Two released files can cover overlapping dates; each table is counted alone.
+
+
+## 21. Budget, Encampment Reports and Shelter Beds by Year
+
+`src/utils/capacityLeads.ts`, run by automatic discovery and stored as `CAPACITY_COMPARISON_LEAD` findings (§17 E). Verified natively by `tests/data_discovery.rs::capacity_comparison_counts_each_series_per_fiscal_year_and_keeps_absence_apart`, which imports the shelter inventory as GeoJSON, the operating budget and the Get It Done open and closed-year files with the publishers' own headers.
+
+### A. Which tables are read
+The lead is anchored on the latest imported table with `year`, `city`, `year_round_beds` and `total_beds` columns: the UCSD Homelessness Hub layer `HIC_ES_2014_2024`, fetched as `SHELTER_INVENTORY` in GeoJSON (the format the SANDAG layers use; the fetch fails when the server reports `exceededTransferLimit`, because a cut-short table would give short yearly sums). It also reads the latest operating budget table (§17 B), the latest copy of the Get It Done open file, and one closed-reports table per calendar year. A closed-year table is used when it is the whole file or the `service_name = 'Encampment'` subset; the subset kept for reports seen in an open copy is not, because it does not hold every Encampment report closed that year. With no budget table, or fewer than two countable fiscal years of reports, nothing is computed.
+
+### B. What is counted
+Everything is per City fiscal year, 1 July to 30 June, named by the year it ends.
+
+Budget: the sum of `amount` where `budget_cycle` is `adopted`, `account_number` begins with 5 and `dept_name` contains "homeless" (in the file retrieved 2026-10-04 the only such name is Homelessness Strategies & Solutions, present from fiscal 2021). `report_fy` is two digits and is read as 2000 plus that number. A year with adopted rows and no such department has no amount; it is reported as having no such department and is never an amount of zero. A year whose rows carry no `budget_cycle` (fiscal 2026 in that file) is not counted as adopted.
+
+Reports: rows whose `service_name` is exactly `Encampment`, counted once per `service_request_id` and filing time, by the fiscal year of `date_requested`. The publisher files a closed report under the year it was closed, so the reports filed in fiscal year Y are spread over the open file and the closed files for calendar years Y-1 onward. Fiscal year Y is counted only when the open copy was retrieved at least a day after 30 June of Y (retrieval times are UTC, the publisher's dates local) and a closed table is imported for every calendar year from Y-1 through the year of the open copy, each retrieved either at least a day after its own year ended or no earlier than the open copy (a current-year file older than the open copy would miss a report closed between the two). Any other year is returned as not counted (NULL), never as a smaller number. Closed years before 2020 are not read: the budget has no homelessness department before fiscal 2021, so there is nothing to set them beside. The Encampment service name first appears in a report filed 2018-08-22.
+
+Beds: the sum of `Year_Round_Beds`, and of `Total_Beds`, over rows whose `City` is San Diego, per `Year`, with the number of projects and the number recording no count in each column. A project with no recorded count adds nothing to the sum and is reported, not treated as zero beds. The inventory is a count made on one night each January, so the January 2025 count is set beside fiscal 2025, seven months into it. Years before 2018 are left out: the year-round and seasonal columns were filled differently then (170 year-round and 406 seasonal beds in 2014, 374 and 386 in 2015, against 1,550 and 36 in 2018).
+
+### C. When a lead is raised
+A fiscal year is compared when it has an adopted amount, a complete report count of at least 30 and a year-round bed count. Thirty is the minimum the other leads use for a count to be stated. A lead needs two compared years and at least one series differing by 10% or more between the first and the latest. Ten per cent is a fixed yardstick, not a statistical test: in the inventory retrieved 2026-10-04, four of the eight year-to-year differences in year-round beds from 2018 to 2026 were below it (1.6% to 4.3%) and four above (19.7% to 68.8%). The lead lists every compared year, then each series for the first and latest with the difference, then the years not compared with the reason for each.
+
+### D. What a lead does and does not claim
+The three series come from three publishers and are set beside each other; nothing in the lead says one moved another. The budget figure is one department's adopted amount: the San Diego Housing Commission and the County spend separately, and adopted is not spent. The beds are emergency shelter only, without transitional or permanent housing. The reports are complaints residents filed, not people or encampments. The inventory was compiled by UCSD from the Regional Task Force on Homelessness count and states no licence. The first and latest years are endpoints chosen by which years are available; the years between are listed because they do not move in a straight line.
+
+### E. Missing tables
+`dataGaps.ts` offers `SHELTER_INVENTORY` when an open Get It Done copy lists Encampment reports and no inventory table is imported. With an inventory and a budget table imported, it offers one `GET_IT_DONE_ENCAMPMENTS` year at a time, latest first, down to 2020, until every closed year is held. The outcome gaps (§17 C) fetch a different subset of the same files and neither satisfies the other.
+
+## 22. Release Timing
+
+`src-tauri/src/analysis/detectors/release_timing.rs`, stored as `RELEASE_TIMING_CONCENTRATION` findings. Every rule below has a test in that file run against a fresh database.
+
+### A. Which rows are read
+Public rows of `documents` that have a `download_url` and belong to a portal whose `source_kind` is `NEXT_REQUEST`, joined to their request for its agency. `documents.created_at` does not mean one thing: it is the portal's upload time of the file (`document_scan.upload_date`), the request's opening time when the portal gave no upload date, the request's closing time for a closure notice, the moment the application first saw a local, pasted or open-data file, or the container's time for a file extracted from an archive. Only the first is an upload time. Closure notices and extracted files have no download route and files from other source kinds are not on a records portal, so none of them is read. A row that is read is left out, and counted as left out, when its time equals its request's opening time, has no time of day or no offset, is written in UTC with no local offset (`Z` or `-00:00`), or is exactly midnight (how a date without a time is stored). A date is never read as midnight. `request_release_events.released_at` is not used: it is per request, to the minute, and its Pacific offset is assumed by the ingester rather than recorded by the portal.
+
+### B. What is counted
+The unit is a release: the files uploaded to one request with less than 60 minutes between one file and the next, timed at its first file. The weekday, date and hour are taken from the stamp's own offset, so a change of daylight time needs no rule and nothing is converted through UTC. A release is late when it began at or after 3:00 p.m. on a working day whose next day is a Saturday, Sunday or California judicial holiday (`court_calendar`, 1990 to 2099; a release outside those years is left out). An agency is the pair of agency id and portal. For each agency: its releases, its late releases, the dates they fall on, and the same counts for every other release on the portal, including requests with no agency. Several late releases by the agency on one date count once in the comparison. A finding needs 20 releases so counted, 40 other releases, late releases on three dates, a share at least twice the others' share and at least ten percentage points above it; ratio and difference are tested by cross-multiplication. The finding states the counts, both shares, the first and last release date, and the files left out for the agency and the portal. It cites up to five files of the late releases. Severity is Info and confidence is not assessed.
+
+For the files of the late releases (the 50 most recent) the internal modification time is read from the file at `documents.local_path`: PDF Info `ModDate`, else XMP `ModifyDate`, else XMP `MetadataDate`; OOXML `dcterms:modified`. The finding counts files modified less than a day, one to six days and seven or more days before upload, and each citation states its file's figure. A modification time later than the upload time is counted and labelled as a contradiction between the file and the portal's clock, not as an age. A file with no readable internal time is "not recorded". A PDF time written without a zone is read as UTC, so an age can be off by the zone difference.
+
+`held_back_response` and `regenerated_response` now time a file by the same upload time when it has one, and by the request's `determination_at` as before when it does not; the explanation states which was used. Their candidate sets and thresholds are unchanged.
+
+### C. What a finding does and does not claim
+It is a count of upload times against the same portal's other uploads. It does not say why they fall where they do: staff often finish and post work at the end of a week or before a holiday, and requests that fall due then are released then; the finding says so. The portal records when a file was uploaded and not when a file uploaded earlier was made public. The holiday list is California's; days proclaimed for one occasion are not modeled, and an agency in another state keeps a different calendar. The 3 p.m. start is the last two hours of an 8-to-5 day; on the collection in ROADMAP "Cross-source accountability build" 18% of releases began at or after it. No request draft is offered.
+
+## 23. Shared Denial and Determination Wording
+Three detectors compare passages of public documents: `boilerplate_denial` (near-identical denial wording across requests on different topics), `cross_corpus_shared_language` (one determination passage, near-identical or reworded, across three or more agencies) and `evasion_paraphrased_denials` (denial passages of one agency that share vocabulary but not wording). The shared code is `analysis/detectors/text_shared.rs`.
+
+### A. Which passages are compared
+Nothing stored labels a document as a denial or determination letter. A passage is the text around an occurrence of one of the detector's phrases, matched on word tokens (so a phrase broken across lines is found and a longer word is not): up to 300 bytes each side (200 for the paraphrase detector), widened to whole words, cut at blank-line paragraph breaks, and never overlapping the previous passage. A passage under 120 characters is dropped, which also drops a one-sentence denial standing in its own paragraph. Each document contributes up to 8 passages from its first 50,000 characters, and each is compared on its own, so two reused paragraphs in one letter form two clusters. The newest 2,000 public documents are read per run.
+
+Phrases that state a search outcome ("no responsive records", "no records exist", ...) count wherever they occur. Phrases that statutes, policies and ordinary prose also use ("records are exempt from disclosure", "pursuant to government code", "not readily available", "we have determined", "does not maintain", ...) count only within 120 words of wording that addresses a requester: "your" followed within five words by "request", or "you" followed within two by "requested". A released record that quotes a statute is therefore not a candidate. Precision and recall of the phrase lists on real letters are unmeasured.
+
+### B. Agencies
+An agency is a portal and an id within it; the same id on two portals is two agencies, and every distinct-agency count and grouping uses the pair. Names come from `agencies.name` joined on both columns. An agency with no row or a blank name is described as having no recorded name, with its id and portal; the id is never printed as a name. A request with no recorded agency is not counted toward any agency, and `boilerplate_denial` names a single agency only when every passage of the cluster is attributed to it.
+
+### C. Similarity and gates
+* `boilerplate_denial`: Jaccard of five-word shingles at or above 0.60 against the cluster's first passage; at least 5 documents and 3 distinct request titles.
+* `cross_corpus_shared_language`, near-identical: the same at 0.85; at least 5 documents and 3 agencies.
+* `cross_corpus_shared_language`, reworded: passages linked by pairs sharing at least 60% of their distinct content words (words of three letters or more outside a stop list) and less than 85% of their five-word shingles; at least 3 agencies. The 60% floor is a chosen cut-off with no measured error rate, so these findings are `Unassessed`.
+* `evasion_paraphrased_denials`: passages of one agency linked by pairs sharing at least 35% of content words and less than 35% of content-word shingles; the largest group per agency, at least 4 documents and 3 request titles, emitted at 6,500 basis points or more.
+
+### D. Candidate pairs
+Pairs are not compared exhaustively. Each set gets MinHash signatures in bands of 3 rows; only sets sharing a band are compared, and exact Jaccard decides. Two sets with Jaccard `s` share a band with probability `1 - (1 - s^3)^b`: with 40 bands (thresholds 0.60 and 0.85) a pair at 0.60 is missed with probability 5.9e-5 and a pair at 0.85 below 1e-16; with 160 bands (threshold 0.35) a pair at 0.35 is missed with probability 9.0e-4 and a pair at 0.45 with 2.2e-7. `banded_candidates_reproduce_the_exhaustive_comparison` checks, on 480 synthetic passages, that every pair at each threshold is a candidate and that clusters and groups equal the all-pairs result.
+
+Measured 2026-10-04 on synthetic passages (optimised build of the same functions, one run on a loaded machine; `banded_pass_cost` reproduces it):
+
+| passages | sets | index | banded pass | pairs compared | all-pairs pass |
+|---|---|---|---|---|---|
+| 2,000 | shingles, 0.60 | 15 ms | 2 ms | 339 of 1,999,000 | 7.4 s |
+| 2,000 | words, 0.35 | 150 ms | 42 ms | 8,252 of 1,999,000 | 1.7 s |
+| 16,000 | shingles, 0.60 | 329 ms | 69 ms | 2,613 of 127,992,000 | 259 s |
+| 16,000 | words, 0.35 | 444 ms | 842 ms | 461,692 of 127,992,000 | 94 s |
+| 40,000 | shingles, 0.60 | 2.1 s | 0.6 s | 6,581 of 799,980,000 | not run |
+| 40,000 | words, 0.35 | 5.3 s | 2.7 s | 2,850,625 of 799,980,000 | not run |
+
+Groups were identical wherever both passes ran. 16,000 passages is the most 2,000 documents can yield. Reading and tokenising the documents was not timed, so the document cap was not raised.
+
+### E. What a finding does and does not claim
+A finding states how many passages in how many documents share wording, names the agencies, and cites up to 12 passages (one per agency first) with the character range of each in `documents_fts.extracted_text`, the units `SUBSTRING` uses. Every finding's text says that shared wording is not evidence that agencies coordinated and does not show that any request was not reviewed individually: standard wording, a common template or a quoted statute all produce it. All three kinds are pattern signals (`is_legal_claim` false).
+
+## 24. Adopted and Actual Spending, Settlement Accounts and Overtime Paid
+
+`src/utils/spendingLeads.ts`, run by automatic discovery and stored as `SPENDING_RECORD_LEAD` findings (§17 E). Verified natively by `tests/data_discovery.rs::spending_checks_keep_no_rows_apart_from_zero_and_tie_a_budget_to_one_employer`, which imports the operating budget, the operating actuals and the State Controller's city pay file with each publisher's own header and runs the three statements through the restricted SQL boundary. The fixture is generated by `scripts/spending-leads-fixture.mjs`.
+
+### A. Which tables are read
+The operating actuals are the latest imported table with `dept_name`, `report_fy`, `amount`, `account` and `account_number` columns and no `budget_cycle` column (`actuals_operating_datasd.csv`, fetched as `OPERATING_ACTUALS`). The budget table is the one §17 B reads. The pay file is any imported table with `EmployerName`, `DepartmentOrSubdivision`, `Position`, `RegularPay`, `OvertimePay` and `TotalWages` columns: the State Controller's yearly `<year>_City.csv`, one row per position held, without names. The Controller's site refuses clients that are not browsers, so the app does not fetch it; the user downloads the file and imports it.
+
+### B. Adopted against actual
+Per department and fiscal year, adopted is the sum of `amount` over budget rows whose `budget_cycle` is adopted and whose `account_number` begins with 5; actual is the sum over the same accounts in the actuals table. Departments are matched on `dept_name` without regard to letter case. Only fiscal years with rows in both tables are read, so a year the actuals table does not reach is not counted. The statement returns the departments followed (a name containing "homeless", Police, Environmental Services) and any department-year with adopted rows and no row of any account in the actuals table.
+
+A followed department gets a lead when a year's actual expense is at least 10% below adopted and at least $1,000,000 below. Ten percent is the yardstick §9's year-over-year measure uses; the dollar floor keeps out a small office's unfilled post. Neither is a statistical test. The lead lists every covered year of the department, so the years that do not meet the yardstick are visible beside the ones that do. A year with adopted rows and no actual rows is written as "no rows in the actuals table"; rows in revenue accounts only, or an amount that could not be read, are written as that. None is shown as zero or counted as a year below adopted. A second lead lists every department-year with an adopted amount above zero and no actual rows under that department name.
+
+This differs from the financial workspace's measures (§9, `budget_lines.rs`): those compare a fund's actual with its adopted amount and report it when it is above, compare a department's actual with its own previous year, and compare one overtime account's actual with its adopted line. None compares a department's actual with its adopted amount, reports spending below adopted, or reports an adopted amount with no actual rows.
+
+### C. Settlement and claim accounts
+Rows whose account label contains "Negotiated Settlement" or begins "Claims-Pub Liab", per fiscal year and department, for the five latest fiscal years in the actuals table. Each year is stated with its sum, its row count, the number of departments with a row in these accounts and the number of departments in the table that year; the three largest departments and the followed departments are named. A year with no such row is stated as having none. The years are never compared: in the file retrieved 2026-10-05 these accounts have rows from 10, 10, 6, 1 and 38 departments in fiscal 2019 to 2023, so a difference between years can be a change in where the City books a payment.
+
+### D. Overtime in the pay file
+Per `EmployerName` with at least 100 rows: the sums of `OvertimePay` and `RegularPay` and the count of positions with overtime of $100,000 or more. Per department: the same sums, and overtime as a share of regular pay when the department has at least 30 positions, for the five departments with most overtime and the followed departments. At most three employers are described, the budget's city first, then by number of rows. A row with no overtime figure adds nothing and is counted apart.
+
+An employer is read as the budget table's city only when at least 20 of its department names, and at least half of them, are the budget's own `dept_name` values (2024 file: San Diego 56 of 60, Sacramento 17 of 257, Los Angeles 9 of 46, Oceanside 8 of 16). For that employer each department's overtime is set beside the adopted amount of its accounts whose label contains "overtime", for the fiscal year with the pay file's year number and the one after. The pay file covers a calendar year and the budget a fiscal year, so both fiscal years are shown and the lead says they are not the same period. A department with no adopted overtime row is said to have none. A table holding more than one year gets no budget comparison.
+
+The count of positions with overtime above regular pay is not produced. A low regular figure can be part of a year in the position, and the file does not record how long a position was held.
+
+### E. What a lead does and does not claim
+Each figure is a sum from a published table. Adopted is the original appropriation, not the revised budget: a transfer or a mid-year change is in neither figure, and an amount not spent may have been carried forward, moved or returned to its fund. The settlement accounts do not name cases or reasons. The pay file records amounts employers reported; a row is a position, not a person. No lead says why an amount was not spent or why overtime was worked. A result the row limit cut short produces no lead.
+
+### F. Missing tables
+`dataGaps.ts` offers `OPERATING_ACTUALS` when a budget table is imported and no actuals table is.
+
+## 25. Disclosure Filing Leads
+
+`src/utils/disclosureLeads.ts`, run by automatic discovery and stored as `DISCLOSURE_FILING_LEAD` findings (§17 E). Verified natively by `tests/data_discovery.rs::agency_report_export_counts_reports_by_form_and_by_named_official`, which imports a file with the headers and values of the City of San Diego filing portal's agency-report export. The app does not download from that portal; the file is exported there and imported (`docs/data-sources/city-disclosure-filings.md`).
+
+### A. Which tables are read
+A table with `filing_date`, `filing_type`, `description`, `agency` and `official` columns: one row per report on FPPC Form 801, 802, 803 or 806.
+
+### B. What is counted
+The form is the first eight characters of the filing type in upper case, so a type carrying a note ("FPPC 802; Not electronically filed.") is counted under its form. The date is the first ten characters of the filing date. Counted: reports per form with the number undated and the first and last date; for Form 803, reports per official named, the number of officials named, and reports whose official cell is empty, which are counted apart and never under a name. A lead needs 10 Form 803 reports and names an official with 3 or more, at most five.
+
+### C. What a lead does and does not claim
+A behested payment report is the official's own disclosure of a payment made to a third party at the official's request. The export has a short description and no amount column; payor, payee and amount are on the filed form. A count of reports is not a finding about any decision, a larger count can reflect more complete reporting, and the export covers only the dates chosen when it was downloaded.
+
+## 27. Meeting Posting Time and Agenda Revisions
+Shown in the Meetings view; neither produces a finding.
+
+### A. Posting time
+The time is the `Last-Modified` header stored with the first fetch (`document_acquisitions`) that delivered the bytes the app holds. A re-check that received other bytes describes a copy the app did not keep and is not used. The header is the server's statement about the file, not when the public could first read it.
+
+It is shown as not recorded, with the reason, when:
+* no fetch of the held bytes is recorded, the header is absent, or it is not an HTTP date;
+* the host is `sandiego.hylandcloud.com`, measured 2026-10-04 and 2026-10-05 to answer every page with the request time;
+* the header is not at least 5 seconds earlier than the response's own `Date` header (generated pages on sandiego.gov and OnBase stamp `Last-Modified` 0 to 2 seconds before `Date`);
+* the fetch predates storage of the response `Date` and the header is not at least one hour earlier than the local fetch time, since a local clock can be wrong.
+
+### B. Time before the meeting
+Computed for an agenda file only when its posting time is recorded, the meeting has one heading date, and an agenda heading states a start time directly after that date ("…, 2026, AT 10:00 AM"); agendas of one meeting stating different times yield none. The stated start is read as US Pacific time by the federal rule (daylight time from 02:00 on the second Sunday of March to 02:00 on the first Sunday of November), and only for publishers the source table classifies as a San Diego or State agency. The result is whole minutes, floored, and is negative when the header is later than the start.
+
+The view counts agenda files with both times whose result is at least 0 and under 4,320 minutes ("posted less than 72 hours before the meeting, per the file's Last-Modified header"), and separately those below 0. Exactly 72 hours is not counted. No notice requirement is evaluated: which rule applies to a meeting, and whether posting a file on a website satisfied it, are not facts a header carries.
+
+### C. Agenda copies
+Copies are the agenda documents with extracted text grouped into one meeting (same publisher meeting identifier, or same source, body and heading date). They are ordered by posting time when every copy has one, otherwise by collection order, and the view states which. At most the 6 latest are compared, each with the next.
+
+A copy is read as its `Item N:` headings. An item's title runs from its heading to the first of "Council District", "Proposed Actions" or "Recommendation", or to the next heading, whitespace collapsed, first 300 characters. Its text is everything up to the next heading. By item number: present only in the later copy is added; only in the earlier, removed; in both with different titles, reworded; in both with equal titles and different text, text changed. The last item's text is never compared and its title only when a marker ends it; a number occurring twice in a copy is not compared. These are listed as not compared.
+
+### D. What is not compared
+A revised file published at the address of the original replaces the stored text when collected again (OnBase dockets, the Civil Service Commission agenda). The view reports how many fetches of the address returned different bytes and compares nothing, because the earlier text is not retained. A difference between copies is a difference between files and says nothing about why an agenda changed.
+
+## 30. Redaction Context Matched in Other Sources
+`analysis/detectors/inferred_redaction_identity.rs` (finding kind `REDACTION_CANDIDATE_INFERRED`), with bookkeeping in `storage/redaction_sweep.rs` and the anchor definition in `analysis/reconstruction.rs` (`AnchoredSpan`), which the on-demand reconstruction panel shares.
+
+### A. What is compared
+A redaction mark is a bracketed `[REDACTED]`, `[WITHHELD]` or `[EXEMPT]` label, an exemption stamp such as `(b)(6)` that does not follow a section number, or a run of three or more block characters, found in `documents_fts.extracted_text`. Runs of underscores or the letter X are blank form fields and are not compared. The anchors of a mark are up to five whitespace-separated words on each side within 160 bytes; a mark with fewer than three words on either side, or with another mark among those words, is not compared. The first 24 usable marks of a document are kept (`MAX_SPANS_PER_DOCUMENT`).
+
+A source matches when it holds the left anchor, then 1 to 160 characters on one line, then the right anchor, compared without regard to case or the amount of whitespace. The text must lie between the two anchors; the same words occurring nearby do not match. Text that is itself a mark, or that `mask_pii` recognises (a phone number, a street address, a card or labelled identifier), is never a match.
+
+### B. Imported tables
+A table row is read as one line: its original cells in column order, empty cells left out, joined by single spaces. Against a row, a mark is compared by the anchors on its own line of the document (again up to five words, at least three), because a row holds one line; a mark whose line is too short keeps its full anchors. The row matches when the line holds the left anchor, text and the right anchor in that order and the text lies inside one cell. The anchors may be the neighbouring cells of that row or part of the same cell. Text that runs across a cell boundary is refused: no single recorded value stands between the anchors. A number written differently in the two places ("48,200" and "48200.00") does not match.
+
+### C. What is withheld
+* Two different texts between the same anchors, in any sources, mark the wording as reused prose; the mark is not reported and is not compared again until its document changes.
+* Where the mark is a personal-privacy stamp (`(b)(6)`, `(b)(7)(C)`), its passage contains a lead-in such as "signed by" or "attention:", or the text found is two to five capitalised words that are not a public role title, the same text must stand between the anchors in two independent sources. Two documents with the same text digest, or two imports of one file, are one source. The earlier engine asked for two documents for a person; this asks for two independent ones and applies to anything shaped like a name.
+* A file the user added by hand is never read, as the redacted document or as a source.
+* At most 3 findings per document; at most 5 sources listed per finding, the rest counted.
+
+### D. Coverage and bounds
+Eligible documents are public, held under a collected source, with stored text of at most 2 MiB (`MAX_DOCUMENT_TEXT_BYTES`; a larger text is an export and is not read). Each is taken in once, in portal and id order, and identified by portal and id together. Runs are numbered. A document or table read in run *n* has been compared with every mark recorded up to run *n*, and is read again only when a newer mark exists. So a new source is compared with every old mark in the run that takes it in, and a new mark causes every older source to be read again over later runs.
+
+Per run (`SweepLimits`): 500 documents or 64 MiB of text taken in for the first time; 500 documents or 64 MiB read again, longest-waiting first; 8 tables and 400,000 table rows, a table in progress first. What a limit leaves stays recorded as not yet read and is done by later runs; a table stopped part-way resumes at the next row. A run happens when findings are refreshed (after ingestion, or on request), so coverage of a large corpus completes over several refreshes. Stored matches are reported on every run, so a finding stands until one of its documents or tables changes or leaves.
+
+All left anchors are searched in one pass of each text (Aho-Corasick over the lower-cased, whitespace-collapsed text); the pattern is run only for marks whose two anchors both occur.
+
+Measured: 2026-10-05, debug build, one run on a loaded machine (`table_scan_cost`): a run that took in 500 one-mark documents and read a 300,000-row, five-column imported table against those 500 marks took 12.7 s, row assembly by the `analytical_rows` view included. An optimised build is not measured. Reading documents on a real corpus is not measured.
+
+### E. What a finding does and does not claim
+A finding states that the words around a mark in one document also appear in a number of other sources with text where the mark is, and cites each: the document passage by character range in the stored text (the units `SUBSTRING` uses), a table by display name, recorded source address, retrieval date, SHA-256, row number and column. It does not print the text found and does not say what the redaction covers; its own wording says that reused wording in templates and amended versions produces the same match. Confidence is `Unassessed`: matching words are not a measured probability. Severity is Serious when two independent sources agree and Notable otherwise. It is a pattern signal (`is_legal_claim` false), and reports and bundles leave it out.
+
+The ranked engine in `analysis/redaction_inference.rs` (context of 120 characters each side, values drawn from a 400-character excerpt, ceilings of 9,500 basis points with the semantic model and 6,000 without) remains only behind the on-demand panel. It now searches every portal, labels each match with its portal, excludes the redacted document by portal and id, and never counts a hand-added file.
+
+## 33. Follow-up Letter After a Deadline Passes With No Recorded Response
+
+Code: `analysis/artifacts/overdue_followup.rs` (letter), `analysis/artifacts/agency_record.rs` (paragraph and minimum), `storage/sqlite/agency_record.rs` (counts), command `draft_overdue_follow_up`, UI `OverdueFollowUp.tsx` in the casework panel.
+
+### A. Dates and rule
+The letter is drafted for one saved casework request. Its dates come from `request_compiler::evaluate_filing`, the same call the request's filing plan is built from, so the letter and the plan cannot disagree. The received date is the request's `submittedAt`, widened to the start of that day in UTC; the letter names it as the sender's own record and says the count treats it as the date of receipt. The deadline is the evaluator's `effective_deadline_at`: received date plus 10 calendar days under Government Code § 7922.535, moved to the next court day when it lands on a Saturday, Sunday or judicial holiday (`court_calendar`), or the date a valid extension notice gave, moved the same way. Days since the deadline is `calendar_days_elapsed - allowed_calendar_days` as of the instant the command runs. The letter is dated that day.
+
+A casework request has no extension field, so that path always evaluates with no extension and the letter says none is recorded. The drafting function itself accepts an evaluated extension (tested) for a caller that has one.
+
+### B. Refusals
+No letter is produced, and the reason is returned for display, when any of these holds:
+
+| Condition | Why |
+|---|---|
+| no `submittedAt` | there is no date to count from; none is guessed |
+| state `DRAFT` | the request is not recorded as submitted |
+| state `ACKNOWLEDGED`, `PARTIAL`, `PRODUCED` or `CLOSED` | a response is recorded |
+| any production recorded at or after the filing date (basis is not `ObservationWithoutRecordedActivity`) | a response is recorded |
+| a sourced determination | `statutory_appeal.rs` covers that case |
+| extension status other than `NotInvoked` or `Valid` | the same two statuses `statutory_appeal.rs` accepts and `cpra_calendar_confidence_basis_points` scores without penalty |
+| elapsed days not greater than allowed days | the deadline has not passed; on the deadline day there is no letter |
+| received date with no stated source | nothing is counted from an unsourced date |
+| jurisdiction other than `US-CA` | no other statute is modeled |
+| the evaluator returns an error (for example a submission date after today) | the dates cannot be evaluated together |
+
+### C. What the letter claims
+It states the received date and its source, the rule, the computed deadline (labelled as computed), the days since, and that the sender's records hold no response. It asks for the determination and the estimated date of availability, and for a copy of anything already sent. Its evidence basis is `DEADLINE_PASSED_WITHOUT_RECORDED_RESPONSE` and its confidence is `Unassessed`: 10000 basis points is reserved for a count in which every date input was recorded, and here the determination was not observed. It is titled a follow-up. A test asserts the text contains none of "violat", "unlawful", "illegal", "breach", "intent", "deliberate", "willful", "refus", "ignor", "bad faith", "appeal", "petition".
+
+One sentence says a requester may seek judicial relief under Government Code section 7923.000 et seq. The section was read at leginfo.legislature.ca.gov on 2026-10-05 (Chapter 1 of the enforcement part; added by Stats. 2021, Ch. 614, operative 2023-01-01). The page was read through a text-extraction tool, not in a browser. The letter cites the section number and quotes none of its text.
+
+### D. The agency paragraph
+Optional. The user picks an agency after the first draft; nothing links a casework request to a library agency automatically, and a custodian name is not matched to one. An agency is `(portal_subdomain, agency_id)`; the same id on another portal is never pooled (tested).
+
+- N: requests assigned to the agency with a non-empty `closed_at`. Period: the earliest and latest `created_at` date among them.
+- M of N: requests the shared evaluator reads as `SourcedDeterminationEvent` with an extension status of `NotInvoked` or `Valid`. A determination timestamp with no source, an unreadable date, or an unknown extension reason leaves the request out of M; it stays in N and is described as counted neither way.
+- L of M: those the evaluator marks past the deadline.
+- K of N: closed requests whose stored closure notice classifies as no responsive records (`dispositions.rs`).
+- C of K: those with an undismissed `NO_RECORDS_CONTRADICTED_BY_RELEASE` finding for the same portal and agency. That detector records an earlier release by the same agency close in subject and wording; the paragraph says the comparison measures similarity of text and not responsiveness.
+
+Minimum N is 10 (`MINIMUM_CLOSED_REQUESTS`), tested at 9, 10 and 11. Below it the paragraph is omitted. With 10, one request moves any share by at most a tenth; below that a count describes a handful of individually identifiable requests while reading as a pattern. No percentage is printed at any N. When M is 0 the paragraph says no request carries a sourced determination and prints no late count; when K is 0 the no-records sentence is omitted. A zero is printed only for L with M above 0, or C with K above 0. The paragraph says the counts come from the sender's library and not from all requests the agency received.
+
+### E. Table leads in the dossier
+`src/utils/tableLeadSources.ts` is the only reader of the "Tables read:" and "SQL:" tail that `service_leads.rs` appends to a table lead's stored explanation. The on-screen dossier shows, per table, its name, source address, retrieval date and full SHA-256, then the query. A line whose parts cannot be separated is shown as stored. An explanation without the tail yields no section.
+
+### F. Record gaps behind a table lead
+
+Source: `src/utils/recordGaps.ts`, `src/utils/belongingsLeads.ts`, `storage/casework.rs`
+(`request_record_gap`, `record_gap_requests`).
+
+A gap definition is data: a record, the checks (by query id) whose leads leave it open, the record
+types and fields to ask for, search terms, and the check that reads the record once imported. It
+names no place or agency. The period and identifiers come from the lead's own result; the
+custodian is the saved source whose host the table was retrieved from, else that host, else left
+blank. One gap exists per definition, check and source address, so a newer copy of a table does
+not ask again.
+
+States: not asked; found (held requests matching a search term that have released files, which
+is not an answer); drafted (tracked, no submission date, so no clock); requested and overdue (the
+CPRA determination clock `plan_filing` already models, counted at read time); produced; closed;
+answered. Answered requires the definition's check to have returned rows on an imported table.
+
+Tracking stores a `CaseworkRequest` whose id is derived from the gap key, in a case whose
+`report_id` is `lead:` plus a digest of the check and source. That case cites no document and has
+topic `general`. Sending the same gap again changes nothing.
+
+The stored-property check counts rows by the disposition text as written, blank apart, and
+entries with a non-blank release date. With no release column the release count is NULL, not
+zero. Its column names are assumed; no released stored-property log has been imported, so the
+check is untested against a real one.
+
+Not built: the request compiled by casework always cites the CPRA, whatever jurisdiction the
+table came from; the SB 272 catalogue is not consulted to name the system of record; only the
+stored-property definition has a check, so the other definitions cannot reach answered.
+
+## 34. Organisation Filings
+
+Source: `ingestion/organisation_filings.rs`, `ingestion/remote_zip.rs`, `parsers/form990.rs`,
+`storage/organisations.rs`, `storage/financial.rs` (`organisation_public_money`),
+`src/components/dashboard/OrganisationFilingsPanel.tsx`.
+
+This view states what documents say. It stores no finding and has no finding kind.
+
+### A. Which returns are read
+
+The IRS publishes one e-file index per submission year (2017 onward) and the returns in batch
+archives. Only the indexes from 2024 name the archive that holds each return (`XML_BATCH_ID`), so
+only those years' returns are read. A check downloads each needed year's index (54 to 93 MB on
+2026-10-05) and replaces the library's copy of that year (`irs_efile_index`, every row, about a
+million a year) in one transaction, then deletes the file; a failed read leaves the earlier copy.
+A year older than the previous calendar year is fetched once; the current and previous years are
+fetched again when the copy is more than seven days old. The organisation's rows are then read
+from the library, so checking a second organisation costs no index download.
+
+The index writes some archive names in lower case (`2024_TEOS_XML_05a`) where the published file
+and its members are upper case; the lower-case address redirects to a not-found page. Archive
+names are upper-cased before use. The 2024 archives hold each return under a directory named
+for the archive; the 2025 and 2026 archives hold it at the top level. A return is therefore found
+by its file name (`<OBJECT_ID>_public.xml`) in any directory, without regard to case, and the
+member name the archive actually uses is the one stored.
+
+A return is read with byte-range requests: the archive's last 65,633 bytes (end record, zip64
+locator and record), the central directory (15 to 17 MB for an archive of about 1 GB and 150,000
+members), then the member's local header and data. The member must match the size and CRC-32 its
+directory entry records. Members are stored, deflated (2024) or Deflate64 (2025 and 2026); the
+Deflate64 path has no fixture test and is exercised only by the ignored live check. Its SHA-256, archive address and member name are stored with the XML
+itself, so a later check re-reads the stored copy. A request that is redirected, or answered
+without `206` and a matching `Content-Range`, is an error.
+
+Only Form 990 is read. A 990-EZ, 990-PF or 990-T is listed with that reason.
+
+### B. What a return states
+
+Element names were taken from 9,681 published Form 990 returns in one 2024 archive (schema
+versions 2020v1.3 to 2023v4.0) and three more read singly (to 2023v5.1), not from the schema
+documents.
+
+| Shown | Element |
+|---|---|
+| Revenue, expenses, assets, liabilities, net assets | `CYTotalRevenueAmt`, `CYTotalExpensesAmt`, `TotalAssetsEOYAmt`, `TotalLiabilitiesEOYAmt`, `NetAssetsOrFundBalancesEOYAmt` |
+| Government grants | `GovernmentGrantsAmt` |
+| Part VI line 5, significant diversion of assets | `MaterialDiversionOrMisuseInd` |
+| Part VII line 3, a former person is listed | `FormerOfcrEmployeesListedInd` |
+| Part VII Section A rows | `Form990PartVIISectionAGrp` |
+| Schedule J Part I line 4a, severance or change-of-control payment | `IRS990ScheduleJ/SeverancePaymentInd` |
+| Schedule J Part II rows | `RltdOrgOfficerTrstKeyEmplGrp` |
+| Schedule L Parts I to IV | `DisqualifiedPersonExBnftTrGrp`, `LoansBtwnOrgInterestedPrsnGrp`, `GrntAsstBnftInterestedPrsnGrp`, `BusTrInvolveInterestedPrsnGrp` |
+| The filer's explanations on Schedules J, L and O | `SupplementalInformationDetail` |
+
+A yes/no element holds `true`/`false`, `1`/`0`, or `X` for a checked box; any other value fails
+the return rather than being guessed. An element the return does not carry is absent: shown as
+"The return carries no answer" or "not stated", never as No or zero. Whether Schedule J or L is
+attached is recorded separately from its rows, so an empty list on a return without the schedule
+is not read as "none reported". A Schedule L row with no name, relationship, description or
+amount is dropped: filing software emits such rows for a part left blank. Part VII rows are shown
+when marked former or carrying any compensation; the rest are counted.
+
+Schedule O is quoted whole, every explanation with its line reference, opened by default when
+Part VI line 5 is answered Yes (the form requires an explanation there); which paragraph answers
+which line is left to the reader rather than matched from its label. Not read: Schedule J Part III beyond its supplemental text, Schedule R related organisations, and the
+amount of a severance payment, which the form has no field for. The filer may give it in the
+Schedule J explanation, which is quoted whole.
+
+### C. Summary by year
+
+ProPublica Nonprofit Explorer API v2 (`/organizations/<ein>.json`, `filings_with_data`): tax
+year, form type, total revenue, total functional expenses, total assets and liabilities at year
+end, and compensation of current officers. These are ProPublica's extract of IRS files, shown
+with that attribution and a link, and cover years the returns above do not. Name search uses
+`/search.json`. The site's `download-xml` and `download-filing` addresses are excluded by its
+robots file and are not requested.
+
+### D. Single audits
+
+Federal Audit Clearinghouse (`api.fac.gov/general?auditee_ein=eq.<ein>`, then
+`/findings?report_id=in.(…)`), with the user's own api.data.gov key sent in `X-Api-Key` to that
+host only and not stored. Per audit: year, fiscal year end, auditor, federal amount expended, and
+the submission's recorded answers (financial statement opinion, going concern, internal control
+deficiency and material weakness, material noncompliance, low-risk auditee) with their values as
+recorded. Per finding row: reference number, compliance requirement code, and the recorded Y/N
+columns. With no key, no lookup runs and the record holds no audit history, which the view states.
+Finding text (`/findings_text`) is not read; the one 2016 row sampled held a migration
+placeholder instead of text.
+
+### E. Public money in the library
+
+For each table mapped under roles contract, amendment or payment with vendor and amount columns,
+and each table the user names as a payee table (`organisation_payment_mappings`: vendor, amount
+and optional fiscal-year columns, checked against the imported schema when saved): rows whose
+vendor value, reduced to lower-case letters and digits, contains the organisation's
+name reduced the same way, grouped by vendor value as written and fiscal year. These tables carry
+no EIN, so this is a name match and every matched vendor value is shown. A group's sum is NULL
+when any of its amounts could not be read as a number. It is computed when the record is read,
+not stored, so it follows the tables as they change.
+
+### F. People across returns and year changes
+
+`organisationPeople.ts` joins Part VII and Schedule J rows across the read returns by name
+reduced to letters and digits (the newest return's spelling shown), newest return first; a return that does not
+list a person yields no cell, not a zero. `yearChange` is the difference between consecutive
+summary years, null when either is unstated. Both are shown as arithmetic on stated figures.
+
+### G. Portfolio
+
+`src/utils/organisationPortfolio.ts` derives one row per stored organisation from its record:
+the latest return with a read statement (by tax period), its answers, Schedule L row count,
+audits and finding rows, and the payment groups, summed only when every group has a sum. Each
+absent value is labelled as absent ("no answer", "not read", "no lookup"); none is shown as No or
+zero. Export CSV writes the same rows (`portfolioCsv`), absent values as empty cells, through
+`export_organisation_portfolio_csv` to a path chosen in the save dialog.
+
+A pasted list of names or EINs (`organisationNames.ts`) is checked sequentially in the view (one
+`check_organisation_filings` call at a time); a failure is listed and the rest continue. A name
+is resolved through the ProPublica name search and taken without confirmation only when exactly
+one result's name equals it with letters and digits alone compared; any other case is the
+reader's choice among the first five results, or skipped. `organisation_payees` lists every
+distinct payee value of the searched payment tables (500 per table, most rows first) so the
+organisations the library pays can be looked up by the name the table uses.
+
+### H. Connections to the library
+
+`Library` in the panel searches the collected documents (`hybrid_search`, first ten) and held
+requests (`query_audit_records_page`, first ten) for the organisation's name as text; a search
+that fails is reported as such, not as "none". `organisationRequests.ts` builds the contract-file
+request (contracts and amendments, invoices and payment records, monitoring and corrective action,
+outcome reports) to a saved source the reader chooses, keyed `organisation:<ein>:contract-file:
+<portal key>` with lead reference `organisation:<ein>`, and tracks it through
+`request_record_gap`, so it lives in casework beside the record gaps (§33 F) with the same states.
+The same chosen source can be collected from for the organisation's name as subject
+(`start_data_source` with `guidanceForSubject(name)`), the path a record gap's portal search uses;
+the panel does not read the results itself, they arrive through the ordinary collection and show
+in the two lists on the next open.
+The period is the latest read return's tax period and the two preceding fiscal years, or "the
+last three fiscal years" when no return was read.
+
+### I. Failure of one source
+
+A source that fails (an index year, an archive, the summary, the audits) leaves a warning naming
+it and whatever an earlier check stored from that source. The rest of the record is saved.
+
 ---
 
 ## Appendix: Eval-Set Scorecards

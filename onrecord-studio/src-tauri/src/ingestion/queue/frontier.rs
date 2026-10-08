@@ -176,7 +176,7 @@ pub(super) fn enqueue_task(
 }
 
 pub(super) fn decrement_atomic(value: &AtomicUsize) {
-    let _ = value.fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+    let _ = value.try_update(Ordering::AcqRel, Ordering::Acquire, |current| {
         Some(current.saturating_sub(1))
     });
 }

@@ -2196,9 +2196,11 @@ fn collect_redaction_annotations(
                 values.len() % 8 == 0 && values.len() <= MAXIMUM_FILLED_RECTANGLES_PER_PAGE * 8
             })
         {
-            for quad in quad_points.chunks_exact(8) {
+            for quad in quad_points.as_chunks::<8>().0 {
                 let points = quad
-                    .chunks_exact(2)
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
                     .filter_map(|point| {
                         Some((object_number(&point[0])?, object_number(&point[1])?))
                     })
@@ -2777,8 +2779,10 @@ fn collect_xmp_metadata(document: &Document) -> Vec<String> {
 
 fn decode_utf16_metadata(bytes: &[u8], decode: fn([u8; 2]) -> u16) -> String {
     let units = bytes
-        .chunks_exact(2)
-        .map(|chunk| decode([chunk[0], chunk[1]]))
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|chunk| decode(*chunk))
         .collect::<Vec<_>>();
     String::from_utf16_lossy(&units)
 }

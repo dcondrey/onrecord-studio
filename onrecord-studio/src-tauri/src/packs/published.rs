@@ -631,7 +631,7 @@ mod tests {
             .join("san-diego-money")
             .join(&summary.pack_version);
         assert_ne!(kept_revision(&directory), BRANCH);
-        let repository = DuckDbRepository::new(&root.path().join("library.duckdb")).unwrap();
+        let repository = DuckDbRepository::new(root.path().join("library.duckdb")).unwrap();
         repository
             .run_migrations(include_str!("../../migrations/0001_initial_schema.sql"))
             .await

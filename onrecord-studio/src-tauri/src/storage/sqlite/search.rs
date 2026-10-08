@@ -288,7 +288,7 @@ impl DuckDbRepository {
             }
             completed = completed.saturating_add(processed);
             self.search_index_pending
-                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |pending| {
+                .try_update(Ordering::Relaxed, Ordering::Relaxed, |pending| {
                     Some(pending.saturating_sub(processed))
                 })
                 .ok();

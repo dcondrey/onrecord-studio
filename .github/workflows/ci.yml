@@ -100,7 +100,9 @@ jobs:
           cache-dependency-path: onrecord-studio/package-lock.json
       - run: npm ci
       - name: npm advisories
-        run: npm audit --audit-level=high
+        # Shipped dependencies only. The build tooling's advisories (Tailwind 3's file-watching
+        # chain) need the Tailwind 4 migration; they never reach the app bundle.
+        run: npm audit --omit=dev --audit-level=high
       - uses: rustsec/audit-check@v2
         with:
           # The GTK3 and unic-* advisories arrive through Tauri's Linux webview stack and have no

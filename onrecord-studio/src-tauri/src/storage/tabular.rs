@@ -47,12 +47,14 @@ pub(crate) fn prepare(
         }
         let little_endian = bytes[0] == 0xff;
         let units = bytes[2..]
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|pair| {
                 if little_endian {
-                    u16::from_le_bytes([pair[0], pair[1]])
+                    u16::from_le_bytes(*pair)
                 } else {
-                    u16::from_be_bytes([pair[0], pair[1]])
+                    u16::from_be_bytes(*pair)
                 }
             })
             .collect::<Vec<_>>();
