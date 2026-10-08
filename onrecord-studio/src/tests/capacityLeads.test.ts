@@ -82,6 +82,13 @@ describe('budget, Encampment reports and shelter beds side by side', () => {
     expect(lead.detail).toContain('Nothing here shows why any series moved.');
     // The department's first year is the first compared, not a rise from nothing.
     expect(leads([{ year: 2023, departmentRows: 0, expense: null }, { year: 2024 }])).toEqual([]);
+    // The figure draws the same years with each absence as a gap carrying its reason, never a 0.
+    if (lead.figure?.kind !== 'series') throw new Error('the capacity lead draws a series');
+    const budget = lead.figure.panels.find((panel) => panel.key === 'budget')!.values;
+    expect(lead.figure.points.map((point) => point.label)).toEqual(['FY 2023', 'FY 2024', 'FY 2025', 'FY 2026', 'FY 2027']);
+    expect(budget[0]).toEqual({ state: 'not-recorded', reason: 'no department with "homeless" in its name; not an amount of zero' });
+    expect(budget[3]).toEqual({ state: 'not-recorded', reason: 'the budget table has no rows marked adopted' });
+    expect(lead.figure.panels.find((panel) => panel.key === 'reports')!.values[4]).toEqual({ state: 'not-covered', reason: 'the imported files cannot hold every Encampment report filed' });
   });
 
   it('stores the lead with every table its SQL read, the inventory first', () => {

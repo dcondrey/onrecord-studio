@@ -249,6 +249,85 @@ const FINDINGS = [
   finding('f-dismissed', 'REGENERATED_RESPONSE', 'INFO', 5100, 26_0602, 9051, 'Retention schedule PDF regenerated two days after the request was closed', 'Producer metadata changed; text is identical. Dismissed as an administrative re-export.', 70, 'regeneration', true),
 ];
 
+// ---- Stored lead figures (src/types/analysis.ts LeadFigure), one per lead finding -------------
+
+/** @param {number} value */
+const fv = (value) => ({ state: /** @type {const} */ ('value'), value });
+/** @param {'not-recorded'|'not-covered'|'excluded'} state @param {string} reason */
+const fgap = (state, reason) => ({ state, reason });
+/** One call type-year of calls_outcomes as the builder draws it (callLeads.ts). */
+const callRow = (type, year, partial, [arrest, report, noReport, unfounded, other], [blank, conflicting, cancelled], crisis) => ({
+  key: `${type}:${year}`, group: type, label: `${year}${partial ? ' so far' : ''}`, partial, values: [arrest, noReport, report, unfounded, other],
+  excluded: [{ key: 'blank', label: 'no disposition', count: blank }, { key: 'conflicting', label: 'conflicting', count: conflicting }, { key: 'cancelled', label: 'cancelled or duplicate', count: cancelled }].filter((stub) => stub.count > 0),
+  overlay: { label: 'Crisis Response Team (also counted under its outcome)', value: crisis }, note: null,
+});
+const CALL_SEGMENTS = [{ key: 'arrest', label: 'Arrest', tone: 'lead' }, { key: 'noReport', label: 'No report required', tone: 'ord-1' }, { key: 'report', label: 'Report', tone: 'ord-2' }, { key: 'unfounded', label: 'Unfounded', tone: 'ord-3' }, { key: 'other', label: 'Other code', tone: 'ord-4' }];
+
+/** @type {Record<string, import('../src/types').LeadFigure>} */
+const LEAD_FIGURES = {
+  'f-call-lead': { kind: 'stacked', measure: 'How the calls ended, by call type and year', claim: 'descriptive', unit: 'count', normalise: true,
+    caption: 'Each bar is the calls with a disposition; blank, conflicting and cancelled calls sit beside it, outside the bar.', notes: ['14 SLEEPER calls have no readable date and are in no year.'], segments: CALL_SEGMENTS,
+    rows: [
+      callRow('SLEEPER', 2026, true, [96, 141, 2790, 205, 572], [22, 4, 380], 61), callRow('SLEEPER', 2025, false, [162, 230, 3856, 301, 882], [31, 6, 512], 88), callRow('SLEEPER', 2024, false, [211, 265, 3650, 344, 1072], [40, 3, 540], 12),
+      callRow('CW (check the welfare)', 2026, true, [410, 2950, 9800, 1120, 1950], [80, 10, 2100], 640), callRow('602 (trespassing)', 2026, true, [690, 610, 3980, 520, 648], [30, 2, 820], 25),
+      callRow('5150 (listed as mental case)', 2026, true, [40, 1810, 1180, 90, 457], [12, 1, 310], 820), callRow('647F (drunk, drugs or alcohol)', 2026, true, [380, 210, 520, 60, 112], [8, 0, 160], 14),
+    ] },
+  'f-abatement-lead': { kind: 'bins', measure: 'Hours from a posted notice to the abatement', claim: 'descriptive', unit: 'hours', caption: '2,067 places with exactly one notice and one abatement, matched on address and coordinates.', notes: ['214 of 11,104 abatements dated within the notice log\'s period are at a place with no notice in that log.'],
+    bins: [{ key: 'under_3', label: 'under 3 h', from: 0, to: 3, count: 22 }, { key: 'from_3_to_24', label: '3 to 24 h', from: 3, to: 24, count: 79 }, { key: 'from_24_to_72', label: '24 to 72 h', from: 24, to: 72, count: 1811 }, { key: 'over_72', label: '72 h or more', from: 72, to: null, count: 144 }],
+    before: { key: 'before', label: 'completed before the notice was logged', count: 11 }, median: 29.3, reference: { at: 72, label: '72 h reference (app yardstick; the logs do not record the notice period that applied)' },
+    denominator: [{ key: 'paired', label: 'notices paired with one abatement', count: 2067 }, { key: 'not_matchable', label: 'notices with no place or time', count: 31 }, { key: 'other', label: 'notices at a place without exactly one of each', count: 312 }] },
+  'f-capacity-lead': { kind: 'series', measure: 'Adopted budget, Encampment reports and shelter beds, by fiscal year', claim: 'descriptive', caption: 'Three publishers; each panel has its own scale. Nothing here shows why any series moved.',
+    notes: ['212 Encampment reports have no readable filing date and are in no year.'],
+    points: [2020, 2021, 2022, 2023, 2024, 2025].map((year) => ({ key: String(year), label: `FY ${year}`, partial: false })),
+    panels: [
+      { key: 'budget', label: 'Adopted operating expense', unit: 'currency', context: null, values: [fgap('not-recorded', 'no department with "homeless" in its name; not an amount of zero'), fv(14_210_400), fv(21_880_150), fv(30_516_002), fv(44_007_454), fv(53_916_571)] },
+      { key: 'reports', label: 'Encampment reports filed', unit: 'count', context: null, values: [fgap('not-covered', 'the imported files cannot hold every Encampment report filed'), fgap('not-covered', 'the imported files cannot hold every Encampment report filed'), fv(31_204), fv(52_860), fv(69_987), fv(48_135)] },
+      { key: 'beds', label: 'Year-round emergency shelter beds', unit: 'count', values: [fv(1_552), fv(1_871), fv(1_940), fv(2_210), fv(2_476), fv(1_970)], context: { label: 'Beds of every kind', values: [fv(1_690), fv(2_002), fv(2_051), fgap('not-recorded', 'the inventory records no total bed count'), fv(2_655), fv(2_118)] } },
+    ] },
+  'f-spending-lead': { kind: 'paired', display: 'bullet', measure: 'Adopted against actual operating expense: Homelessness Strategies & Solutions', claim: 'statistical', unit: 'currency', subjectLabel: 'Actual expense', comparisonLabel: 'Adopted',
+    caption: 'Adopted is the original appropriation, not the revised budget.', notes: [], band: { percent: 10, minimum: 1_000_000, label: 'Lead threshold (10% and $1M): app yardstick, not a budget rule' },
+    rows: [
+      { key: '2021', label: 'FY 2021', subject: fv(12_904_115), comparison: fv(14_210_400), subjectBasis: null, comparisonBasis: null },
+      { key: '2022', label: 'FY 2022', subject: fv(20_118_660), comparison: fv(21_880_150), subjectBasis: null, comparisonBasis: null },
+      { key: '2023', label: 'FY 2023', subject: fgap('not-recorded', 'no rows in the actuals table; not spending of zero'), comparison: fv(30_516_002), subjectBasis: null, comparisonBasis: null },
+      { key: '2024', label: 'FY 2024', subject: fv(53_407_454), comparison: fv(44_007_454), subjectBasis: null, comparisonBasis: null },
+      { key: '2025', label: 'FY 2025', subject: fv(49_120_330), comparison: fv(53_916_571), subjectBasis: null, comparisonBasis: null },
+    ] },
+  'f-parking-lead': { kind: 'ranked', measure: 'Oversized-vehicle and 72-hour citations, by location as written', claim: 'descriptive', unit: 'count', caption: 'The ten locations with most citations; one block can appear under more than one spelling.', notes: [],
+    excluded: [{ key: 'no_block', label: 'no location recorded', count: 96 }],
+    rows: [['2500 MISSION BAY DR', 412], ['3700 MORENA BLVD', 301], ['1900 GRAND AVE', 266], ['2600 CLAIREMONT DR', 214], ['3300 DAKOTA ST', 188], ['1600 E MISSION BAY DR', 176]].map(([block, n], index) => ({ key: String(block), label: String(block), value: fv(Number(n)), subject: index === 0, detail: `${Math.round(Number(n) * 0.6)} by police` })) },
+  'f-stop-lead': { kind: 'paired', display: 'dots', measure: 'What stops resulted in, people perceived as unhoused against everyone else', claim: 'statistical', unit: 'percent', subjectLabel: 'Perceived as unhoused', comparisonLabel: 'Everyone else', band: null,
+    caption: 'Rates of persons with a recorded result; a difference in rate is not a finding about any stop.', notes: ['318 persons have no row in the results table and are left out of the rates.'],
+    rows: [['arrested', 'Custodial arrest', 1214, 6420, 9_801, 112_550], ['warrantless', 'Arrest without a warrant', 702, 4012, 9_801, 112_550], ['warrant', 'Arrest on an outstanding warrant', 512, 2408, 9_801, 112_550], ['cited', 'Citation or cite and release', 2_310, 31_740, 9_801, 112_550]]
+      .map(([key, label, u, o, uw, ow]) => ({ key: String(key), label: String(label), subject: fv(Number(u) / Number(uw)), comparison: fv(Number(o) / Number(ow)), subjectBasis: `${Number(u).toLocaleString('en-US')} of ${Number(uw).toLocaleString('en-US')}`, comparisonBasis: `${Number(o).toLocaleString('en-US')} of ${Number(ow).toLocaleString('en-US')}` })) },
+  'f-housing-lead': { kind: 'stacked', measure: 'Dwelling units on building permits issued, by income tier and issue year', claim: 'descriptive', unit: 'count', normalise: false,
+    caption: 'Units on permits issued, not built or occupied; a negative tier total is units removed, net.', notes: ['41 building permits have no job recorded and are in no total.'],
+    segments: [{ key: 'lowest', label: 'Extremely low and very low', tone: 'lead' }, { key: 'low', label: 'Low', tone: 'ord-1' }, { key: 'moderate', label: 'Moderate', tone: 'ord-2' }, { key: 'above_moderate', label: 'Above moderate', tone: 'ord-4' }],
+    rows: [[2023, false, [412, 388, 120, 4_310], '218 jobs with no tier recorded'], [2024, false, [296, 451, -6, 3_902], '190 jobs with no tier recorded'], [2025, false, [188, 302, 96, 3_455], null], [2026, true, [74, 140, 22, 1_610], 'no extremely low tier recorded']]
+      .map(([year, partial, values, note]) => ({ key: String(year), group: 'Units by income tier', label: `${year}${partial ? ' so far' : ''}`, partial: Boolean(partial), values: /** @type {number[]} */ (values), excluded: [], overlay: null, note: /** @type {string|null} */ (note) })) },
+  'f-service-lead': { kind: 'paired', display: 'dots', measure: 'Encampment reports closed as referred, by council district', claim: 'descriptive', unit: 'count', subjectLabel: '2025', comparisonLabel: '2024', band: null,
+    caption: 'A referred report leaves this table; whether the receiving office acted is not recorded.', notes: [],
+    rows: [[3, 1212, 819], [8, 640, 702], [9, 488, 377], [2, 301, 290], [1, 144, 160]].map(([district, now, then]) => ({ key: `cd${district}`, label: `Council District ${district}`, subject: fv(now), comparison: fv(then), subjectBasis: null, comparisonBasis: null })) },
+};
+
+/** The publisher file each stored lead names as the first table it read. */
+const LEAD_TABLES = {
+  'f-call-lead': ['pd_calls_for_service_2026_datasd.csv', 'https://seshat.datasd.org/police_calls_for_service/pd_calls_for_service_2026_datasd.csv'],
+  'f-abatement-lead': ['Encampment abatement notices posted', 'https://www.sandiego.gov/environmental-services/ehs/encampment'],
+  'f-capacity-lead': ['HIC emergency shelter inventory (UCSD Homelessness Hub)', 'https://homelessness.ucsd.edu/'],
+  'f-spending-lead': ['actuals_operating_datasd.csv', 'https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv'],
+  'f-parking-lead': ['parking_citations_2026_part1_datasd.csv', 'https://seshat.datasd.org/parking_citations/parking_citations_2026_part1_datasd.csv'],
+  'f-stop-lead': ['ripa_stops_datasd.csv', 'https://seshat.datasd.org/police_ripa/ripa_stops_datasd.csv'],
+  'f-housing-lead': ['approvals_issued_2025_datasd.csv', 'https://seshat.datasd.org/development_permits/approvals_issued_2025_datasd.csv'],
+  'f-service-lead': ['get_it_done_requests_closed_2025_datasd.csv', 'https://seshat.datasd.org/get_it_done_reports/get_it_done_requests_closed_2025_datasd.csv'],
+};
+
+// A stored lead's explanation ends with the tables it read and its SQL (analysis/service_leads.rs).
+for (const lead of FINDINGS.filter((item) => LEAD_FIGURES[item.id])) {
+  const [name, url] = LEAD_TABLES[/** @type {keyof typeof LEAD_TABLES} */ (lead.id)];
+  lead.explanation += ` Method: counted from the published records. Worth asking: what explains the change?\n\nTables read:\n1. '${name}' (${url}), retrieved 2026-10-02, sha256 ${hex(`lead-${lead.id}`)}\n\nSQL:\nSELECT * FROM lead_rows`;
+}
+
 /** @param {import('../src/types').FindingsFilter | null | undefined} filter @param {import('../src/types').Finding[]} [findings] */
 const filterFindings = (filter, findings = FINDINGS) => findings.filter((f) =>
   (filter?.includeDismissed || f.dismissedAt === null)
@@ -357,6 +436,7 @@ const DATASETS = [
   ['snap-cfs-2025', 'CALLS_FOR_SERVICE', 'Police calls for service 2025', 'analysis_cfs_2025', 512_388, 'https://seshat.datasd.org/police_calls_for_service/pd_calls_for_service_2025_datasd.csv', '2025-01-01', '2025-12-31'],
   ['snap-ripa-2025', 'RIPA_STOPS', 'RIPA stop details 2025', 'analysis_ripa_stops_2025', 141_002, 'https://seshat.datasd.org/police_ripa/ripa_stops_datasd.csv', '2025-01-01', '2025-12-31'],
   ['snap-gid-enc', 'REGIONAL_DATA', 'Get It Done encampment reports', 'analysis_get_it_done_encampments', 38_455, 'https://seshat.datasd.org/get_it_done_encampment/get_it_done_encampment_requests_datasd.csv', '2024-01-01', '2026-09-30'],
+  ['snap-pd-beats', 'REGIONAL_DATA', 'San Diego Police Department beats (polygons)', 'analysis_police_beats', 25, 'https://seshat.datasd.org/gis_police_beats/pd_beats_datasd.geojson', '2026-01-01', '2026-09-30'],
 ].map(([snapshotId, datasetKind, displayName, tableName, importedRows, sourceUri, start, end]) => ({
   snapshotId: String(snapshotId),
   datasetKind: /** @type {import('../src/types').AnalyticalDatasetKind} */ (datasetKind),
@@ -381,6 +461,7 @@ const SCHEMA = {
     ['analysis_operating_budget_fy24', 'fund_number', 'VARCHAR'], ['analysis_operating_budget_fy24', 'dept_name', 'VARCHAR'], ['analysis_operating_budget_fy24', 'account', 'VARCHAR'], ['analysis_operating_budget_fy24', 'amount', 'DECIMAL(18,2)'],
     ['analysis_cfs_2025', 'incident_num', 'VARCHAR'], ['analysis_cfs_2025', 'date_time', 'TIMESTAMP'], ['analysis_cfs_2025', 'call_type', 'VARCHAR'], ['analysis_cfs_2025', 'disposition', 'VARCHAR'], ['analysis_cfs_2025', 'beat', 'INTEGER'],
     ['analysis_ripa_stops_2025', 'stop_id', 'VARCHAR'], ['analysis_ripa_stops_2025', 'date_stop', 'DATE'], ['analysis_ripa_stops_2025', 'reason_for_stop', 'VARCHAR'], ['analysis_ripa_stops_2025', 'beat', 'INTEGER'],
+    ['analysis_police_beats', 'beat', 'VARCHAR'], ['analysis_police_beats', '_geometry', 'VARCHAR'], ['analysis_police_beats', '_crs', 'VARCHAR'],
     ['analysis_get_it_done_encampments', 'service_request_id', 'VARCHAR'], ['analysis_get_it_done_encampments', 'date_requested', 'TIMESTAMP'], ['analysis_get_it_done_encampments', 'status', 'VARCHAR'], ['analysis_get_it_done_encampments', 'council_district', 'INTEGER'],
   ].map(([tableName, columnName, logicalType]) => ({ tableName, columnName, logicalType, originalName: columnName.toUpperCase(), nullable: true, dictionary: null })),
   templates: [
@@ -390,9 +471,73 @@ const SCHEMA = {
   ],
 };
 
+/** The SLEEPER beats the calls fixtures count: the ten listed, then a long tail. */
+const LISTED_BEATS = [[521, 1210], [524, 980], [523, 744], [522, 611], [527, 402], [627, 388], [813, 301], [314, 266], [511, 240], [626, 233]];
+const ALL_BEATS = [...LISTED_BEATS, ...[115, 122, 233, 312, 325, 432, 446, 512, 513, 614, 712, 722, 811, 833, 931].map((beat, index) => [beat, 200 - index * 12])];
+const NO_BEAT = 23;
+
+/**
+ * Beat polygons as the GeoJSON import stores them: one feature per beat, a 6 by 5 grid of
+ * irregular quadrilaterals over central San Diego, with one beat (931) left out of the file so the
+ * map's "no boundary in the file" note has a case.
+ */
+const BEAT_SHAPES = ALL_BEATS.filter(([beat]) => beat !== 931).map(([beat], index) => {
+  const column = index % 6; const row = Math.floor(index / 6);
+  const jitter = (k) => (((beat * 31 + k * 17) % 11) - 5) * 0.0012;
+  const west = -117.26 + column * 0.035; const south = 32.69 + row * 0.04;
+  const ring = [[west + jitter(1), south + jitter(2)], [west + 0.035 + jitter(3), south + jitter(4)], [west + 0.035 + jitter(5), south + 0.04 + jitter(6)], [west + jitter(7), south + 0.04 + jitter(8)]];
+  return [String(beat), JSON.stringify({ type: 'Polygon', coordinates: [[...ring, ring[0]]] }), null];
+});
+
 /** @param {string} sql @returns {import('../src/types').SqlQueryResult} */
 const sqlResult = (sql) => {
   const lowered = sql.toLowerCase();
+  // AutomaticDiscovery.tsx BeatMap: the beat polygons, read when the map is opened.
+  if (lowered.includes('_geometry')) {
+    return { columns: ['beat', '_geometry', '_crs'], rows: BEAT_SHAPES, rowCount: BEAT_SHAPES.length, truncated: false, elapsedMs: 31, provenance: ['snap-pd-beats'] };
+  }
+  // serviceAccountability.ts dailyCountsSql (calls_daily): one row per year, days packed 'MM-DD:n'.
+  if (lowered.includes('span_days')) {
+    const first = Date.UTC(2024, 0, 1);
+    const last = Date.UTC(2026, 8, 30);
+    const years = new Map();
+    for (let ms = first, i = 0; ms <= last; ms += 86_400_000, i += 1) {
+      const date = new Date(ms);
+      const weekday = (date.getUTCDay() + 6) % 7;
+      // A weekday rhythm, a slow seasonal swell and deterministic noise; some days have none.
+      const n = Math.max(0, Math.round((weekday < 5 ? 17 : 9) + 5 * Math.sin(i / 58) + ((i * 7919) % 13) - 6));
+      if (n === 0) continue;
+      const year = date.getUTCFullYear();
+      years.set(year, [...(years.get(year) ?? []), `${date.toISOString().slice(5, 10)}:${n}`]);
+    }
+    const columns = ['year', 'days', 'first_day', 'last_day', 'span_years', 'undated'];
+    const rows = [...years].map(([year, days]) => [year, days.join(','), '2024-01-01', '2026-09-30', '2024,2025,2026', 14]);
+    return { columns, rows, rowCount: rows.length, truncated: false, elapsedMs: 188, provenance: ['snap-cfs-2025'] };
+  }
+  // callLeads.ts calls_outcomes: one row per call type and year.
+  if (lowered.includes('as crisis_team')) {
+    const columns = ['call_year', 'call_type', 'calls', 'cancelled_duplicate', 'blank', 'conflicting', 'arrest', 'report', 'no_report', 'unfounded', 'other', 'crisis_team', 'other_codes', 'last_call'];
+    const rows = [
+      [2026, 'SLEEPER', 4210, 380, 22, 4, 96, 141, 2790, 205, 572, 61, 'O; C; P', '2026-09-30 23:41:00'],
+      [2026, 'CW', 18420, 2100, 80, 10, 410, 2950, 9800, 1120, 1950, 640, 'O; C; P; T', '2026-09-30 23:58:00'],
+      [2026, '602', 7300, 820, 30, 2, 690, 610, 3980, 520, 648, 25, 'O; C', '2026-09-30 22:10:00'],
+      [2026, '5150', 3900, 310, 12, 1, 40, 1810, 1180, 90, 457, 820, 'O; T', '2026-09-30 21:02:00'],
+      [2026, '647F', 1450, 160, 8, 0, 380, 210, 520, 60, 112, 14, 'O', '2026-09-30 20:44:00'],
+      [2025, 'SLEEPER', 5980, 512, 31, 6, 162, 230, 3856, 301, 882, 88, 'O; C; P', '2025-12-31 23:50:00'],
+      [2024, 'SLEEPER', 6125, 540, 40, 3, 211, 265, 3650, 344, 1072, 12, 'O; C', '2024-12-31 23:12:00'],
+      [null, 'SLEEPER', 14, 0, 0, 0, 0, 0, 12, 0, 2, 0, null, null],
+    ];
+    return { columns, rows, rowCount: rows.length, truncated: false, elapsedMs: 212, provenance: ['snap-cfs-2025'] };
+  }
+  // callLeads.ts calls_sleeper_beats: the ten beats with most SLEEPER calls.
+  if (lowered.includes('citywide_calls')) {
+    const columns = ['beat', 'neighborhood', 'calls', 'citywide_calls', 'no_beat', 'first_year', 'last_year', 'all_beats'];
+    // Every beat's count, as the map reads it; with the calls with no beat they make the citywide total.
+    const allBeats = ALL_BEATS.map(([beat, calls]) => `${beat}=${calls}`).join(',');
+    const citywide = ALL_BEATS.reduce((sum, [, calls]) => sum + calls, 0) + NO_BEAT;
+    const rows = LISTED_BEATS.map(([beat, calls]) => [String(beat), null, calls, citywide, NO_BEAT, 2024, 2026, allBeats]);
+    return { columns, rows, rowCount: rows.length, truncated: false, elapsedMs: 96, provenance: ['snap-cfs-2025'] };
+  }
   if (lowered.includes('cfs')) {
     return { columns: ['disposition', 'calls'], rows: [['K', 3880], ['A', 612], ['R', 455], ['CAN', 301], ['U', 214]], rowCount: 5, truncated: false, elapsedMs: 38, provenance: ['snap-cfs-2025'] };
   }
@@ -721,7 +866,9 @@ const full = {
     };
   }),
   refresh_findings: () => ({ detectorsRun: 28, findingsRecorded: FINDINGS.length, staleCleared: 2 }),
-  list_findings: ({ filter, limit }) => filterFindings(filter).slice(0, limit ?? 500),
+  // A lookup of one finding by id carries a stored lead's figure, as commands/findings.rs sends it.
+  list_findings: ({ filter, limit }) => filterFindings(filter).slice(0, limit ?? 500)
+    .map((item) => (filter?.id && LEAD_FIGURES[item.id] ? { ...item, figure: LEAD_FIGURES[item.id] } : item)),
   count_findings: ({ filter }) => filterFindings(filter).length,
   dismiss_finding: () => null,
   restore_finding: () => null,

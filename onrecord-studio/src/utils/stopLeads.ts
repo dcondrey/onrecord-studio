@@ -1,6 +1,6 @@
-import type { AnalyticalDatasetSummary, AnalyticalSchema, CityDataset, SqlQueryResult } from '../types';
+import type { AnalyticalDatasetSummary, AnalyticalSchema, CityDataset, LeadFigure, SqlQueryResult } from '../types';
 import { quoteIdentifier, type DiscoveryQuery } from './dataDiscovery';
-import type { ServiceLead } from './serviceAccountability';
+import { figureValue, type ServiceLead } from './serviceAccountability';
 import { numberOrNull as count, wholeNumber as shown, records, percent } from './leadRows';
 
 /** Police stop records (RIPA): one table of persons stopped, and companion tables keyed by the
@@ -112,7 +112,19 @@ export function stopLeads(results: { query: DiscoveryQuery; result?: SqlQueryRes
       const uMissing = count(unhoused.no_result_row) ?? 0; const oMissing = count(others.no_result_row) ?? 0;
       const missing = uMissing || oMissing ? ` ${shown(uMissing)} persons perceived as unhoused and ${shown(oMissing)} others have no row in ${String(unhoused.results_table ?? 'the results table')}; no row is not an outcome of no arrest, so they are left out of the arrest and citation rates.` : '';
       const period = unhoused.first_stop && unhoused.last_stop ? `, ${String(unhoused.first_stop).slice(0, 10)} to ${String(unhoused.last_stop).slice(0, 10)}` : '';
+      const ratePair = (key: string, label: string, column: string, uWhole = ur, oWhole = or) => {
+        const un = count(unhoused[column]); const ot = count(others[column]);
+        const value = (part: number | null, whole: number) => figureValue(part === null || whole <= 0 ? null : part / whole, 'not recorded in this table');
+        return { key, label, subject: value(un, uWhole), comparison: value(ot, oWhole),
+          subjectBasis: un === null ? null : `${shown(un)} of ${shown(uWhole)}`, comparisonBasis: ot === null ? null : `${shown(ot)} of ${shown(oWhole)}` };
+      };
       leads.push({ key: 'stops_unhoused_outcomes', priority: 100, query,
+        ...(result.truncated ? {} : { figure: { kind: 'paired', display: 'dots', measure: 'What stops resulted in, people perceived as unhoused against everyone else', claim: 'statistical', unit: 'percent',
+          subjectLabel: 'Perceived as unhoused', comparisonLabel: 'Everyone else', band: null,
+          caption: 'Rates of persons with a recorded result; a difference in rate is not a finding about any stop.',
+          notes: [...(uMissing || oMissing ? [`${shown(uMissing + oMissing)} persons have no row in the results table and are left out of the rates.`] : []), ...(unrecorded ? [`${shown(unrecorded)} persons have no perception recorded and are left out.`] : [])],
+          rows: [ratePair('arrested', 'Custodial arrest', 'arrested'), ratePair('warrantless', 'Arrest without a warrant', 'arrested_without_warrant'), ratePair('warrant', 'Arrest on an outstanding warrant', 'arrested_on_warrant'),
+            ratePair('cited', 'Citation or cite and release', 'cited'), ...(count(unhoused.property_seized) === null ? [] : [ratePair('property', 'Property seized (of all persons)', 'property_seized', u, o)])] } satisfies LeadFigure }),
         title: `${percent(count(unhoused.arrested) ?? 0, ur)} of people perceived as unhoused with a recorded result were arrested when stopped, against ${percent(count(others.arrested) ?? 0, or)} of others with one`,
         detail: `${shown(u)} of ${shown(u + o)} persons in the stop records${period} were perceived as unhoused.${missing}${rate('Custodial arrest', 'arrested')}${rate('Arrest on an outstanding warrant', 'arrested_on_warrant')}${rate('Arrest without a warrant', 'arrested_without_warrant')}${rate('Citation or cite and release', 'cited')}${rate('Property seized', 'property_seized', u, o)}${unrecorded ? ` ${shown(unrecorded)} persons have no perception recorded and are left out.` : ''} These rates are not adjusted for the reason for the stop or where it was made. ${UNADJUSTED}`,
         question: 'What were the outstanding warrants for? A records request for the warrant offences would show how many began as unpaid citations or missed court dates.',
@@ -124,11 +136,21 @@ export function stopLeads(results: { query: DiscoveryQuery; result?: SqlQueryRes
       // Cross-multiplied so a rate exactly at the limit is not lost to division.
       const higher = compared.filter((row) => row.ua * row.or >= HIGHER_RATIO * row.oa * row.ur && 100 * (row.ua * row.or - row.oa * row.ur) >= HIGHER_POINTS * row.ur * row.or);
       if (reasons[0]?.u >= GROUP_MINIMUM) leads.push({ key: 'stops_unhoused_reasons', priority: 97, query,
+        ...(result.truncated ? {} : { figure: { kind: 'ranked', measure: 'Recorded reasons for stopping people perceived as unhoused', claim: 'descriptive', unit: 'count', excluded: [],
+          caption: 'Persons perceived as unhoused; a person with two reasons is counted under each.', notes: [],
+          rows: reasons.slice(0, 12).map((row, index) => ({ key: row.reason, label: row.reason, value: figureValue(row.u, ''), subject: index === 0, detail: null })) } satisfies LeadFigure }),
         title: `Most recorded reason for stopping people perceived as unhoused: ${reasons[0].reason} (${shown(reasons[0].u)} persons)`,
         detail: `${reasons.slice(0, 5).map((row) => `${row.reason}: ${shown(row.u)}.`).join(' ')} The reason is the publisher's code text; a person with two reasons is counted under each.`,
         question: 'Which ordinances do the local-ordinance codes stand for, and how many of these stops followed an offer of shelter?',
       });
+      const tooFew = reasons.length - compared.length;
       if (higher.length) leads.push({ key: 'stops_same_reason', priority: 99, query,
+        ...(result.truncated ? {} : { figure: { kind: 'paired', display: 'dots', measure: 'Arrests without a warrant, by recorded reason for the stop', claim: 'statistical', unit: 'percent',
+          subjectLabel: 'Perceived as unhoused', comparisonLabel: 'Everyone else', band: null,
+          caption: `Rates of persons with a recorded result; higher in ${higher.length} of ${compared.length} reasons compared. A difference in rate is not a finding about any stop.`,
+          notes: tooFew ? [`${shown(tooFew)} reasons with fewer than ${GROUP_MINIMUM} persons of either group are too few to compare and are not drawn.`] : [],
+          rows: compared.slice(0, 20).map((row) => ({ key: row.reason, label: row.reason, subject: figureValue(row.ua / row.ur, ''), comparison: figureValue(row.oa / row.or, ''),
+            subjectBasis: `${shown(row.ua)} of ${shown(row.ur)}`, comparisonBasis: `${shown(row.oa)} of ${shown(row.or)}` })) } satisfies LeadFigure }),
         title: `Stopped for the same recorded reason, people perceived as unhoused were arrested without a warrant more often in ${higher.length} of ${compared.length} reasons compared`,
         detail: `${higher.slice(0, 3).map((row) => `${row.reason}: ${shown(row.ua)} of ${shown(row.ur)} (${percent(row.ua, row.ur)}) against ${shown(row.oa)} of ${shown(row.or)} (${percent(row.oa, row.or)}).`).join(' ')} Rates are over persons with a result row; a person with no result row has no recorded outcome and is left out. A reason is compared when at least ${GROUP_MINIMUM} persons of each group with a result row were stopped for it, and counted as higher at ${HIGHER_RATIO} times the others' rate and at least ${HIGHER_POINTS} percentage points. In the other ${compared.length - higher.length} the rate was not higher by that measure. Arrests on an outstanding warrant are left out. ${UNADJUSTED}`,
         question: 'For these reasons, what offence was each person arrested for, and where were the stops made?',
@@ -136,6 +158,9 @@ export function stopLeads(results: { query: DiscoveryQuery; result?: SqlQueryRes
     } else if (query.id === 'stops_unhoused_property') {
       const total = rows.reduce((sum, row) => sum + (count(row.persons) ?? 0), 0);
       if (total >= GROUP_MINIMUM) leads.push({ key: 'stops_unhoused_property', priority: 96, query,
+        ...(result.truncated ? {} : { figure: { kind: 'ranked', measure: 'Recorded basis for seizing property from people perceived as unhoused', claim: 'descriptive', unit: 'count', excluded: [],
+          caption: 'Persons; a person with two bases is counted under each.', notes: [],
+          rows: rows.slice(0, 20).map((row, index) => ({ key: String(row.basis), label: String(row.basis), value: figureValue(count(row.persons), 'no count'), subject: index === 0, detail: null })) } satisfies LeadFigure }),
         title: `Property was seized from people perceived as unhoused on ${shown(total)} recorded bases, ${shown(count(rows[0].persons) ?? 0)} as ${String(rows[0].basis).toLowerCase()}`,
         detail: `${rows.map((row) => `${String(row.basis)}: ${shown(count(row.persons) ?? 0)}.`).join(' ')} A person with two bases is counted under each. The table records that property was seized, not where it was kept, whether it was returned or whether it was discarded.`,
         question: 'Where was the property taken for safekeeping or as abandoned stored, and how much was returned? A records request for the property log would show it.',

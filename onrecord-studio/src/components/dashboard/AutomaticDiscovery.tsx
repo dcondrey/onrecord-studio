@@ -1,7 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { formatNativeError, invokeCommand } from '../../ipc';
+import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
 import { useFirstRunDataStore } from '../../store/useFirstRunDataStore';
-import type { CityDataset } from '../../types';
+import type { AnalyticalDatasetSummary as CityDatasetSummary, AnalyticalSchema, CityDataset } from '../../types';
+import { sleeperBeatCounts, sleeperBeatRowsSql } from '../../utils/callLeads';
+import PlaceMap, { type PlaceBoundary } from '../charts/figures/PlaceMap';
+import { quoteIdentifier } from '../../utils/dataDiscovery';
+import { dailyCountsOf, type DailyCounts } from '../../utils/serviceAccountability';
+import CalendarHeat from '../charts/figures/CalendarHeat';
+import LeadFigure from '../charts/figures/LeadFigure';
+import type { ChartSources } from '../charts/frame/SourceCaption';
 import { metadataObservations, profileObservations, rankObservations, recurringObservations, type DiscoveryObservation } from '../../utils/automaticDiscovery';
 import type { DataGap } from '../../utils/dataGaps';
 import { focusSourceComposer } from '../../utils/sanDiego';
@@ -36,6 +45,78 @@ const ERROR_LABEL: Record<string, string> = {
   discovery: 'Discovery',
 };
 
+/** The daily-count query each lead family's tables run, and how its calendar names what it counts. */
+const DAILY_QUERY: Partial<Record<NonNullable<DiscoveryObservation['family']>, { id: string; title: string; noun: string }>> = {
+  POLICE_CALLS: { id: 'calls_daily', title: 'SLEEPER calls by day', noun: 'SLEEPER calls' },
+  ABATEMENT_LOGS: { id: 'abatement_daily', title: 'Abatements by day', noun: 'abatements' },
+  PARKING_CITATIONS: { id: 'parking_daily', title: 'Oversized-vehicle and 72-hour citations by day', noun: 'citations' },
+};
+
+/** The latest imported table of police beat polygons: a beat code beside each feature's geometry. */
+function beatBoundaryTable(schema: AnalyticalSchema | null | undefined): { table: CityDatasetSummary; crs: boolean } | null {
+  if (!schema) return null;
+  const has = (table: CityDatasetSummary, name: string) => schema.columns.some((column) => column.tableName === table.tableName && column.columnName === name);
+  const table = schema.datasets.filter((dataset) => has(dataset, 'beat') && has(dataset, '_geometry'))
+    .sort((a, b) => b.retrievedAt.localeCompare(a.retrievedAt) || a.snapshotId.localeCompare(b.snapshotId))[0];
+  return table ? { table, crs: has(table, '_crs') } : null;
+}
+
+type BoundaryState = { status: 'loading' } | { status: 'ready'; boundaries: PlaceBoundary[] } | { status: 'failed'; message: string };
+
+/**
+ * SLEEPER calls per beat over the beat polygons. The polygons are read only when the map is
+ * opened, and a read that resolves after the beat table changed is discarded: it would draw one
+ * file's boundaries under another's counts.
+ */
+export function BeatMap({ boundary, counts, noBeat, citywide, sources, onActivate }: {
+  boundary: { table: CityDatasetSummary; crs: boolean };
+  counts: { beat: string; calls: number }[];
+  noBeat: number;
+  /** The beats query's own citywide total, the denominator the ranked lead states. */
+  citywide: number;
+  sources: ChartSources;
+  onActivate?(beat: string): void;
+}) {
+  const [state, setState] = useState<BoundaryState>({ status: 'loading' });
+  const gate = useLatestRequestGate();
+  const { table, crs } = boundary;
+  useEffect(() => {
+    const request = gate.begin();
+    setState({ status: 'loading' });
+    invokeCommand('run_analytical_sql', { sql: `SELECT CAST(beat AS VARCHAR) AS beat, _geometry${crs ? ', _crs' : ''} FROM ${quoteIdentifier(table.tableName)} WHERE _geometry IS NOT NULL`, limit: 5000 })
+      .then((result) => {
+        if (!gate.isCurrent(request)) return;
+        if (result.truncated) {
+          setState({ status: 'failed', message: 'The beat file has more shapes than one read returns, so no partial map is drawn.' });
+          return;
+        }
+        const at = (name: string) => result.columns.indexOf(name);
+        setState({ status: 'ready', boundaries: result.rows.map((row) => ({ key: String(row[at('beat')]).trim(), _geometry: row[at('_geometry')], _crs: crs ? row[at('_crs')] : undefined })) });
+      })
+      .catch((reason: unknown) => {
+        if (!gate.isCurrent(request)) return;
+        setState({ status: 'failed', message: formatNativeError(reason) });
+      });
+    return gate.invalidate;
+  }, [gate, table.tableName, table.snapshotId, crs]);
+  const top = counts[0];
+  return (
+    <PlaceMap
+      title="SLEEPER calls by police beat, on the beat map"
+      headline={top && citywide ? `Beat ${top.beat}: ${top.calls.toLocaleString('en-US')} of ${citywide.toLocaleString('en-US')} SLEEPER calls` : null}
+      noun="SLEEPER calls"
+      places={counts.map((item) => ({ key: item.beat, label: `Beat ${item.beat}`, count: item.calls }))}
+      unplaced={noBeat}
+      total={citywide}
+      onActivate={onActivate}
+      boundaries={state.status === 'ready' ? state.boundaries : null}
+      error={state.status === 'failed' ? state.message : null}
+      sources={{ ...sources, tables: [...sources.tables, table.displayName] }}
+      size="card"
+    />
+  );
+}
+
 /** Two gaps for one table differ only in the companion they need, so the title names it. */
 function gapTitle(gap: DataGap): string {
   const companion = gap.fetch && (gap.key.startsWith('calls:') || gap.key.startsWith('stops:')) ? COMPANION_TITLE[gap.fetch.dataset] : undefined;
@@ -53,6 +134,8 @@ function readableError(message: string): string {
 export default function AutomaticDiscovery() {
   const { controller, state } = useAutomaticDiscovery();
   const [showAll, setShowAll] = useState(false);
+  // Maps whose disclosure is open; a closed map reads no boundaries.
+  const [openMaps, setOpenMaps] = useState<ReadonlySet<string>>(new Set());
   const store = useAppStore;
   const inAnalysis = useAppStore((app) => app.workspaceView === 'analysis');
   const fetchingCoreData = useFirstRunDataStore((first) => first.running);
@@ -85,6 +168,39 @@ export default function AutomaticDiscovery() {
   const stage = (url: string) => { store.getState().setPortalUrlDraft(url); focusSourceComposer(); };
   const openAnalysis = () => store.getState().setWorkspaceView('analysis');
   const getCoreData = () => { void useFirstRunDataStore.getState().run(controller); store.getState().setWorkspaceView('overview'); };
+  // A lead's figure names every table its query read: its own first, then each one the SQL quotes
+  // or the lead says it read beside it.
+  const leadSources = (item: DiscoveryObservation, dataset: CityDatasetSummary): ChartSources => ({
+    tables: [dataset, ...datasets.filter((other) => other.snapshotId !== dataset.snapshotId
+      && (item.reads?.includes(other.snapshotId) || Boolean(item.query?.sql.includes(quoteIdentifier(other.tableName)))))].map((table) => table.displayName),
+    snapshot: { name: dataset.displayName, id: dataset.snapshotId, sha256: dataset.sourceSha256 },
+    retrievedAt: dataset.retrievedAt,
+  });
+  // A family's daily counts are drawn once per table, under the first of its leads shown.
+  const calendarOwner = new Map<string, { title: string; noun: string; daily: DailyCounts }>();
+  const claimed = new Set<string>();
+  for (const item of ranked) {
+    const daily = item.family ? DAILY_QUERY[item.family] : undefined;
+    const results = state.profiles[item.snapshotId]?.results;
+    if (!daily || !results || claimed.has(`${item.snapshotId}:${daily.id}`)) continue;
+    const counts = dailyCountsOf(results, daily.id);
+    if (!counts) continue;
+    claimed.add(`${item.snapshotId}:${daily.id}`);
+    calendarOwner.set(item.id, { title: daily.title, noun: daily.noun, daily: counts });
+  }
+  const boundary = beatBoundaryTable(state.schema);
+  // The beats lead maps every beat's count, read from the same result as its ranked list.
+  const beatMapOf = (item: DiscoveryObservation) => {
+    if (!boundary || !item.id.endsWith(':calls_sleeper_beats')) return null;
+    const counts = sleeperBeatCounts(state.profiles[item.snapshotId]?.results ?? []);
+    const sql = item.query?.sql;
+    // A beat's circle opens that beat's calls, selected exactly as the lead's query selects them.
+    const onActivate = sql ? (beat: string) => {
+      const rows = sleeperBeatRowsSql(sql, beat);
+      if (rows) { controller.inspect(rows); openAnalysis(); }
+    } : undefined;
+    return counts ? { boundary, counts: counts.beats, noBeat: counts.noBeat, citywide: counts.citywide, onActivate } : null;
+  };
   const card = (item: DiscoveryObservation) => {
     const dataset = datasets.find((candidate) => candidate.snapshotId === item.snapshotId)!;
     const spending = item.family === 'SPENDING_RECORDS' || dataset.datasetKind === 'OPERATING_BUDGET' || dataset.datasetKind === 'BUDGET_DIMENSION';
@@ -100,7 +216,37 @@ export default function AutomaticDiscovery() {
         }
         headline={item.title}
         body={<>
-          <p>{item.detail}</p>
+          {item.figure ? (
+            <>
+              <LeadFigure figure={item.figure} headline={null} size="card" sources={leadSources(item, dataset)} onActivate={item.query ? () => { controller.inspect(item.query!.sql); openAnalysis(); } : undefined} />
+              <details className="text-body">
+                <summary className="focus-ring w-fit cursor-pointer rounded text-caption text-muted hover:text-fg">Figures as text</summary>
+                <p className="mt-1">{item.detail}</p>
+              </details>
+            </>
+          ) : <p>{item.detail}</p>}
+          {beatMapOf(item) && (
+            <details className="text-body" onToggle={(event) => {
+              const open = event.currentTarget.open;
+              setOpenMaps((current) => {
+                const next = new Set(current);
+                if (open) next.add(item.id);
+                else next.delete(item.id);
+                return next;
+              });
+            }}>
+              <summary className="focus-ring w-fit cursor-pointer rounded text-caption text-muted hover:text-fg">Map</summary>
+              {openMaps.has(item.id) && <div className="mt-2"><BeatMap {...beatMapOf(item)!} sources={leadSources(item, dataset)} /></div>}
+            </details>
+          )}
+          {calendarOwner.get(item.id) && (
+            <details className="text-body">
+              <summary className="focus-ring w-fit cursor-pointer rounded text-caption text-muted hover:text-fg">By day</summary>
+              <div className="mt-2">
+                <CalendarHeat {...calendarOwner.get(item.id)!} sources={leadSources(item, dataset)} size="card" />
+              </div>
+            </details>
+          )}
           <p className="text-caption text-lead">Investigate: {item.question}</p>
           <details className="text-caption text-muted">
             <summary className="focus-ring w-fit cursor-pointer rounded hover:text-fg">Evidence and method</summary>

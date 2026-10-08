@@ -3,7 +3,7 @@ import fixture from '../../src-tauri/tests/fixtures/abatement-leads.json';
 import service from '../../src-tauri/tests/fixtures/service-accountability.json';
 import type { AnalyticalSchema, SqlQueryResult } from '../types';
 import nearby from '../../src-tauri/tests/fixtures/abatement-reports-nearby.json';
-import { abatementLeads, abatementQueries, reportsAroundAbatements } from '../utils/abatementLeads';
+import { abatementLeads, abatementQueries, noticeParts, reportsAroundAbatements } from '../utils/abatementLeads';
 import { storedLeads } from '../utils/automaticDiscovery';
 
 const schema = fixture.schema as AnalyticalSchema;
@@ -17,7 +17,7 @@ describe('leads from released abatement logs', () => {
   it('reads a notice log only beside a completion log, and never a service-report table', () => {
     expect(abatementQueries(schema, posted).map((item) => item.id)).toEqual(['abatement_notice_hours']);
     // A completion log alone is still read for places abated on many days.
-    expect(abatementQueries(schema, completed).map((item) => item.id)).toEqual(['abatement_repeat_places']);
+    expect(abatementQueries(schema, completed).map((item) => item.id)).toEqual(['abatement_repeat_places', 'abatement_daily']);
     expect(abatementQueries({ ...schema, datasets: [posted] }, posted)).toEqual([]);
     const reports = service.schema as AnalyticalSchema;
     expect(abatementQueries(reports, reports.datasets[0])).toEqual([]);
@@ -30,14 +30,23 @@ describe('leads from released abatement logs', () => {
     expect(lead.detail).toContain('Completed within 3 hours of posting: 22. Within 24 hours: 101. From 24 to 72 hours: 1,811. After 72 hours or more: 144. Median 29.3 hours.');
     expect(lead.detail).not.toContain('before the notice was posted');
     expect(lead.detail).not.toContain('no notice in that log');
-    expect(lead.detail).toContain('24 and 72 hours are yardsticks, not the agency\'s stated requirement.');
+    expect(lead.detail).toContain('24 and 72 hours are this app\'s yardsticks; the logs do not record the notice period that applied.');
     const full = abatementLeads([{ query, result: hours(2067, { completed_before_posted: 11, abatements_without_notice_in_log: 214 }) }])[0].detail;
     expect(full).toContain('11 are recorded completed before the notice was posted. 214 of 11,104 abatements dated within the notice log\'s period are at a place with no notice in that log.');
   });
 
-  it('stores the lead under the abatement family', () => {
+  it('bins the hours with under 3 as part of under 24, completions before posting outside the axis, and no figure from a cut-short result', () => {
+    const [lead] = abatementLeads([{ query, result: hours(2067, { completed_before_posted: 11 }) }]);
+    if (lead.figure?.kind !== 'bins') throw new Error('the notice lead draws bins');
+    expect(lead.figure.bins.map((bin) => [bin.from, bin.to, bin.count])).toEqual([[0, 3, 22], [3, 24, 79], [24, 72, 1811], [72, null, 144]]);
+    expect(lead.figure.before).toEqual({ key: 'before', label: 'completed before the notice was logged', count: 11 });
+    const [cut] = abatementLeads([{ query, result: { ...hours(2067), truncated: true } }]);
+    expect(cut.figure).toBeUndefined();
+  });
+
+  it('stores the lead under the abatement family, with its figure', () => {
     const stored = storedLeads(schema, { posted: { fingerprint: 'f', checkedAt: 'now', results: [{ query, result: hours(2067) }] } });
-    expect(stored.leads).toEqual([expect.objectContaining({ family: 'ABATEMENT_LOGS', key: 'posted:abatement_notice_hours' })]);
+    expect(stored.leads).toEqual([expect.objectContaining({ family: 'ABATEMENT_LOGS', key: 'posted:abatement_notice_hours', figure: expect.objectContaining({ kind: 'bins' }) })]);
   });
 });
 
@@ -50,11 +59,11 @@ describe('Encampment reports around abatements', () => {
     near_before: 500, near_after: 480, near_same_day: 40, ring_before: 5000, ring_after: 5100, reports_since: '2023-01-01', reports_until: '2026-10-04', ...extra });
 
   it('reads a completion log only beside report tables that are complete and carry coordinates', () => {
-    expect(abatementQueries(around, log).map((item) => item.id)).toEqual(['abatement_repeat_places', 'abatement_reports_nearby']);
+    expect(abatementQueries(around, log).map((item) => item.id)).toEqual(['abatement_repeat_places', 'abatement_daily', 'abatement_reports_nearby']);
     expect(reportsAroundAbatements(around, log)).toMatchObject({ since: '2025-01-01', until: '2025-09-30', coordinates: ['lat', 'lng'] });
     // Without the closed-year file, reports closed before the open copy are in no table.
-    expect(abatementQueries({ ...around, datasets: [log, open] }, log).map((item) => item.id)).toEqual(['abatement_repeat_places']);
-    expect(abatementQueries({ ...around, columns: around.columns.filter((column) => !(column.tableName === closed.tableName && column.columnName === 'lng')) }, log).map((item) => item.id)).toEqual(['abatement_repeat_places']);
+    expect(abatementQueries({ ...around, datasets: [log, open] }, log).map((item) => item.id)).toEqual(['abatement_repeat_places', 'abatement_daily']);
+    expect(abatementQueries({ ...around, columns: around.columns.filter((column) => !(column.tableName === closed.tableName && column.columnName === 'lng')) }, log).map((item) => item.id)).toEqual(['abatement_repeat_places', 'abatement_daily']);
     expect(abatementQueries(around, closed)).toEqual([]);
   });
 
@@ -108,5 +117,14 @@ describe('Encampment reports around abatements', () => {
     expect(lead.detail).not.toContain('9 Elm Street');
     expect(lead.detail).toContain('34 rows have no coordinates or readable time');
     expect(lead.detail).toContain('whether the same people returned');
+  });
+});
+
+describe('the posted notices strip', () => {
+  it('splits the posted notices into parts that sum to them, and draws none when the parts would exceed the whole', () => {
+    const parts = noticeParts(100, 60, 10);
+    expect(parts.map((part) => part.count)).toEqual([60, 10, 30]);
+    expect(noticeParts(70, 60, 10).map((part) => part.key)).toEqual(['paired', 'not_matchable']);
+    expect(noticeParts(69, 60, 10)).toEqual([]);
   });
 });

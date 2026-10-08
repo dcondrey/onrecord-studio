@@ -1,6 +1,6 @@
-import type { AnalyticalDatasetSummary, AnalyticalSchema, CityDataset } from '../types';
+import type { AnalyticalDatasetSummary, AnalyticalSchema, CityDataset, LeadSegmentTone } from '../types';
 import { quoteIdentifier, type DiscoveryQuery } from './dataDiscovery';
-import type { ServiceLead } from './serviceAccountability';
+import { dailyCountsSql, figureValue, type ServiceLead } from './serviceAccountability';
 import { numberOrNull as count, wholeNumber as shown, percent, type QueryEntry as Entry, rowsOf } from './leadRows';
 
 /** SDPD calls for service: one table per calendar year, and code lookups published beside them.
@@ -56,6 +56,8 @@ export function missingCallCompanions(schema: AnalyticalSchema, dataset: Analyti
 
 const code = (name: string) => `UPPER(TRIM(CAST(${quoteIdentifier(name)} AS VARCHAR)))`;
 const list = (codes: readonly string[]) => codes.map((value) => `'${value}'`).join(', ');
+/** A SLEEPER call a unit was sent to: not cancelled or duplicated, unless its latest entries disagree. */
+const SLEEPER_SENT = `call_type = 'SLEEPER' AND (conflicted OR dispo IS NULL OR dispo NOT IN (${list(CANCELLED)}))`;
 /** Every year's rows, then one row per incident: the publisher repeats an incident number when a
  * call is updated, and the latest entry is the one kept. Repeats often share a date_time, so the
  * latest entry cannot always be told apart; an incident whose latest entries disagree on the
@@ -94,24 +96,63 @@ SELECT call_year, call_type, COUNT(*) AS calls, COUNT(*) FILTER (WHERE outcome =
 FROM typed${dispositions ? ' LEFT JOIN codes ON codes.code = typed.dispo' : ''}
 GROUP BY call_year, call_type ORDER BY call_year DESC NULLS LAST, call_type`,
   }];
+  queries.push({
+    id: 'calls_daily', title: 'SLEEPER calls by day',
+    method: `SLEEPER calls in ${names}, one row per incident number as above, leaving out the cancelled and duplicate codes ${CANCELLED.join(', ')} unless the incident's latest entries disagree on the disposition, counted per calendar day of date_time. The days covered are those from the first to the last call of any type in the files, in the years the files hold; a day in them with no SLEEPER call is a count of zero, and a day outside them was not covered.`,
+    sql: `WITH ${deduplicated(years, false)}, ${dailyCountsSql(
+      `SELECT CAST(called_at AS DATE) AS day FROM incidents WHERE ${SLEEPER_SENT}`,
+      'SELECT CAST(called_at AS DATE) AS day FROM incidents',
+    )}`,
+  });
   if (years.every((table) => has(schema, table, ['beat']))) queries.push({
     id: 'calls_sleeper_beats', title: 'Where SLEEPER calls were sent, by police beat',
-    method: `SLEEPER calls in ${names}, one row per incident number as above, leaving out the cancelled and duplicate codes ${CANCELLED.join(', ')} unless the incident's latest entries disagree on the disposition, counted by the beat of the call's address${beats ? ` with the neighborhood from ${beats.displayName}` : ''}. The ten beats with most calls are read, with the citywide total and the calls with no beat recorded.`,
+    method: `SLEEPER calls in ${names}, one row per incident number as above, leaving out the cancelled and duplicate codes ${CANCELLED.join(', ')} unless the incident's latest entries disagree on the disposition, counted by the beat of the call's address${beats ? ` with the neighborhood from ${beats.displayName}` : ''}. The ten beats with most calls are read, with every beat's count packed in one column for the map, the citywide total and the calls with no beat recorded.`,
     sql: `WITH ${deduplicated(years, true)}, sleeper AS (
- SELECT beat, called_at FROM incidents WHERE call_type = 'SLEEPER' AND (conflicted OR dispo IS NULL OR dispo NOT IN (${list(CANCELLED)}))
+ SELECT beat, called_at FROM incidents WHERE ${SLEEPER_SENT}
 )${beats ? `, places AS (
  SELECT TRIM(CAST(${quoteIdentifier('beat')} AS VARCHAR)) AS beat, MIN(TRIM(CAST(${quoteIdentifier('neighborhood')} AS VARCHAR))) AS neighborhood FROM ${quoteIdentifier(beats.tableName)} GROUP BY 1
-)` : ''}
-, beat_calls AS (
+)` : ''}${BEAT_CALLS_CTE}
  SELECT beat, COUNT(*) AS calls FROM sleeper WHERE beat IS NOT NULL GROUP BY beat
 ), sleeper_totals AS (
  SELECT COUNT(*) AS citywide_calls, COUNT(*) FILTER (WHERE beat IS NULL) AS no_beat, MIN(YEAR(called_at)) AS first_year, MAX(YEAR(called_at)) AS last_year FROM sleeper
 )
-SELECT beat_calls.beat, ${beats ? 'places.neighborhood' : 'CAST(NULL AS VARCHAR)'} AS neighborhood, beat_calls.calls, citywide_calls, no_beat, first_year, last_year
+SELECT beat_calls.beat, ${beats ? 'places.neighborhood' : 'CAST(NULL AS VARCHAR)'} AS neighborhood, beat_calls.calls, citywide_calls, no_beat, first_year, last_year,
+ (SELECT STRING_AGG(beat || '=' || CAST(calls AS VARCHAR), ',' ORDER BY calls DESC, beat) FROM beat_calls) AS all_beats
 FROM beat_calls CROSS JOIN sleeper_totals${beats ? ' LEFT JOIN places ON places.beat = beat_calls.beat' : ''}
 ORDER BY beat_calls.calls DESC, beat_calls.beat LIMIT 10`,
   });
   return queries;
+}
+
+/** Where the beats query's per-beat counting starts; everything before it selects the SLEEPER calls. */
+const BEAT_CALLS_CTE = '\n, beat_calls AS (';
+
+/** Every beat's SLEEPER calls from the beats query's packed column, the calls with no beat and the
+ * citywide total; null when the result was cut short, predates the column, or the beats and the
+ * calls with no beat do not add up to the citywide total (a map of them would then disagree with
+ * the lead's own denominator). */
+export function sleeperBeatCounts(results: Entry[]): { beats: { beat: string; calls: number }[]; noBeat: number; citywide: number } | null {
+  const read = rowsOf(results, 'calls_sleeper_beats');
+  const packed = read?.rows[0].all_beats;
+  if (!read || typeof packed !== 'string') return null;
+  const beats = packed.split(',').flatMap((pair) => {
+    const at = pair.lastIndexOf('=');
+    const calls = count(pair.slice(at + 1));
+    return at > 0 && calls !== null ? [{ beat: pair.slice(0, at), calls }] : [];
+  });
+  const noBeat = count(read.rows[0].no_beat) ?? 0;
+  const citywide = count(read.rows[0].citywide_calls);
+  if (citywide === null || beats.reduce((sum, item) => sum + item.calls, 0) + noBeat !== citywide) return null;
+  return { beats, noBeat, citywide };
+}
+
+/** The SLEEPER calls of one beat, selected as the beats query selects them, with each call's
+ * incident number and disposition; null for SQL that is not a beats query. Opens the rows behind a
+ * beat's circle on the map. */
+export function sleeperBeatRowsSql(sql: string, beat: string): string | null {
+  const at = sql.indexOf(BEAT_CALLS_CTE);
+  if (at < 0) return null;
+  return `${sql.slice(0, at)}\nSELECT incident, called_at, dispo, beat FROM incidents WHERE ${SLEEPER_SENT} AND beat = '${beat.replace(/'/g, "''")}' ORDER BY called_at`;
 }
 
 /** A result cut short by the row limit would give short counts, so it gives none. */
@@ -120,6 +161,17 @@ interface TypeYear { year: number | null; type: string; calls: number; cancelled
 const typeYear = (row: Record<string, unknown>): TypeYear => ({ year: count(row.call_year), type: String(row.call_type), calls: count(row.calls) ?? 0, cancelled: count(row.cancelled_duplicate) ?? 0,
   blank: count(row.blank) ?? 0, conflicting: count(row.conflicting) ?? 0, arrest: count(row.arrest) ?? 0, report: count(row.report) ?? 0, noReport: count(row.no_report) ?? 0, unfounded: count(row.unfounded) ?? 0, other: count(row.other) ?? 0,
   crisis: count(row.crisis_team) ?? 0, otherCodes: typeof row.other_codes === 'string' && row.other_codes ? row.other_codes : null });
+/** The outcomes that partition the calls with a disposition. The Crisis Response Team is not one:
+ * its calls are also counted under their first letter, so it is drawn as an overlay. The grey
+ * outcomes take the ramp's steps in segment order, so the legend reads light to dark as the bar
+ * does; the commonest, no report required, takes the first step. */
+const OUTCOME_SEGMENTS = [
+  { key: 'arrest', label: 'Arrest', tone: 'lead' },
+  { key: 'noReport', label: 'No report required', tone: 'ord-1' },
+  { key: 'report', label: 'Report', tone: 'ord-2' },
+  { key: 'unfounded', label: 'Unfounded', tone: 'ord-3' },
+  { key: 'other', label: 'Other code', tone: 'ord-4' },
+] as const satisfies readonly { key: keyof TypeYear; label: string; tone: LeadSegmentTone }[];
 /** Calls not cancelled or duplicated: the ones a unit was sent to or that were otherwise closed. */
 const sent = (item: TypeYear) => item.calls - item.cancelled;
 const split = (item: TypeYear) => {
@@ -142,7 +194,16 @@ export function callLeads(results: Entry[], currentYear = new Date().getUTCFullY
         .sort((a, b) => CALL_TYPES.indexOf(a.type as typeof CALL_TYPES[number]) - CALL_TYPES.indexOf(b.type as typeof CALL_TYPES[number]));
       const earlier = sleeper.filter((item) => item.year !== year);
       const undated = rows.filter((item) => item.type === 'SLEEPER' && item.year === null).reduce((sum, item) => sum + sent(item), 0);
+      const drawn = [...sleeper, ...others].filter((item) => sent(item) - item.blank - item.conflicting > 0);
       leads.push({ key: 'calls_outcomes', priority: 98, query: outcomes.query,
+        figure: { kind: 'stacked', measure: 'How the calls ended, by call type and year', claim: 'descriptive', unit: 'count', normalise: true,
+          caption: 'Each bar is the calls with a disposition; blank, conflicting and cancelled calls sit beside it, outside the bar.',
+          notes: undated ? [`${shown(undated)} SLEEPER calls have no readable date and are in no year.`] : [],
+          segments: OUTCOME_SEGMENTS.map(({ key, label, tone }) => ({ key, label, tone })),
+          rows: drawn.map((item) => ({ key: `${item.type}:${item.year}`, group: CALL_NAMES[item.type] ?? item.type, label: `${item.year}${item.year! >= currentYear ? ' so far' : ''}`, partial: item.year! >= currentYear,
+            values: OUTCOME_SEGMENTS.map(({ key }) => item[key]),
+            excluded: [{ key: 'blank', label: 'no disposition', count: item.blank }, { key: 'conflicting', label: 'conflicting', count: item.conflicting }, { key: 'cancelled', label: 'cancelled or duplicate', count: item.cancelled }].filter((stub) => stub.count > 0),
+            overlay: { label: 'Crisis Response Team (also counted under its outcome)', value: item.crisis }, note: null })) },
         title: `${shown(sent(latest))} calls dispatched as SLEEPER in ${year}${soFar}: ${shown(latest.arrest)} ended in arrest, ${shown(latest.crisis)} with the Crisis Response Team, ${shown(latest.noReport)} with no report required`,
         detail: `SLEEPER in ${year}${soFar}: ${shown(latest.calls)} calls, ${split(latest)} Cancelled and duplicate calls (${CANCELLED.join(', ')}) are left out of the calls counted, and calls with no disposition are not counted as no report required. A code ending HR is counted both under the Crisis Response Team and under its first letter, so the figures overlap.${others.map((item) => ` ${CALL_NAMES[item.type] ?? item.type} in ${year}: ${shown(item.calls)} calls, ${split(item)}`).join('')}${earlier.length ? ` SLEEPER in other years: ${earlier.map((item) => `${item.year}${item.year! >= currentYear ? ' so far' : ''}: ${shown(sent(item))} calls not cancelled, ${shown(item.arrest)} ended in arrest`).join('; ')}.` : ''}${undated ? ` ${shown(undated)} SLEEPER calls have no readable date and are in no year.` : ''} ${CAVEAT}`,
         question: 'What did the officers record on the SLEEPER calls that ended in arrest, and what was each arrest for? The CAD event narratives and arrest reports for these incidents would show it.',
@@ -161,6 +222,11 @@ export function callLeads(results: Entry[], currentYear = new Date().getUTCFullY
     const unnamed = places.rows.some((row) => row.neighborhood == null);
     const listed = places.query.sql.includes('LEFT JOIN places');
     leads.push({ key: 'calls_sleeper_beats', priority: 95, query: places.query,
+      figure: { kind: 'ranked', measure: 'SLEEPER calls by police beat', claim: 'descriptive', unit: 'count',
+        caption: `The ten beats with most calls, of ${shown(citywide)} citywide; a beat not listed is uncounted here, not zero.`, notes: [],
+        rows: places.rows.map((row, index) => ({ key: String(row.beat), label: place(row, 'Beat'), value: figureValue(count(row.calls), 'no count'), subject: index === 0,
+          detail: `${percent(count(row.calls) ?? 0, citywide)} of citywide calls` })),
+        excluded: noBeat ? [{ key: 'no_beat', label: 'no beat recorded', count: noBeat }] : [] },
       title: `${shown(count(top.calls) ?? 0)} of ${shown(citywide)} SLEEPER calls${spanSoFar} were to addresses in ${place(top)}`,
       detail: `${places.rows.map((row) => `${place(row, 'Beat')}: ${shown(count(row.calls) ?? 0)} (${percent(count(row.calls) ?? 0, citywide)}).`).join(' ')}${noBeat ? ` ${shown(noBeat)} calls have no beat recorded.` : ''}${unnamed ? listed ? ' A beat with no neighborhood named is not in the imported beat list.' : ' No beat list is imported, so beats are named by code.' : ''} Cancelled and duplicate calls are left out. A beat's count is of calls to addresses in it, not a count of people. ${CAVEAT}`,
       question: 'Which units answered the SLEEPER calls in these beats, and what did they record? The CAD event narratives and incident reports for the beats named would show it.',

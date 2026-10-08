@@ -1,6 +1,6 @@
-import type { AnalyticalDatasetSummary, AnalyticalSchema, SqlQueryResult } from '../types';
+import type { AnalyticalDatasetSummary, AnalyticalSchema, LeadFigure, SqlQueryResult } from '../types';
 import { quoteIdentifier, type DiscoveryQuery } from './dataDiscovery';
-import type { ServiceLead } from './serviceAccountability';
+import { figureValue, type ServiceLead } from './serviceAccountability';
 import { numberOrNull, wholeNumber as shown, percent } from './leadRows';
 
 /** Arrest and citation logs as police departments release them to records requests: one row per
@@ -81,7 +81,18 @@ export function chargeLeads(results: { query: DiscoveryQuery; result?: SqlQueryR
   // A file holding only these sections has nothing else to compare the recorded races with.
   const compared = raceRows.filter((item) => count(item.counted_activities) >= RACE_MINIMUM && count(item.all_activities) > count(item.all_counted_activities)).slice(0, 3)
     .map((item) => `${titled(item.race)} ${percent(count(item.counted_activities), count(item.all_counted_activities))} and ${percent(count(item.activities), count(item.all_activities))}`);
-  return [{ key: 'charges_living_outdoors', priority: 96, query: entry.query,
+  const comparedRows = raceRows.filter((item) => count(item.counted_activities) >= RACE_MINIMUM && count(item.all_activities) > count(item.all_counted_activities));
+  const figure: LeadFigure | undefined = entry.result.truncated ? undefined : comparedRows.length >= 2 && !races?.truncated
+    ? { kind: 'paired', display: 'dots', measure: 'Recorded race: share of these arrests and citations against every one in the file', claim: 'statistical', unit: 'percent',
+      subjectLabel: 'These sections', comparisonLabel: 'Every arrest and citation', band: null,
+      caption: 'Shares of recorded race, blank entries set aside; a difference in share is not a finding about any arrest.', notes: [],
+      rows: comparedRows.map((item) => ({ key: String(item.race), label: titled(item.race),
+        subject: figureValue(count(item.counted_activities) / count(item.all_counted_activities), ''), comparison: figureValue(count(item.activities) / count(item.all_activities), ''),
+        subjectBasis: `${shown(count(item.counted_activities))} of ${shown(count(item.all_counted_activities))}`, comparisonBasis: `${shown(count(item.activities))} of ${shown(count(item.all_activities))}` })) }
+    : { kind: 'ranked', measure: 'Arrests and citations citing each section', claim: 'descriptive', unit: 'count', excluded: [],
+      caption: 'One arrest or citation can cite more than one section.', notes: [],
+      rows: SECTIONS.filter((item) => count(row[item.name]) > 0).map((item, index) => ({ key: item.name, label: item.label, value: figureValue(count(row[item.name]), ''), subject: index === 0, detail: null })) };
+  return [{ key: 'charges_living_outdoors', priority: 96, query: entry.query, ...(figure ? { figure } : {}),
     title: alone > 0
       ? `${shown(counted)} arrests and citations cite an encampment, encroachment, lodging or public urination section; ${shown(alone)} were arrests on those sections alone`
       : `${shown(counted)} arrests and citations cite an encampment, encroachment, lodging or public urination section`,

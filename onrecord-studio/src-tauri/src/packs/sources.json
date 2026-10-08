@@ -1223,5 +1223,77 @@
       "Number of people projected to transition into permanent housing"
     ],
     "notes": "Linked from the ERF program page as 'ERF Grantee Self Reported Encampment Resolution Status, Estimated Persons Served, and Other Outcomes (XLS) - as of March 31, 2026'. Last-Modified 2026-05-29; replaced in place each quarter. Self-reported projections by grantees. Header on row 1. 'n/a' strings in numeric columns. 'Disbursement ' has a trailing space."
+  },
+  {
+    "pack": "san-diego-boundaries",
+    "table": "police_beat_boundaries",
+    "title": "San Diego Police Department beats (polygons)",
+    "publisher": "City of San Diego (Police / DataSD)",
+    "page": "https://data.sandiego.gov/datasets/police-beats/",
+    "url": "https://seshat.datasd.org/gis_police_beats/pd_beats_datasd.geojson",
+    "years": null,
+    "format": "geojson",
+    "worksheet": null,
+    "licence": {
+      "id": "ODC-PDDL-1.0",
+      "url": "https://opendefinition.org/licenses/odc-pddl/",
+      "attribution": null,
+      "disclaimer": null,
+      "evidence": "Landing page https://data.sandiego.gov/datasets/police-beats/ (read 2026-10-08) links 'View License' to https://opendefinition.org/licenses/odc-pddl/; the City's DCAT inventory (https://raw.githubusercontent.com/COSD-PANDA/data-inventory/refs/heads/master/data.json) gives \"license\": \"https://opendefinition.org/licenses/odc-pddl/\" for 'Police Beats'."
+    },
+    "key": null,
+    "time": {
+      "column": null,
+      "kind": "undated"
+    },
+    "partial": false,
+    "bytes": 47441347,
+    "rows": 671,
+    "headers": [
+      "objectid",
+      "beat",
+      "div",
+      "serv",
+      "name"
+    ],
+    "notes": "Read 2026-10-08 (Last-Modified 2026-10-06). FeatureCollection with crs urn:ogc:def:crs:OGC::CRS84; every geometry a Polygon; 671 features (a beat can be several polygons), 1,133,037 vertices, at most 15,199 in one feature. Properties are strings: beat '0' is the citywide remainder named 'SAN DIEGO'. The data dictionary (pd_beats_dictionary_datasd.csv) types beat as an integer; calls for service write the same code in their beat column."
+  },
+  {
+    "pack": "san-diego-boundaries",
+    "table": "council_district_boundaries",
+    "title": "City Council districts in the San Diego region (polygons)",
+    "publisher": "SanGIS (City of San Diego and County of San Diego)",
+    "page": "https://geo.sandag.org/portal/home/item.html?id=92715d6aefe94b10b07ec2dbf254a71e",
+    "url": "https://geo.sandag.org/server/rest/directories/downloads/Council_Districts.geojson",
+    "years": null,
+    "format": "geojson",
+    "worksheet": null,
+    "licence": {
+      "id": "ODC-PDDL-1.0",
+      "url": "https://opendefinition.org/licenses/odc-pddl/",
+      "attribution": null,
+      "disclaimer": null,
+      "evidence": "The City's DCAT inventory (https://raw.githubusercontent.com/COSD-PANDA/data-inventory/refs/heads/master/data.json, read 2026-10-08) lists 'City Council districts', publisher SanGIS under the City of San Diego, with this GeoJSON as a distribution and \"license\": \"https://opendefinition.org/licenses/odc-pddl/\"."
+    },
+    "key": null,
+    "time": {
+      "column": null,
+      "kind": "undated"
+    },
+    "partial": false,
+    "bytes": 3988078,
+    "rows": 62,
+    "headers": [
+      "OBJECTID",
+      "DISTRICT",
+      "WEBSITE",
+      "CODE",
+      "JUR_NAME",
+      "NAME",
+      "PHONE",
+      "Shape_Length",
+      "Shape_Area"
+    ],
+    "notes": "Read 2026-10-08. Every city in the region: 62 features, 9 of them JUR_NAME 'SAN DIEGO' (DISTRICT 1 to 9). No crs member, so RFC 7946 longitude/latitude (CRS84). Polygon and MultiPolygon; 97,293 vertices, at most 10,951 in one feature. NAME is the council member, not the district."
   }
 ]

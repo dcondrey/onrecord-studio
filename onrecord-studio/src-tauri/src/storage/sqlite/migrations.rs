@@ -257,6 +257,8 @@ impl DuckDbRepository {
         ] {
             ensure_column(conn, "report_exports", column, "TEXT")?;
         }
+        // No default: a lead stored before figures has none, which is not an empty figure.
+        ensure_column(conn, "findings", "figure_json", "TEXT")?;
         conn.execute_batch(
             "UPDATE documents
              SET extraction_status = CASE
