@@ -1143,13 +1143,8 @@ fn write_case(
     let blob = encode(case)?;
     record_operations(conn, prior.as_ref(), case, author)?;
     conn.execute("INSERT INTO casework_cases VALUES (?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(id) DO UPDATE SET disposition=excluded.disposition,revision=excluded.revision,payload_zstd=excluded.payload_zstd,updated_at=excluded.updated_at",params![case.id,case.report_id,case.topic,case.disposition,case.revision,blob,case.updated_at]).map_err(storage)?;
-    // `payload_zstd` used to carry a full compressed snapshot of the case on every revision,
-    // forever — nothing in this application ever reads it back (grepped and confirmed); only
-    // author/summary/recorded_at power the UI's contribution trail. A case edited 200 times wrote
-    // 200 full copies for no reader. Going forward this writes an empty placeholder instead of
-    // dropping the column: existing installs keep every historical snapshot they already have
-    // (DROP COLUMN would destroy it irreversibly on upgrade, which was never authorized), and the
-    // schema needs no upgrade migration that could fail and block startup.
+    // The event's `payload_zstd` stays empty: nothing reads a per-revision snapshot back. The
+    // column is kept so snapshots an existing install already holds are never dropped.
     conn.execute(
         "INSERT INTO casework_events VALUES (?1,?2,?3,?4,?5,?6)",
         params![

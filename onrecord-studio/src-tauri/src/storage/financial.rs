@@ -2,7 +2,7 @@ use crate::{
     analysis::{budget_lines, financial},
     error::AppError,
     integrity::sha256_hex,
-    storage::sqlite::DuckDbRepository,
+    storage::{quote_ident, sql_literal, sqlite::DuckDbRepository},
     types::*,
 };
 use duckdb::params;
@@ -58,12 +58,6 @@ pub const FIELDS: &[&str] = &[
 ];
 fn error(e: impl std::fmt::Display) -> AppError {
     AppError::Storage(e.to_string())
-}
-fn quote(value: &str) -> String {
-    format!("\"{}\"", value.replace('"', "\"\""))
-}
-fn literal(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "''"))
 }
 fn requirements(role: &str) -> Vec<&'static str> {
     match role {
@@ -213,7 +207,7 @@ fn automatic_mappings(schema: &AnalyticalSchema) -> Vec<FinancialMapping> {
 }
 fn expression(mapping: &FinancialMapping, field: &str) -> String {
     if let Some(column) = mapping.columns.get(field) {
-        let column = quote(column);
+        let column = quote_ident(column);
         if ["amount", "quantity", "denominator"].contains(&field) {
             format!("TRY_CAST({column} AS DECIMAL(28,4))")
         } else if ["fy", "end_fy"].contains(&field) {
@@ -225,13 +219,13 @@ fn expression(mapping: &FinancialMapping, field: &str) -> String {
         mapping
             .agency
             .as_ref()
-            .map(|v| literal(v))
+            .map(|v| sql_literal(v))
             .unwrap_or_else(|| "NULL".into())
     } else if field == "currency" {
         mapping
             .currency
             .as_ref()
-            .map(|v| literal(v))
+            .map(|v| sql_literal(v))
             .unwrap_or_else(|| "NULL".into())
     } else {
         "NULL".into()
@@ -250,7 +244,7 @@ fn official_city_export(mapping: &FinancialMapping) -> bool {
 fn mapped_select(mapping: &FinancialMapping, fields: &[&str]) -> String {
     fields
         .iter()
-        .map(|field| format!("{} AS {}", expression(mapping, field), quote(field)))
+        .map(|field| format!("{} AS {}", expression(mapping, field), quote_ident(field)))
         .collect::<Vec<_>>()
         .join(",")
 }
@@ -287,7 +281,7 @@ fn budget_line_query(
     if let Some(accounts) = accounts {
         let list = accounts
             .iter()
-            .map(|a| literal(a))
+            .map(|a| sql_literal(a))
             .collect::<Vec<_>>()
             .join(",");
         filters.push(format!("account IN ({list})"));
@@ -296,7 +290,7 @@ fn budget_line_query(
     let dimensions = dimensions.join(",");
     format!(
         "WITH mapped AS (SELECT {selected} FROM {}) SELECT {dimensions}, CASE WHEN COUNT(*)=COUNT(amount) THEN SUM(amount) END AS amount, COUNT(*) AS _source_rows FROM mapped WHERE {} GROUP BY {dimensions} ORDER BY {dimensions}",
-        quote(table),
+        quote_ident(table),
         filters.join(" AND ")
     )
 }
@@ -310,7 +304,7 @@ fn account_label_query(mapping: &FinancialMapping, table: &str) -> String {
     };
     format!(
         "WITH mapped AS (SELECT {selected} FROM {}) SELECT DISTINCT account, account_label FROM mapped WHERE {filter} ORDER BY account, account_label",
-        quote(table)
+        quote_ident(table)
     )
 }
 
@@ -319,7 +313,7 @@ const BUDGET_LINE_ROW_CAP: usize = 10_000;
 fn query(mapping: &FinancialMapping, table: &str, scope: &FinancialScope) -> String {
     let selected = FIELDS
         .iter()
-        .map(|field| format!("{} AS {}", expression(mapping, field), quote(field)))
+        .map(|field| format!("{} AS {}", expression(mapping, field), quote_ident(field)))
         .collect::<Vec<_>>()
         .join(",");
     let mut filters = vec![];
@@ -333,11 +327,11 @@ fn query(mapping: &FinancialMapping, table: &str, scope: &FinancialScope) -> Str
         }
     }
     if let Some(fund) = &scope.fund {
-        filters.push(format!("fund = {}", literal(fund)));
+        filters.push(format!("fund = {}", sql_literal(fund)));
     }
     if let Some(department) = &scope.department {
         if mapping.columns.contains_key("department") {
-            filters.push(format!("department = {}", literal(department)));
+            filters.push(format!("department = {}", sql_literal(department)));
         }
     }
     if official_city_export(mapping)
@@ -359,11 +353,11 @@ fn query(mapping: &FinancialMapping, table: &str, scope: &FinancialScope) -> Str
         let dimensions = FIELDS
             .iter()
             .filter(|f| !matches!(**f, "amount" | "quantity" | "denominator"))
-            .map(|f| quote(f))
+            .map(|f| quote_ident(f))
             .collect::<Vec<_>>();
-        format!("WITH mapped AS (SELECT {selected} FROM {}) SELECT {}, CASE WHEN COUNT(*)=COUNT(amount) THEN SUM(amount) END AS amount, NULL AS quantity, NULL AS denominator, COUNT(*) AS _source_rows FROM mapped WHERE {filter} GROUP BY {} ORDER BY fy,fund,account,center,basis",quote(table),dimensions.join(","),dimensions.join(","))
+        format!("WITH mapped AS (SELECT {selected} FROM {}) SELECT {}, CASE WHEN COUNT(*)=COUNT(amount) THEN SUM(amount) END AS amount, NULL AS quantity, NULL AS denominator, COUNT(*) AS _source_rows FROM mapped WHERE {filter} GROUP BY {} ORDER BY fy,fund,account,center,basis",quote_ident(table),dimensions.join(","),dimensions.join(","))
     } else {
-        format!("WITH mapped AS (SELECT {selected}, rowid AS _source_row FROM {}) SELECT *, 1 AS _source_rows FROM mapped WHERE {filter} ORDER BY _source_row",quote(table))
+        format!("WITH mapped AS (SELECT {selected}, rowid AS _source_row FROM {}) SELECT *, 1 AS _source_rows FROM mapped WHERE {filter} ORDER BY _source_row",quote_ident(table))
     }
 }
 fn value_string(value: &serde_json::Value) -> Option<String> {
@@ -389,27 +383,27 @@ fn history_query(mapping: &FinancialMapping, table: &str, scope: &FinancialScope
         "basis",
     ]
     .iter()
-    .map(|field| format!("{} AS {}", expression(mapping, field), quote(field)))
+    .map(|field| format!("{} AS {}", expression(mapping, field), quote_ident(field)))
     .collect::<Vec<_>>()
     .join(",");
     let year = scope.fiscal_year.unwrap();
     let mut filters = vec![
         format!("fy BETWEEN {} AND {year}", year - 2),
-        format!("fund={}", literal(scope.fund.as_deref().unwrap())),
+        format!("fund={}", sql_literal(scope.fund.as_deref().unwrap())),
     ];
     if mapping.role == "budget" {
         filters.push("lower(basis)='adopted'".into());
     }
     if let Some(department) = &scope.department {
         if mapping.columns.contains_key("department") {
-            filters.push(format!("department={}", literal(department)));
+            filters.push(format!("department={}", sql_literal(department)));
         }
     }
     if official_city_export(mapping) {
         filters.push("account LIKE '5%'".into());
     }
     let dimensions = "agency,fy,fund,department,currency,funding_duration";
-    format!("WITH mapped AS (SELECT {selected} FROM {}) SELECT {dimensions},CASE WHEN COUNT(*)=COUNT(amount) THEN SUM(amount) END AS amount,COUNT(*) AS _source_rows FROM mapped WHERE {} GROUP BY {dimensions} ORDER BY agency,fund,department,fy,currency,funding_duration",quote(table),filters.join(" AND "))
+    format!("WITH mapped AS (SELECT {selected} FROM {}) SELECT {dimensions},CASE WHEN COUNT(*)=COUNT(amount) THEN SUM(amount) END AS amount,COUNT(*) AS _source_rows FROM mapped WHERE {} GROUP BY {dimensions} ORDER BY agency,fund,department,fy,currency,funding_duration",quote_ident(table),filters.join(" AND "))
 }
 
 impl DuckDbRepository {
@@ -457,7 +451,7 @@ impl DuckDbRepository {
             {
                 for field in ["fy", "fund", "department"] {
                     let expr = expression(mapping, field);
-                    let sql=format!("SELECT DISTINCT {expr} AS value FROM {} WHERE {expr} IS NOT NULL ORDER BY value DESC",quote(&dataset.table_name));
+                    let sql=format!("SELECT DISTINCT {expr} AS value FROM {} WHERE {expr} IS NOT NULL ORDER BY value DESC",quote_ident(&dataset.table_name));
                     match self.execute_restricted_sql(&sql, 1000).await {
                         Ok(result) => {
                             let values = result
@@ -563,7 +557,7 @@ impl DuckDbRepository {
         }
         let sql = format!(
             "SELECT 1 FROM {} WHERE {} = {fiscal_year}",
-            quote(table_name),
+            quote_ident(table_name),
             expression(mapping, "fy")
         );
         Ok(Some(
@@ -932,16 +926,16 @@ impl DuckDbRepository {
                 vendor_column: mapping.vendor_column.clone(),
                 vendor: format!(
                     "NULLIF(trim(CAST({} AS VARCHAR)), '')",
-                    quote(&mapping.vendor_column)
+                    quote_ident(&mapping.vendor_column)
                 ),
                 amount: format!(
                     "TRY_CAST({} AS DECIMAL(28,4))",
-                    quote(&mapping.amount_column)
+                    quote_ident(&mapping.amount_column)
                 ),
                 fiscal_year: mapping
                     .fiscal_year_column
                     .as_ref()
-                    .map(|c| format!("NULLIF(trim(CAST({} AS VARCHAR)), '')", quote(c)))
+                    .map(|c| format!("NULLIF(trim(CAST({} AS VARCHAR)), '')", quote_ident(c)))
                     .unwrap_or_else(|| "NULL".into()),
             });
         }
@@ -956,7 +950,7 @@ impl DuckDbRepository {
             let sql = format!(
                 "WITH mapped AS (SELECT {} AS vendor FROM {}) SELECT vendor, COUNT(*) AS source_rows FROM mapped WHERE vendor IS NOT NULL GROUP BY vendor ORDER BY source_rows DESC, vendor",
                 source.vendor,
-                quote(&source.dataset.table_name)
+                quote_ident(&source.dataset.table_name)
             );
             for row in self.execute_restricted_sql(&sql, 500).await?.rows {
                 let Some(vendor_value) = row.first().and_then(value_string) else {
@@ -1023,8 +1017,8 @@ impl DuckDbRepository {
             searched = true;
             let sql = format!(
                 "WITH mapped AS (SELECT {vendor} AS vendor, {fiscal_year} AS fy, {amount} AS amount FROM {}) SELECT vendor, CAST(fy AS VARCHAR) AS fy, COUNT(*) AS source_rows, CAST(CASE WHEN COUNT(*)=COUNT(amount) THEN SUM(amount) END AS VARCHAR) AS amount FROM mapped WHERE trim(regexp_replace(regexp_replace(lower(vendor),'[''’]','','g'),'[^a-z0-9]+',' ','g')) LIKE {} GROUP BY vendor, fy ORDER BY fy, vendor",
-                quote(&dataset.table_name),
-                literal(&format!("%{needle}%")),
+                quote_ident(&dataset.table_name),
+                sql_literal(&format!("%{needle}%")),
             );
             let result = self.execute_restricted_sql(&sql, 500).await?;
             if result.rows.is_empty() {
@@ -1458,7 +1452,7 @@ mod tests {
                 "CREATE TABLE {table} ({})",
                 fields
                     .iter()
-                    .map(|f| format!("{} VARCHAR", quote(f)))
+                    .map(|f| format!("{} VARCHAR", quote_ident(f)))
                     .collect::<Vec<_>>()
                     .join(",")
             ))
@@ -1521,7 +1515,7 @@ mod tests {
                         .iter()
                         .map(|f| values
                             .get(f)
-                            .map(|s| literal(s))
+                            .map(|s| sql_literal(s))
                             .unwrap_or_else(|| "NULL".into()))
                         .collect::<Vec<_>>()
                         .join(",")

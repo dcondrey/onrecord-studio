@@ -13,6 +13,7 @@ use sha2::{Digest, Sha256};
 
 use crate::error::AppError;
 use crate::integrity::digest_hex;
+use crate::storage::now_stamp;
 use crate::storage::search_paging::{build_filters, count_matches, Filters};
 use crate::storage::snapshot_export::corpus_state_digest;
 use crate::storage::sqlite::DuckDbRepository;
@@ -53,10 +54,6 @@ fn err(error: impl std::fmt::Display) -> AppError {
 
 fn invalid(message: impl Into<String>) -> AppError {
     AppError::DataParsing(message.into())
-}
-
-fn now_stamp() -> String {
-    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
 }
 
 /// The AST is stored verbatim but must be one the flat native query executes exactly. A negated

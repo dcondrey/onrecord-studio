@@ -514,17 +514,21 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn dismissed_findings_hidden_by_default() {
+    async fn a_dismissal_hides_the_finding_until_restored_and_keeps_its_discovery_time() {
         let repo = fresh_repo().await;
         let one = sample_finding(1, "one", FindingSeverity::Notable);
         let id = one.id.clone();
         repo.record_findings(vec![one]).await.unwrap();
-        repo.dismiss_finding(id).await.unwrap();
-        let default = repo
+        let before = repo
             .list_findings(FindingsFilter::default(), 50)
             .await
             .unwrap();
-        assert!(default.is_empty(), "dismissed hidden by default");
+        repo.dismiss_finding(id.clone()).await.unwrap();
+        assert!(repo
+            .list_findings(FindingsFilter::default(), 50)
+            .await
+            .unwrap()
+            .is_empty());
         let included = repo
             .list_findings(
                 FindingsFilter {
@@ -536,19 +540,6 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(included.len(), 1);
-    }
-
-    #[tokio::test]
-    async fn restoring_a_dismissal_returns_the_finding_and_keeps_its_discovery_time() {
-        let repo = fresh_repo().await;
-        let one = sample_finding(1, "one", FindingSeverity::Notable);
-        let id = one.id.clone();
-        repo.record_findings(vec![one]).await.unwrap();
-        let before = repo
-            .list_findings(FindingsFilter::default(), 50)
-            .await
-            .unwrap();
-        repo.dismiss_finding(id.clone()).await.unwrap();
         repo.restore_finding(id.clone()).await.unwrap();
         repo.restore_finding(id).await.unwrap();
         let after = repo
@@ -593,30 +584,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn filter_by_subject_returns_only_matching_findings() {
-        let repo = fresh_repo().await;
-        let mut for_doc_one = sample_finding(1, "one", FindingSeverity::Notable);
-        for_doc_one.subject.document_id = Some(1);
-        let mut for_doc_two = sample_finding(2, "two", FindingSeverity::Notable);
-        for_doc_two.subject.document_id = Some(2);
-        repo.record_findings(vec![for_doc_one, for_doc_two])
-            .await
-            .unwrap();
-        let filtered = repo
-            .list_findings(
-                FindingsFilter {
-                    document_id: Some(1),
-                    ..Default::default()
-                },
-                50,
-            )
-            .await
-            .unwrap();
-        assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].subject.document_id, Some(1));
-    }
-
-    #[tokio::test]
     async fn discovered_after_admits_a_new_low_severity_finding_past_an_older_critical_backlog() {
         let repo = fresh_repo().await;
         let cutoff = Utc::now() - chrono::Duration::minutes(5);
@@ -658,23 +625,25 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn id_filter_names_exactly_one_finding() {
+    async fn document_and_id_filters_each_select_exactly_their_finding() {
         let repo = fresh_repo().await;
         let one = sample_finding(1, "one", FindingSeverity::Notable);
         let two = sample_finding(2, "two", FindingSeverity::Notable);
-        let wanted = two.id.clone();
+        let two_id = two.id.clone();
         repo.record_findings(vec![one, two]).await.unwrap();
-        let listed = repo
-            .list_findings(
-                FindingsFilter {
-                    id: Some(wanted.clone()),
-                    ..Default::default()
-                },
-                50,
-            )
-            .await
-            .unwrap();
-        assert_eq!(listed.len(), 1);
-        assert_eq!(listed[0].id, wanted);
+        for filter in [
+            FindingsFilter {
+                document_id: Some(2),
+                ..Default::default()
+            },
+            FindingsFilter {
+                id: Some(two_id.clone()),
+                ..Default::default()
+            },
+        ] {
+            let listed = repo.list_findings(filter, 50).await.unwrap();
+            assert_eq!(listed.len(), 1);
+            assert_eq!(listed[0].id, two_id);
+        }
     }
 }

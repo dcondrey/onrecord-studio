@@ -187,9 +187,8 @@ impl DuckDbWorkspace {
     /// Binds the workspace to a live sibling connection of the application's own DuckDB core,
     /// obtained from `DuckDbRepository::analytics_connection`.
     ///
-    /// The previous implementation opened a separate in-memory connection and `ATTACH`ed the core
-    /// file. That connection observed the database as it stood at process start and never saw a
-    /// subsequent write, so every correlation was computed against a launch-time snapshot.
+    /// A sibling connection sees every later write; a separate connection that `ATTACH`ed the core
+    /// file would compute correlations against the file as it stood at launch.
     pub fn bind_to_core(connection: Connection) -> Self {
         Self {
             state: Arc::new(Mutex::new(DuckDbState {

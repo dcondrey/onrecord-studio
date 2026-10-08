@@ -33,9 +33,10 @@ use std::time::{Duration, Instant};
 use duckdb::Connection;
 
 use super::legacy_import::{
-    foreign_key_dependencies, order_by_foreign_keys, quote_identifier, quote_sql_literal,
-    remove_if_present, sibling_path,
+    foreign_key_dependencies, order_by_foreign_keys, quote_sql_literal, remove_if_present,
+    sibling_path,
 };
+use super::quote_ident;
 use crate::error::AppError;
 
 /// Suffix of the file being built; it is only ever published by the final rename.
@@ -225,7 +226,7 @@ fn build_verified_copy(
         }
     }
     for table in &order {
-        let quoted = quote_identifier(table);
+        let quoted = quote_ident(table);
         execute(
             &connection,
             &format!("INSERT INTO main.{quoted} SELECT * FROM {SOURCE}.main.{quoted};"),
@@ -478,7 +479,7 @@ fn table_digest(
     }
     let projection = columns
         .iter()
-        .map(|column| quote_identifier(column))
+        .map(|column| quote_ident(column))
         .collect::<Vec<_>>()
         .join(", ");
     let (rows, digest): (i64, String) = connection
@@ -486,8 +487,8 @@ fn table_digest(
             &format!(
                 "SELECT count(*), COALESCE(CAST(sum(CAST(hash({projection}) AS HUGEINT)) AS VARCHAR), '')
                  FROM {}.main.{}",
-                quote_identifier(database),
-                quote_identifier(table)
+                quote_ident(database),
+                quote_ident(table)
             ),
             [],
             |row| Ok((row.get(0)?, row.get(1)?)),
@@ -541,7 +542,8 @@ fn storage_error(context: &str, error: duckdb::Error) -> AppError {
     AppError::Storage(format!("Storage rewrite failed to {context}: {error}"))
 }
 
-fn wal_path(path: &Path) -> PathBuf {
+/// DuckDB's write-ahead log, kept beside the database as `<file>.wal`.
+pub(super) fn wal_path(path: &Path) -> PathBuf {
     sibling_path(path, "wal")
 }
 

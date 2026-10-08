@@ -7,10 +7,9 @@
 //! SQLite appears only at boundaries, never in the core:
 //!
 //! * [`legacy_import`] upgrades a pre-DuckDB core written by an earlier release.
-//! * [`duckdb::DuckDbWorkspace`] and `analysis::anomaly` can take a bounded read-only snapshot of
-//!   a SQLite file an investigator supplies, so it can be analyzed without changing the source or
-//!   downloading a platform-specific DuckDB extension.
-//! * [`fts`] carries a SQLite FTS5 query sanitizer that no core path calls; see its module docs.
+//! * In tests only, `sqlite_snapshot` copies a SQLite fixture into [`duckdb::DuckDbWorkspace`]
+//!   and `analysis::anomaly` without a DuckDB extension. No shipped command attaches a SQLite
+//!   file.
 //!
 //! The core search projection, `documents_fts`, is a plain DuckDB table maintained transactionally
 //! by the repository. A versioned companion token table provides indexed all-term matching; it is
@@ -73,26 +72,33 @@ pub use pii::{mask_json_pii, mask_pii, PiiFinding, PiiKind, PiiMaskResult};
 pub use sqlite::{DocumentExtractionFinalization, DuckDbRepository};
 pub use vector::VectorIndex;
 
-pub mod review;
-
-pub mod financial;
-
-pub mod facilities;
-
-pub mod organisations;
-
 pub mod bundle;
 pub mod case_scope;
 pub mod casework;
 pub mod casework_operations;
-
+pub mod facilities;
+pub mod financial;
+pub mod findings;
 pub mod monitoring;
-
+pub mod organisations;
+pub(crate) mod redaction_sweep;
+pub mod review;
 pub mod watchlists;
 
-pub mod findings;
+/// A DuckDB identifier in double quotes, embedded quotes doubled.
+pub(crate) fn quote_ident(value: &str) -> String {
+    format!("\"{}\"", value.replace('"', "\"\""))
+}
 
-pub(crate) mod redaction_sweep;
+/// A DuckDB string literal in single quotes, embedded quotes doubled.
+pub(crate) fn sql_literal(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
+}
+
+/// The current UTC instant as RFC 3339 at whole-second precision with a `Z` suffix.
+pub(crate) fn now_stamp() -> String {
+    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+}
 
 #[cfg(test)]
 mod tests {

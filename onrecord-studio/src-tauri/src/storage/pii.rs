@@ -269,7 +269,6 @@ fn detect_phone_numbers(text: &str) -> Vec<Candidate> {
         // non-digit, non-phone-punctuation characters (crucially including ordinary letters) is
         // what keeps two unrelated numbers in the same sentence ("Item 605 ... budget of 4500")
         // from being merged into one digit run and read as a single 10-digit phone-shaped window.
-        // Previously allowing letters here let the segment span whole sentences of prose.
         let allowed =
             character.is_ascii_digit() || matches!(character, '+' | '(' | ')' | '-' | '.' | ' ');
         if allowed {
@@ -927,6 +926,8 @@ mod tests {
             "Medicare 2024 rates and Medi-Cal 2023-24 expansion.",
             "Passport 2025 fee schedule; savings account 2019 audit.",
             "Routing number 123456789 is a placeholder.",
+            // Unrelated numbers in one sentence never join into a phone-shaped digit run.
+            "Item 605 approved 2023 budget of 4500",
         ] {
             assert_eq!(mask_pii(public).unwrap().masked_text, public);
         }
@@ -942,25 +943,8 @@ mod tests {
         assert!(!result.masked_text.contains("440 Cedar"));
     }
 
-    /// The phone detector's segment used to include ordinary letters, so an entire sentence of
-    /// prose became one digit run: the tail of "605", all of "2023", and the head of "4500"
-    /// formed a spurious 10-digit NANP-shaped window spanning three unrelated numbers, and
-    /// ordinary case-number/year/budget prose was masked as a phone number that was never there.
-    #[test]
-    fn does_not_fabricate_a_phone_number_from_unrelated_digits_in_the_same_sentence() {
-        let input = "Item 605 approved 2023 budget of 4500";
-        let result = mask_pii(input).unwrap();
-        assert!(
-            result.findings.is_empty(),
-            "no real phone number exists in this text; got {:?}",
-            result.findings
-        );
-        assert_eq!(result.masked_text, input);
-    }
-
-    /// The same over-permissive segmentation let a spurious cross-word digit run ("4412" +
-    /// "619") start earlier than the real phone number and win the overlap tie-break by position,
-    /// masking a bogus span while leaking the real number's last digit in cleartext.
+    /// A cross-word digit run ("4412" + "619") starting before the real number must not win the
+    /// overlap tie-break, or the real number's last digit leaks in cleartext.
     #[test]
     fn detects_the_real_phone_number_and_not_a_cross_word_digit_run_that_starts_earlier() {
         let input = "Room 4412 call 619-555-0198";
@@ -978,21 +962,6 @@ mod tests {
             result.masked_text.contains("Room 4412"),
             "the unrelated room number must survive untouched"
         );
-    }
-
-    #[test]
-    fn masks_findings_that_cross_visible_chunk_boundaries() {
-        let input = "prefix 123-45-6789 suffix";
-
-        let left = mask_pii_character_range(input, 0, 12).unwrap();
-        assert_eq!(left.findings.len(), 1);
-        assert_eq!(left.masked_text, "prefix [MASKED_SSN]");
-        assert!(!left.masked_text.contains("123-45"));
-
-        let right = mask_pii_character_range(input, 12, 14).unwrap();
-        assert_eq!(right.findings.len(), 1);
-        assert_eq!(right.masked_text, "[MASKED_SSN] suffix");
-        assert!(!right.masked_text.contains("6789"));
     }
 }
 
@@ -1069,8 +1038,9 @@ mod boundary_tests {
                 "right leaked {fragment}"
             );
         }
-        assert!(left.masked_text.contains("[MASKED_SSN]"));
-        assert!(right.masked_text.contains("[MASKED_SSN]"));
+        assert_eq!(left.masked_text, "prefix [MASKED_SSN]");
+        assert_eq!(right.masked_text, "[MASKED_SSN] suffix");
+        assert_eq!((left.findings.len(), right.findings.len()), (1, 1));
     }
 
     // Detection runs over the whole document, so a window that contains none of a value still
@@ -1170,13 +1140,9 @@ mod boundary_tests {
         assert_eq!(result.masked_text, "x [MASKED_PRIVATE_ADDRESS] y");
     }
 
-    // SECURITY(pii): a higher-priority overlap used to replace a lower-priority finding's span
-    // outright instead of unioning it, so whatever part of the wider finding the narrower one
-    // didn't itself cover survived in cleartext. A street address whose unit number is
-    // phone-shaped is exactly that: the address candidate spans the whole "125 ... 619-555-0198"
-    // range, the phone candidate only spans "619-555-0198", and the phone wins on priority.
-    // Before the fix this masked only the phone digits and left the house number and street name
-    // ("125 Ocean View Drive Unit") in the clear.
+    // SECURITY(pii): a higher-priority overlap is unioned with the lower-priority finding, not
+    // substituted for it. Here the phone wins on priority but spans only the address's unit
+    // number; the house number and street must still be masked.
     #[test]
     fn a_higher_priority_overlap_does_not_leave_the_rest_of_the_lower_priority_finding_unmasked() {
         let input = "125 Ocean View Drive Unit 619-555-0198 filed today";

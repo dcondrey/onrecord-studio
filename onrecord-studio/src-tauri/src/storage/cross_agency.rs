@@ -14,7 +14,7 @@
 //! Aggregation is SQL. The only per-row work is looking up a citation for a row that is already
 //! inside the row limit.
 
-use super::{corpus::CorpusIndex, fts::core_query_tokens, sqlite::DuckDbRepository};
+use super::{corpus::CorpusIndex, fts::core_query_tokens, sql_literal, sqlite::DuckDbRepository};
 use crate::{
     analysis::{
         finding::{FindingCitation, FindingKind},
@@ -165,10 +165,6 @@ pub async fn execute_plan(
 
 fn storage(error: impl std::fmt::Display) -> AppError {
     AppError::Storage(error.to_string())
-}
-
-fn sql_literal(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "''"))
 }
 
 /// Builds a row and enforces the citation invariant: citations are capped, and a row with none
