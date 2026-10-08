@@ -29,6 +29,7 @@ use rusqlite::types::ValueRef as SqliteValueRef;
 use rusqlite::OpenFlags;
 
 use crate::error::AppError;
+use crate::storage::quote_ident;
 
 /// First 16 bytes of every SQLite 3 database file.
 const SQLITE_MAGIC: &[u8; 16] = b"SQLite format 3\0";
@@ -424,22 +425,38 @@ fn open_legacy_source(legacy_path: &Path) -> Result<rusqlite::Connection, AppErr
     .map_err(open_error)
 }
 
-/// A `file:` URI for `path` with `immutable=1`. SQLite percent-decodes the path and ends it at `?`
-/// or `#`, and a Windows drive path needs a leading `/`.
+/// A `file:` URI for `path` with `immutable=1`.
 fn immutable_uri(path: &Path) -> Result<String, AppError> {
     let value = path.to_str().ok_or_else(|| {
         AppError::DataParsing(format!("Database path '{}' is not UTF-8", path.display()))
     })?;
+    immutable_uri_for(value, cfg!(windows))
+}
+
+/// SQLite percent-decodes the path and ends it at `?` or `#`, and a Windows drive path needs a
+/// leading `/`. The bundled SQLite lacks SQLITE_ALLOW_URI_AUTHORITY, so a UNC share cannot be
+/// named in a URI and is refused, as are the `\\?\` and `\\.\` forms that share its prefix.
+fn immutable_uri_for(value: &str, windows: bool) -> Result<String, AppError> {
+    if windows && (value.starts_with(r"\\") || value.starts_with("//")) {
+        return Err(AppError::DataParsing(format!(
+            "The legacy database '{value}' is on a network share or uses a Windows device path, which cannot be opened without modification; move it to a local drive"
+        )));
+    }
+    let bytes = value.as_bytes();
+    let drive = bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && matches!(bytes[2], b'\\' | b'/');
     let mut uri = String::from("file:");
-    if cfg!(windows) && path.is_absolute() {
-        uri.push('/');
+    if windows && drive {
+        uri.push_str("///");
     }
     for character in value.chars() {
         match character {
             '%' => uri.push_str("%25"),
             '?' => uri.push_str("%3F"),
             '#' => uri.push_str("%23"),
-            '\\' if cfg!(windows) => uri.push('/'),
+            '\\' if windows => uri.push('/'),
             other => uri.push(other),
         }
     }
@@ -602,7 +619,7 @@ fn snapshot_table(
              The original was not modified."
         ))
     };
-    let quoted = quote_identifier(table);
+    let quoted = quote_ident(table);
 
     // Hidden columns (an FTS5 table's own name and `rank`) are absent from `table_info`, so the
     // explicit projection below never reads them.
@@ -614,10 +631,7 @@ fn snapshot_table(
                 .collect()
         })
         .map_err(read_error)?;
-    let quoted_columns: Vec<String> = columns
-        .iter()
-        .map(|(name, _)| quote_identifier(name))
-        .collect();
+    let quoted_columns: Vec<String> = columns.iter().map(|(name, _)| quote_ident(name)).collect();
 
     let class_unions = quoted_columns
         .iter()
@@ -694,7 +708,7 @@ fn snapshot_table(
 /// transfers; columns the legacy table does not have take their schema default.
 ///
 fn copy_table(connection: &Connection, table: &str) -> Result<u64, AppError> {
-    let quoted = quote_identifier(table);
+    let quoted = quote_ident(table);
     let expected = count_rows(connection, "legacy", table)?;
     connection
         .execute_batch(&format!(
@@ -710,14 +724,14 @@ fn copy_table(connection: &Connection, table: &str) -> Result<u64, AppError> {
 /// holds seeded rows the legacy database may not have. Presence of every legacy row is the
 /// guarantee that actually matters: no record the investigator collected was dropped.
 fn verify_table_transferred(connection: &Connection, table: &str) -> Result<(), AppError> {
-    let quoted = quote_identifier(table);
+    let quoted = quote_ident(table);
     let columns = legacy_columns(connection, table)?;
     if columns.is_empty() {
         return Ok(());
     }
     let projection = columns
         .iter()
-        .map(|column| quote_identifier(column))
+        .map(|column| quote_ident(column))
         .collect::<Vec<_>>()
         .join(", ");
     let missing: i64 = connection
@@ -765,7 +779,7 @@ fn legacy_columns(connection: &Connection, table: &str) -> Result<Vec<String>, A
 }
 
 fn count_rows(connection: &Connection, schema: &str, table: &str) -> Result<u64, AppError> {
-    let quoted = quote_identifier(table);
+    let quoted = quote_ident(table);
     let count: i64 = connection
         .query_row(
             &format!("SELECT COUNT(*) FROM {schema}.{quoted}"),
@@ -995,10 +1009,6 @@ pub(super) fn sibling_path(path: &Path, suffix: &str) -> PathBuf {
     path.with_file_name(name)
 }
 
-pub(super) fn quote_identifier(identifier: &str) -> String {
-    format!("\"{}\"", identifier.replace('"', "\"\""))
-}
-
 pub(super) fn quote_sql_literal(path: &Path) -> Result<String, AppError> {
     let value = path.to_str().ok_or_else(|| {
         AppError::DataParsing(format!("Database path '{}' is not UTF-8", path.display()))
@@ -1025,7 +1035,7 @@ mod tests {
         let mut sqlite = rusqlite::Connection::open(path).unwrap();
         let transaction = sqlite.transaction().unwrap();
         for table in tables {
-            let quoted = quote_identifier(table);
+            let quoted = quote_ident(table);
             let columns: Vec<(String, String)> = staging
                 .prepare(
                     "SELECT column_name, data_type FROM information_schema.columns
@@ -1039,7 +1049,7 @@ mod tests {
                 .unwrap();
             let definitions = columns
                 .iter()
-                .map(|(name, data_type)| format!("{} {data_type}", quote_identifier(name)))
+                .map(|(name, data_type)| format!("{} {data_type}", quote_ident(name)))
                 .collect::<Vec<_>>()
                 .join(", ");
             transaction
@@ -1505,5 +1515,19 @@ mod tests {
         );
         assert!(!sidecar_path(&core, "-wal").exists());
         assert!(!sibling_path(&core, LEGACY_SOURCE_COPY_SUFFIX).exists());
+    }
+
+    #[test]
+    fn immutable_uri_escapes_uri_delimiters_maps_drives_and_refuses_unc() {
+        assert_eq!(
+            immutable_uri_for("/data/a%b?c#d.db", false).unwrap(),
+            "file:/data/a%25b%3Fc%23d.db?immutable=1"
+        );
+        assert_eq!(
+            immutable_uri_for(r"C:\a b\x.db", true).unwrap(),
+            "file:///C:/a b/x.db?immutable=1"
+        );
+        assert!(immutable_uri_for(r"\\server\share\x.db", true).is_err());
+        assert!(immutable_uri_for(r"\\?\C:\x.db", true).is_err());
     }
 }
