@@ -186,7 +186,7 @@ export default function ActivityDashboard() {
   );
 }
 
-const UNAVAILABLE = 'Not available: the runtime snapshot did not load.';
+const UNAVAILABLE = 'Not available.';
 
 /** A throughput tile at its final height (overline, metric, caption), so nothing shifts on load. */
 function StatSkeleton({ label }: { label: string }) {

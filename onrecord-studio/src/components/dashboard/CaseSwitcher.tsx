@@ -78,7 +78,9 @@ export default function CaseSwitcher() {
         className={cn(
           'motion-press focus-ring flex h-8 items-center gap-1.5 rounded-lg border text-control transition-colors',
           active || activeMissing ? 'px-2.5' : 'w-8 justify-center',
-          activeMissing ? 'border-warning/30 bg-warning/10 text-warning' : 'border-line-strong bg-canvas/70 text-fg-secondary hover:bg-raised hover:text-fg',
+          activeMissing ? 'border-warning/30 bg-warning/10 text-warning'
+            : active ? 'border-line-strong text-fg-secondary hover:bg-raised hover:text-fg'
+              : 'border-transparent text-fg-secondary hover:bg-raised hover:text-fg',
         )}
       >
         <Icon name="briefcase" size="md" className="shrink-0" />

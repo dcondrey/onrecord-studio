@@ -129,7 +129,7 @@ export default function CommandPalette() {
       label: 'Show evidence timeline',
       detail: 'Requests, findings and watch changes on one dated list',
       group: 'Navigate',
-      icon: 'calendar',
+      icon: 'clock',
       keywords: 'timeline chronology dates events history sequence',
       perform: () => {
         setEvidenceMode('timeline');

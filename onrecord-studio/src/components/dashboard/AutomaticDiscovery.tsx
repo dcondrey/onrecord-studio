@@ -139,7 +139,7 @@ export default function AutomaticDiscovery() {
               {Object.keys(state.errors).map((key) => ERROR_LABEL[key] ?? 'Table checks').join(', ')} could not run. Earlier results may be out of date.
             </p>
             <details className="mt-1">
-              <summary className="focus-ring w-fit cursor-pointer rounded hover:text-fg">Technical details</summary>
+              <summary className="focus-ring w-fit cursor-pointer rounded text-caption text-muted hover:text-fg">Technical details</summary>
               {Object.entries(state.errors).map(([key, error]) => (
                 <p key={key} className="mt-1 break-words font-mono text-code">{readableError(error)}</p>
               ))}

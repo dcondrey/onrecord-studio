@@ -78,7 +78,7 @@ describe('ClaimBasisBadge', () => {
   it('renders the solid counted-violation badge for statutory kinds and for nothing else', () => {
     for (const kind of Object.keys(PLAIN_FINDING_TEXT) as FindingKind[]) {
       const { container, unmount } = render(<ClaimBasisBadge kind={kind} />);
-      const solid = container.querySelector('.bg-danger') !== null;
+      const solid = container.querySelector('.bg-violation') !== null;
       expect({ kind, solid }).toEqual({ kind, solid: isLegalClaimKind(kind) });
       expect(container.textContent?.includes('Counted violation')).toBe(isLegalClaimKind(kind));
       unmount();

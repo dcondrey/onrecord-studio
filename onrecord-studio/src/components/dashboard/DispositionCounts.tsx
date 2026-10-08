@@ -105,8 +105,8 @@ export default function DispositionCounts({ portalSubdomain }: { portalSubdomain
         <Table label="Dispositions by department">
           <thead>
             <tr>
-              <Th className="min-w-[14rem]">Department</Th>
-              <Th numeric>Requests</Th>
+              <Th className="min-w-[14rem] py-2 align-bottom">Department</Th>
+              <Th numeric className="py-2 align-bottom">Requests</Th>
               {DISPOSITION_ORDER.map((disposition) => (
                 <Th key={disposition} numeric className="h-auto min-w-[6.5rem] whitespace-normal py-2 align-bottom leading-4">{DISPOSITION_LABELS[disposition]}</Th>
               ))}
