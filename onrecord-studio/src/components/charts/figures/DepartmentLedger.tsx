@@ -132,8 +132,8 @@ function ledgerLayout(width: number): Layout {
   const nameWidth = narrow ? 0 : Math.min(260, Math.max(216, Math.round(width * 0.24)));
   const start = narrow ? 0 : nameWidth + 12;
   const rest = width - start - 2 * GUTTER;
-  const a = Math.round(rest * 0.38);
-  const b = Math.round(rest * 0.18);
+  const a = Math.round(rest * 0.36);
+  const b = Math.round(rest * 0.2);
   const cols = {
     a: [start, start + a] as [number, number],
     b: [start + a + GUTTER, start + a + GUTTER + b] as [number, number],
@@ -362,7 +362,7 @@ function LedgerPlot({ width, rows, scaleRows, portalName, onInspect }: {
               onBlurMark: tooltip.hide,
             }}
           >
-            <text x={0} y={narrow ? y + 10 : barY + 3} dy="0.32em" className={NAME_CLASS}>
+            <text x={0} y={narrow ? y + 10 : notes ? barY + 2 : barY + BAND / 2} dy="0.32em" className={NAME_CLASS}>
               <title>{profile.agencyName}</title>
               {truncate(profile.agencyName, nameWidth - (narrow ? measureText(notes) + 12 : 0), NAME_FONT)}
             </text>

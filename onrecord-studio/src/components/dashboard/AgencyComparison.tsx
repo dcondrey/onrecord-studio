@@ -180,7 +180,7 @@ export default function AgencyComparison() {
             />
           )
         ) : (
-          <section className="app-panel grid gap-6 p-5" aria-label="Agency comparison">
+          <section className="app-panel grid min-w-0 grid-cols-1 gap-6 p-5" aria-label="Agency comparison">
             <DepartmentLedger
               variant="compare"
               profiles={rows}
@@ -198,7 +198,7 @@ export default function AgencyComparison() {
                 <span className="text-caption tabular-nums text-muted">{rows.length.toLocaleString()} {rows.length === 1 ? 'agency' : 'agencies'}</span>
               </>}
             />
-            <div className="grid gap-2">
+            <div className="grid min-w-0 gap-2">
               <h3 className="text-heading text-fg">Exact values</h3>
               <p className="text-caption text-muted">The same agencies, in the same order; a header sorts both the table and the ledger above.</p>
             <Table label="Agency comparison">
