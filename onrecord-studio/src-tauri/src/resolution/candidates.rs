@@ -14,8 +14,8 @@ use std::collections::BTreeMap;
 /// A validated identifier must sit in the same segment as an entity in at least this many
 /// documents before the two are linked; one shared header line is not a pattern.
 pub const MINIMUM_IDENTIFIER_DOCUMENTS: u64 = 2;
-/// Resource guards. A group this large is a generic name or a shared mailbox, and pairing its
-/// members is quadratic. Skipped groups are counted and reported, not hidden.
+/// Resource guard. A name group this large is a generic name, and pairing its members is
+/// quadratic. Skipped groups are counted and reported, not hidden.
 pub const MAXIMUM_NAME_GROUP: usize = 40;
 pub const MAXIMUM_PAGE: usize = 100;
 

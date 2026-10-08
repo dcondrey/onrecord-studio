@@ -147,33 +147,32 @@ impl DirectGate {
     }
 
     /// The application's integrity, then the signed-in session; anything else is the denial.
-    fn verified_session(&self) -> Result<AccountSession, LicenseStatus> {
+    fn verified_session(&self) -> Result<AccountSession, Box<LicenseStatus>> {
         if let IntegrityResult::Tampered(detail) = self.account.integrity_check() {
-            return Err(denied(
+            return Err(Box::new(denied(
                 LicenseState::Unverified,
                 format!("The application failed its integrity check. {detail}"),
                 None,
-            ));
+            )));
         }
-        match self.account.session() {
-            Ok(SessionResult::SignedIn(session)) => Ok(session),
-            Ok(SessionResult::SignedOut) => Err(denied(
+        let denial = match self.account.session() {
+            Ok(SessionResult::SignedIn(session)) => return Ok(session),
+            Ok(SessionResult::SignedOut) => denied(
                 LicenseState::SignInRequired,
                 "Sign in to use OnRecord Studio.".to_string(),
                 None,
-            )),
-            Ok(SessionResult::Failed(message)) => {
-                Err(denied(LicenseState::Unavailable, message, None))
-            }
-            Err(error) => Err(denied(LicenseState::Unavailable, error.to_string(), None)),
-        }
+            ),
+            Ok(SessionResult::Failed(message)) => denied(LicenseState::Unavailable, message, None),
+            Err(error) => denied(LicenseState::Unavailable, error.to_string(), None),
+        };
+        Err(Box::new(denial))
     }
 
     /// Full evaluation: integrity, session, clock, device, then the stored token.
     pub fn evaluate(&self, now: i64) -> LicenseStatus {
         match self.verified_session() {
             Ok(session) => self.evaluate_token(now, Some(&session)),
-            Err(status) => status,
+            Err(status) => *status,
         }
     }
 
@@ -335,7 +334,7 @@ impl DirectGate {
     }
 
     fn prepare_request(&self) -> Result<Prepared, Box<LicenseStatus>> {
-        let session = self.verified_session().map_err(Box::new)?;
+        let session = self.verified_session()?;
         let fail = |error: AppError| {
             Box::new(denied(
                 LicenseState::Unavailable,

@@ -238,6 +238,16 @@ async fn retrieve_meetings(
     }
 }
 
+/// An investigation without in-run source acquisition. Used by the live finance test in
+/// `tests/research_finance_live.rs`.
+pub async fn investigate(
+    repository: &DuckDbRepository,
+    topic_id: &str,
+    force: bool,
+) -> Result<(), AppError> {
+    investigate_with_collection(repository, None, topic_id, force).await
+}
+
 pub async fn investigate_with_collection(
     repository: &DuckDbRepository,
     manager: Option<&Arc<QueueManager>>,
