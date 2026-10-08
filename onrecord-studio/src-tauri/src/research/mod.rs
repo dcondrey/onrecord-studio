@@ -460,7 +460,7 @@ pub async fn investigate_with_collection(
             .to_lowercase()
     };
     for action in agenda::fallback_actions(&agendas, chrono::Local::now().date_naive()) {
-        if synthesis.meetings.len() >= 6 {
+        if synthesis.meetings.len() >= evidence::MAXIMUM_MEETINGS {
             break;
         }
         if !synthesis.meetings.iter().any(|meeting| {
