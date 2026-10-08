@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { formatNativeError, invokeCommand } from '../../ipc';
+import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { CoverageExpectation, MonitoringEvidence, MonitoringStatus, ServiceObservation } from '../../types/monitoring';
 import { citationLocation, observationPoints, optionalMeasurement } from '../../utils/monitoring';
 
@@ -24,52 +25,40 @@ export default function MonitoringPanel({ caseId = null, topic = 'homelessness' 
   const [newObservation, setNewObservation] = useState(false);
   const [selectedObservation, setSelectedObservation] = useState<string | null>(null);
   const [dateFrom, setDateFrom] = useState(''); const [dateTo, setDateTo] = useState('');
-  const identity = `${topic}:${caseId ?? ''}`;
-  const identityRef = useRef(identity); identityRef.current = identity;
-  const generation = useRef(0);
+  // Every read and save begins a request on one gate, and the effect below begins a new one
+  // whenever the case or topic changes, so a result for the previous case is never written.
+  const gate = useLatestRequestGate();
 
-  async function load(refresh = false) {
-    const requestedIdentity = identityRef.current; const requestedGeneration = ++generation.current;
+  const load = useCallback(async (refresh = false) => {
+    const request = gate.begin();
     setBusy(true); setError(null);
     try {
       const next = await invokeCommand(refresh ? 'refresh_monitoring_now' : 'get_monitoring_status', { topic, caseId });
-      if (identityRef.current !== requestedIdentity || generation.current !== requestedGeneration) return;
-      setStatus(next);
+      if (gate.isCurrent(request)) setStatus(next);
     } catch (failure) {
-      if (identityRef.current !== requestedIdentity || generation.current !== requestedGeneration) return;
-      setError(formatNativeError(failure));
+      if (gate.isCurrent(request)) setError(formatNativeError(failure));
     } finally {
-      if (identityRef.current === requestedIdentity && generation.current === requestedGeneration) setBusy(false);
+      if (gate.isCurrent(request)) setBusy(false);
     }
-  }
+  }, [caseId, gate, topic]);
 
   useEffect(() => {
-    setStatus(null); setError(null); setNewCoverage(false); setNewObservation(false); setSelectedObservation(null);
-    const requestedIdentity = identity; const requestedGeneration = ++generation.current;
-    setBusy(true);
-    void invokeCommand('get_monitoring_status', { topic, caseId }).then(next => {
-      if (identityRef.current !== requestedIdentity || generation.current !== requestedGeneration) return;
-      setStatus(next);
-    }).catch(failure => {
-      if (identityRef.current !== requestedIdentity || generation.current !== requestedGeneration) return;
-      setError(formatNativeError(failure));
-    }).finally(() => {
-      if (identityRef.current === requestedIdentity && generation.current === requestedGeneration) setBusy(false);
-    });
-    return () => { generation.current += 1; };
-  }, [identity, topic, caseId]);
+    setStatus(null); setNewCoverage(false); setNewObservation(false); setSelectedObservation(null);
+    void load();
+    return gate.invalidate;
+  }, [gate, load]);
 
   async function save(kind: 'coverage' | 'observation', value: CoverageExpectation | ServiceObservation) {
-    const requestedIdentity = identityRef.current; const requestedGeneration = ++generation.current;
+    const request = gate.begin();
     setBusy(true); setError(null);
     try {
       if (kind === 'coverage') await invokeCommand('save_monitoring_coverage', { expectation: value as CoverageExpectation });
       else await invokeCommand('save_monitoring_observation', { observation: value as ServiceObservation });
-      if (identityRef.current !== requestedIdentity || generation.current !== requestedGeneration) return;
+      if (!gate.isCurrent(request)) return;
       setNewCoverage(false); setNewObservation(false);
       await load();
     } catch (failure) {
-      if (identityRef.current !== requestedIdentity || generation.current !== requestedGeneration) return;
+      if (!gate.isCurrent(request)) return;
       setError(formatNativeError(failure)); setBusy(false);
     }
   }

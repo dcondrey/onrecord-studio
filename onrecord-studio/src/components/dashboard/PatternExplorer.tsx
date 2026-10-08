@@ -57,6 +57,7 @@ export default function PatternExplorer() {
   const [isLoading, setIsLoading] = useState(false);
   const [excerptLoadingKey, setExcerptLoadingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [listFailed, setListFailed] = useState(false);
   const refreshGate = useLatestRequestGate();
   const evidenceGate = useLatestRequestGate();
   const restoredEvidenceKey = useRef<string | null>(null);
@@ -72,10 +73,8 @@ export default function PatternExplorer() {
   }), [indexedFrom, indexedTo, kindFilter, minimumConfidence, minimumEvidenceCount, requiredTerms]);
 
   const refresh = useCallback(async (markAsRecipePreview = false) => {
-    // The "Minimum evidence" select is not disabled while a refresh runs, so refreshes are already
-    // concurrent. Without a sequence the slower one wins: patterns supported by three documents
-    // render under a control reading "5", and portal A's cross-document patterns render under
-    // portal B. Same guard `SearchFilter` uses.
+    // Controls stay live during a refresh, so refreshes overlap; only the latest may publish, or
+    // patterns for one portal or threshold would render under another's controls.
     const request = refreshGate.begin();
     setIsLoading(true);
     setError(null);
@@ -88,10 +87,8 @@ export default function PatternExplorer() {
             minimumConfidenceBasisPoints: minimumConfidence,
             indexedFrom: toRfc3339(indexedFrom),
             indexedTo: toRfc3339(indexedTo),
-            // Always fetch every kind, unfiltered: the per-kind filter-button counts below are
-            // computed from `patterns`, and the UI narrows to `kindFilter` client-side via
-            // `filteredPatterns`. Filtering this query by `kindFilter` would make every other
-            // kind's count read 0 once a kind filter was active.
+            // Every kind, always: the per-kind counts come from this list and the kind filter is
+            // applied client-side, so filtering here would zero every other kind's count.
             patternKinds: [],
             requiredTerms: parsePatternRecipeTerms(requiredTerms),
             resultLimit: 250,
@@ -102,6 +99,7 @@ export default function PatternExplorer() {
       if (!refreshGate.isCurrent(request)) return;
       setPatterns(nextPatterns);
       setStatus(nextStatus);
+      setListFailed(false);
       if (markAsRecipePreview) {
         setLastPreviewFingerprint(patternRecipeFingerprint(currentRecipeControls()));
       }
@@ -112,6 +110,9 @@ export default function PatternExplorer() {
       );
     } catch (reason) {
       if (!refreshGate.isCurrent(request)) return;
+      // The previous list answered other controls; keeping it would present it as this query's.
+      setPatterns([]);
+      setListFailed(true);
       setError(formatNativeError(reason));
     } finally {
       if (refreshGate.isCurrent(request)) setIsLoading(false);
@@ -134,13 +135,9 @@ export default function PatternExplorer() {
     ?? filteredPatterns[0]
     ?? null;
 
-  // The pattern actually shown in the "Source evidence" panel can change for reasons besides the
-  // pattern-list `onClick` below: `refresh()` reselects silently when the previously selected
-  // pattern drops out of a new result set, and a `kindFilter` change can drop it out of
-  // `filteredPatterns` before that. Whenever the *displayed* pattern changes for any reason, any
-  // evidence fetched or in flight for the previous one must not survive under the new one. Skips
-  // the initial null-to-first-pattern transition so it never races the mount-time evidence restore
-  // effect below, which begins its own request for that same transition.
+  // The displayed pattern also changes when a refresh or the kind filter drops the selected one, and
+  // its evidence must not survive under the next. The first null-to-pattern transition is skipped
+  // so it does not race the evidence restore below, which begins its own request for it.
   useEffect(() => {
     const nextPatternId = selectedPattern?.patternId ?? null;
     const previousPatternId = lastGatedPatternId.current;
@@ -194,7 +191,7 @@ export default function PatternExplorer() {
   }, [savedRecipes]);
 
   const openEvidence = useCallback(async (evidence: CorpusEvidenceReference) => {
-    const key = `${evidence.portalKey}:${evidence.documentId}:${evidence.characterStart ?? 'document'}`;
+    const key = evidenceKey(evidence);
     restoredEvidenceKey.current = key;
     setPatternEvidenceSelection({
       patternId: selectedPattern?.patternId ?? patternEvidenceSelection?.patternId ?? '',
@@ -231,9 +228,7 @@ export default function PatternExplorer() {
       && candidate.documentId === patternEvidenceSelection.documentId
       && candidate.characterStart === patternEvidenceSelection.characterStart
     );
-    if (!evidence) return;
-    const key = `${evidence.portalKey}:${evidence.documentId}:${evidence.characterStart ?? 'document'}`;
-    if (restoredEvidenceKey.current === key) return;
+    if (!evidence || restoredEvidenceKey.current === evidenceKey(evidence)) return;
     void openEvidence(evidence);
   }, [openEvidence, patternEvidenceSelection, selectedPattern]);
 
@@ -389,6 +384,8 @@ export default function PatternExplorer() {
             <div className="max-h-[650px] overflow-y-auto">
               {isLoading && patterns.length === 0 ? (
                 <EmptyState title="Analyzing corpus index…" />
+              ) : listFailed ? (
+                <EmptyState title="Signals could not be read for these controls. Preview again to retry." />
               ) : filteredPatterns.length === 0 ? (
                 <EmptyState title="No matching pattern has enough evidence yet." />
               ) : filteredPatterns.map((pattern) => (
@@ -399,9 +396,8 @@ export default function PatternExplorer() {
                     setSelectedPatternId(pattern.patternId);
                     setPatternEvidenceSelection({ patternId: pattern.patternId, portalKey: null, documentId: null, characterStart: null });
                     setExcerpt(null);
-                    // An evidence fetch for the previously selected pattern may still be in
-                    // flight. Without invalidating it, it would still pass `isCurrent` and
-                    // publish its excerpt under this newly selected pattern.
+                    // Invalidated here as well as in the effect: the effect runs after paint, and an
+                    // excerpt for the previous pattern can resolve in between.
                     evidenceGate.invalidate();
                     setExcerptLoadingKey(null);
                   }}
@@ -440,10 +436,10 @@ export default function PatternExplorer() {
                   <div className="mb-2 text-caption font-bold uppercase tracking-[0.16em] text-muted">Source evidence</div>
                   <div className="space-y-2">
                     {selectedPattern.evidence.map((evidence) => {
-                      const key = `${evidence.portalKey}:${evidence.documentId}:${evidence.characterStart ?? 'document'}`;
+                      const key = evidenceKey(evidence);
                       return (
                         <button
-                          key={`${key}:${evidence.characterStart ?? 'document'}`}
+                          key={key}
                           type="button"
                           onClick={() => void openEvidence(evidence)}
                           className="focus-ring w-full rounded-xl border border-control bg-canvas/40 p-3 text-left transition hover:border-highlight/30 hover:bg-highlight/5"
@@ -474,7 +470,7 @@ export default function PatternExplorer() {
                             {excerpt.chunk.portalKey} / document {excerpt.chunk.documentId} · offset {excerpt.chunk.characterOffset}
                           </div>
                         </div>
-                        <button type="button" onClick={() => setExcerpt(null)} aria-label="Close excerpt" className="text-muted hover:text-fg-secondary">
+                        <button type="button" onClick={() => setExcerpt(null)} aria-label="Close excerpt" className="focus-ring rounded text-muted hover:text-fg-secondary">
                           <Icon name="x" className="h-3.5 w-3.5" />
                         </button>
                       </div>
@@ -496,6 +492,10 @@ export default function PatternExplorer() {
       </div>
     </div>
   );
+}
+
+function evidenceKey(evidence: CorpusEvidenceReference) {
+  return `${evidence.portalKey}:${evidence.documentId}:${evidence.characterStart ?? 'document'}`;
 }
 
 function toRfc3339(value: string) {
