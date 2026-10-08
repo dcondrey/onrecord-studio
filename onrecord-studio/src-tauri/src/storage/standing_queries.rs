@@ -167,6 +167,7 @@ fn filters_for(query: &StandingQuery) -> Result<Filters, AppError> {
         query.filters.agency_id,
         query.filters.status.as_deref(),
         query.filters.policy_deviation.as_deref(),
+        false,
     )
 }
 
@@ -418,6 +419,7 @@ impl DuckDbRepository {
             input.filters.agency_id,
             input.filters.status.as_deref(),
             input.filters.policy_deviation.as_deref(),
+            false,
         )?;
         let query = StandingQuery {
             id: uuid::Uuid::new_v4().to_string(),

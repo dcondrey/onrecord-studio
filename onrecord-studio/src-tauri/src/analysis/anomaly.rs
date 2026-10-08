@@ -52,19 +52,17 @@ FROM (
 ) AS required_layout
 "#;
 
-/// Per-agency aggregate over every request, rendered from `analysis::statute`.
-///
-/// Only the aggregation belongs to this module. The determination proxy, the extension-validity
-/// rule, the calendar-day derivation, and every threshold are rendered from `statute::sql`, which
-/// is the same model `analysis::timeline` evaluates one request at a time. The two therefore
-/// cannot drift apart without failing `statutory_verdicts_match_the_per_request_evaluator`.
+/// The per-request statutory evaluation, as the `court_holidays`, `parsed`, `milestones`,
+/// `extended` and `evaluated` CTEs (no leading `WITH`), over every request with an agency and
+/// narrowed by `{created_window}`. The deadline ledger aggregates it and the evidence search's
+/// statutory filter selects from it, so the requests a ledger count names are the ones the
+/// filter lists.
 ///
 /// The `parsed` CTE establishes the column names `statute::sql` documents as its contract. Note
 /// that instants and calendar dates are derived separately and deliberately: durations and
 /// ordering use the `TIMESTAMPTZ`-derived instants, while every day count uses the recorded-offset
 /// date, because the statute counts days in the offset the agency wrote down.
-const AGENCY_PERFORMANCE_QUERY_TEMPLATE: &str = r#"
-WITH {court_holidays_cte},
+const EVALUATED_REQUESTS_TEMPLATE: &str = r#"{court_holidays_cte},
 parsed AS (
     SELECT
         requests.id,
@@ -91,9 +89,7 @@ parsed AS (
     LEFT JOIN {db}statutory_extensions AS statutory_extensions
       ON statutory_extensions.request_id = requests.id
      AND statutory_extensions.portal_subdomain = requests.portal_subdomain
-    WHERE requests.agency_id IS NOT NULL
-      AND (?2 = '' OR TRY_CAST(requests.created_at AS TIMESTAMPTZ) >= TRY_CAST(?2 AS TIMESTAMPTZ))
-      AND (?3 = '' OR TRY_CAST(requests.created_at AS TIMESTAMPTZ) < TRY_CAST(?3 AS TIMESTAMPTZ))
+    WHERE requests.agency_id IS NOT NULL{created_window}
 ),
 milestones AS (
     SELECT
@@ -121,7 +117,21 @@ evaluated AS (
             ELSE NULL
         END AS latency_seconds
     FROM extended
-),
+)"#;
+
+/// The created-at window the aggregate binds as `?2` and `?3`; an empty bound is open.
+const CREATED_WINDOW: &str = "
+      AND (?2 = '' OR TRY_CAST(requests.created_at AS TIMESTAMPTZ) >= TRY_CAST(?2 AS TIMESTAMPTZ))
+      AND (?3 = '' OR TRY_CAST(requests.created_at AS TIMESTAMPTZ) < TRY_CAST(?3 AS TIMESTAMPTZ))";
+
+/// Per-agency aggregate over every request, rendered from `analysis::statute`.
+///
+/// Only the aggregation belongs to this module. The determination proxy, the extension-validity
+/// rule, the calendar-day derivation, and every threshold are rendered from `statute::sql`, which
+/// is the same model `analysis::timeline` evaluates one request at a time. The two therefore
+/// cannot drift apart without failing `statutory_verdicts_match_the_per_request_evaluator`.
+const AGENCY_PERFORMANCE_QUERY_TEMPLATE: &str = r#"
+WITH {evaluated_requests},
 request_counts AS (
     SELECT
         agency_id,
@@ -414,13 +424,25 @@ impl AnalyticsEngine {
 /// Statutory placeholders are expanded before `{db}` so the two substitution passes stay
 /// independent: `statute::sql` never sees a table qualifier and `qualify` never sees a rule.
 fn agency_performance_query(table_prefix: &str) -> String {
-    qualify(
-        &statute::sql::render(AGENCY_PERFORMANCE_QUERY_TEMPLATE),
-        table_prefix,
-    )
+    let template = AGENCY_PERFORMANCE_QUERY_TEMPLATE.replace(
+        "{evaluated_requests}",
+        &EVALUATED_REQUESTS_TEMPLATE.replace("{created_window}", CREATED_WINDOW),
+    );
+    qualify(&statute::sql::render(&template), table_prefix)
 }
 
-fn query_agency_performance_profiles(
+/// A query listing `portal_subdomain:id` for every request the statutory model counts as past
+/// its deadline, all-time: the rows behind the ledger's `statutory_violation_count`. It binds no
+/// parameter, so it can be embedded in another statement's predicate.
+pub fn statutory_violation_keys_query() -> String {
+    let template = format!(
+        "WITH {} SELECT portal_subdomain || ':' || CAST(id AS VARCHAR) FROM evaluated WHERE {{statutory_violation_predicate}}",
+        EVALUATED_REQUESTS_TEMPLATE.replace("{created_window}", "")
+    );
+    qualify(&statute::sql::render(&template), "")
+}
+
+pub(crate) fn query_agency_performance_profiles(
     connection: &Connection,
     latency_threshold_days: f64,
     created_from: &str,

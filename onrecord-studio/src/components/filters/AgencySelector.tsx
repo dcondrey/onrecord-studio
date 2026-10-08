@@ -11,6 +11,7 @@ export default function AgencySelector() {
   const selectedAgencyId = useAppStore((state) => state.selectedAgencyId);
   const selectedStatus = useAppStore((state) => state.selectedStatus);
   const selectedPolicyDeviation = useAppStore((state) => state.selectedPolicyDeviation);
+  const selectedStatutoryOnly = useAppStore((state) => state.selectedStatutoryOnly);
   const setSearchFilters = useAppStore((state) => state.setSearchFilters);
   const setActivePortal = useAppStore((state) => state.setActivePortal);
   const agencyIndex = useMemo(() => {
@@ -30,7 +31,7 @@ export default function AgencySelector() {
       onChange={(event) => {
         const agency = agencyIndex.find((candidate) => candidate.value === event.target.value);
         if (agency && activePortalKey !== agency.portalKey) setActivePortal(agency.portalKey);
-        setSearchFilters(searchTerm, agency?.agencyId ?? null, selectedStatus, selectedPolicyDeviation);
+        setSearchFilters(searchTerm, agency?.agencyId ?? null, selectedStatus, selectedPolicyDeviation, selectedStatutoryOnly);
       }}
       className="focus-ring w-40 truncate xl:w-48"
     >

@@ -47,6 +47,7 @@ pub async fn count_audit_records(
     agency_id: Option<u64>,
     status: Option<String>,
     policy_deviation: Option<String>,
+    statutory_deadline_exceeded: Option<bool>,
     repository: State<'_, DuckDbRepository>,
 ) -> Result<AuditRecordCount, AppError> {
     let arguments = validated(
@@ -63,6 +64,7 @@ pub async fn count_audit_records(
             agency_id,
             arguments.status.as_deref(),
             arguments.policy_deviation.as_deref(),
+            statutory_deadline_exceeded.unwrap_or(false),
         )
         .await?;
     Ok(AuditRecordCount { total })
@@ -78,6 +80,7 @@ pub async fn query_audit_records_page(
     agency_id: Option<u64>,
     status: Option<String>,
     policy_deviation: Option<String>,
+    statutory_deadline_exceeded: Option<bool>,
     cursor: Option<String>,
     page_size: usize,
     repository: State<'_, DuckDbRepository>,
@@ -96,6 +99,7 @@ pub async fn query_audit_records_page(
             agency_id,
             arguments.status.as_deref(),
             arguments.policy_deviation.as_deref(),
+            statutory_deadline_exceeded.unwrap_or(false),
             cursor.as_deref(),
             page_size,
         )
