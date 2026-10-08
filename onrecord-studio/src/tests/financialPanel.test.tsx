@@ -16,7 +16,7 @@ async function run(){fireEvent.click(screen.getByRole('button',{name:'Investigat
 it('shows real cited comparisons, explicit gaps and reproducible source rows',async()=>{
  await mounted();await run();expect(screen.getByText('50 - 100')).toBeTruthy();expect(screen.getByText('USD -50.00')).toBeTruthy();expect(screen.getAllByText('Unknown').length).toBeGreaterThan(0);expect(screen.getByText(/Obtain the dated appropriation bridge/)).toBeTruthy();
  fireEvent.click(screen.getAllByRole('button',{name:'Inspect 1 cited rows'})[0]);expect(screen.getByRole('region',{name:'Financial source evidence'})).toBeTruthy();expect(screen.getByText('SELECT amount FROM analysis_fixture')).toBeTruthy();
- fireEvent.click(screen.getByRole('tab',{name:'Missing evidence'}));expect(screen.getByText('Open encumbrance register')).toBeTruthy();
+ fireEvent.click(screen.getByRole('button',{name:'Missing evidence'}));expect(screen.getByText('Open encumbrance register')).toBeTruthy();
 });
 it('discards a financial report when the selected scope changes before completion',async()=>{
  const pending=deferred<FinancialReport>();bridge.invoke.mockImplementation((command:string)=>command==='get_financial_workspace'?Promise.resolve(workspace):pending.promise);
@@ -25,7 +25,7 @@ it('discards a financial report when the selected scope changes before completio
 });
 it('discards scenario estimates when the requested amount changes during native revalidation',async()=>{
  const pending=deferred<FinancialScenario>();bridge.invoke.mockImplementation((command:string)=>command==='get_financial_workspace'?Promise.resolve(workspace):command==='evaluate_financial_scenario'?pending.promise:Promise.resolve(report));
- await mounted();await run();fireEvent.click(screen.getByRole('tab',{name:'Policy scenarios'}));fireEvent.change(screen.getByLabelText('Scenario amount'),{target:{value:'100'}});fireEvent.click(screen.getByRole('button',{name:'Calculate sourced scenario'}));fireEvent.change(screen.getByLabelText('Scenario amount'),{target:{value:'900'}});
+ await mounted();await run();fireEvent.click(screen.getByRole('button',{name:'Policy scenarios'}));fireEvent.change(screen.getByLabelText('Scenario amount'),{target:{value:'100'}});fireEvent.click(screen.getByRole('button',{name:'Calculate sourced scenario'}));fireEvent.change(screen.getByLabelText('Scenario amount'),{target:{value:'900'}});
  await act(async()=>pending.resolve(result));expect(screen.queryByLabelText('Scenario result')).toBeNull();
 });
 

@@ -81,7 +81,7 @@ export default function CaseSwitcher() {
                 className="focus-ring min-w-0 flex-1 rounded-lg px-2.5 py-2 text-left"
               >
                 <span className="block truncate text-label font-medium text-fg">{entry.title}</span>
-                <span className="block truncate text-caption text-muted">{entry.topic || 'No topic'} · {entry.evidence.length} sources · {entry.requests.length} requests</span>
+                <span className="block truncate text-caption text-muted">{entry.topic || 'No topic'} · {entry.evidence.length} source{entry.evidence.length === 1 ? '' : 's'} · {entry.requests.length} request{entry.requests.length === 1 ? '' : 's'}</span>
               </button>
               <button
                 type="button"

@@ -33,7 +33,7 @@ export default function EvidenceGaps() {
   if (error) return <p className="text-caption text-warning">Evidence gaps unavailable: {error}</p>;
   if (gaps.length === 0) return null;
   return (
-    <div aria-label="Evidence gaps" className="flex flex-col gap-2 border-t border-line pt-3">
+    <section aria-label="Evidence gaps" className="flex flex-col gap-2 border-t border-line pt-3">
       <div className="app-eyebrow">Routes that cannot be tested yet</div>
       <ul className="flex flex-col gap-2">
         {gaps.map((gap) => (
@@ -47,6 +47,6 @@ export default function EvidenceGaps() {
           </li>
         ))}
       </ul>
-    </div>
+    </section>
   );
 }

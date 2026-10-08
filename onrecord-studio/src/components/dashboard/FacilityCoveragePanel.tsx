@@ -85,7 +85,7 @@ export default function FacilityCoveragePanel({ schema }: { schema: AnalyticalSc
   const setArea = (index: number, patch: Partial<AreaDraft>) => draft && setDraft({ ...draft, areas: draft.areas.map((area, i) => (i === index ? { ...area, ...patch } : area)) });
 
   return (
-    <div className="space-y-4" aria-label="Facility coverage">
+    <section className="space-y-4" aria-label="Facility coverage">
       <p className="text-label text-muted">Descriptive counts from an imported facility list, per area you define. Only rows with recorded, interpretable daily hours contribute to open-hours arithmetic; blank hours stay {NOT_RECORDED}. This view does not raise findings.</p>
       {error && <p role="alert" className="text-label leading-4 text-danger">{error}</p>}
       {workspace?.warnings.map((warning) => <p key={warning} className="text-label leading-4 text-warning">{warning}</p>)}
@@ -134,20 +134,20 @@ export default function FacilityCoveragePanel({ schema }: { schema: AnalyticalSc
                     <label key={label} className="text-label text-fg-secondary">{label}<input aria-label={`Area ${index + 1} ${label.toLowerCase()}`} inputMode="decimal" className="analysis-input block w-28" disabled={saving} value={area.bbox[bound]} onChange={(event) => { const bbox = [...area.bbox] as AreaDraft['bbox']; bbox[bound] = event.target.value; setArea(index, { bbox }); }} /></label>
                   ))
                   : <label className="text-label text-fg-secondary">Facility ids (one per line)<textarea aria-label={`Area ${index + 1} facility ids`} className="analysis-input block" rows={3} disabled={saving} value={area.ids} onChange={(event) => setArea(index, { ids: event.target.value })} /></label>}
-                <button type="button" className="text-label text-muted underline" disabled={saving || draft.areas.length === 1} onClick={() => setDraft({ ...draft, areas: draft.areas.filter((_, i) => i !== index) })}>Remove area</button>
+                <button type="button" className="focus-ring rounded text-label text-muted underline" disabled={saving || draft.areas.length === 1} onClick={() => setDraft({ ...draft, areas: draft.areas.filter((_, i) => i !== index) })}>Remove area</button>
               </div>
             ))}
-            <button type="button" className="text-label text-accent underline" disabled={saving} onClick={() => setDraft({ ...draft, areas: [...draft.areas, emptyArea()] })}>Add area</button>
+            <button type="button" className="focus-ring rounded text-label text-accent underline" disabled={saving} onClick={() => setDraft({ ...draft, areas: [...draft.areas, emptyArea()] })}>Add area</button>
           </div>
           <div className="flex gap-3">
             <button type="button" className="analysis-button" disabled={saving || !draft.mapping.nameColumn} onClick={() => void save()}>{saving ? 'Validating columns and areas…' : 'Save facility mapping'}</button>
-            <button type="button" className="text-label leading-4 text-fg-secondary" disabled={saving} onClick={() => setDraft(null)}>Cancel</button>
+            <button type="button" className="focus-ring rounded text-label leading-4 text-fg-secondary" disabled={saving} onClick={() => setDraft(null)}>Cancel</button>
           </div>
         </div>
       )}
       {workspace?.reports.map((report) => <CoverageReport key={report.mapping.snapshotId} report={report} />)}
       {workspace && workspace.reports.length === 0 && <p className="text-label text-muted">No facility list is mapped. Import the agency's facility list above, then choose it here and define the areas to summarize.</p>}
-    </div>
+    </section>
   );
 }
 
@@ -159,7 +159,7 @@ function CoverageReport({ report }: { report: FacilityCoverageReport }) {
       <div className="overflow-x-auto">
         <table className="w-full text-left text-label">
           <thead>
-            <tr>{['Area', 'Public restrooms', 'With recorded hours', 'Hours unreadable', 'Hours not recorded', 'Recorded open coverage (of 24 h)', 'Time with none of the recorded open'].map((heading) => <th key={heading} className="p-1.5 text-fg-secondary">{heading}</th>)}</tr>
+            <tr>{['Area', 'Public restrooms', 'With recorded hours', 'Hours unreadable', 'Hours not recorded', 'Recorded open coverage (of 24 h)', 'Time with none of the recorded open'].map((heading) => <th key={heading} scope="col" className="p-1.5 text-fg-secondary">{heading}</th>)}</tr>
           </thead>
           <tbody>
             {report.areas.map((area) => (

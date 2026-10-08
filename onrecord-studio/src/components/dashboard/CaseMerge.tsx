@@ -37,8 +37,8 @@ export default function CaseMerge({
       <h5 className="text-sm font-semibold text-fg">Merge selected items into your open case</h5>
       <p className="mt-1 text-label leading-4 text-muted">Tick what to take. The result is a draft in the open case; review it, then save a new revision. Nothing is saved by this step, and a shared case that lacks an item may only be older.</p>
       <div className="mt-2 flex gap-3 text-label leading-4">
-        <button type="button" className="underline" onClick={() => setSelected(new Set(candidates.filter((c) => c.change === 'added').map((c) => c.key)))}>Select additions</button>
-        <button type="button" className="underline" onClick={() => setSelected(new Set())}>Clear</button>
+        <button type="button" className="focus-ring rounded underline" onClick={() => setSelected(new Set(candidates.filter((c) => c.change === 'added').map((c) => c.key)))}>Select additions</button>
+        <button type="button" className="focus-ring rounded underline" onClick={() => setSelected(new Set())}>Clear</button>
       </div>
       <ul className="mt-2 space-y-1 text-label leading-4 text-fg-secondary">
         {candidates.map((candidate) => (
