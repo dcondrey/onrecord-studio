@@ -46,7 +46,7 @@ describe('encampment ordinance observations', () => {
     expect(screen.getByRole('img', { name: /activity A2: recorded 2025-03-15 21:00, at an endpoint/ })).toBeTruthy();
     expect(document.querySelector('[data-absence="excluded"]')?.textContent).toBe('4 time not recorded');
     expect(screen.getByText(/Distance to schools and stations is not measured for every section; 0 offenses not geocoded/)).toBeTruthy();
-    expect(screen.getByText(/quarter-mile stand-in for “two blocks” \(reference; not stated in the ordinance\)/)).toBeTruthy();
+    expect(screen.getByText('1,320 ft stand-in (reference)')).toBeTruthy();
     expect(document.body.innerHTML).not.toMatch(/--viz-(counted|lead|positive)/);
   });
 });

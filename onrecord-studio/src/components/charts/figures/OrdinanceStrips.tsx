@@ -35,7 +35,9 @@ const isNightSection = (section: string) => section.toLowerCase().startsWith('63
 
 /** Axis labels at clock hours on the noon-to-noon scale, through the shared band axis. */
 function clockAxis(x: ContinuousScale): BandScale<string> {
-  const keys = [0, 3, 6, 9, 12, 15, 18, 21, 24].map((h) => `${h}`);
+  // Every 3 hours where the labels fit, else every 6, so midnight is never the label dropped.
+  const every = x(180) - x(0) >= 60 ? 3 : 6;
+  const keys = Array.from({ length: 24 / every + 1 }, (_, i) => `${i * every}`);
   const position = (key: string) => x(Number(key) * 60);
   return Object.assign(position, { bandwidth: 0, step: x(180) - x(0), domain: keys });
 }
@@ -48,7 +50,9 @@ const SWARM_R = 4;
 const SWARM_ROWS = 3;
 const STRIP = (2 * SWARM_ROWS + 1) * (2 * SWARM_R + 1);
 const BAR = 12;
-const LANE = 18 + STRIP + 8 + BAR + 18;
+/** Below 480px the excluded stub moves under the bar instead of beside it. */
+const narrow = (width: number) => width < 480;
+const laneHeight = (width: number) => 18 + STRIP + 8 + BAR + 28 + (narrow(width) ? 18 : 0);
 /** A gutter under the last lane for the window band's label, above the axis. */
 const GUTTER = 20;
 
@@ -78,23 +82,28 @@ function interactionFor(name: string, content: JSX.Element, tooltip: ReturnType<
 function TimePlot({ lanes, width, onRecord }: { lanes: Lane[]; width: number; onRecord(key: string): void }) {
   const tooltip = useTooltip();
   const plotX = 0;
-  const right = width - 150;
-  const x = scaleLinear([0, 1440], [plotX + 8, right], { nice: false, zero: true });
+  const right = narrow(width) ? width - 12 : width - 150;
+  const LANE = laneHeight(width);
+  // 24px in from the left so the 'noon' label centred on the first tick is not clipped.
+  const x = scaleLinear([0, 1440], [plotX + 24, right], { nice: false, zero: true });
   const dots = lanes.flatMap((lane) => lane.listed.map((entry) => ({ lane, ...entry })));
   const roving = useRovingFocus({ shape: { rows: Math.max(1, dots.length) }, onActivate: (i) => dots[i] && onRecord(recordKey(dots[i].activity)), onEscape: tooltip.hide });
   const height = lanes.length * LANE;
   let dotIndex = 0;
   return (
     <>
-      <ReferenceBand axis="x" from={x(WINDOW_START)} to={x(WINDOW_END)} extent={[0, height + GUTTER - 2]} label="63.0405(b) window 9:00 p.m.–5:30 a.m." />
+      {/* The window shades only the clock strips and the gutter above the axis, never the share bars, which are not on the clock. */}
+      <ReferenceBand axis="x" from={x(WINDOW_START)} to={x(WINDOW_END)} extent={[height, height + GUTTER - 2]} label="63.0405(b) window 9:00 p.m.–5:30 a.m." />
       {lanes.map((lane, l) => {
         const y = l * LANE;
         const cy = y + 18 + STRIP / 2;
+        const windowBand = <rect x={x(WINDOW_START)} y={y + 16} width={x(WINDOW_END) - x(WINDOW_START)} height={STRIP + 4} style={{ fill: 'var(--viz-track)', opacity: 0.6 }} aria-hidden="true" />;
         const timed = lane.inside + lane.boundary + lane.outside;
-        const bar = scaleLinear([0, Math.max(1, timed)], [plotX + 8, right], { nice: false });
+        const bar = scaleLinear([0, Math.max(1, timed)], [plotX + 24, right], { nice: false });
         const barY = y + 18 + STRIP + 8;
         return (
           <g key={lane.key} aria-label={`${lane.label}: ${lane.activities} activities, ${lane.inside} inside the window, ${lane.boundary} at an endpoint, ${lane.outside} outside, ${lane.noTime} time not recorded.`}>
+            {windowBand}
             <text x={0} y={y + 10} className={ROW_LABEL_CLASS}>{lane.label}</text>
             <Beeswarm
               x={x}
@@ -124,11 +133,11 @@ function TimePlot({ lanes, width, onRecord }: { lanes: Lane[]; width: number; on
                 ] satisfies StackSegment[]).filter((segment) => segment.value > 0)}
               />
             ) : (
-              <text x={plotX + 8} y={barY + BAR / 2} dy="0.32em" className={MUTED_LABEL_CLASS}>no activity has a recorded time</text>
+              <text x={plotX + 24} y={barY + BAR / 2} dy="0.32em" className={MUTED_LABEL_CLASS}>no activity has a recorded time</text>
             )}
-            {lane.noTime > 0 && <ExcludedStub band={{ pos: barY, thickness: BAR }} at={right + 8} count={lane.noTime.toLocaleString('en-US')} label="time not recorded" />}
-            <text x={plotX + 8} y={barY + BAR + 12} className={LABEL_CLASS}>
-              {`${lane.inside.toLocaleString('en-US')} inside · ${lane.boundary.toLocaleString('en-US')} at an endpoint · ${lane.outside.toLocaleString('en-US')} outside`}
+            {lane.noTime > 0 && <ExcludedStub band={narrow(width) ? { pos: barY + BAR + 22, thickness: BAR } : { pos: barY, thickness: BAR }} at={narrow(width) ? plotX + 24 : right + 8} count={lane.noTime.toLocaleString('en-US')} label="time not recorded" />}
+            <text x={plotX + 24} y={barY + BAR + 12} className={LABEL_CLASS}>
+              {`${narrow(width) ? '' : 'Share of timed activities: '}${lane.inside.toLocaleString('en-US')} inside · ${lane.boundary.toLocaleString('en-US')} at an endpoint · ${lane.outside.toLocaleString('en-US')} outside`}
             </text>
           </g>
         );
@@ -150,11 +159,13 @@ function nearestFeet(incident: EncampmentIncidentDistance): number | null {
 }
 
 const DIST_LANE = 18 + STRIP + 6;
+/** Room above the first lane for the yardstick labels. */
+const DIST_TOP = 32;
 
 function DistancePlot({ locations, width, onRecord }: { locations: EncampmentLocationObservation; width: number; onRecord(key: string): void }) {
   const tooltip = useTooltip();
   const plotX = 0;
-  const right = width - 120;
+  const right = width - 12;
   const x = scaleLinear([0, MAX_FEET], [plotX + 8, right], { nice: false });
   const lanes = locations.sections.map((section) => ({
     section,
@@ -166,19 +177,23 @@ function DistancePlot({ locations, width, onRecord }: { locations: EncampmentLoc
   }));
   const all = lanes.flatMap((lane) => lane.points);
   const roving = useRovingFocus({ shape: { rows: Math.max(1, all.length) }, onActivate: (i) => all[i] && onRecord(incidentKey(all[i].incident)), onEscape: tooltip.hide });
-  const height = lanes.length * DIST_LANE;
+  const height = DIST_TOP + lanes.length * DIST_LANE;
   let index = 0;
   return (
     <>
       <Grid scale={x} extent={[0, height]} vertical />
-      <ReferenceLine kind="yardstick" axis="x" at={x(NEAR_FEET)} extent={[0, height]} labelSide="start" label="1,320 ft: quarter-mile stand-in for “two blocks” (reference; not stated in the ordinance)" />
-      <ReferenceLine kind="yardstick" axis="x" at={x(FAR_FEET)} extent={[0, height]} label="2,640 ft (reference)" />
+      {/* Labels on two levels, both right of their line, so neither runs into the other or off the plot. */}
+      <ReferenceLine kind="yardstick" axis="x" at={x(NEAR_FEET)} extent={[0, height]} label="1,320 ft stand-in (reference)" />
+      <ReferenceLine kind="yardstick" axis="x" at={x(FAR_FEET)} extent={[14, height]} label="2,640 ft stand-in (reference)" />
       {lanes.map(({ section, points }, l) => {
-        const y = l * DIST_LANE;
+        const y = DIST_TOP + l * DIST_LANE;
         const beyond = points.filter((point) => point.feet > MAX_FEET).length;
         return (
           <g key={section.section} aria-label={`${section.section}: ${points.length} geocoded offenses plotted; ${section.notGeocoded} not geocoded.`}>
-            <text x={0} y={y + 10} className={ROW_LABEL_CLASS}>{section.section}</text>
+            <text x={0} y={y + 10} className={ROW_LABEL_CLASS}>
+              {section.section}
+              <tspan className={MUTED_LABEL_CLASS}>{` · ${section.notGeocoded.toLocaleString('en-US')} not geocoded${beyond > 0 ? ` · ${beyond} beyond 5,000 ft` : ''}`}</tspan>
+            </text>
             <Beeswarm
               x={x}
               cy={y + 18 + STRIP / 2}
@@ -196,11 +211,6 @@ function DistancePlot({ locations, width, onRecord }: { locations: EncampmentLoc
                 };
               })}
             />
-            <text x={right + 10} y={y + 18 + STRIP / 2} dy="0.32em" className={MUTED_LABEL_CLASS}>
-              <tspan className="viz-num fill-fg-secondary">{section.notGeocoded.toLocaleString('en-US')}</tspan>
-              {' not geocoded'}
-              {beyond > 0 && <tspan x={right + 10} dy="1.3em">{`${beyond} beyond 5,000 ft`}</tspan>}
-            </text>
           </g>
         );
       })}
@@ -286,7 +296,8 @@ export function NightHoursStrip({ night, sources, onRecord }: { night: NightHour
         { key: 'endpoint', label: 'At an endpoint', swatch: 'hollow', tone: 'mark' },
         { key: 'window', label: 'Ordinance window', swatch: 'rect', tone: 'track' },
       ]}
-      minHeight={lanes.length * LANE + GUTTER + 28}
+      minHeight={lanes.length * laneHeight(640) + GUTTER + 28}
+      plotHeight={(width) => lanes.length * laneHeight(width) + GUTTER + 28}
       interactive={{ roledescription: 'strip plot' }}
       storageKey="encampment-night-hours"
     >
@@ -313,9 +324,9 @@ export function DistanceStrip({ locations, sources, onRecord }: { locations: Enc
       }}
       legend={[
         { key: 'offense', label: 'Geocoded offense', swatch: 'dot', tone: 'mark' },
-        { key: 'stand-in', label: 'Distance stand-in (reference, not in the ordinance)', swatch: 'dashed-line', tone: 'context' },
+        { key: 'stand-in', label: '1,320 ft: quarter-mile stand-in for “two blocks”; 2,640 ft: half mile (references, not stated in the ordinance)', swatch: 'dashed-line', tone: 'context' },
       ]}
-      minHeight={locations.sections.length * DIST_LANE + 36}
+      minHeight={DIST_TOP + locations.sections.length * DIST_LANE + 36}
       interactive={{ roledescription: 'strip plot' }}
       storageKey="encampment-distance"
     >

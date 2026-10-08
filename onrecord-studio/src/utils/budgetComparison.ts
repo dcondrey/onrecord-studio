@@ -116,7 +116,7 @@ export function readBudgetComparison(result: { columns: string[]; rows: unknown[
     const matched = status === 'Matched';
     return {
       key: `${i}:${fund ?? ''}:${center ?? ''}:${account ?? ''}`,
-      label: `Fund ${fund ?? '?'} · center ${center ?? '?'} · account ${account ?? '?'}`,
+      label: `Fund ${fund ?? '?'} / ${center ?? '?'} / ${account ?? '?'}`,
       departments: cellText(at(row, 'budget_departments')) ?? cellText(at(row, 'actuals_departments')),
       status,
       fund,

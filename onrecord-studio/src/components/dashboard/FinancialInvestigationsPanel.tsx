@@ -122,11 +122,11 @@ function grouped<T>(items: readonly T[], keyOf: (item: T) => { key: string; labe
 function ContractChart({ chains, paymentsMapped, onInspect }: { chains: FinancialChain[]; paymentsMapped: boolean; onInspect: (ids: string[]) => void }) {
   const compared = chains.filter((chain) => chain.remainingAuthority !== null);
   const over = compared.filter((chain) => negative(chain.remainingAuthority)).sort((a, b) => Number(a.remainingAuthority) - Number(b.remainingAuthority));
-  const overBy = (chain: FinancialChain) => money((chain.remainingAuthority as string).trim().replace(/^-/, ''), chain.currency, { signed: true });
+  const overBy = (chain: FinancialChain, signed = true) => money((chain.remainingAuthority as string).trim().replace(/^-/, ''), chain.currency, { signed });
   const excluded = chains.length - compared.length;
   const headline = !paymentsMapped
     ? `No payments dataset mapped, so none of ${chains.length} ${chains.length === 1 ? 'contract is' : 'contracts are'} compared with posted payments.`
-    : `${over.length ? `${over.length} of ${compared.length}` : `None of ${compared.length}`} contracts show posted payments above retrieved authority${over.length ? `; largest: ${over[0].contractId} by ${overBy(over[0])}` : ''}${excluded ? `; ${excluded} lack retrieved authority or payments` : ''}.`;
+    : `${over.length ? `${over.length} of ${compared.length}` : `None of ${compared.length}`} contracts show posted payments above retrieved authority${over.length ? `; largest: ${over[0].contractId} by ${overBy(over[0], false)}` : ''}${excluded ? `; ${excluded} ${excluded === 1 ? 'lacks' : 'lack'} retrieved authority or payments` : ''}.`;
   const groups = grouped(chains, (chain) => ({ key: chain.currency, label: currencyLabel(chain.currency), currency: chain.currency }), (chain): BulletRow => {
     const label = `Contract ${chain.contractId} · ${chain.program || 'program unresolved'}`;
     const fig = (v: string | null) => (v === null ? 'not retrieved' : financialAmount(v, chain.currency));
@@ -211,7 +211,8 @@ function ReconcileChart({ lines, onInspect }: { lines: FinancialReconciliation[]
       track: plotted(line.revised, absent('not-recorded', 'no revised authority recorded')),
       bar: plotted(line.actual, absent('not-recorded', 'no actual recorded')),
       ticks: line.adopted === null ? [] : [{ key: 'adopted', at: measured(Number(line.adopted)), label: `Adopted ${financialAmount(line.adopted, line.currency)}` }],
-      barLabel: delta ? `${actual} · ${delta}` : actual,
+      // An absent actual is labelled by its slot; a second label would sit on top of it.
+      barLabel: line.actual === null ? undefined : delta ? `${actual} · ${delta}` : actual,
       overrunLabel: `${actual} · above revised`,
       name: `${label}: adopted ${fig(line.adopted)}, revised ${fig(line.revised)}, actual ${fig(line.actual)}, encumbered ${fig(line.encumbered)}.${line.citations.length ? ' Press Enter to inspect its cited rows.' : ''}`,
       tooltip: {

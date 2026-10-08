@@ -84,8 +84,10 @@ function Plot({ lines, width, props }: { lines: ComparedLine[]; width: number; p
   const currency = props.currency ?? 'USD';
   const { rows, height, plotX } = rowLayout(lines, width, { band: BAND });
   const values = lines.map((line) => Number(line.difference));
-  const labelRoom = Math.min(150, Math.round(width * 0.22));
-  const x = scaleLinear([Math.min(0, ...values), Math.max(0, ...values)], [plotX + 8, width - labelRoom]);
+  const valueLabel = (line: ComparedLine) => `${formatCurrencyString(line.difference, { currency, compact: true, signed: true })} (${signedPercent(line.percent)})`;
+  // Room outside the extremes for each side's value labels, so a label never sits on its stem.
+  const room = (side: ComparedLine[]) => (side.length ? Math.min(Math.round(width * 0.25), Math.max(...side.map((line) => measureText(valueLabel(line)))) + 14) : 8);
+  const x = scaleLinear([Math.min(0, ...values), Math.max(0, ...values)], [plotX + room(lines.filter((line) => Number(line.difference) < 0)), width - room(lines.filter((line) => Number(line.difference) >= 0))]);
   const roving = useRovingFocus({ shape: { rows: Math.max(1, lines.length) }, onActivate: (i) => props.onActivate?.(lines[i].key), onEscape: tooltip.hide });
   const zero = Math.round(x(0)) + 0.5;
   return (
@@ -96,7 +98,7 @@ function Plot({ lines, width, props }: { lines: ComparedLine[]; width: number; p
         const line = lines[index];
         const cx = x(Number(line.difference));
         const cy = row.markY + BAND / 2;
-        const label = `${formatCurrencyString(line.difference, { currency, compact: true, signed: true })} (${signedPercent(line.percent)})`;
+        const label = valueLabel(line);
         const negative = Number(line.difference) < 0;
         const fromText = formatCurrencyString(line.from, { currency });
         const toText = formatCurrencyString(line.to, { currency });
@@ -135,7 +137,7 @@ function Plot({ lines, width, props }: { lines: ComparedLine[]; width: number; p
                 onBlurMark: tooltip.hide,
               }}
             />
-            <text x={end ? cx + 10 : cx - 10} y={cy} dy="0.32em" textAnchor={end ? 'start' : 'end'} className={LABEL_CLASS}>{label}</text>
+            <text x={end ? cx + 10 : cx - 10} y={cy} dy="0.32em" textAnchor={end ? 'start' : 'end'} className={LABEL_CLASS} style={{ paintOrder: 'stroke', stroke: VIZ.surface, strokeWidth: 4, strokeLinejoin: 'round' }}>{label}</text>
           </g>
         );
       })}

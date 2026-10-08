@@ -468,7 +468,7 @@ describe('budget comparison difference chart', () => {
 
     expect(screen.getByText(/exceeds its budget amount by the most: \+\$236K \(\+23\.62%\)/)).toBeTruthy();
     expect(screen.getAllByRole('img', { name: /a difference of/ })).toHaveLength(2);
-    expect(screen.getByRole('img', { name: /512000: actual \$1,236,200\.35 against budget \$1,000,000\.10, a difference of \+\$236,200\.25/ })).toBeTruthy();
+    expect(screen.getByRole('img', { name: /100000 \/ 1914 \/ 512000: actual \$1,236,200\.35 against budget \$1,000,000\.10, a difference of \+\$236,200\.25/ })).toBeTruthy();
     expect(screen.getByLabelText('Not compared').textContent).toMatch(/Missing actuals 1 · Missing budget baseline 1/);
     expect(screen.queryByRole('img', { name: /512002/ })).toBeNull();
   });

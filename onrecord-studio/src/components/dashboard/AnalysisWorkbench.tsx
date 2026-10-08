@@ -535,11 +535,12 @@ export default function AnalysisWorkbench() {
                     Export CSV
                   </button>
                 </div>
-                {sqlResult && <BudgetDifference result={sqlResult} onInspect={(line) => { setSql(budgetComparisonLineQuery(resultSql, line)); sqlGate.invalidate(); }} />}
                 {sqlResult && <SqlTable result={sqlResult} />}
                 {exportResult && <p className="mt-2 break-all text-label leading-4 text-muted">Exported {exportResult.rowCount.toLocaleString()} rows to {exportResult.outputPath}. Export limit: 10,000 rows.</p>}
               </div>
             </div>
+            {/* Full panel width: the result column beside the dataset list is too narrow for row labels. */}
+            {sqlResult && <BudgetDifference result={sqlResult} onInspect={(line) => { setSql(budgetComparisonLineQuery(resultSql, line)); sqlGate.invalidate(); }} />}
           </Panel>
 
           {groupedColumns.length > 0 && (

@@ -54,7 +54,7 @@ it('draws a contract overrun in ink from the decimal strings and says when no pa
  const mapped:FinancialWorkspace={...workspace,mappings:[{role:'payment',snapshotId:'pay',columns:{},currency:'USD',agency:'City of San Diego'}]};
  bridge.invoke.mockImplementation((command:string)=>command==='get_financial_workspace'?Promise.resolve(mapped):Promise.resolve({...report,chains:[chain]}));
  await mounted();await run();fireEvent.click(screen.getByRole('button',{name:'Spending chains'}));
- expect(screen.getByText('1 of 1 contracts show posted payments above retrieved authority; largest: H-24-1180 by +$236,200.10.')).toBeTruthy();
+ expect(screen.getByText('1 of 1 contracts show posted payments above retrieved authority; largest: H-24-1180 by $236,200.10.')).toBeTruthy();
  expect(screen.getByText('+$236,200.10 over retrieved authority')).toBeTruthy();
  expect(document.body.innerHTML).not.toContain('--viz-counted');
  // A stage with no cited rows is a hollow node read as not linked; a linked one opens its rows.
