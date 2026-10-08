@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import ModalDialog from '../licensing/ModalDialog';
+import Button from '../ui/Button';
 import { useLicense } from '../licensing/LicenseProvider';
 import { useProfileLensStore } from '../../store/useProfileLensStore';
 import { isDirectChannel } from '../../utils/licenseState';
@@ -60,13 +61,7 @@ export default function AccountMenu() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="focus-ring h-9 rounded-xl border border-control bg-surface/70 px-3 text-label leading-4 font-medium text-fg-secondary transition hover:text-fg"
-      >
-        Account
-      </button>
+      <Button variant="ghost" iconOnly icon="user" title="Account" aria-label="Account" onClick={() => setOpen(true)} />
       {open ? (
         <ModalDialog label="Account" onClose={close}>
           <h2 className="text-lg font-semibold">Account</h2>

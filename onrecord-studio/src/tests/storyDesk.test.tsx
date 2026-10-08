@@ -147,7 +147,7 @@ describe('StoryDesk', () => {
     act(() => useAppStore.getState().setWorkspaceView('activity'));
     try {
       await renderWithNoLeads({ datasets: [] });
-      expect(screen.getByRole('button', { name: 'Add a source' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Add source' })).toBeTruthy();
       act(() => screen.getByRole('button', { name: CORE_DATA }).click());
       expect(run).toHaveBeenCalledTimes(1);
       expect(useAppStore.getState().workspaceView).toBe('overview');
@@ -169,7 +169,7 @@ describe('StoryDesk', () => {
   it('does not treat a schema that has not loaded as an empty library', async () => {
     await renderWithNoLeads(null);
     expect(screen.queryByRole('button', { name: CORE_DATA })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Add a source' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add source' })).toBeTruthy();
     expect(screen.getByText(NO_SOURCE_COPY)).toBeTruthy();
   });
 

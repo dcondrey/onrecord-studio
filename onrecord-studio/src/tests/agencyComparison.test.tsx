@@ -126,7 +126,7 @@ describe('AgencyComparison', () => {
     useAppStore.setState({ agencyProfiles: [], portals: [] });
     render(<AgencyComparison />);
     expect(screen.getByRole('heading', { name: 'No agencies to compare yet' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Add a source' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add source' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Refresh analytics' })).toBeNull();
   });
 

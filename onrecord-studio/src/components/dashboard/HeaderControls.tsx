@@ -8,7 +8,7 @@ import HelpButton from '../help/HelpButton';
 import UpdatePrompt from '../updates/UpdatePrompt';
 
 /**
- * The right-hand toolbar: case, requests, help, account, then the one primary action. Profile is
+ * The right-hand toolbar: case, requests, help, account, then Add source, which is secondary so each page keeps its own one primary action. Profile is
  * reached through Account, audio alerts and appearance through the command palette, and source
  * status lives on each source row in the sidebar.
  */
@@ -23,7 +23,7 @@ export function HeaderControls({ isConnectorOpen, onOpenConnector }: { isConnect
       <ProfileSettings />
       <SelfReview />
       <Button
-        variant="primary"
+        variant="secondary"
         icon="filePlus"
         aria-haspopup="dialog"
         aria-expanded={isConnectorOpen}

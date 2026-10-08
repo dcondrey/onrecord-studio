@@ -15,7 +15,7 @@ const twMerge = extendTailwindMerge({
     theme: {
       colors: [
         "fg", "fg-secondary", "muted", "canvas", "surface", "raised", "line", "line-strong", "control",
-        "accent", "on-accent", "highlight", "success", "warning", "danger", "focus", "scrim", "hatch",
+        "accent", "on-accent", "accent-fill", "on-accent-fill", "highlight", "success", "warning", "danger", "focus", "scrim", "hatch",
         "panel", "chrome", "bg", "lead", "lead-mark", "on-lead", "success-mark", "danger-mark", "on-danger",
         "warning-mark",
       ],

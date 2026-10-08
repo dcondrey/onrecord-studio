@@ -26,6 +26,10 @@
   --muted: 82 97 116;
   --accent: 14 116 144;
   --on-accent: 255 255 255;
+  /* The solid primary fill. Dark keeps the light theme's teal-700 rather than its pale text step,
+     so the one primary action is not the brightest block on a dark screen. White on it is 5.36. */
+  --accent-fill: 14 116 144;
+  --on-accent-fill: 255 255 255;
   --lead: 109 40 217;
   --lead-mark: 124 58 237;
   --on-lead: 255 255 255;
@@ -119,6 +123,8 @@
   --muted: 167 180 199;
   --accent: 103 232 249;
   --on-accent: 4 47 61;
+  --accent-fill: 14 116 144;
+  --on-accent-fill: 255 255 255;
   --lead: 196 181 253;
   --lead-mark: 167 139 250;
   --on-lead: 46 16 101;
@@ -598,18 +604,18 @@ a[href] {
    gradient is not a button colour. */
 .primary-action {
   border-color: transparent;
-  background: rgb(var(--accent));
-  color: rgb(var(--on-accent));
+  background: rgb(var(--accent-fill));
+  color: rgb(var(--on-accent-fill));
   box-shadow: none;
   transition: background-color 120ms ease-out, transform 120ms ease-out;
 }
 
 .primary-action:hover:not(:disabled) {
-  background: rgb(var(--accent) / 0.9);
+  background: rgb(var(--accent-fill) / 0.9);
 }
 
 .primary-action:active:not(:disabled) {
-  background: rgb(var(--accent) / 0.8);
+  background: rgb(var(--accent-fill) / 0.8);
 }
 
 /* Non-floating surfaces never blur. Each is its own compositing layer in WKWebView, and on the

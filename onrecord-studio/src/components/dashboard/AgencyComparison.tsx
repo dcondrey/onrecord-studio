@@ -166,7 +166,7 @@ export default function AgencyComparison() {
               icon="building"
               title="No agencies to compare yet"
               body="Profiles are computed from the requests a source has synced. Add a records portal to start."
-              actions={<Button variant="primary" onClick={openSourceConnector}>Add a source</Button>}
+              actions={<Button variant="primary" onClick={openSourceConnector}>Add source</Button>}
             />
           ) : (
             <EmptyState
