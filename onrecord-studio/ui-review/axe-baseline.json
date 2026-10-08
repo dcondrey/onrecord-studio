@@ -110,22 +110,6 @@
           }
         ]
       }
-    },
-    "my-requests-detail": {
-      "color-contrast": {
-        "impact": "serious",
-        "targets": [
-          {
-            "target": "time[datetime=\"2026-08-04T17:00:00.000Z\"]",
-            "states": [
-              "populated"
-            ],
-            "widths": [
-              1024
-            ]
-          }
-        ]
-      }
     }
   }
 }
