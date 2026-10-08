@@ -120,10 +120,11 @@ impl DuckDbRepository {
                     extraction_status = 'DOWNLOADED', extraction_format = NULL,
                     extraction_deferred_reason = NULL,
                     retention_eligible_at = CASE WHEN (local_path IS NULL OR raw_file_sha256 IS DISTINCT FROM ?3)
-                        AND EXISTS (SELECT 1 FROM data_maintenance_policy WHERE singleton
-                            AND json_extract_string(policy_json, '$.retentionMode') = 'REFERENCE_ONLY'
-                            AND json_extract_string(policy_json, '$.enabled') = 'true')
-                        THEN strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ') ELSE NULL END
+                        THEN CASE WHEN EXISTS (SELECT 1 FROM data_maintenance_policy WHERE singleton
+                                AND json_extract_string(policy_json, '$.retentionMode') = 'REFERENCE_ONLY'
+                                AND json_extract_string(policy_json, '$.enabled') = 'true')
+                            THEN strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ') ELSE NULL END
+                        ELSE retention_eligible_at END
                  WHERE id = ?8 AND portal_subdomain = ?9",
                     params![
                         file_size,
@@ -895,10 +896,11 @@ impl DuckDbRepository {
                     extraction_status = 'SEARCHABLE', extraction_format = NULL,
                     extraction_deferred_reason = NULL,
                     retention_eligible_at = CASE WHEN (raw_file_sha256 IS DISTINCT FROM ?4 OR extraction_deferred_reason LIKE 'REFERENCE_ONLY:%')
-                        AND EXISTS (SELECT 1 FROM data_maintenance_policy WHERE singleton
-                            AND json_extract_string(policy_json, '$.retentionMode') = 'REFERENCE_ONLY'
-                            AND json_extract_string(policy_json, '$.enabled') = 'true')
-                        THEN strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ') ELSE retention_eligible_at END
+                        THEN CASE WHEN EXISTS (SELECT 1 FROM data_maintenance_policy WHERE singleton
+                                AND json_extract_string(policy_json, '$.retentionMode') = 'REFERENCE_ONLY'
+                                AND json_extract_string(policy_json, '$.enabled') = 'true')
+                            THEN strftime(now(), '%Y-%m-%dT%H:%M:%S.%fZ') ELSE NULL END
+                        ELSE retention_eligible_at END
                  WHERE id = ?10 AND portal_subdomain = ?11",
                         params![
                             stored_file_size,
