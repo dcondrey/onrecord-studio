@@ -220,9 +220,7 @@ impl DuckDbRepository {
         .await
     }
 
-    /// Test-only: production ingestion always persists frontier tasks in a batch via
-    /// [`Self::persist_ingestion_frontier_tasks`]; this singular form exists for tests that need
-    /// to seed or assert on one task at a time.
+    /// One task through [`Self::persist_ingestion_frontier_tasks`]; returns whether it was new.
     #[cfg(test)]
     pub async fn persist_ingestion_frontier_task(
         &self,
@@ -231,26 +229,13 @@ impl DuckDbRepository {
         target_id: &str,
         payload_json: &str,
     ) -> Result<bool, AppError> {
-        let run_id = run_id.to_string();
-        let source_key = source_key.to_string();
-        let target_id = target_id.to_string();
-        let payload_json = payload_json.to_string();
-        self.query_connection("Persist ingestion frontier task", move |conn| {
-            let inserted = conn
-                .execute(
-                    "INSERT OR IGNORE INTO ingestion_task_frontier (
-                    run_id, source_key, target_id, payload_json
-                 ) VALUES (?1, ?2, ?3, ?4)",
-                    params![run_id, source_key, target_id, payload_json],
-                )
-                .map_err(|error| {
-                    AppError::Storage(format!(
-                        "Failed to persist a bounded ingestion frontier task: {error}"
-                    ))
-                })?;
-            Ok(inserted == 1)
-        })
+        self.persist_ingestion_frontier_tasks(
+            run_id,
+            source_key,
+            &[(target_id.to_string(), payload_json.to_string())],
+        )
         .await
+        .map(|inserted| inserted == 1)
     }
 
     pub async fn persist_ingestion_frontier_tasks(
