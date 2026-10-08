@@ -323,18 +323,34 @@ pub(super) async fn process_binary_payload(
     Ok(())
 }
 
-fn document_is_html(document: &DocumentMetadata) -> bool {
+/// Whether a downloaded document declares one of the given kinds, by its media type (compared
+/// case-insensitively, without parameters) or by its file extension.
+pub(super) fn document_declares_type(
+    document: &DocumentMetadata,
+    media_type_matches: impl Fn(&str) -> bool,
+    extensions: &[&str],
+) -> bool {
     document.content_type.as_deref().is_some_and(|value| {
-        matches!(
-            value.split(';').next().unwrap_or(value).trim(),
-            "text/html" | "application/xhtml+xml"
+        media_type_matches(
+            &value
+                .split(';')
+                .next()
+                .unwrap_or(value)
+                .trim()
+                .to_ascii_lowercase(),
         )
     }) || document.file_name.as_deref().is_some_and(|name| {
         let name = name.to_ascii_lowercase();
-        [".html", ".htm", ".xhtml"]
-            .iter()
-            .any(|extension| name.ends_with(extension))
+        extensions.iter().any(|extension| name.ends_with(extension))
     })
+}
+
+pub(super) fn document_is_html(document: &DocumentMetadata) -> bool {
+    document_declares_type(
+        document,
+        |media_type| matches!(media_type, "text/html" | "application/xhtml+xml"),
+        &[".html", ".htm", ".xhtml"],
+    )
 }
 
 async fn index_extracted_document(

@@ -1,7 +1,11 @@
 //! Format-routed document extraction and recursive container expansion within budget.
 
 use super::*;
-use super::{frontier::enqueue_tasks_resilient, guidance::next_msg_attachment_container_depth};
+use super::{
+    frontier::enqueue_tasks_resilient,
+    guidance::next_msg_attachment_container_depth,
+    payload::{document_declares_type, document_is_html},
+};
 use crate::parsers::{extract_pst_container_with_manifest, inspect_pst_header};
 
 #[derive(Clone, Copy)]
@@ -151,37 +155,15 @@ pub(super) async fn extract_document(
         }
         DocumentFormat::PlainText => {
             let path = local_path.to_path_buf();
-            let is_html = document
-                .content_type
-                .as_deref()
-                .is_some_and(|value| {
-                    matches!(
-                        value.split(';').next().unwrap_or(value).trim(),
-                        "text/html" | "application/xhtml+xml"
-                    )
-                })
-                || document
-                    .file_name
-                    .as_deref()
-                    .is_some_and(|name| {
-                        let name = name.to_ascii_lowercase();
-                        [".html", ".htm", ".xhtml"]
-                            .iter()
-                            .any(|extension| name.ends_with(extension))
-                    });
+            let is_html = document_is_html(document);
             // The PlainText route carries three markup families. SVG needs its own collector:
             // `extract_plain_text` would index `<path d="M0 0 L400 200"/>` as if it were prose, and
             // `extract_html_text` drops every `svg` subtree by design.
-            let is_svg = document
-                .content_type
-                .as_deref()
-                .is_some_and(|value| {
-                    value.split(';').next().unwrap_or(value).trim() == "image/svg+xml"
-                })
-                || document
-                    .file_name
-                    .as_deref()
-                    .is_some_and(|name| name.to_ascii_lowercase().ends_with(".svg"));
+            let is_svg = document_declares_type(
+                document,
+                |media_type| media_type == "image/svg+xml",
+                &[".svg"],
+            );
             let text = spawn_blocking("Text parser", move || {
                 if is_svg {
                     extract_svg_text(&path)

@@ -6,6 +6,7 @@ use super::{
     frontier::enqueue_tasks_resilient,
     guidance::{guidance_allows_url, may_expand_structured_links},
     intake::has_likely_document_extension,
+    payload::document_declares_type,
     resources::{prepare_crawl_url, prepare_discovered_download},
 };
 
@@ -180,15 +181,11 @@ pub(super) async fn expand_structured_document_links(
 }
 
 fn document_is_json(document: &DocumentMetadata) -> bool {
-    document.content_type.as_deref().is_some_and(|value| {
-        let value = value.split(';').next().unwrap_or(value).trim();
-        value == "application/json" || value == "application/ld+json" || value.ends_with("+json")
-    }) || document.file_name.as_deref().is_some_and(|name| {
-        let name = name.to_ascii_lowercase();
-        [".json", ".jsonld"]
-            .iter()
-            .any(|extension| name.ends_with(extension))
-    })
+    document_declares_type(
+        document,
+        |media_type| media_type == "application/json" || media_type.ends_with("+json"),
+        &[".json", ".jsonld"],
+    )
 }
 
 /// Parses and walks one structured payload without retaining the potentially large JSON tree in
