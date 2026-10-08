@@ -5,13 +5,12 @@ import { useAppStore } from '../../store/useAppStore';
 import { useFirstRunDataStore } from '../../store/useFirstRunDataStore';
 import { useAutomaticDiscovery } from './AutomaticDiscoveryProvider';
 import type { StoryLead } from '../../types';
-import { severityLabel } from '../objects/labels';
 import { findingFamily } from '../objects/findingFamily';
-import FamilyBadge, { ClaimBasisBadge } from '../ui/FamilyBadge';
+import FamilyBadge from '../ui/FamilyBadge';
 import SegmentedControl from '../ui/SegmentedControl';
 import Button from '../ui/Button';
 import InlineError from '../ui/InlineError';
-import SeverityGlyph from './SeverityGlyph';
+import { LeadByline, LeadKicker } from './LeadLine';
 import { findingToBriefingEvidence } from './BriefingWorkspace';
 import FindingsInbox from './FindingsInbox';
 import PageHeader from '../ui/PageHeader';
@@ -25,6 +24,7 @@ import { cn } from '../../utils/cn';
 import ArtifactDrafts from './ArtifactDrafts';
 import BarTable, { type BarTableColumn, type BarTableRow } from '../charts/figures/BarTable';
 import { absent, measured } from '../charts/core/nulls';
+import { COUNTED_FACTOR, EVIDENCE_FACTOR, FACTOR_ORDER, FACTOR_SCALE_MAX_BP, factorLabel, factorPoints, isKnownFactor, points, storyHeadline } from './storyFactors';
 
 type DeskState =
   | { status: 'PENDING' }
@@ -277,32 +277,6 @@ export default function StoryDesk() {
   );
 }
 
-// The backend names factors in lowercase prose; the card shows one consistent label per factor.
-const FACTOR_LABELS: Record<string, string> = {
-  'money at stake': 'Money',
-  scale: 'Scale',
-  recurrence: 'Recurrence',
-  'record contradicts statement': 'Contradiction',
-  'counted statutory or policy violation': 'Counted violation',
-  'evidence strength': 'Evidence strength',
-  freshness: 'Freshness',
-};
-
-function factorLabel(name: string) {
-  return FACTOR_LABELS[name] ?? name.charAt(0).toUpperCase() + name.slice(1);
-}
-
-/** The seven factors the ranker can emit (analysis/story_desk.rs), in the figure's fixed order. */
-const FACTOR_ORDER = [
-  'money at stake',
-  'scale',
-  'recurrence',
-  'record contradicts statement',
-  'counted statutory or policy violation',
-  'evidence strength',
-  'freshness',
-] as const;
-const isKnownFactor = (name: string) => (FACTOR_ORDER as readonly string[]).includes(name);
 /** Header labels for a frame too narrow for the full ones; the full wording stays in the title. */
 const FACTOR_SHORT: Record<string, string> = {
   'money at stake': 'Money',
@@ -313,33 +287,7 @@ const FACTOR_SHORT: Record<string, string> = {
   'evidence strength': 'Evid.',
   freshness: 'Fresh',
 };
-const COUNTED_FACTOR = 'counted statutory or policy violation';
-const EVIDENCE_FACTOR = 'evidence strength';
-/** The largest single factor (money at stake), so every factor column shares one 0–2500 bp scale. */
-const FACTOR_SCALE_MAX_BP = 2500;
 const SCORE_KEY = 'score';
-
-const points = (basisPoints: number) => Math.round(basisPoints / 100);
-const factorPoints = (lead: StoryLead, name: string) => lead.publicInterest.factors.find((factor) => factor.name === name)?.basisPoints ?? 0;
-
-/**
- * The deterministic headline: what lifts #1, and on which factor it is ahead of #2. Factor names
- * are the ranker's own lowercase prose.
- */
-export function storyHeadline(leads: readonly StoryLead[]): string {
-  const [first, second] = leads;
-  if (!first) return '';
-  const top = [...first.publicInterest.factors].filter((factor) => factor.basisPoints > 0).sort((a, b) => b.basisPoints - a.basisPoints).slice(0, 2);
-  const lead = `#1 scores ${points(first.publicInterest.totalBasisPoints)}`;
-  const from = top.length === 0 ? '' : `: most from ${top.map((factor) => `${factor.name} (+${points(factor.basisPoints)})`).join(' and ')}`;
-  if (!second) return `${lead}${from}.`;
-  const delta = points(first.publicInterest.totalBasisPoints) - points(second.publicInterest.totalBasisPoints);
-  if (delta === 0) return `${lead}${from}. It ties #2.`;
-  const names = [...new Set([...first.publicInterest.factors, ...second.publicInterest.factors].map((factor) => factor.name))];
-  const lead1Ahead = (name: string) => factorPoints(first, name) - factorPoints(second, name);
-  const gap = names.reduce((best, name) => (lead1Ahead(name) > lead1Ahead(best) ? name : best), names[0]);
-  return `${lead}${from}. It is ahead of #2 by ${delta}, mostly on ${gap}.`;
-}
 
 /**
  * The ranked leads as a bar-table: the attention score, then the seven factors on one shared
@@ -401,19 +349,15 @@ function RankedLeads({ leads, allLeads, busy, renderDetail }: { leads: StoryLead
       label: `#${rank.get(lead.findingId)}, ${lead.headline}, score ${points(lead.publicInterest.totalBasisPoints)}: ${present.join(', ')}`,
       cells,
       header: (
-        <div className="grid min-w-[14rem] max-w-[22rem] gap-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-caption tabular-nums text-muted">#{rank.get(lead.findingId)}</span>
-            <span className="inline-flex items-center gap-1 text-caption text-fg-secondary">
-              <SeverityGlyph severity={lead.severity} />
-              {severityLabel(lead.severity)}
+        <div className="grid min-w-[15rem] max-w-[24rem] grid-cols-[2rem_minmax(0,1fr)] gap-x-2">
+          <span aria-hidden="true" className="text-rank tabular-nums text-muted">{rank.get(lead.findingId)}</span>
+          <div className="grid min-w-0 gap-1">
+            <LeadKicker lead={lead} className="pt-1" />
+            <span id={`lead-${lead.findingId}`} className="line-clamp-2 text-body font-medium" title={lead.headline}>
+              <ObjectLink target={{ kind: 'finding', id: lead.findingId, label: lead.headline }} className="text-fg no-underline hover:underline">{lead.headline}</ObjectLink>
             </span>
-            <ClaimBasisBadge kind={lead.kind} />
+            <LeadByline lead={lead} />
           </div>
-          <span id={`lead-${lead.findingId}`} className="line-clamp-2 text-body font-medium" title={lead.headline}>
-            <ObjectLink target={{ kind: 'finding', id: lead.findingId, label: lead.headline }} className="text-fg no-underline hover:underline">{lead.headline}</ObjectLink>
-          </span>
-          <AgencyReference lead={lead} />
         </div>
       ),
     };
@@ -464,18 +408,6 @@ function RankedLeads({ leads, allLeads, busy, renderDetail }: { leads: StoryLead
         )}
       />
     </div>
-  );
-}
-
-/** The agency a lead is about, as a link, when the analytics profile names it. */
-function AgencyReference({ lead }: { lead: StoryLead }) {
-  const { agencyId, portalKey } = lead.subject;
-  const profile = useAppStore((state) => agencyId === null ? null : state.agencyProfiles.find((entry) => entry.agencyId === agencyId && entry.portalSubdomain === portalKey) ?? null);
-  if (agencyId === null || !portalKey || !profile) return null;
-  return (
-    <p className="mt-1 text-caption text-muted">
-      About <ObjectLink target={{ kind: 'agency', portalKey, agencyId, label: profile.agencyName }}>{profile.agencyName}</ObjectLink>
-    </p>
   );
 }
 

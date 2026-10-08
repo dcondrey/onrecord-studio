@@ -24,7 +24,7 @@ import AutomaticDiscovery from './AutomaticDiscovery';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { AgencyPerformanceProfile } from '../../types';
-import AttentionFeed, { AttentionFeedSkeleton } from './AttentionFeed';
+import FrontPage, { FrontPageSkeleton, Rubric } from './FrontPage';
 import SinceControl from './SinceControl';
 import WatchlistPanel from './WatchlistPanel';
 import StandingSearchPanel from './StandingSearchPanel';
@@ -86,9 +86,7 @@ export default function OverviewDashboard() {
             <PageHeader title="Casework" summary="Track requests and commitments, reconcile spending, and challenge the evidence." />
           </div>
         ) : (
-          <PageHeader
-            title="Overview"
-            summary="New leads, what you follow, and the state of your sources."
+          <Masthead
             actions={<>
               {portals.length > 0 && <SinceControl />}
               <Button onClick={() => setWorkspaceView('evidence')}>Review evidence</Button>
@@ -98,7 +96,7 @@ export default function OverviewDashboard() {
 
         <FirstRunData />
         {workspaceInitializationStatus === 'loading' ? (
-          <section aria-label="Needs attention" className="app-panel overflow-hidden"><AttentionFeedSkeleton /></section>
+          <FrontPageSkeleton />
         ) : workspaceInitializationStatus === 'error' ? (
           <WorkspaceSourcesUnavailable detail={workspaceInitializationError} />
         ) : portals.length === 0 || starterRunShown ? (
@@ -110,7 +108,8 @@ export default function OverviewDashboard() {
           <ProfessionalWorkbench key={`${workbench.reportId}:${workbench.review}`} initialReportId={workbench.reportId} initialTab={workbench.review ? 'Evidence review' : 'Cases'} />
         ) : <>
           <SubjectDossier />
-          {portals.length > 0 && <AttentionFeed onOpenLedger={openLedger} />}
+          {portals.length > 0 && <FrontPage onOpenLedger={openLedger} />}
+          <Rubric id="desk-rubric" title="The desk" className="!mt-14" />
           <section aria-label="Following" className="grid grid-cols-1 items-start gap-4 2xl:grid-cols-2">
             <WatchlistPanel />
             <StandingSearchPanel />
@@ -175,6 +174,27 @@ export default function OverviewDashboard() {
         </>}
       </div>
     </div>
+  );
+}
+
+const DATELINE = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+/** The overview's nameplate: the dateline and scope over the title, closed by the front page's heavy rule. */
+function Masthead({ actions }: { actions: ReactNode }) {
+  const activePortalKey = useAppStore((state) => state.activePortalKey);
+  const portalName = usePortalName();
+  return (
+    <header className="flex flex-col gap-4 border-b-2 border-fg pb-4 xl:flex-row xl:items-end xl:justify-between">
+      <div className="min-w-0">
+        <p className="text-overline uppercase text-muted">
+          <time dateTime={new Date().toISOString().slice(0, 10)}>{DATELINE.format(new Date())}</time>
+          <span aria-hidden="true"> · </span>
+          {activePortalKey ? portalName(activePortalKey) : 'All saved sources'}
+        </p>
+        <h2 className="mt-1 text-display text-fg">Overview</h2>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 xl:shrink-0 xl:justify-end">{actions}</div>
+    </header>
   );
 }
 

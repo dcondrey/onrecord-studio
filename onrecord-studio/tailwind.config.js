@@ -57,7 +57,13 @@ export default {
       // sync with the `font-size` class group in src/utils/cn.ts, or cn() will read them as colours.
       // `label` is a transitional alias of `body` until call sites are renamed.
       fontSize: {
+        // The overview's lead story: the one headline on the page set larger than the page title.
+        banner: ['2rem', { lineHeight: '2.375rem', letterSpacing: '-0.026em', fontWeight: '600' }],
         display: ['1.75rem', { lineHeight: '2.125rem', letterSpacing: '-0.022em', fontWeight: '600' }],
+        // A ranked list's ordinal: set in figures, never bolder than the headline beside it.
+        rank: ['1.375rem', { lineHeight: '1.75rem', letterSpacing: '-0.02em', fontWeight: '500' }],
+        // The standfirst under the lead story's headline.
+        dek: ['0.9375rem', { lineHeight: '1.5rem' }],
         title: ['1.25rem', { lineHeight: '1.75rem', letterSpacing: '-0.012em', fontWeight: '600' }],
         heading: ['0.9375rem', { lineHeight: '1.25rem', letterSpacing: '-0.006em', fontWeight: '600' }],
         // The one-sentence finding that leads every chart and data module.

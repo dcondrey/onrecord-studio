@@ -237,7 +237,7 @@ const sqlEditor = (page) => page.getByLabel('Analytical SQL');
  * and an error state fails: the ones whose answer the view's main content waits on.
  */
 const VIEWS = [
-  { view: 'overview', steps: [nav('overview')], primary: ['list_saved_portals'], states: ['empty', 'loading', 'error'], discover: true },
+  { view: 'overview', steps: [nav('overview')], primary: ['list_saved_portals'], states: ['empty', 'loading', 'error'], discover: true, sections: ['[data-front-page]'] },
   { view: 'story', steps: [nav('story')], primary: ['list_story_leads'], states: ['empty', 'loading', 'error'], discover: true },
   { view: 'patterns', steps: [nav('patterns')], primary: ['query_corpus_patterns', 'get_corpus_index_status'], states: ['empty', 'loading', 'error'], discover: true },
   { view: 'analysis', steps: [nav('analysis')], primary: ['get_analytical_schema', 'get_embedding_model_status', 'get_embedding_index_status'], states: ['empty', 'loading', 'error'], discover: true },
@@ -627,8 +627,12 @@ try {
             await page.setViewportSize({ width, height: Math.min(6000, Math.ceil(box.height) + 160) });
             await settle(page);
           }
+          // An element capture scrolls its pane; put every pane back so the next viewport capture
+          // shows the page as the reader left it.
+          await page.evaluate(() => { window.__uiReviewScroll = [...document.querySelectorAll('*')].map((node) => [node, node.scrollTop]); });
           await element.screenshot({ path: path.join(outputDirectory, `${definition.view}__${state}__${theme}__${width}__${slug(selector)}.png`) });
           await page.setViewportSize({ width, height });
+          await page.evaluate(() => { for (const [node, top] of window.__uiReviewScroll ?? []) node.scrollTop = top; delete window.__uiReviewScroll; });
         }
         if (definition.gallery) {
           // One capture per gallery section at full resolution: a whole-page capture is downscaled
