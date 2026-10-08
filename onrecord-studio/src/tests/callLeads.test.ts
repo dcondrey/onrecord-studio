@@ -59,6 +59,19 @@ describe('leads from police calls for service', () => {
     expect(callLeads([outcomes([ended('SLEEPER', 500)], true), { ...beats(500), result: { ...beats(500).result, truncated: true } }], 2026)).toEqual([]);
   });
 
+  it('draws the calls with a disposition as the bar, Crisis Response Team as an overlay, and blank, conflicting and cancelled calls beside it', () => {
+    const [lead] = callLeads([outcomes([ended('SLEEPER', 100, { conflicting: 2, other: 30 })])], 2026);
+    const figure = lead.figure;
+    if (figure?.kind !== 'stacked') throw new Error('the outcomes lead draws stacked rows');
+    // HR codes are also counted under their first letter, so a CRT segment would count them twice.
+    expect(figure.segments.map((segment) => segment.key)).not.toContain('crisis');
+    const [row] = figure.rows;
+    expect(row.overlay).toEqual({ label: 'Crisis Response Team (also counted under its outcome)', value: 5 });
+    // The bar is the calls with a disposition: sent minus blank minus conflicting.
+    expect(row.values.reduce((sum, value) => sum + value, 0)).toBe(100 - 5 - 2);
+    expect(row.excluded).toEqual([{ key: 'blank', label: 'no disposition', count: 5 }, { key: 'conflicting', label: 'conflicting', count: 2 }, { key: 'cancelled', label: 'cancelled or duplicate', count: 20 }]);
+  });
+
   it('names the beat with most SLEEPER calls, and only the beat code when the beat list does not name it', () => {
     expect(callLeads([beats(99)], 2026)).toEqual([]);
     expect(callLeads([beats(100)], 2026)[0].title).toBe('40 of 100 SLEEPER calls from 2025 to 2026 so far were to addresses in beat 524 (Core-Columbia)');

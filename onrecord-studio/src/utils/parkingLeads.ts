@@ -1,6 +1,6 @@
 import type { AnalyticalDatasetSummary, AnalyticalSchema } from '../types';
 import { quoteIdentifier, type DiscoveryQuery } from './dataDiscovery';
-import type { ServiceLead } from './serviceAccountability';
+import { figureValue, type ServiceLead } from './serviceAccountability';
 import { numberOrNull as count, type QueryEntry as Entry, rowsOf, wholeNumber } from './leadRows';
 
 /** The City's half-year parking citation files, recognized by the publisher's column names. */
@@ -141,7 +141,17 @@ export function parkingLeads(results: Entry[]): ServiceLead[] {
       const file = span(top);
       const habitation = count(row('habitation')?.citations) ?? 0;
       const habitationEarlier = earlierOf('habitation', row('habitation'));
+      const drawn = (['oversized', 'unmoved', 'habitation'] as const).filter((key) => (count(row(key)?.citations) ?? 0) > 0);
       leads.push({ key: 'parking_vehicle_sections', priority: 96, query: sections.query,
+        figure: { kind: 'stacked', measure: 'Vehicle citations by section and issuing unit', claim: 'descriptive', unit: 'count', normalise: false,
+          caption: 'A citation records the vehicle and the place, not whether anyone lived in it.', notes: [],
+          segments: [{ key: 'police', label: 'Police', tone: 'lead' }, { key: 'parking', label: 'Parking enforcement', tone: 'ord-3' }, { key: 'other', label: 'Another City unit', tone: 'ord-2' }],
+          rows: drawn.map((key) => {
+            const item = row(key)!;
+            return { key, group: 'Citations', label: `SDMC ${SECTIONS[key].code}`, partial: false, overlay: null, note: SECTIONS[key].short,
+              values: [count(item.by_police) ?? 0, count(item.by_parking) ?? 0, count(item.other_sector) ?? 0],
+              excluded: [{ key: 'no_sector', label: 'no issuing unit', count: count(item.no_sector) ?? 0 }, { key: 'conflicting', label: 'conflicting', count: count(item.conflicting) ?? 0 }].filter((stub) => stub.count > 0) };
+          }) },
         title: `${shown(count(top.citations))} citations under ${named(headline, earlierOf(headline, top).n > 0, true)}${file?.text ?? ''}, ${shown(count(top.by_police))} written by police`,
         detail: `The file holds ${shown(count(top.all_citations))} citation numbers${file?.text ?? ''}, each counted once. ${described('oversized', row('oversized'))} ${described('unmoved', row('unmoved'))} ${habitation
           ? `${shown(habitation)} citations under ${named('habitation', habitationEarlier.n > 0)} are in this file${habitationEarlier.note}, ${shown(count(row('habitation')?.by_police))} written by police.`
@@ -157,6 +167,11 @@ export function parkingLeads(results: Entry[]): ServiceLead[] {
     const dates = span(top);
     const noBlock = count(top.no_block) ?? 0;
     leads.push({ key: 'parking_vehicle_blocks', priority: 93, query: blocks.query,
+      figure: { kind: 'ranked', measure: 'Oversized-vehicle and 72-hour citations, by location as written', claim: 'descriptive', unit: 'count',
+        caption: 'The ten locations with most citations; one block can appear under more than one spelling.', notes: [],
+        excluded: noBlock ? [{ key: 'no_block', label: 'no location recorded', count: noBlock }] : [],
+        rows: blocks.rows.map((item, index) => ({ key: `${String(item.block)}:${index}`, label: String(item.block), value: figureValue(count(item.citations), 'no count'), subject: index === 0,
+          detail: `${shown(count(item.oversized))} oversized, ${shown(count(item.unmoved))} 72-hour; ${shown(count(item.by_police))} by police` })) },
       title: `${shown(count(top.citations))} of ${shown(count(top.section_citations))} oversized-vehicle and 72-hour citations${dates?.text ?? ''} were written at ${String(top.block)}, ${shown(count(top.by_police))} by police`,
       detail: `Citations under ${label('oversized')} or ${label('unmoved')}, by location as written: ${blocks.rows.map((row) => `${String(row.block)}: ${shown(count(row.citations))} (${shown(count(row.oversized))} oversized, ${shown(count(row.unmoved))} 72-hour; ${shown(count(row.by_police))} by police)`).join('; ')}.${noBlock ? ` ${shown(noBlock)} have no location recorded.` : ''} A location is the place as the officer wrote it, so one block can appear under more than one spelling. ${CAVEAT}`,
       question: QUESTION,

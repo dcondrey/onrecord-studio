@@ -1,4 +1,4 @@
-import type { AnalyticalDatasetSummary, AnalyticalSchema } from '../types';
+import type { AnalyticalDatasetSummary, AnalyticalSchema, LeadFigure } from '../types';
 import { quoteIdentifier, type DiscoveryQuery } from './dataDiscovery';
 import type { ServiceLead } from './serviceAccountability';
 import { records, wholeNumber, type QueryEntry } from './leadRows';
@@ -44,7 +44,21 @@ export function belongingsLeads(results: QueryEntry[]): ServiceLead[] {
   const [top] = rows;
   const named = (row: Record<string, unknown>) => row.disposition == null ? 'no disposition recorded' : `recorded as "${String(row.disposition)}"`;
   const unlisted = Number(top.dispositions) - rows.length;
-  return [{ key: 'belongings_disposition', priority: 96, query: entry.query,
+  // The four largest wordings are drawn; the rest of the log, listed or not, is one remainder. A
+  // blank disposition is outside the bar, never a wording.
+  const worded = rows.filter((row) => row.disposition != null);
+  const blank = Number(rows.find((row) => row.disposition == null)?.entries ?? 0);
+  const drawn = worded.slice(0, 4);
+  const remainder = Number(top.all_entries) - blank - drawn.reduce((sum, row) => sum + Number(row.entries), 0);
+  const tones = ['lead', 'ord-4', 'ord-3', 'ord-2'] as const;
+  const figure: LeadFigure | undefined = entry.result.truncated || !drawn.length ? undefined : { kind: 'stacked', measure: 'Stored-property entries by recorded disposition', claim: 'descriptive', unit: 'count', normalise: true,
+    caption: 'Dispositions as the agency wrote them; an entry is a row of the log, not necessarily one item or one person.', notes: [],
+    segments: [...drawn.map((row, index) => ({ key: `d${index}`, label: String(row.disposition), tone: tones[index] })), ...(remainder > 0 ? [{ key: 'other', label: 'Other recorded dispositions', tone: 'ord-1' as const }] : [])],
+    rows: [{ key: 'log', group: 'Entries in the log', label: 'All entries', partial: false, overlay: null,
+      values: [...drawn.map((row) => Number(row.entries)), ...(remainder > 0 ? [remainder] : [])],
+      excluded: blank ? [{ key: 'blank', label: 'no disposition recorded', count: blank }] : [],
+      note: top.released_entries == null ? 'no release date column, so returns cannot be counted' : `${shown(top.released_entries)} entries have a release or retrieval date` }] };
+  return [{ key: 'belongings_disposition', priority: 96, query: entry.query, ...(figure ? { figure } : {}),
     title: `${shown(top.entries)} of ${shown(top.all_entries)} stored-property entries have ${named(top)}`,
     detail: `The log holds ${shown(top.all_entries)} entries. By disposition as written: ${rows.map((row) => `${shown(row.entries)} ${named(row)}`).join('; ')}${unlisted > 0 ? `; ${shown(unlisted)} other wordings are not listed` : ''}. ${top.released_entries == null ? 'The log has no release or retrieval date column, so it cannot show how many entries were returned.' : `${shown(top.released_entries)} entries have a release or retrieval date.`} An entry is a row of the log as released, not necessarily one item or one person, and the disposition wording is the agency's own.`,
     question: 'How do these entries compare with the abatements logged for the same period, and what storage and return does the written procedure require?',

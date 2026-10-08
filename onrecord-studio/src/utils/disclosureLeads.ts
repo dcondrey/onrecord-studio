@@ -1,4 +1,4 @@
-import type { AnalyticalDatasetSummary, AnalyticalSchema, SqlQueryResult } from '../types';
+import type { AnalyticalDatasetSummary, AnalyticalSchema, LeadFigure, SqlQueryResult } from '../types';
 import { quoteIdentifier, type DiscoveryQuery } from './dataDiscovery';
 import type { ServiceLead } from './serviceAccountability';
 import { numberOrNull, wholeNumber as shown, records } from './leadRows';
@@ -64,6 +64,11 @@ export function disclosureLeads(results: { query: DiscoveryQuery; result?: SqlQu
     .map((row) => `${shown(count(row.reports))} ${FORMS[String(row.form)]}`);
   const officialCount = count(officials[0].officials_named);
   return [{ key: 'disclosure_behested_by_official', priority: 88, query: byOfficial.query,
+    ...(byOfficial.result.truncated ? {} : { figure: { kind: 'ranked', measure: 'Behested payment reports, by the official named', claim: 'descriptive', unit: 'count',
+      caption: 'A count of reports says nothing about any decision the official made.', notes: [],
+      excluded: unnamed ? [{ key: 'unnamed', label: 'reports naming no official', count: unnamed }] : [],
+      rows: named.slice(0, 12).map((row, index) => ({ key: String(row.official), label: String(row.official), value: { state: 'value', value: count(row.reports) }, subject: index === 0,
+        detail: row.first_filed && row.last_filed ? `${String(row.first_filed)} to ${String(row.last_filed)}` : null })) } satisfies LeadFigure }),
     title: `${shown(all)} behested payment reports${period}${officialCount ? ` name ${shown(officialCount)} ${officialCount === 1 ? 'official' : 'officials'}` : ''}`,
     detail: `${listed.length ? `Reports by the official named: ${listed.join('; ')}.` : 'No official is named on three or more reports.'}${unnamed ? ` ${shown(unnamed)} name no official.` : ''}${other.length ? ` The same export also holds ${other.join(', ')}.` : ''} A behested payment is a payment made to a third party, often a charity or a public event, at an official's request, and the official files the report. The export gives a short description of each report and no amount column; the payor, the payee and the amount are on the filed form. A count of reports says nothing about any decision the official made, and a larger count can reflect more complete reporting.`,
     question: 'Did any payor named on these reports have a contract, permit or other matter before the official in the year around the payment? The filed Form 803 names the payor and the amount; council dockets and contract awards show the matters.',

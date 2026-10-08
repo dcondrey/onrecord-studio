@@ -1,4 +1,4 @@
-import type { AnalyticalColumnSummary, AnalyticalDatasetSummary, AnalyticalSchema, SqlQueryResult } from '../types';
+import type { AnalyticalColumnSummary, AnalyticalDatasetSummary, AnalyticalSchema, LeadFigure, LeadFigureValue, SqlQueryResult } from '../types';
 import { quoteIdentifier, type DiscoveryQuery } from './dataDiscovery';
 import { numberOrNull as count, wholeNumber as shown, records, money } from './leadRows';
 
@@ -25,7 +25,14 @@ export interface ServiceLead {
   detail: string;
   question: string;
   query: DiscoveryQuery;
+  /** Drawn from the same rows as `detail`. Absent when the result was cut short: a partial
+   * result gives no figure, as it gives no counts. */
+  figure?: LeadFigure;
 }
+
+/** A figure value from a nullable cell: null becomes the stated absence, never 0. */
+export const figureValue = (value: number | null, reason: string): LeadFigureValue => value === null ? { state: 'not-recorded', reason } : { state: 'value', value };
+export const absentValue = (state: Exclude<LeadFigureValue['state'], 'value'>, reason: string): LeadFigureValue => ({ state, reason });
 
 const roleNames = {
   category: ['service_name', 'service_type', 'request_type', 'complaint_type', 'case_type', 'problem_type', 'issue_type', 'category'],
@@ -306,6 +313,10 @@ export function serviceAccountabilityLeads(results: { query: DiscoveryQuery; res
       const budget = results.find((entry) => entry.query.id === 'service_budget')?.result;
       const owner = ownership(rows.filter((row) => (count(row.open_over_one_year) ?? 0) > 0).slice(0, 3), budget ? records(budget) : undefined);
       leads.push({ key: 'service_backlog', priority: 98, query,
+        ...(result.truncated ? {} : { figure: { kind: 'ranked', measure: 'Open reports older than a year, by service', claim: 'descriptive', unit: 'count', excluded: [],
+          caption: 'An open report is not proof the problem persists: the table records no inspections or work done.', notes: [],
+          rows: rows.filter((row) => (count(row.open_over_one_year) ?? 0) > 0).slice(0, 12).map((row, index) => ({ key: String(row.category), label: String(row.category),
+            value: figureValue(count(row.open_over_one_year), ''), subject: index === 0, detail: `of ${shown(count(row.open_reports) ?? 0)} open` })) } satisfies LeadFigure }),
         title: `${shown(stale)} of ${shown(open)} open reports have been open more than a year`,
         detail: `${worst.join(' ')}${owner.text ? ` ${owner.text}` : ''} An open report is not proof the problem persists: the table records no inspections or work done.`,
         question: owner.departments.length ? `What do the ${listed(owner.departments)} budget and staffing say about the ${String(rows[0].category)} backlog?`
@@ -318,6 +329,10 @@ export function serviceAccountabilityLeads(results: { query: DiscoveryQuery; res
         if (median === null || overall === null) return;
         const reports = shown(count(open ? row.open_reports : row.closed_reports) ?? 0);
         leads.push({ key: `${query.id}:${index}`, priority: FOLLOWED_SERVICES.test(String(row.category)) ? 99 : (open ? 95 : 94) - index, query,
+          ...(result.truncated ? {} : { figure: { kind: 'paired', display: 'dots', measure: open ? 'Median age of open reports, this area against all areas' : 'Median days to close, this area against all areas',
+            claim: 'statistical', unit: 'days', subjectLabel: areaLabel(area, row.area), comparisonLabel: 'All areas', band: null,
+            caption: 'The difference can reflect what was reported as well as how it was handled.', notes: [],
+            rows: [{ key: String(row.category), label: String(row.category), subject: figureValue(median, ''), comparison: figureValue(overall, ''), subjectBasis: `${reports} reports`, comparisonBasis: null }] } satisfies LeadFigure }),
           title: open
             ? `${String(row.category)}: open reports in ${areaLabel(area, row.area)} are a median ${shown(median)} days old, against ${shown(overall)} across all areas`
             : `${String(row.category)}: reports in ${areaLabel(area, row.area)} took a median ${shown(median)} days to close, against ${shown(overall)} across all areas`,
@@ -349,7 +364,7 @@ export function serviceAccountabilityLeads(results: { query: DiscoveryQuery; res
 /** The same service and area listed as slower to close in several imported tables (for example
  * one table per year). One table's difference can be chance; the same one recurring is a pattern. */
 export function recurringServiceLeads(tables: { snapshotId: string; displayName: string; results: { query: DiscoveryQuery; result?: SqlQueryResult }[] }[]): (ServiceLead & { snapshotId: string; reads: string[] })[] {
-  const seen = new Map<string, { area: string; category: string; place: string; hits: { snapshotId: string; displayName: string; median: number; overall: number; reports: number; query: DiscoveryQuery }[] }>();
+  const seen = new Map<string, { area: string; category: string; place: string; hits: { snapshotId: string; displayName: string; median: number; overall: number; reports: number; query: DiscoveryQuery; truncated: boolean }[] }>();
   for (const table of tables) for (const { query, result } of table.results) {
     const [id, area] = query.id.split(':');
     if (id !== 'service_wait_area' || !result) continue;
@@ -358,7 +373,7 @@ export function recurringServiceLeads(tables: { snapshotId: string; displayName:
       if (median === null || overall === null) continue;
       const key = JSON.stringify([area, row.category, row.area]);
       const entry = seen.get(key) ?? { area, category: String(row.category), place: areaLabel(area, row.area), hits: [] };
-      entry.hits.push({ snapshotId: table.snapshotId, displayName: table.displayName, median, overall, reports: count(row.closed_reports) ?? 0, query });
+      entry.hits.push({ snapshotId: table.snapshotId, displayName: table.displayName, median, overall, reports: count(row.closed_reports) ?? 0, query, truncated: result.truncated });
       seen.set(key, entry);
     }
   }
@@ -366,6 +381,10 @@ export function recurringServiceLeads(tables: { snapshotId: string; displayName:
     .sort(([a, x], [b, y]) => y.hits.length - x.hits.length || y.hits.reduce((sum, hit) => sum + hit.reports, 0) - x.hits.reduce((sum, hit) => sum + hit.reports, 0) || a.localeCompare(b))
     .slice(0, 3).map(([key, entry], index) => ({
       snapshotId: entry.hits[0].snapshotId, reads: entry.hits.slice(1).map((hit) => hit.snapshotId), key: `service_recurring:${key}`, priority: 99 - index, query: entry.hits[0].query,
+      ...(entry.hits.some((hit) => hit.truncated) ? {} : { figure: { kind: 'paired', display: 'dots', measure: `Median days to close ${entry.category} reports in ${entry.place}, by imported table`, claim: 'statistical', unit: 'days',
+        subjectLabel: entry.place, comparisonLabel: 'All areas', band: null, notes: [],
+        caption: 'Tables are compared as imported and can overlap in the reports they hold.',
+        rows: entry.hits.map((hit) => ({ key: hit.snapshotId, label: hit.displayName, subject: figureValue(hit.median, ''), comparison: figureValue(hit.overall, ''), subjectBasis: `${shown(hit.reports)} reports`, comparisonBasis: null })) } satisfies LeadFigure }),
       title: `${entry.category} reports in ${entry.place} closed slower than the all-area median in ${entry.hits.length} imported tables`,
       detail: `${entry.hits.map((hit) => `${hit.displayName}: median ${shown(hit.median)} days against ${shown(hit.overall)} (${shown(hit.reports)} reports).`).join(' ')} Tables are compared as imported and can overlap in the reports they hold. The difference can reflect what was reported as well as how it was handled.`,
       question: `Has the responsible department explained why ${entry.category} takes longer in ${entry.place}, and has it been raised with the council office?`,
@@ -387,6 +406,10 @@ function movementLead(movement: { query: DiscoveryQuery; result?: SqlQueryResult
     ? `Of those that left, ${shown(total('all_closed_on_record'))} have a close date and ${shown(total('all_referred_on_record'))} were referred in the imported tables; ${shown(unrecorded)} have no close or referral record in any of them. `
     : 'This source lists open reports only, so whether they were closed or referred is not in it; the publisher’s closed-reports table would say. ';
   return { key: 'service_movement', priority: 99, query: movement.query,
+    ...(movement.result.truncated ? {} : { figure: { kind: 'ranked', measure: `Reports leaving and joining the open file, ${earlierDay} to ${laterDay}`, claim: 'descriptive', unit: 'count', excluded: [],
+      caption: 'A report leaves the open file when it is closed or referred.', notes: [],
+      rows: [{ key: 'left', label: 'Left the open file', value: figureValue(left, ''), subject: false, detail: `${shown(stale)} open more than a year` },
+        { key: 'arrived', label: 'New reports arrived', value: figureValue(arrived, ''), subject: false, detail: null }] } satisfies LeadFigure }),
     title: `${shown(left)} reports left the open file and ${shown(arrived)} new ones arrived between ${earlierDay} and ${laterDay}`,
     detail: `${outcome}${shown(stale)} of those that left had been open more than a year. ${services.join(' ')} A close date records that a report was closed, not what work was done.`,
     question: searched && unrecorded > 0 ? `What became of the ${shown(unrecorded)} reports that left the open file with no close or referral record?`
@@ -397,11 +420,11 @@ function movementLead(movement: { query: DiscoveryQuery; result?: SqlQueryResult
 
 /** The same published source imported on two dates: how its open backlog moved between them. */
 export function backlogChangeLeads(tables: { snapshotId: string; sourceUri: string | null; retrievedAt: string; results: { query: DiscoveryQuery; result?: SqlQueryResult }[] }[]): (ServiceLead & { snapshotId: string; reads: string[] })[] {
-  const bySource = new Map<string, { snapshotId: string; day: string; query: DiscoveryQuery; rows: Record<string, unknown>[]; movement?: { query: DiscoveryQuery; result?: SqlQueryResult } }[]>();
+  const bySource = new Map<string, { snapshotId: string; day: string; query: DiscoveryQuery; rows: Record<string, unknown>[]; truncated: boolean; movement?: { query: DiscoveryQuery; result?: SqlQueryResult } }[]>();
   for (const table of tables) {
     const backlog = table.results.find((entry) => entry.query.id === 'service_backlog');
     if (!table.sourceUri || !backlog?.result?.rows.length) continue;
-    bySource.set(table.sourceUri, [...(bySource.get(table.sourceUri) ?? []), { snapshotId: table.snapshotId, day: table.retrievedAt.slice(0, 10), query: backlog.query, rows: records(backlog.result), movement: table.results.find((entry) => entry.query.id === 'service_movement') }]);
+    bySource.set(table.sourceUri, [...(bySource.get(table.sourceUri) ?? []), { snapshotId: table.snapshotId, day: table.retrievedAt.slice(0, 10), query: backlog.query, rows: records(backlog.result), truncated: backlog.result.truncated, movement: table.results.find((entry) => entry.query.id === 'service_movement') }]);
   }
   const leads: (ServiceLead & { snapshotId: string; reads: string[] })[] = [];
   for (const snapshots of bySource.values()) {
@@ -417,7 +440,13 @@ export function backlogChangeLeads(tables: { snapshotId: string; sourceUri: stri
     const moved = later.rows.map((row) => ({ category: String(row.category), now: count(row.open_over_one_year) ?? 0, then: prior.get(String(row.category)) }))
       .filter((row): row is { category: string; now: number; then: number } => row.then !== undefined && row.then !== row.now)
       .sort((a, b) => Math.abs(b.now - b.then) - Math.abs(a.now - a.then) || a.category.localeCompare(b.category)).slice(0, 3);
+    const slopes = later.rows.flatMap((row) => prior.has(String(row.category)) ? [{ category: String(row.category), now: count(row.open_over_one_year) ?? 0, then: prior.get(String(row.category))! }] : [])
+      .sort((a, b) => Math.abs(b.now - b.then) - Math.abs(a.now - a.then) || a.category.localeCompare(b.category)).slice(0, 12);
     leads.push({ snapshotId: later.snapshotId, reads: [earlier.snapshotId], key: `service_backlog_change:${earlier.snapshotId}`, priority: 99, query: later.query,
+      ...(earlier.truncated || later.truncated ? {} : { figure: { kind: 'paired', display: 'dots', measure: 'Open reports older than a year, by service, at each retrieval', claim: 'descriptive', unit: 'count',
+        subjectLabel: later.day, comparisonLabel: earlier.day, band: null, notes: [],
+        caption: 'The dates are when each copy was retrieved; this comparison does not say why a report left.',
+        rows: slopes.map((row) => ({ key: row.category, label: row.category, subject: figureValue(row.now, ''), comparison: figureValue(row.then, ''), subjectBasis: null, comparisonBasis: null })) } satisfies LeadFigure }),
       title: `Open reports older than a year ${after > before ? 'rose' : 'fell'} from ${shown(before)} to ${shown(after)} between ${earlier.day} and ${later.day}`,
       detail: `All open reports went from ${shown(openBefore)} to ${shown(openAfter)}. ${moved.map((row) => `${row.category}: ${shown(row.then)} to ${shown(row.now)}.`).join(' ')} The two dates are when each copy was retrieved. A report leaves the open file when it is closed or referred; this comparison does not say which.`,
       question: 'Which reports left the open file between these dates, and were they repaired or closed without work?',

@@ -1,6 +1,6 @@
-import type { AnalyticalDatasetSummary, AnalyticalSchema, SqlQueryResult } from '../types';
+import type { AnalyticalDatasetSummary, AnalyticalSchema, LeadFigure, SqlQueryResult } from '../types';
 import { quoteIdentifier, type DiscoveryQuery } from './dataDiscovery';
-import { budgetTable, type ServiceLead } from './serviceAccountability';
+import { absentValue, budgetTable, figureValue, type ServiceLead } from './serviceAccountability';
 import { numberOrNull as count, wholeNumber as shown, money } from './leadRows';
 
 const GET_IT_DONE = 'https://seshat.datasd.org/get_it_done_reports/';
@@ -165,10 +165,34 @@ export function capacityLeads(results: { query: DiscoveryQuery; result?: SqlQuer
   if (!moved(first.expense, latest.expense) && !moved(first.reports, latest.reports) && !moved(first.yearRound, latest.yearRound)) return [];
   const departments = [...new Set(rows.flatMap((row) => typeof row.departments === 'string' ? row.departments.split('; ') : []))].join(', ');
   const undated = count(rows[0].undated_reports) ?? 0;
+  const figure: LeadFigure | undefined = entry.result.truncated ? undefined : {
+    kind: 'series', measure: 'Adopted budget, Encampment reports and shelter beds, by fiscal year', claim: 'descriptive',
+    caption: 'Three publishers; each panel has its own scale. Nothing here shows why any series moved.',
+    notes: [
+      ...(undated ? [`${shown(undated)} ${SERVICE} reports have no readable filing date and are in no year.`] : []),
+      ...compared.filter((year) => year.withoutYearRound > 0).map((year) => `In the ${year.fiscalYear} count, ${year.withoutYearRound} of ${year.projects} projects record no year-round bed count.`),
+    ].slice(0, 6),
+    points: rows.flatMap((row) => count(row.fiscal_year) === null ? [] : [{ key: String(count(row.fiscal_year)), label: `FY ${count(row.fiscal_year)}`, partial: false }]),
+    panels: [
+      { key: 'budget', label: 'Adopted operating expense', unit: 'currency', context: null, values: rows.filter((row) => count(row.fiscal_year) !== null).map((row) => {
+        if (count(row.adopted_rows) === null) return absentValue('not-recorded', 'the budget table has no rows marked adopted');
+        if (count(row.department_rows) === 0) return absentValue('not-recorded', `no department with "${DEPARTMENT_WORD}" in its name; not an amount of zero`);
+        const value = count(row.adopted_expense);
+        return value === null || (count(row.unreadable_amounts) ?? 0) > 0 ? absentValue('not-recorded', 'the adopted expense could not be read in full') : figureValue(value, '');
+      }) },
+      { key: 'reports', label: `${SERVICE} reports filed`, unit: 'count', context: null, values: rows.filter((row) => count(row.fiscal_year) !== null).map((row) => {
+        const value = count(row.encampment_reports);
+        if (value === null) return absentValue('not-covered', `the imported files cannot hold every ${SERVICE} report filed`);
+        return value < REPORT_MINIMUM ? absentValue('excluded', `fewer than ${REPORT_MINIMUM} reports filed (${shown(value)})`) : figureValue(value, '');
+      }) },
+      { key: 'beds', label: 'Year-round emergency shelter beds', unit: 'count', values: rows.filter((row) => count(row.fiscal_year) !== null).map((row) => figureValue(count(row.year_round_beds), 'the inventory records no year-round bed count')),
+        context: { label: 'Beds of every kind', values: rows.filter((row) => count(row.fiscal_year) !== null).map((row) => figureValue(count(row.total_beds), 'the inventory records no total bed count')) } },
+    ],
+  };
   const perYear = compared.map((year) => `FY ${year.fiscalYear}: ${money(year.expense)} adopted, ${shown(year.reports)} ${SERVICE} reports filed, ${shown(year.yearRound)} year-round emergency shelter beds${year.total === null ? '' : ` (${shown(year.total)} beds of every kind)`} in the January ${year.fiscalYear} count.`);
   const unrecorded = compared.filter((year) => year.withoutYearRound > 0 || year.withoutTotal > 0).map((year) =>
     `In the ${year.fiscalYear} count, ${year.withoutYearRound} of ${year.projects} projects record no year-round bed count and ${year.withoutTotal} no total; they add nothing to the sums.`);
-  return [{ key: 'capacity_comparison', priority: 97, query: entry.query,
+  return [{ key: 'capacity_comparison', priority: 97, query: entry.query, ...(figure ? { figure } : {}),
     title: `Adopted homelessness budget ${money(first.expense)} to ${money(latest.expense)}; ${SERVICE} reports ${shown(first.reports)} to ${shown(latest.reports)}; year-round emergency shelter beds ${shown(first.yearRound)} to ${shown(latest.yearRound)}, fiscal ${first.fiscalYear} to ${latest.fiscalYear}`,
     detail: `Three counts for the City of ${CITY}, set beside each other for each fiscal year (1 July to 30 June) in which all three are available. ${perYear.join(' ')} Between FY ${first.fiscalYear} and FY ${latest.fiscalYear}: adopted operating expense of ${departments || 'the department'} ${money(first.expense)} to ${money(latest.expense)} (${change(first.expense, latest.expense)}); ${SERVICE} reports filed ${shown(first.reports)} to ${shown(latest.reports)} (${change(first.reports, latest.reports)}); year-round emergency shelter beds ${shown(first.yearRound)} to ${shown(latest.yearRound)} (${change(first.yearRound, latest.yearRound)}).${unrecorded.length ? ` ${unrecorded.join(' ')}` : ''}${undated ? ` ${shown(undated)} ${SERVICE} reports have no readable filing date and are in no year.` : ''}${setAside.size ? ` Not compared: ${[...setAside].map(([reason, years]) => `${years.map((year) => `FY ${year}`).join(', ')} (${reason})`).join('; ')}.` : ''} The first and latest years are endpoints, and the years between do not move in a straight line; every year is listed above. The budget figure is the amount adopted for one department, not all homelessness spending: the San Diego Housing Commission and the County spend separately, and an adopted amount is not an amount spent. The beds are emergency shelter only; transitional and permanent housing are not in the inventory. The reports are complaints residents filed, not people or encampments, and one place can be reported many times. The inventory was compiled by UCSD's Homelessness Hub from the Regional Task Force on Homelessness count and states no licence. The bed count is one night each January; the other two series cover the whole fiscal year. Nothing here shows why any series moved.`,
     question: 'Which programmes did each year\'s adopted amount pay for, and how many beds did each fund? The department\'s budget volumes, its actual expenditure by programme and the Housing Commission\'s shelter operating agreements for the same years would show it.',

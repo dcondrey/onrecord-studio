@@ -1,4 +1,4 @@
-import type { AnalyticalDatasetSummary, AnalyticalSchema } from '../types';
+import type { AnalyticalDatasetSummary, AnalyticalSchema, LeadFigure } from '../types';
 import { quoteIdentifier, type DiscoveryQuery } from './dataDiscovery';
 import type { ServiceLead } from './serviceAccountability';
 import { numberOrNull as count, wholeNumber as shown, records, type QueryEntry as Entry } from './leadRows';
@@ -99,6 +99,18 @@ export function housingLeads(results: Entry[], currentYear = new Date().getUTCFu
   const side = years.length >= 2
     ? ` Extremely-low and very-low income units on building permits, by issue year: ${years.map((row) => `${count(row.issued_year)!}${soFar(count(row.issued_year)!)}: ${((lower) => lower ? `${shown(lower.sum)}${lower.missing}` : 'not recorded')(lowest(row))}`).join('; ')}.`
     : '';
+  // A tier no job recorded adds nothing to a bar and is named in the row's note; it is not a zero.
+  const figure: LeadFigure = { kind: 'stacked', measure: 'Dwelling units on building permits issued, by income tier and issue year', claim: 'descriptive', unit: 'count', normalise: false,
+    caption: 'Units on permits issued, not built or occupied; a negative tier total is units removed, net.',
+    notes: [...(undated ? [`${shown(undated)} jobs have no readable issue date and are in no year.`] : []), ...(noJob ? [`${shown(noJob)} building permits have no job recorded and are in no total.`] : [])],
+    segments: [{ key: 'lowest', label: 'Extremely low and very low', tone: 'lead' }, { key: 'low', label: 'Low', tone: 'ord-4' }, { key: 'moderate', label: 'Moderate', tone: 'ord-3' }, { key: 'above_moderate', label: 'Above moderate', tone: 'ord-2' }],
+    rows: years.map((row) => {
+      const year = count(row.issued_year)!; const unrecorded = TIERS.filter((tier) => count(row[tier.key]) === null).map((tier) => tier.name);
+      const untiered = (count(row.jobs) ?? 0) - (count(row.tiered_jobs) ?? 0);
+      return { key: String(year), group: 'Units by income tier', label: `${year}${soFar(year)}`, partial: year >= currentYear, excluded: [], overlay: null,
+        values: [lowest(row)?.sum ?? 0, count(row.low) ?? 0, count(row.moderate) ?? 0, count(row.above_moderate) ?? 0],
+        note: [untiered ? `${shown(untiered)} jobs with no tier recorded` : '', unrecorded.length ? `no ${unrecorded.join(', ')} tier recorded` : ''].filter(Boolean).join('; ') || null };
+    }) };
   return years.map((row) => {
     const year = count(row.issued_year)!;
     const tiers = TIERS.map((tier) => ({ ...tier, value: count(row[tier.key]) }));
@@ -106,7 +118,7 @@ export function housingLeads(results: Entry[], currentYear = new Date().getUTCFu
     const lower = lowest(row);
     const jobs = count(row.jobs) ?? 0; const tieredJobs = count(row.tiered_jobs) ?? 0; const unitJobs = count(row.unit_jobs) ?? 0; const multi = count(row.multi_permit_jobs) ?? 0; const removals = count(row.removal_jobs) ?? 0;
     return {
-      key: `housing_units_by_tier:${year}`, priority: 95, query: entry.query, scope: { period: `${year}-01-01 to ${year}-12-31` },
+      key: `housing_units_by_tier:${year}`, priority: 95, query: entry.query, scope: { period: `${year}-01-01 to ${year}-12-31` }, figure,
       title: `Building permits issued in ${year}${soFar(year)} ${lower ? `carry ${units(lower.sum)} for ${lower.households}${lower.missing}` : 'record no extremely-low or very-low income tier'}, of ${units(tiered)} with an income tier`,
       detail: `Building and Combination Building Permits issued in ${year}${soFar(year)}, counted once per job. Of ${shown(jobs)} jobs, ${shown(unitJobs)} record a unit in an income tier, ${shown(tieredJobs - unitJobs)} record no unit above 0 in any tier, and ${shown(jobs - tieredJobs)} have no tier recorded. Units by income tier: ${tiers.map((tier) => `${tier.name} ${recorded(tier.value)}`).join(', ')}. Reported apart, because the file does not say whether they are inside the tiers: density-bonus units ${recorded(count(row.bonus))}, ADUs ${recorded(count(row.adu))}.${multi ? ` ${shown(multi)} jobs hold more than one building permit; each is counted once, at the largest figure any of its permits records for each tier.` : ''}${removals ? ` ${shown(removals)} job${removals === 1 ? ' records' : 's record'} a negative figure in an income tier (units removed); the tier totals are net of ${removals === 1 ? 'it' : 'them'}.` : ''}${side}${undated ? ` ${shown(undated)} jobs have no readable issue date and are in no year.` : ''}${noJob ? ` ${shown(noJob)} building permits have no job recorded and are in no total.` : ''} ${CAVEAT}`,
       question: `What does the City's Annual Progress Report table A2 for ${year} record as building permits issued by income tier, and what is the City's RHNA allocation for each tier? The report's table A2 and the allocation would show what the City reported for the same tiers.`,

@@ -35,9 +35,18 @@ describe('leads from released abatement logs', () => {
     expect(full).toContain('11 are recorded completed before the notice was posted. 214 of 11,104 abatements dated within the notice log\'s period are at a place with no notice in that log.');
   });
 
-  it('stores the lead under the abatement family', () => {
+  it('bins the hours with under 3 as part of under 24, completions before posting outside the axis, and no figure from a cut-short result', () => {
+    const [lead] = abatementLeads([{ query, result: hours(2067, { completed_before_posted: 11 }) }]);
+    if (lead.figure?.kind !== 'bins') throw new Error('the notice lead draws bins');
+    expect(lead.figure.bins.map((bin) => [bin.from, bin.to, bin.count])).toEqual([[0, 3, 22], [3, 24, 79], [24, 72, 1811], [72, null, 144]]);
+    expect(lead.figure.before).toEqual({ key: 'before', label: 'completed before the notice was logged', count: 11 });
+    const [cut] = abatementLeads([{ query, result: { ...hours(2067), truncated: true } }]);
+    expect(cut.figure).toBeUndefined();
+  });
+
+  it('stores the lead under the abatement family, with its figure', () => {
     const stored = storedLeads(schema, { posted: { fingerprint: 'f', checkedAt: 'now', results: [{ query, result: hours(2067) }] } });
-    expect(stored.leads).toEqual([expect.objectContaining({ family: 'ABATEMENT_LOGS', key: 'posted:abatement_notice_hours' })]);
+    expect(stored.leads).toEqual([expect.objectContaining({ family: 'ABATEMENT_LOGS', key: 'posted:abatement_notice_hours', figure: expect.objectContaining({ kind: 'bins' }) })]);
   });
 });
 

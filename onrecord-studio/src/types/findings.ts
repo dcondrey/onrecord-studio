@@ -8,6 +8,7 @@
  * When a new `FindingKind` variant lands on the Rust side, add its SCREAMING_SNAKE_CASE string
  * here to keep the union exhaustive.
  */
+import type { LeadFigure } from './analysis';
 
 export type FindingSeverity = 'INFO' | 'NOTABLE' | 'SERIOUS' | 'CRITICAL';
 
@@ -104,6 +105,11 @@ export interface Finding {
   lastSeenAt: string;
   dismissedAt: string | null;
   sourceDetector: string;
+  /**
+   * A stored lead's figure. Sent only on a lookup of one finding by id (`FindingsFilter.id`), and
+   * absent for a lead whose result was cut short or that predates figures.
+   */
+  figure?: LeadFigure | null;
 }
 
 export interface FindingsFilter {
@@ -147,6 +153,8 @@ export interface ServiceLeadInput {
   detail: string;
   question: string;
   method: string;
+  /** Drawn from the same rows as `detail`; null when the result was cut short or has nothing to draw. */
+  figure: LeadFigure | null;
 }
 
 export interface ServiceLeadsRecorded {

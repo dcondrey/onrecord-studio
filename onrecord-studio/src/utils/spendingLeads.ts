@@ -1,6 +1,6 @@
-import type { AnalyticalDatasetSummary, AnalyticalSchema } from '../types';
+import type { AnalyticalDatasetSummary, AnalyticalSchema, LeadFigure, LeadFigureValue } from '../types';
 import { quoteIdentifier, type DiscoveryQuery } from './dataDiscovery';
-import { budgetTable, type ServiceLead } from './serviceAccountability';
+import { absentValue, budgetTable, figureValue, type ServiceLead } from './serviceAccountability';
 import { numberOrNull as count, wholeNumber as shown, percent, type QueryEntry as Entry, rowsOf, money } from './leadRows';
 
 /** The City's operating actuals file: the budget file's columns without `budget_cycle`. */
@@ -211,6 +211,15 @@ export function spendingQueries(schema: AnalyticalSchema, dataset: AnalyticalDat
 }
 
 const flag = (value: unknown) => value === true || value === 'true' || value === 1;
+
+/** One bullet row per fiscal year: the adopted amount as the target tick, the actual as the bar,
+ * and the lead's yardstick as a band about the adopted amount. */
+function bulletFigure(measure: string, subjectLabel: string, years: { year: number; adopted: number | null; actual: LeadFigureValue }[], percentage: number, dollars: number, band: string): LeadFigure {
+  return { kind: 'paired', display: 'bullet', measure, claim: 'statistical', unit: 'currency', subjectLabel, comparisonLabel: 'Adopted',
+    caption: 'Adopted is the original appropriation, not the revised budget.', notes: [], band: { percent: percentage, minimum: dollars, label: band },
+    rows: years.map((item) => ({ key: String(item.year), label: `FY ${item.year}`, subject: item.actual, subjectBasis: null, comparisonBasis: null,
+      comparison: figureValue(item.adopted, 'the adopted amount could not be read in full') })) };
+}
 /** A result cut short by the row limit would give short counts, so it gives none. */
 
 const belowAdopted = (adopted: number, actual: number) => adopted > 0 && (adopted - actual) * 100 >= BELOW_ADOPTED_PERCENT * adopted && adopted - actual >= BELOW_ADOPTED_DOLLARS;
@@ -242,6 +251,12 @@ function adoptedActualLeads(results: Entry[]): ServiceLead[] {
     const latest = reported.at(-1);
     if (!latest) continue;
     leads.push({ key: `spending_below_adopted:${department}`, priority: 97, query,
+      figure: bulletFigure(`Adopted against actual operating expense: ${department}`, 'Actual expense', years.map((row) => ({
+        year: count(row.fiscal_year)!, adopted: (count(row.unreadable_adopted) ?? 0) > 0 ? null : count(row.adopted_expense),
+        actual: count(row.actual_rows) === null ? absentValue('not-recorded', 'no rows in the actuals table; not spending of zero')
+          : (count(row.actual_expense_rows) ?? 0) === 0 || count(row.actual_expense) === null ? absentValue('not-recorded', 'rows for the department, none in an expense account')
+            : (count(row.unreadable_actual) ?? 0) > 0 ? absentValue('not-recorded', 'the actual amount could not be read in full') : figureValue(count(row.actual_expense), ''),
+      })), BELOW_ADOPTED_PERCENT, BELOW_ADOPTED_DOLLARS, `Lead threshold (${BELOW_ADOPTED_PERCENT}% and $1M below): app yardstick, not a budget rule`),
       title: `${department}: actual expense ${money(latest.actual)} against ${money(latest.adopted)} adopted in FY ${latest.year}, ${percent(latest.adopted - latest.actual, latest.adopted)} below${reported.length > 1 ? `; ${reported.length - 1} other year${reported.length > 2 ? 's' : ''} at least ${BELOW_ADOPTED_PERCENT}% below` : ''}`,
       detail: `Operating expense of ${department}, adopted against actual, for every fiscal year both tables cover (${covered}). ${lines.join(' ')} At least ${BELOW_ADOPTED_PERCENT}% and $${shown(BELOW_ADOPTED_DOLLARS)} below adopted: ${reported.map((item) => `FY ${item.year} (${money(item.adopted - item.actual)})`).join(', ')}. ${ADOPTED_LIMITS}`,
       question: `What does the revised budget of ${department} for FY ${latest.year} show, and where did the ${money(latest.adopted - latest.actual)} not spent go? The year-end budget monitoring report and the Council's mid-year budget amendments would show a transfer or a carry-forward.`,
@@ -252,6 +267,11 @@ function adoptedActualLeads(results: Entry[]): ServiceLead[] {
   if (absent.length) {
     const first = absent[0]; const named = (row: Record<string, unknown>) => `${String(row.department)}, FY ${count(row.fiscal_year)} (${money(count(row.adopted_expense)!)} adopted)`;
     leads.push({ key: 'spending_no_actual_rows', priority: 93, query,
+      figure: { kind: 'ranked', measure: 'Adopted expense with no rows in the actuals table, by department-year', claim: 'descriptive', unit: 'currency',
+        caption: 'Bars are the adopted amounts; the actuals table has no row for these departments in these years, which is not spending of zero.',
+        notes: absent.length > NO_ACTUAL_ROWS_LISTED ? [`${shown(absent.length - NO_ACTUAL_ROWS_LISTED)} more department-years are not drawn.`] : [], excluded: [],
+        rows: absent.slice(0, NO_ACTUAL_ROWS_LISTED).map((row, index) => ({ key: `${String(row.department)}:${count(row.fiscal_year)}`, label: `${String(row.department)}, FY ${count(row.fiscal_year)}`,
+          value: figureValue(count(row.adopted_expense), ''), subject: index === 0, detail: 'no rows in the actuals table' })) },
       title: absent.length === 1 ? `${String(first.department)} has an adopted amount for FY ${count(first.fiscal_year)} and no rows in the actuals table`
         : `${shown(absent.length)} department-years have an adopted amount and no rows in the actuals table, the latest ${String(first.department)} in FY ${count(first.fiscal_year)}`,
       detail: `Of ${shown(count(rows[0].department_years) ?? 0)} department-years with an adopted expense amount in the years both tables cover (${covered}), ${shown(absent.length)} ${absent.length === 1 ? 'has' : 'have'} no row of any account under that department name in the actuals table: ${absent.slice(0, NO_ACTUAL_ROWS_LISTED).map(named).join('; ')}${absent.length > NO_ACTUAL_ROWS_LISTED ? `; and ${shown(absent.length - NO_ACTUAL_ROWS_LISTED)} more` : ''}. No rows is not spending of zero: the table is silent on these departments in those years. A department renamed or merged during the year can be recorded under another name, and a reserve is appropriated to be transferred, not spent under its own name. ${ADOPTED_LIMITS}`,
@@ -290,6 +310,12 @@ function overtimeLeads(results: Entry[]): ServiceLead[] {
     const scope = flag(years[0].followed) ? `for every fiscal year both tables cover with an adopted overtime line (${covered})`
       : `for the years both tables cover (${covered}) in which it is among the ${OVERTIME_DEPARTMENT_YEARS_LISTED} department-years with most actual overtime`;
     leads.push({ key: `spending_overtime_above_adopted:${department}`, priority: 95, query,
+      figure: bulletFigure(`Adopted against actual overtime: ${department}`, 'Actual overtime', years.map((row) => ({
+        year: count(row.fiscal_year)!, adopted: (count(row.unreadable_adopted) ?? 0) > 0 ? null : count(row.adopted_overtime),
+        actual: count(row.actual_rows) === null ? absentValue('not-recorded', 'no rows in the actuals table; not overtime of zero')
+          : (count(row.actual_ot_rows) ?? 0) === 0 ? absentValue('not-recorded', 'rows for the department, none in an overtime account')
+            : count(row.actual_overtime) === null || (count(row.unreadable_actual) ?? 0) > 0 ? absentValue('not-recorded', 'the actual amount could not be read in full') : figureValue(count(row.actual_overtime), ''),
+      })), ABOVE_ADOPTED_OVERTIME_PERCENT, ABOVE_ADOPTED_OVERTIME_DOLLARS, `Lead threshold (${ABOVE_ADOPTED_OVERTIME_PERCENT}% and $1M above): app yardstick, not a budget rule`),
       title: `${department}: actual overtime ${money(latest.actual)} against ${money(latest.adopted)} adopted in FY ${latest.year}, ${percent(latest.actual - latest.adopted, latest.adopted)} above${reported.length > 1 ? `; ${reported.length - 1} other year${reported.length > 2 ? 's' : ''} at least ${ABOVE_ADOPTED_OVERTIME_PERCENT}% above` : ''}`,
       detail: `Overtime of ${department}, adopted against actual, ${scope}. ${lines.join(' ')} At least ${ABOVE_ADOPTED_OVERTIME_PERCENT}% and $${shown(ABOVE_ADOPTED_OVERTIME_DOLLARS)} above adopted overtime: ${reported.map((item) => `FY ${item.year} (${money(item.actual - item.adopted)})`).join(', ')}; both are fixed yardsticks, not a statistical test. Actual overtime in FY ${latest.year} is in ${latest.accounts}. ${OVERTIME_LIMITS}`,
       question: `What does the revised budget of ${department} for FY ${latest.year} show for overtime, and which units and assignments account for the ${money(latest.actual - latest.adopted)} above the adopted line? The department's overtime reports and the year-end budget monitoring report would show the transfers and the reasons.`,
@@ -320,6 +346,12 @@ function settlementLeads(results: Entry[]): ServiceLead[] {
   const reporting = recorded.map(([, rows]) => count(rows[0].departments_reporting)!);
   const negative = read.rows.some((row) => (count(row.year_amount) ?? 0) < 0 || (count(row.department_amount) ?? 0) < 0);
   return [{ key: 'spending_settlements', priority: 92, query: read.query,
+    figure: { kind: 'ranked', measure: 'Settlement and public-liability claim accounts, by fiscal year', claim: 'descriptive', unit: 'currency', excluded: [],
+      caption: 'Stated, not compared: the departments recording these accounts differ between years.',
+      notes: negative ? ['A negative figure is as recorded: a reversal or a recovery booked to the account.'] : [],
+      rows: [...years].sort(([a], [b]) => a - b).map(([year, rows]) => ({ key: String(year), label: `FY ${year}`, subject: year === latestYear,
+        value: count(rows[0].departments_reporting) === null ? absentValue('not-recorded', 'no rows in these accounts; not an amount of zero') : figureValue(count(rows[0].year_amount), 'no readable amount'),
+        detail: count(rows[0].departments_reporting) === null ? null : `${from(rows[0])}` })) },
     title: `Settlement and public-liability claim accounts: ${count(latest.year_amount) === null ? 'rows' : money(count(latest.year_amount)!)} recorded by ${from(latest)} in FY ${latestYear}`,
     detail: `Rows booked to the Negotiated Settlement and public-liability claim accounts in the operating actuals, for the ${years.size} latest fiscal year${years.size > 1 ? 's' : ''} in the table. ${lines.join(' ')} Departments named are the ${SETTLEMENT_DEPARTMENTS_LISTED} largest each year, with ${FOLLOWED_TEXT} when they have a row; a department not named may still have one.${Math.min(...reporting) !== Math.max(...reporting) || recorded.length < years.size ? ` The number of departments with a row in these accounts differs between the years listed (${recorded.length < years.size ? 'none' : shown(Math.min(...reporting))} to ${shown(Math.max(...reporting))}), so the yearly figures are not compared: a larger figure can be a change in where the City records a payment, not in what it paid.` : ' The yearly figures are stated, not compared: the table does not say whether the City recorded these payments the same way each year.'}${negative ? ' A negative figure is as recorded: a reversal or a recovery booked to the account.' : ''} The accounts do not name the cases, the claimants or the reasons, and a payment made from the Public Liability fund can be recorded under another department.`,
     question: `Which claims and cases make up the FY ${latestYear} figure, and why do the departments recording these accounts differ from year to year? The Risk Management annual report and the Council's settlement resolutions for the year would show it.`,
@@ -351,6 +383,13 @@ function payLeads(results: Entry[]): ServiceLead[] {
     });
     const high = count(total.high_overtime_positions) ?? 0; const without = count(total.positions_without_overtime) ?? 0;
     leads.push({ key: `spending_pay_overtime:${employer}`, priority: budgetCity ? 96 : 91, query: read.query,
+      figure: { kind: 'ranked', measure: 'Overtime as a share of regular pay, by employer', claim: 'descriptive', unit: 'percent', excluded: [],
+        caption: `Employers with at least ${PAY_MINIMUM_POSITIONS} positions in the pay file.`, notes: [],
+        rows: [...employers].map(([name, employerRows]) => {
+          const paid = count(employerRows[0].overtime_pay); const base = count(employerRows[0].regular_pay);
+          return { key: name, label: name, subject: name === employer, detail: `${shown(count(employerRows[0].positions) ?? 0)} positions`,
+            value: paid === null || base === null || base <= 0 ? absentValue('not-recorded', 'no readable overtime or regular pay') : figureValue(paid / base, '') };
+        }).sort((a, b) => (b.value.state === 'value' ? b.value.value : -1) - (a.value.state === 'value' ? a.value.value : -1)) },
       title: `${employer}: ${money(overtime)} overtime paid in ${period}${regular !== null && regular > 0 ? `, ${percent(overtime, regular)} of regular pay` : ''}; ${shown(high)} positions with $${shown(HIGH_OVERTIME_DOLLARS)} or more`,
       detail: `${employer} reported ${shown(positions)} positions to the State Controller for ${period}: ${regular === null ? 'no readable regular pay' : `${money(regular)} regular pay`} and ${money(overtime)} overtime. ${shown(high)} positions had overtime of $${shown(HIGH_OVERTIME_DOLLARS)} or more.${without ? ` ${shown(without)} positions record no overtime figure and add nothing to the sums.` : ''} By department: ${lines.join(' ')}${budgetCity ? ` ${shown(count(total.budget_departments_matched) ?? 0)} of this employer's ${shown(count(total.departments) ?? 0)} department names are the budget table's own, so it is read as the budget's city. The pay file covers calendar ${year} and the budget fiscal years from 1 July to 30 June: calendar ${year} is the second half of FY ${year} and the first half of FY ${year! + 1}, so the adopted amounts are beside the overtime paid, not for the same period. Adopted is the original appropriation, not the revised budget.` : ' No adopted overtime is set beside these figures: no imported budget table is read as this employer\'s.'} A row is a position held, not a person, and the file has no names. Positions with overtime above regular pay are not counted, because a low regular figure can be part of a year in the position. Nothing here says why the overtime was worked or whether it was authorised.`,
       question: `Which units and assignments account for the overtime in ${String(rows.find((row) => row.department != null)?.department ?? employer)}, and how many of its budgeted positions were vacant in ${year ?? 'those years'}? The department's overtime reports and vacancy reports to the budget committee would show it.`,

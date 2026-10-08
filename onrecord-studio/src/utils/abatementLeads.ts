@@ -1,7 +1,7 @@
-import type { AnalyticalDatasetSummary, AnalyticalSchema, SqlQueryResult } from '../types';
+import type { AnalyticalDatasetSummary, AnalyticalSchema, LeadFigure, SqlQueryResult } from '../types';
 import { quoteIdentifier, type DiscoveryQuery } from './dataDiscovery';
 import { encampmentReportCoverage } from './capacityLeads';
-import { serviceRequestRoles, type ServiceLead } from './serviceAccountability';
+import { figureValue, serviceRequestRoles, type ServiceLead } from './serviceAccountability';
 import { numberOrNull, wholeNumber as shown } from './leadRows';
 
 /** Encampment abatement logs as agencies release them: one table of notices posted and one of
@@ -205,6 +205,10 @@ function repeatLeads(results: { query: DiscoveryQuery; result?: SqlQueryResult }
   const repeated = rows.filter((row) => count(row.days) >= REPEAT_DAYS);
   const listed = repeated.map((row) => `${String(row.address ?? 'a place with no address text')}, ${shown(count(row.days))} days from ${String(row.first_day)} to ${String(row.last_day)}`);
   return [{ key: 'abatement_repeat_places', priority: 98, query: entry.query,
+    ...(entry.result.truncated ? {} : { figure: { kind: 'ranked', measure: 'Places abated most often, by separate days abated', claim: 'descriptive', unit: 'count', caption: 'A place is the recorded coordinates rounded to about eleven metres.',
+      notes: [], excluded: notPlaced ? [{ key: 'not_placed', label: 'rows with no coordinates or readable time', count: notPlaced }] : [],
+      rows: repeated.map((row, index) => ({ key: `${String(row.address)}:${index}`, label: String(row.address ?? 'a place with no address text'), value: figureValue(count(row.days), ''), subject: index === 0,
+        detail: `${String(row.first_day)} to ${String(row.last_day)}` })) } satisfies LeadFigure }),
     title: `${shown(count(rows[0].repeat_place_days))} of ${shown(placeDays)} abatements were at ${shown(repeatPlaces)} ${repeatPlaces === 1 ? 'place' : 'places'} abated on ${REPEAT_DAYS} or more separate days`,
     detail: `The log records abatements at ${shown(count(rows[0].places))} places; ${shown(count(rows[0].places_abated_once))} were abated on one day only. The most abated: ${listed.join('; ')}.${notPlaced ? ` ${shown(notPlaced)} rows have no coordinates or readable time and are in none of these counts.` : ''} A place is the recorded coordinates rounded to about eleven metres, and an abatement is counted once per place and day. The log records that an abatement was completed. It does not record who was there, whether the same people returned, what was offered, or what became of belongings.`,
     question: 'At the places abated most often, what did each abatement cost, and what shelter or storage was offered there? The contractor\'s invoices by date and the outreach and stored-property records for those addresses would show it.',
@@ -222,7 +226,15 @@ function reportLeads(results: { query: DiscoveryQuery; result?: SqlQueryResult }
   const notPlaced = count(row.reports_not_placed);
   const compared = count(row.ring_compared);
   const earlier = count(row.earlier_place_days);
+  const pair = (key: string, label: string, before: number, after: number) => ({ key, label, subject: figureValue(after, ''), comparison: figureValue(before, ''), subjectBasis: `${shown(after)} reports`, comparisonBasis: `${shown(before)} reports` });
   return [{ key: 'abatement_reports_nearby', priority: 94, query: entry.query,
+    ...(entry.result.truncated ? {} : { figure: { kind: 'paired', display: 'dots', measure: `Encampment reports in the ${WINDOW_DAYS} days before and after an abatement`, claim: 'descriptive', unit: 'count',
+      subjectLabel: 'After', comparisonLabel: 'Before', band: null,
+      caption: 'Report and abatement pairs: a report near several abatements is counted once for each.',
+      notes: notPlaced ? [`${shown(notPlaced)} reports have no coordinates or date and are in none of these counts.`] : [],
+      rows: [pair('near', `Within ${NEAR_METRES} m`, nearBefore, nearAfter), pair('ring', `${NEAR_METRES} to ${RING_METRES} m`, ringBefore, ringAfter),
+        ...(earlier >= PLACE_DAY_MINIMUM ? [pair('earlier_near', `Within ${NEAR_METRES} m, ${EARLIER_DAYS} days earlier`, count(row.earlier_near_before), count(row.earlier_near_after)),
+          pair('earlier_ring', `${NEAR_METRES} to ${RING_METRES} m, ${EARLIER_DAYS} days earlier`, count(row.earlier_ring_before), count(row.earlier_ring_after))] : [])] } satisfies LeadFigure }),
     title: `Around ${shown(placeDays)} abatements, ${shown(nearAfter)} Encampment reports were filed within ${NEAR_METRES} metres in the ${WINDOW_DAYS} days after and ${shown(nearBefore)} in the ${WINDOW_DAYS} days before`,
     detail: `${shown(placeDays)} of ${shown(count(row.abatement_place_days))} abatement place-days fall where the imported reports are complete (${String(row.reports_since)} to ${String(row.reports_until)}, ${shown(count(row.reports_in_period))} Encampment reports). Within ${NEAR_METRES} metres: ${shown(nearBefore)} reports in the ${WINDOW_DAYS} days before, ${shown(count(row.near_same_day))} on the day, ${shown(nearAfter)} in the ${WINDOW_DAYS} days after. From ${NEAR_METRES} to ${RING_METRES} metres: ${shown(ringBefore)} before and ${shown(ringAfter)} after.${compared ? ` Of ${shown(compared)} abatements with at least ${RING_BASELINE} reports in that ring beforehand, ${shown(count(row.ring_more_after))} had more afterwards and ${shown(count(row.ring_fewer_after))} fewer; in ${shown(count(row.ring_rose_by_half))} the count rose by half or more and in ${shown(count(row.ring_fell_by_third))} it fell by a third or more.` : ''}${earlier >= PLACE_DAY_MINIMUM ? ` The same count taken ${EARLIER_DAYS} days earlier at ${shown(earlier)} of these abatements' places: within ${NEAR_METRES} metres ${shown(count(row.earlier_near_before))} then ${shown(count(row.earlier_near_after))}; in the ring ${shown(count(row.earlier_ring_before))} then ${shown(count(row.earlier_ring_after))}. That is how the counts were moving before the abatement.` : ''}${notPlaced ? ` ${shown(notPlaced)} reports have no coordinates or date and are in none of these counts.` : ''} These are counts of report and abatement pairs, so a report near several abatements is counted once for each. A report is a resident's complaint, not a person or a camp, and an abatement is often scheduled because reports were filed, so more reports before than after is expected whatever the abatement did. The counts do not show where anyone went.`,
     question: 'Where the surrounding ring has more reports after an abatement than before, what did the abatement record say became of the people and belongings there? The work orders and the stored-property log for those places would show it.',
@@ -238,7 +250,25 @@ export function abatementLeads(results: { query: DiscoveryQuery; result?: SqlQue
   if (paired < PAIRED_MINIMUM) return [];
   const period = row.first_posted && row.last_posted ? ` (notices posted ${String(row.first_posted)} to ${String(row.last_posted)})` : '';
   const early = count(row.completed_before_posted); const unnoticed = count(row.abatements_without_notice_in_log);
+  // under_3_hours is a subset of under_24_hours, so the 3-24 h bin is their difference.
+  const under3 = count(row.under_3_hours); const under24 = count(row.under_24_hours);
   return [{ key: 'abatement_notice_hours', priority: 100, query: entry.query,
+    ...(entry.result.truncated ? {} : { figure: { kind: 'bins', measure: 'Hours from a posted notice to the abatement', claim: 'descriptive', unit: 'hours',
+      caption: `${shown(paired)} places with exactly one notice and one abatement, matched on address and coordinates.`, notes: [],
+      bins: [
+        { key: 'under_3', label: 'under 3 h', from: 0, to: 3, count: under3 },
+        { key: 'from_3_to_24', label: '3 to 24 h', from: 3, to: 24, count: under24 - under3 },
+        { key: 'from_24_to_72', label: '24 to 72 h', from: 24, to: 72, count: count(row.from_24_to_72_hours) },
+        { key: 'over_72', label: '72 h or more', from: 72, to: null, count: count(row.over_72_hours) },
+      ],
+      before: early ? { key: 'before', label: 'completed before the notice was logged', count: early } : null,
+      median: numberOrNull(row.median_hours),
+      reference: { at: 72, label: '72 h reference (app yardstick, not the agency\'s stated requirement)' },
+      denominator: [
+        { key: 'paired', label: 'places matched to one notice', count: paired },
+        { key: 'not_matchable', label: 'notices with no place or time', count: count(row.notices_not_matchable) },
+        { key: 'no_notice', label: `abatements in the log's period with no notice there (of ${shown(count(row.abatements_in_notice_period))})`, count: unnoticed },
+      ].filter((item) => item.count > 0) } satisfies LeadFigure }),
     title: `${shown(count(row.under_24_hours))} of ${shown(paired)} abatements matched to a single posted notice were completed less than 24 hours after posting`,
     detail: `${shown(count(row.posted_notices))} notices and ${shown(count(row.completed_abatements))} abatements are in the two logs${period}. ${shown(paired)} places have exactly one of each, matched on address and coordinates. Completed within 3 hours of posting: ${shown(count(row.under_3_hours))}. Within 24 hours: ${shown(count(row.under_24_hours))}. From 24 to 72 hours: ${shown(count(row.from_24_to_72_hours))}. After 72 hours or more: ${shown(count(row.over_72_hours))}.${row.median_hours == null ? '' : ` Median ${String(row.median_hours)} hours.`}${early ? ` ${shown(early)} are recorded completed before the notice was posted.` : ''}${unnoticed ? ` ${shown(unnoticed)} of ${shown(count(row.abatements_in_notice_period))} abatements dated within the notice log's period are at a place with no notice in that log.` : ''} The logs record when a notice was posted and when an abatement was closed. They do not record the notice period that applied, whether anyone was present, or what was done with belongings; 24 and 72 hours are yardsticks, not the agency's stated requirement.`,
     question: 'What notice period does the agency\'s abatement procedure require, and what happened to belongings at the places cleared soonest after posting? A records request for the storage log and the notices as posted would show it.',
