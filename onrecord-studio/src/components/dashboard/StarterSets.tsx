@@ -10,6 +10,7 @@ import Time from '../ui/Time';
 import Button from '../ui/Button';
 import InlineError from '../ui/InlineError';
 import Skeleton from '../ui/Skeleton';
+import { cn } from '../../utils/cn';
 
 /**
  * One-click bundles of public San Diego sources. Choosing a set fetches nothing: it opens a
@@ -55,18 +56,25 @@ export default function StarterSets() {
           </MethodNote>
         </div>
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className={cn('grid gap-4', report.sets.length > 1 && 'lg:grid-cols-2')}>
         {report.sets.map((set) => {
           const pending = entriesToAdd(set, portals);
+          const withoutTerms = set.entries.filter((entry) => !entry.termsNote).length;
           return (
             <article key={set.id} aria-label={set.title} className="flex flex-col rounded-lg border border-line p-4">
               <h4 className="text-body font-medium text-fg">{set.title}</h4>
               <p className="mt-1 text-body text-muted">{set.summary}</p>
-              <ul className="mt-3 space-y-3 text-caption text-fg-secondary">
+              <ul className="mt-3 grid gap-x-6 gap-y-3 text-caption text-fg-secondary [grid-template-columns:repeat(auto-fill,minmax(18rem,1fr))]">
                 {set.entries.map((entry) => (
                   <EntryRow key={entry.id} entry={entry} saved={entryIsSaved(entry, portals)} status={statuses[entry.id]} />
                 ))}
               </ul>
+              {withoutTerms > 0 && (
+                <p className="mt-3 text-caption text-muted">
+                  {withoutTerms === set.entries.length ? 'No source in this set states reuse terms' : `${withoutTerms} of these sources state no reuse terms`};
+                  check the publisher before redistributing.
+                </p>
+              )}
               <div className="mt-auto pt-4">
                 {confirmingId === set.id ? (
                   <div role="group" aria-label={`Confirm ${set.title}`} className="space-y-3 rounded-lg bg-raised/60 p-3 text-body text-fg-secondary">
@@ -112,8 +120,11 @@ function EntryRow({ entry, saved, status }: { entry: StarterEntry; saved: boolea
           : status?.state === 'unavailable' ? <span role="alert" className="text-warning">Unavailable: {status.reason}</span>
           : saved ? <span className="text-muted">In your library</span> : null}
       </div>
-      <div className="text-muted">{entry.what} {entry.publisher}. Verified <Time value={entry.verifiedAsOf} className="whitespace-nowrap" />.</div>
-      <div className="text-muted">{entry.termsNote ?? 'No reuse terms were found; check the publisher before redistributing.'}</div>
+      <div className="text-muted">{entry.what}</div>
+      <div className="text-muted">
+        {entry.publisher} · <span className="whitespace-nowrap">Verified <Time value={entry.verifiedAsOf} /></span>
+      </div>
+      {entry.termsNote && <div className="text-muted">{entry.termsNote}</div>}
     </li>
   );
 }
