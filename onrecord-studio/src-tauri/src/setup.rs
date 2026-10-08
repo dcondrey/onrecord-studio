@@ -38,6 +38,8 @@ pub fn configure_onrecord_studio_runtime<R: Runtime>(app: &mut App<R>) -> Result
     create_runtime_directory(&signing_key_directory)?;
     let published_pack_root = app_data_dir.join("packs");
     create_runtime_directory(&published_pack_root)?;
+    // No fetch can be running yet, so any staged download left here was cut off by a crash.
+    crate::packs::published::remove_partial_downloads(&published_pack_root);
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

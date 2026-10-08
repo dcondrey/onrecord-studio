@@ -25,6 +25,11 @@ const PUBLISHER: &str = "Writerslogic";
 const HUB: &str = "https://huggingface.co/";
 /// A manifest lists a pack's files; `san-diego-reports` 2026.10.7 (94 files) is 123,432 bytes.
 const MAX_MANIFEST_BYTES: usize = 4 * 1024 * 1024;
+/// Beside a kept manifest: the repository commit it was served from, so its files are fetched
+/// from that commit rather than from whatever `main` holds later.
+const REVISION_FILE: &str = "revision";
+/// Before a manifest's commit is known, files resolve from the branch.
+const BRANCH: &str = "main";
 
 /// The app-managed directory published packs are downloaded into, `<app data>/packs`. A pack's
 /// files live under `<pack>/<packVersion>/` inside it.
@@ -52,7 +57,7 @@ fn published_pack(pack: &str) -> Result<&'static str, AppError> {
 
 /// The address of `relative`, a path that passed [`pack_relative`], in `pack`'s repository. Each
 /// part is pushed as one escaped segment, so no part can become a query, fragment or new path.
-fn file_url(pack: &'static str, relative: &Path) -> Result<Url, AppError> {
+fn file_url(pack: &'static str, revision: &str, relative: &Path) -> Result<Url, AppError> {
     let invalid = || AppError::Internal(format!("Published pack path {}", relative.display()));
     let repository = repository(pack);
     let mut url = Url::parse(HUB).map_err(|_| invalid())?;
@@ -63,7 +68,7 @@ fn file_url(pack: &'static str, relative: &Path) -> Result<Url, AppError> {
             PUBLISHER,
             repository.as_str(),
             "resolve",
-            "main",
+            revision,
         ]);
         for part in relative.components() {
             let Component::Normal(part) = part else {
@@ -73,6 +78,43 @@ fn file_url(pack: &'static str, relative: &Path) -> Result<Url, AppError> {
         }
     }
     Ok(url)
+}
+
+/// The 40-hex commit Hugging Face served `pack`'s manifest from, read from the address it
+/// resolved to (`/api/resolve-cache/datasets/<publisher>/<repository>/<commit>/manifest.json`).
+fn served_revision(pack: &'static str, resolved: &str) -> Option<String> {
+    let url = Url::parse(resolved).ok()?;
+    let parts: Vec<&str> = url.path_segments()?.collect();
+    let repository = repository(pack);
+    let commit = parts.windows(6).find(|window| {
+        window[..5]
+            == [
+                "api",
+                "resolve-cache",
+                "datasets",
+                PUBLISHER,
+                repository.as_str(),
+            ]
+    })?[5];
+    (commit.len() == 40
+        && commit
+            .bytes()
+            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f')))
+    .then(|| commit.to_owned())
+}
+
+/// The commit recorded beside a kept manifest, or the branch when none was recorded.
+fn kept_revision(directory: &Path) -> String {
+    std::fs::read_to_string(directory.join(REVISION_FILE))
+        .ok()
+        .map(|text| text.trim().to_owned())
+        .filter(|commit| {
+            commit.len() == 40
+                && commit
+                    .bytes()
+                    .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+        })
+        .unwrap_or_else(|| BRANCH.to_owned())
 }
 
 /// `<root>/<pack>/<version>`, where `version` must be one plain path part.
@@ -90,8 +132,33 @@ fn client() -> Result<ApiClient, AppError> {
     })
 }
 
+const STAGED_SUFFIX: &str = ".partial";
+
 fn staged_name(parent: &Path) -> PathBuf {
-    parent.join(format!(".{}.partial", uuid::Uuid::new_v4()))
+    parent.join(format!(".{}{STAGED_SUFFIX}", uuid::Uuid::new_v4()))
+}
+
+/// Deletes every staged download under `root`. Called at startup only: during a fetch, a staged
+/// file belongs to a download in progress.
+pub(crate) fn remove_partial_downloads(root: &Path) {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if kind.is_dir() {
+            remove_partial_downloads(&path);
+        } else if kind.is_file() && name.starts_with('.') && name.ends_with(STAGED_SUFFIX) {
+            if let Err(error) = std::fs::remove_file(&path) {
+                eprintln!("Could not remove an unfinished pack download: {error}");
+            }
+        }
+    }
 }
 
 async fn blocking<T: Send + 'static>(
@@ -106,6 +173,7 @@ fn keep_manifest(
     root: &Path,
     pack: &'static str,
     staged: &Path,
+    revision: Option<String>,
     pinned: &[VerifyingKey],
 ) -> Result<DataPackSummary, AppError> {
     let bytes = std::fs::read(staged)
@@ -118,9 +186,24 @@ fn keep_manifest(
         )));
     }
     let directory = version_directory(root, pack, &signed.manifest.pack_version)?;
-    std::fs::create_dir_all(&directory)
-        .and_then(|()| std::fs::rename(staged, directory.join(PACK_MANIFEST_FILE)))
-        .map_err(|error| AppError::Storage(format!("Pack directory: {error}")))?;
+    let pack_error = |error: std::io::Error| AppError::Storage(format!("Pack directory: {error}"));
+    std::fs::create_dir_all(&directory).map_err(pack_error)?;
+    let revision_path = directory.join(REVISION_FILE);
+    match revision {
+        Some(commit) => {
+            let staged_revision = staged_name(&directory);
+            std::fs::write(&staged_revision, commit)
+                .and_then(|()| std::fs::rename(&staged_revision, &revision_path))
+                .map_err(pack_error)?;
+        }
+        None => match std::fs::remove_file(&revision_path) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+                return Err(pack_error(error))
+            }
+            _ => {}
+        },
+    }
+    std::fs::rename(staged, directory.join(PACK_MANIFEST_FILE)).map_err(pack_error)?;
     summarize(signed.manifest, &signed.signer_key_id)
 }
 
@@ -136,16 +219,17 @@ pub(crate) async fn fetch_manifest(
         .await
         .map_err(|error| AppError::Storage(format!("Pack directory: {error}")))?;
     let staged = staged_name(&pack_root);
-    client()?
+    let downloaded = client()?
         .download_url_to_path_within(
-            file_url(pack, Path::new(PACK_MANIFEST_FILE))?,
+            file_url(pack, BRANCH, Path::new(PACK_MANIFEST_FILE))?,
             &staged,
             MAX_MANIFEST_BYTES,
         )
         .await?;
+    let revision = served_revision(pack, &downloaded.acquisition.resolved_url);
     let kept = staged.clone();
     let summary = blocking("Verify data pack manifest", move || {
-        keep_manifest(&root, pack, &kept, &pinned)
+        keep_manifest(&root, pack, &kept, revision, &pinned)
     })
     .await;
     if summary.is_err() {
@@ -211,7 +295,8 @@ fn keep_verified(staged: &Path, destination: &Path, file: &PackFile) -> Result<(
         let _ = std::fs::remove_file(staged);
         return Err(match error {
             AppError::Provenance(detail) => AppError::Provenance(format!(
-                "{detail}; the download was deleted and nothing was imported from it"
+                "{detail}; the download was deleted and nothing was imported from it. If the pack \
+                 was published again since its manifest was fetched, fetch the manifest again"
             )),
             other => other,
         });
@@ -227,6 +312,7 @@ async fn fetch_file(
     client: &ApiClient,
     root: &Path,
     pack: &'static str,
+    revision: &str,
     directory: &Path,
     file: &PackFile,
 ) -> Result<(), AppError> {
@@ -263,7 +349,7 @@ async fn fetch_file(
         .map_err(|_| AppError::DataParsing(format!("{} is too large", file.path)))?;
     let staged = staged_name(&parent);
     client
-        .download_url_to_path_within(file_url(pack, relative)?, &staged, maximum_bytes)
+        .download_url_to_path_within(file_url(pack, revision, relative)?, &staged, maximum_bytes)
         .await?;
     let listed = file.clone();
     blocking("Verify data pack file", move || {
@@ -301,11 +387,16 @@ pub(crate) async fn fetch_files(
         ));
     }
     let planned = plan(&signed.manifest, &selection)?;
+    let revision_directory = directory.clone();
+    let revision = blocking("Read data pack revision", move || {
+        Ok(kept_revision(&revision_directory))
+    })
+    .await?;
     let client = client()?;
     let mut kept = Vec::new();
     let mut outcomes = Vec::new();
     for file in &planned {
-        match fetch_file(&client, &root, pack, &directory, file).await {
+        match fetch_file(&client, &root, pack, &revision, &directory, file).await {
             Ok(()) => kept.push(file.path.clone()),
             Err(error) => outcomes.push(DataPackImportOutcome {
                 path: file.path.clone(),
@@ -319,16 +410,31 @@ pub(crate) async fn fetch_files(
         }
     }
     if !kept.is_empty() {
-        outcomes.extend(
-            import_files(
-                repository,
-                directory,
-                inspected_manifest_sha256,
-                kept,
-                pinned,
-            )
-            .await?,
-        );
+        match import_files(
+            repository,
+            directory,
+            inspected_manifest_sha256,
+            kept.clone(),
+            pinned,
+        )
+        .await
+        {
+            Ok(imported) => outcomes.extend(imported),
+            // The downloads' own failures stay reported beside the import's.
+            Err(error) => {
+                outcomes.extend(planned.iter().filter(|file| kept.contains(&file.path)).map(
+                    |file| DataPackImportOutcome {
+                        path: file.path.clone(),
+                        table: file.table.clone(),
+                        year: file.year,
+                        retrieved_at: file.retrieved_at.clone(),
+                        result: None,
+                        already_stored: None,
+                        error: Some(error.to_string()),
+                    },
+                ))
+            }
+        }
     }
     outcomes.sort_by_key(|outcome| planned.iter().position(|file| file.path == outcome.path));
     Ok(outcomes)
@@ -405,12 +511,35 @@ mod tests {
         assert!(!staged.exists());
     }
 
+    /// The startup sweep removes unfinished downloads at any depth and nothing a kept pack holds.
+    #[test]
+    fn the_startup_sweep_removes_only_unfinished_downloads() {
+        let root = tempfile::tempdir().unwrap();
+        let kept = root
+            .path()
+            .join("san-diego-money/2026.10.7/originals/budget_funds");
+        std::fs::create_dir_all(&kept).unwrap();
+        let unfinished = [staged_name(root.path()), staged_name(&kept)];
+        let held = [
+            kept.join("budget_reference_funds_datasd.csv"),
+            kept.join("notes.partial"),
+            root.path().join("san-diego-money/2026.10.7/manifest.json"),
+        ];
+        for path in unfinished.iter().chain(&held) {
+            std::fs::write(path, b"x").unwrap();
+        }
+        remove_partial_downloads(root.path());
+        assert!(unfinished.iter().all(|path| !path.exists()));
+        assert!(held.iter().all(|path| path.exists()));
+    }
+
     /// Every address is the pack's repository plus the manifest's path, each part escaped, and a
     /// version or pack outside the closed lists is refused before any request.
     #[test]
     fn addresses_come_only_from_the_catalog_and_the_manifest() {
         let url = file_url(
             "san-diego-reports",
+            BRANCH,
             Path::new("originals/police_calls/a?b#c.csv"),
         )
         .unwrap();
@@ -419,6 +548,29 @@ mod tests {
             "https://huggingface.co/datasets/Writerslogic/onrecord-san-diego-reports/resolve/main/originals/police_calls/a%3Fb%23c.csv"
         );
         assert!(published_pack("san-diego-elsewhere").is_err());
+        // Files come from the commit the manifest was served from; anything else in that place
+        // of the address is not a commit and leaves the branch.
+        let commit = "1b67e0729f9e785269bdf7aae75ac38e7f99538f";
+        let served = format!("https://huggingface.co/api/resolve-cache/datasets/Writerslogic/onrecord-san-diego-money/{commit}/manifest.json?x=1");
+        assert_eq!(
+            served_revision("san-diego-money", &served).as_deref(),
+            Some(commit)
+        );
+        for other in [
+            served.replace("onrecord-san-diego-money", "onrecord-san-diego-reports"),
+            served.replace(commit, &commit[..39]),
+            served.replace(commit, &commit.to_uppercase()),
+            served.replace(commit, "main"),
+            "https://huggingface.co/datasets/Writerslogic/onrecord-san-diego-money/resolve/main/manifest.json".into(),
+        ] {
+            assert_eq!(served_revision("san-diego-money", &other), None, "{other}");
+        }
+        assert!(
+            file_url("san-diego-money", commit, Path::new("manifest.json"))
+                .unwrap()
+                .as_str()
+                .contains(&format!("/resolve/{commit}/manifest.json"))
+        );
         let root = Path::new("/packs");
         for version in ["..", "a/b", "", "/etc"] {
             assert!(
