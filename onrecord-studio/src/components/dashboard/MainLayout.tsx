@@ -333,8 +333,8 @@ export default function MainLayout() {
               <h3 id="evidence-requests-title" className="text-heading text-fg">Requests</h3>
             </div>
             {resultsTotal > results.length && (
-              <p role="status" className="border-b border-line px-4 py-2 text-caption text-muted">
-                Showing <span className="tabular-nums">{formatMatchCount(results.length)}</span> of <span className="tabular-nums">{formatMatchCount(resultsTotal)}</span> matches. More load as you scroll.
+              <p role="status" className="border-b border-line px-4 py-2 text-caption tabular-nums text-muted">
+                Showing {formatMatchCount(results.length)} of {formatMatchCount(resultsTotal)} matches. More load as you scroll.
               </p>
             )}
             {searchPaging?.nextCursor === null && results.length !== resultsTotal && (
