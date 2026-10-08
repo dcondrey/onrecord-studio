@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import EvidenceTimeline from '../charts/figures/EvidenceTimeline';
 import { isTauri } from '@tauri-apps/api/core';
 import { invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
@@ -10,7 +11,7 @@ import Badge from '../ui/Badge';
 import Button from '../ui/Button';
 import EmptyState from '../ui/EmptyState';
 import InlineError from '../ui/InlineError';
-import { Input, SearchField, Select } from '../ui/Field';
+import { Input, SearchField } from '../ui/Field';
 import MethodNote from '../ui/MethodNote';
 import Skeleton from '../ui/Skeleton';
 import type { Finding } from '../../types';
@@ -80,6 +81,9 @@ export default function CaseTimeline() {
   const [limit, setLimit] = useState(PAGE);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [lane, setLane] = useState<string | null>(null);
+  const [highlight, setHighlight] = useState<string | null>(null);
+  const [opened, setOpened] = useState<string | null>(null);
+  const [today] = useState(() => Date.now());
 
   const loadRequests = useCallback(async (): Promise<Loaded<null>> => {
     if (!isTauri()) return NOTHING;
@@ -118,9 +122,24 @@ export default function CaseTimeline() {
 
   const all = useMemo(() => SOURCES.flatMap((source) => sources[source].items), [sources.REQUEST.items, sources.FINDING.items, sources.WATCH.items, sources.CASE.items]);
   const view = useMemo(() => buildTimeline(all, { sources: shown, from, to, text, lane }), [all, shown, from, to, text, lane]);
+  // The overview ignores the date range, so brushing can widen it again; the list keeps every filter.
+  const overview = useMemo(() => buildTimeline(all, { sources: shown, from: '', to: '', text, lane }), [all, shown, text, lane]);
   const visible = view.items.slice(0, limit);
   const pending = SOURCES.filter((source) => !sources[source].loaded);
   const failed = SOURCES.filter((source) => sources[source].error);
+
+  /** A mark opens its list row: page far enough to render it, then move there. */
+  const openItem = (id: string) => {
+    const index = view.items.findIndex((item) => item.id === id);
+    if (index < 0) return;
+    if (index >= limit) setLimit(index + 1);
+    setOpened(id);
+    window.requestAnimationFrame(() => {
+      const row = document.getElementById(itemAnchor(id));
+      row?.scrollIntoView?.({ block: 'center', behavior: document.documentElement.dataset.motion === 'full' ? 'smooth' : 'auto' });
+      row?.focus({ preventScroll: true });
+    });
+  };
 
   const groups: { month: string; rows: TimelineItem[] }[] = [];
   for (const row of visible) {
@@ -178,17 +197,30 @@ export default function CaseTimeline() {
             <label className="flex items-center gap-2 text-caption text-muted">To
               <Input type="date" value={to} min={from || undefined} onChange={(event) => { setTo(event.target.value); setLimit(PAGE); }} className="w-40 tabular-nums" />
             </label>
-            <label className="flex items-center gap-2 text-caption text-muted">Lane
-              <Select value={lane ?? ''} disabled={caseLanes.length === 0} onChange={(event) => { setLane(event.target.value || null); setLimit(PAGE); }} className="w-44">
-                {!casework.loaded ? <option value="">Loading lanes…</option>
-                  : casework.error ? <option value="">Lanes not available</option>
-                    : caseLanes.length === 0 ? <option value="">No lanes</option>
-                      : <option value="">All lanes</option>}
-                {caseLanes.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-              </Select>
-            </label>
           </div>
         </div>
+
+        {(all.length > 0 || failed.length > 0) && (
+          <EvidenceTimeline
+            items={overview.items}
+            lanes={SOURCES.filter((source) => shown.has(source)).map((source) => ({
+              source,
+              state: sources[source].error ? 'failed' : sources[source].loaded ? 'ready' : 'loading',
+              cappedAt: sources[source].capped ? (source === 'FINDING' ? FINDING_LIMIT : WATCH_LIMIT) : null,
+            }))}
+            caseLanes={caseLanes}
+            contradictions={shown.has('CASE') ? contradictions : []}
+            listed={{ items: view.items, unreadable: view.unreadableDates }}
+            from={from}
+            to={to}
+            onRange={(nextFrom, nextTo) => { setFrom(nextFrom); setTo(nextTo); setLimit(PAGE); }}
+            activeLane={lane}
+            onLane={(id) => { setLane(id); setLimit(PAGE); }}
+            onOpen={openItem}
+            highlight={highlight}
+            today={today}
+          />
+        )}
 
         {failed.length > 0 && (
           <InlineError
@@ -197,31 +229,6 @@ export default function CaseTimeline() {
             onRetry={() => failed.forEach((source) => sources[source].retry())}
           />
         )}
-        {SOURCES.filter((source) => sources[source].capped).map((source) => (
-          <p key={source} role="status" className="text-caption text-warning">
-            Only the most recent {source === 'FINDING' ? FINDING_LIMIT : WATCH_LIMIT} {SOURCE_LABELS[source].toLowerCase()} are loaded; older ones are not shown.
-          </p>
-        ))}
-        {contradictions.length > 0 && (
-          <section aria-label="Date contradictions" className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-body text-warning">
-            <h3 className="text-heading">Two sources give different dates</h3>
-            <ul className="mt-1 space-y-1">
-              {contradictions.map((entry) => (
-                <li key={entry.id}>
-                  <span className="font-medium">{entry.subject}</span>
-                  <ul className="ml-4 list-disc">
-                    {entry.readings.map((reading) => <li key={reading.date}><Time value={reading.date} />: {reading.basis}</li>)}
-                  </ul>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-1">Both readings are shown as recorded. Resolving which is right needs a sourced record, not a choice here.</p>
-          </section>
-        )}
-        {view.unreadableDates > 0 && (
-          <p role="status" className="text-caption text-warning">{view.unreadableDates} item{view.unreadableDates === 1 ? ' has' : 's have'} a date that could not be read and {view.unreadableDates === 1 ? 'is' : 'are'} not shown.</p>
-        )}
-
         {pending.length > 0 && all.length > 0 && (
           <p role="status" className="text-caption text-muted">Still loading {listOf(pending.map((source) => SOURCE_LABELS[source].toLowerCase()))}…</p>
         )}
@@ -253,7 +260,14 @@ export default function CaseTimeline() {
               </div>
               <ol className="app-panel divide-y divide-line overflow-hidden">
                 {group.rows.map((row) => (
-                  <li key={row.id} className="px-4 py-3">
+                  <li
+                    key={row.id}
+                    id={itemAnchor(row.id)}
+                    tabIndex={-1}
+                    className={cn('px-4 py-3 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus', opened === row.id && 'bg-accent/10')}
+                    onPointerEnter={() => setHighlight(row.id)}
+                    onPointerLeave={() => setHighlight((current) => (current === row.id ? null : current))}
+                  >
                     <div className="flex flex-wrap items-center gap-2">
                       <Time value={row.at} className="text-caption font-medium text-fg-secondary" />
                       <Badge tone="neutral">{DATE_MEANING_LABELS[row.dateMeaning]}</Badge>
@@ -294,6 +308,8 @@ export default function CaseTimeline() {
     </div>
   );
 }
+
+const itemAnchor = (id: string) => `timeline-item-${id.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
 
 /** "2026-10" as "October 2026"; a key that is not a month is shown as recorded. */
 function monthLabel(key: string): string {
