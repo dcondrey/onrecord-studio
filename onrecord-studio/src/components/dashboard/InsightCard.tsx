@@ -18,11 +18,13 @@ const STRETCHED =
  * One lead or item that needs a reader's attention: badges, a one-line headline, who and when.
  * The badge row says what kind of item it is; only a counted statutory violation is solid.
  */
-export default function InsightCard({ badges, severity, headline, open, subject, time, meta, chips, actions, nested = false, className }: {
+export default function InsightCard({ badges, severity, headline, open, body, subject, time, meta, chips, actions, nested = false, className }: {
   badges: ReactNode;
   severity?: FindingSeverity;
   headline: string;
   open?: InsightTarget;
+  /** Supporting sentences under the headline. */
+  body?: ReactNode;
   /** A display name, never a raw portal key. */
   subject?: ReactNode;
   /** ISO instant; rendered as a short date in a <time>. Omitted when there is no date. */
@@ -62,6 +64,7 @@ export default function InsightCard({ badges, severity, headline, open, subject,
           headline
         )}
       </h4>
+      {body && <div className="space-y-1 text-body text-fg-secondary">{body}</div>}
       {(subject || time || meta) && (
         <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-caption text-muted">
           {subject && <span className="min-w-0 truncate">{subject}</span>}

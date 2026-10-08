@@ -49,7 +49,7 @@ describe('automatic discovery landing experience', () => {
     await screen.findByText(/These are starting questions/);
     fireEvent.click(screen.getByRole('button', { name: 'Choose housing reports' }));
     expect(bridge.stage).toHaveBeenCalledWith('https://www.rtfhsd.org/reports-data/');
-    fireEvent.click(screen.getByText(/Data upkeep & storage/));
+    fireEvent.click(screen.getByText(/^Storage/));
     fireEvent.change(await screen.findByLabelText('Original download retention'), { target: { value: 'REFERENCE_ONLY' } });
     expect(screen.getByText(/Original-file layout and forensic checks require the original bytes/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Save upkeep settings' }));
