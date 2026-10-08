@@ -4681,6 +4681,7 @@ mod tests {
             .await
             .expect("the rebuilt index must accept a registry import");
         assert_eq!(summary.record_count, 1);
+        drop(index);
         let connection = Connection::open(&path).expect("the rebuilt index must open");
         let stale: i64 = connection
             .query_row("SELECT COUNT(*) FROM corpus_entities", [], |row| row.get(0))
@@ -4719,6 +4720,7 @@ mod tests {
             .index_document(input(1, "Adopted as Resolution No. 2024-011."))
             .await
             .expect("the rebuilt index must store a series number");
+        drop(index);
         let connection = Connection::open(&path).expect("the rebuilt index must open");
         let stored: i64 = connection
             .query_row(
@@ -4918,6 +4920,7 @@ mod tests {
             .expect("a corpus stamped with the previous version must be rebuilt, not fail to open");
         let status = index.status().await.expect("status must read");
         assert_eq!(status.indexed_document_count, 0);
+        drop(index);
 
         let connection = Connection::open(&path).expect("the rebuilt index must open");
         let stale_rows: i64 = connection
@@ -4987,6 +4990,12 @@ mod tests {
         let status = index.status().await.expect("status must read");
         // Discarded rather than migrated: the core is canonical and reconciliation refills this.
         assert_eq!(status.indexed_document_count, 0);
+        // And the rebuilt index accepts writes, not merely opens.
+        index
+            .index_document(input(1, "Section 6254 requires records review."))
+            .await
+            .expect("the rebuilt index must accept writes");
+        drop(index);
         let sentinel_survived: bool = Connection::open(&path)
             .expect("the rebuilt index must open")
             .query_row(
@@ -4999,12 +5008,6 @@ mod tests {
             !sentinel_survived,
             "the outdated index file must be replaced, not have its known tables dropped"
         );
-
-        // And the rebuilt index accepts writes, not merely opens.
-        index
-            .index_document(input(1, "Section 6254 requires records review."))
-            .await
-            .expect("the rebuilt index must accept writes");
     }
 
     /// Typed edges are directed, so their entity ids are in no particular order. The table once
@@ -5229,6 +5232,7 @@ mod tests {
             )
             .expect("the widened relationship_kind CHECK must admit SIGNED_BY, PROMISES, and NULL temporals");
 
+        drop(connection);
         // Read back through the code path the UI uses, so the SELECT and the deserializer are
         // covered end-to-end.
         let index = CorpusIndex::open(&path).expect("the index must reopen");
