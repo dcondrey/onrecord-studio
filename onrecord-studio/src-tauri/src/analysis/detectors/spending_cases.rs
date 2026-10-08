@@ -98,10 +98,8 @@ fn policy_rules(documents: &[PublicDocument]) -> Vec<(PolicyRule, String)> {
         if classify(document.file_name.as_deref(), &document.text) != Some(DocumentClass::Policy) {
             continue;
         }
-        let Some(effective) = document
-            .stated_effective_date()
-            .or_else(|| document.posted_date())
-        else {
+        let stated = document.stated_effective_date();
+        let Some(effective) = stated.or_else(|| document.posted_date()) else {
             continue;
         };
         let name = document.name();

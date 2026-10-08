@@ -84,6 +84,7 @@ fn registry() -> Vec<(&'static str, Run)> {
         practice_departure,
         budget_line_comparison,
         rolling_production,
+        release_timing,
         correlated_findings,
     ];
     registry.insert(
