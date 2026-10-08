@@ -1,4 +1,6 @@
-import DialogBackdrop from '../ui/DialogBackdrop';
+import Dialog, { DialogHeader } from '../ui/Dialog';
+import InlineError from '../ui/InlineError';
+import { Select, Textarea } from '../ui/Field';
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
@@ -237,14 +239,10 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
   };
 
   return (
-    <DialogBackdrop labelledBy="legal-library-title" onClose={onClose} className="app-backdrop fixed inset-0 z-[70] grid place-items-center p-6 backdrop-blur-sm">
-      <div className="grid h-[min(860px,92vh)] w-[min(1380px,96vw)] grid-cols-[360px_minmax(0,1fr)] overflow-hidden rounded-2xl border border-line-strong bg-canvas shadow-2xl shadow-black/60">
-        <aside className="flex min-h-0 flex-col border-r border-line bg-surface">
-          <div className="flex h-14 items-center border-b border-line px-5">
-            <h2 id="legal-library-title" className="text-title text-fg">
-              Legal authorities
-            </h2>
-          </div>
+    <Dialog size="xl" onClose={onClose} className="h-[calc(100vh-4rem)] max-w-[min(1380px,96vw)]">
+      <DialogHeader title="Legal authorities" description="Statutes, ordinances and policies the compliance checks read. Each import is an immutable, content-addressed version." />
+      <div className="grid min-h-0 flex-1 grid-cols-[300px_minmax(0,1fr)] border-t border-line xl:grid-cols-[340px_minmax(0,1fr)]">
+        <aside aria-label="Indexed authorities" className="flex min-h-0 flex-col border-r border-line">
           <div className="min-h-0 flex-1 overflow-y-auto p-3">
             {isLoading ? (
               <div className="space-y-2">
@@ -252,15 +250,14 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
                 <Skeleton variant="card" label="" className="hidden sm:block" />
               </div>
             ) : listError ? (
-              <div role="alert" className="rounded-lg border border-danger/30 bg-danger/10 p-4 text-body text-danger">
-                <p>Authorities could not be read. This does not mean none are indexed.</p>
-                <p className="mt-1 break-words text-caption">{listError}</p>
-                <Button size="sm" onClick={() => setListRevision((value) => value + 1)} className="focus-ring mt-3">Retry</Button>
-              </div>
+              <InlineError
+                summary={`Authorities could not be read. This does not mean none are indexed. ${listError}`}
+                onRetry={() => setListRevision((value) => value + 1)}
+              />
             ) : authorities.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-line p-4 text-label leading-relaxed text-muted">
-                No authorities are indexed yet.
-              </div>
+              <p className="rounded-lg border border-dashed border-line p-4 text-body text-muted">
+                No authorities are indexed yet. Index one with the form beside this list.
+              </p>
             ) : (
               <div className="space-y-2">
                 {authorities.map((authority) => (
@@ -292,43 +289,27 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
           </div>
         </aside>
 
-        <section className="flex min-h-0 flex-col">
-          <div className="flex items-center justify-between border-b border-line px-5 py-3">
-            <div>
-              <h3 className="text-label leading-4 font-semibold text-fg">Index an authority</h3>
-              <p className="mt-0.5 text-caption text-muted">
-                Markdown headings and legal section labels become independently searchable provisions.
-              </p>
-            </div>
-            <button
-              type="button"
-              autoFocus
-              onClick={onClose}
-              className={buttonClass({ size: "sm", className: "focus-ring" })}
-            >
-              Close
-            </button>
-          </div>
+        <section className="flex min-h-0 flex-col overflow-y-auto">
+          {selectedStatuteId && <AuthorityVersionWorkspace citation={authorities.find((authority) => authority.statuteId === selectedStatuteId)?.statuteCitation ?? selectedStatuteId} versions={versions} leftVersionId={leftVersionId} rightVersionId={rightVersionId} leftVersion={leftVersion?.version.versionId === leftVersionId ? leftVersion : null} rightVersion={rightVersion?.version.versionId === rightVersionId ? rightVersion : null} error={versionError} onLeftChange={setLeftVersionId} onRightChange={setRightVersionId} />}
 
-          {selectedStatuteId && <AuthorityVersionWorkspace versions={versions} leftVersionId={leftVersionId} rightVersionId={rightVersionId} leftVersion={leftVersion?.version.versionId === leftVersionId ? leftVersion : null} rightVersion={rightVersion?.version.versionId === rightVersionId ? rightVersion : null} error={versionError} onLeftChange={setLeftVersionId} onRightChange={setRightVersionId} />}
-
-          <form onSubmit={(event) => void submit(event)} className="min-h-0 flex-1 overflow-y-auto p-5">
+          <form onSubmit={(event) => void submit(event)} className="p-5" aria-labelledby="index-authority-heading">
+            <h3 id="index-authority-heading" className="text-heading text-fg">Index an authority</h3>
+            <p className="mb-4 mt-1 text-caption text-muted">
+              Markdown headings and legal section labels become independently searchable provisions.
+            </p>
             <div className="grid grid-cols-2 gap-3">
               <TextField label="Stable authority ID" value={editor.statuteId} onChange={(value) => updateEditor('statuteId', value)} required />
               <TextField label="Jurisdiction" value={editor.jurisdiction} onChange={(value) => updateEditor('jurisdiction', value)} required />
               <TextField label="Citation" value={editor.statuteCitation} onChange={(value) => updateEditor('statuteCitation', value)} required />
               <TextField label="Title" value={editor.title} onChange={(value) => updateEditor('title', value)} required />
-              <label className="block">
-                <span className="text-control text-fg-secondary">Authority type</span>
-                <select value={editor.authorityKind} onChange={(event) => updateEditor('authorityKind', event.target.value as LegalAuthorityKind)} className={controlClass}>
-                  <option value="STATE_STATUTE">State statute</option>
-                  <option value="MUNICIPAL_ORDINANCE">Municipal ordinance</option>
-                  <option value="AGENCY_POLICY">Agency policy</option>
-                  <option value="PROCEDURE_MANUAL">Procedure manual</option>
-                  <option value="REGULATION">Regulation</option>
-                  <option value="OTHER">Other authority</option>
-                </select>
-              </label>
+              <Select label="Authority type" value={editor.authorityKind} onChange={(event) => updateEditor('authorityKind', event.target.value as LegalAuthorityKind)} className="focus-ring">
+                <option value="STATE_STATUTE">State statute</option>
+                <option value="MUNICIPAL_ORDINANCE">Municipal ordinance</option>
+                <option value="AGENCY_POLICY">Agency policy</option>
+                <option value="PROCEDURE_MANUAL">Procedure manual</option>
+                <option value="REGULATION">Regulation</option>
+                <option value="OTHER">Other authority</option>
+              </Select>
               <TextField label="Calendar-day deadline" value={editor.mandatedDeadlineDays} onChange={(value) => updateEditor('mandatedDeadlineDays', value)} type="number" min="0" max="36500" />
               <TextField label="Official HTTPS source" value={editor.canonicalSourceUri} onChange={(value) => updateEditor('canonicalSourceUri', value)} type="url" />
               <div className="grid grid-cols-2 gap-3">
@@ -337,65 +318,62 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
               </div>
             </div>
 
-            <div className="mt-4 rounded-xl border border-line bg-surface/40 p-4">
-              <div className="flex items-center justify-between gap-3">
+            <div className="mt-5">
+              <div className="flex items-end justify-between gap-3">
                 <div>
-                  <div className="text-caption font-semibold text-fg-secondary">Legislative or policy text</div>
+                  <div className="text-control text-fg-secondary">Legislative or policy text<span aria-hidden="true"> *</span></div>
                   <div className="mt-0.5 text-caption text-muted">UTF-8 Markdown or plain text, up to 8 MiB</div>
                 </div>
-                <label className="rounded-md border border-highlight/30 bg-highlight/10 px-2.5 py-1.5 text-caption font-semibold text-highlight transition hover:bg-highlight/20">
+                <label className={buttonClass({ size: 'sm', className: 'cursor-pointer focus-within:ring-2 focus-within:ring-focus' })}>
                   Choose source file
                   <input ref={fileInput} type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" onChange={(event) => void loadFile(event)} className="sr-only" />
                 </label>
               </div>
               {sourceFileName && (
-                <div className="mt-2 font-mono text-caption text-success">
-                  {sourceFileName} · {editor.rawText.length.toLocaleString()} characters loaded
+                <div className="mt-2 text-caption tabular-nums text-success">
+                  <span className="font-mono">{sourceFileName}</span> · {editor.rawText.length.toLocaleString()} characters loaded
                 </div>
               )}
-              <textarea
+              <Textarea
                 value={editor.rawText}
                 onChange={(event) => updateEditor('rawText', event.target.value)}
                 required
                 rows={8}
                 aria-label="Legal source text"
-                className={`${controlClass} mt-3 resize-y font-mono leading-relaxed`}
+                className="focus-ring mt-2 min-h-40 font-mono text-code"
               />
             </div>
 
-            <div className="mt-4">
-              <div className="flex items-center justify-between">
+            <div className="mt-5">
+              <div className="flex items-end justify-between gap-3">
                 <div>
-                  <div className="text-caption font-semibold text-fg-secondary">Policy evidence rules</div>
+                  <div className="text-control text-fg-secondary">Policy evidence rules</div>
                   <p className="mt-0.5 text-caption text-muted">Optional. Phrase sequences are tokenized, stemmed, and matched on word boundaries.</p>
                 </div>
-                <button type="button" onClick={() => setMandates((current) => [...current, emptyMandate()])} className="rounded-md border border-control px-2.5 py-1.5 text-caption font-semibold text-muted transition hover:border-control hover:text-fg">
+                <Button size="sm" onClick={() => setMandates((current) => [...current, emptyMandate()])} className="focus-ring">
                   Add evidence rule
-                </button>
+                </Button>
               </div>
               <div className="mt-3 space-y-3">
                 {mandates.map((mandate, index) => (
                   <div key={mandate.key} className="rounded-xl border border-line bg-surface/40 p-4">
                     <div className="flex items-center justify-between">
                       <span className="text-overline uppercase text-muted">Evidence rule {index + 1}</span>
-                      <button type="button" onClick={() => setMandates((current) => current.filter((_, position) => position !== index))} className="text-caption font-semibold text-danger hover:text-danger">Remove</button>
+                      <Button variant="ghost" size="sm" onClick={() => setMandates((current) => current.filter((_, position) => position !== index))} className="focus-ring text-danger hover:bg-danger/10 hover:text-danger">Remove</Button>
                     </div>
                     <div className="mt-3 grid grid-cols-[1fr_1.5fr_140px] gap-3">
                       <TextField label="Rule ID" value={mandate.mandateId} onChange={(value) => updateMandate(index, 'mandateId', value)} required />
                       <TextField label="Rule title" value={mandate.title} onChange={(value) => updateMandate(index, 'title', value)} required />
-                      <label className="block">
-                        <span className="text-control text-fg-secondary">Severity</span>
-                        <select value={mandate.severity} onChange={(event) => updateMandate(index, 'severity', event.target.value as LegalMandateSeverity)} className={controlClass}>
-                          <option value="ADVISORY">Advisory</option>
-                          <option value="MODERATE">Moderate</option>
-                          <option value="HIGH">High</option>
-                          <option value="CRITICAL">Critical</option>
-                        </select>
-                      </label>
+                      <Select label="Severity" value={mandate.severity} onChange={(event) => updateMandate(index, 'severity', event.target.value as LegalMandateSeverity)} className="focus-ring">
+                        <option value="ADVISORY">Advisory</option>
+                        <option value="MODERATE">Moderate</option>
+                        <option value="HIGH">High</option>
+                        <option value="CRITICAL">Critical</option>
+                      </Select>
                     </div>
                     <label className="mt-3 block">
                       <span className="text-control text-fg-secondary">Rule rationale</span>
-                      <textarea value={mandate.description} onChange={(event) => updateMandate(index, 'description', event.target.value)} required rows={2} className={`${controlClass} resize-y`} />
+                      <Textarea value={mandate.description} onChange={(event) => updateMandate(index, 'description', event.target.value)} required rows={2} className="focus-ring mt-1.5" />
                     </label>
                     <div className="mt-3 grid grid-cols-2 gap-3">
                       <PhraseField label="Applicability phrases" value={mandate.applicabilityText} onChange={(value) => updateMandate(index, 'applicabilityText', value)} />
@@ -411,28 +389,30 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
                 {error ?? success}
               </div>
             )}
-            <div className="mt-5 flex items-center justify-between border-t border-line pt-4">
-              <p className="max-w-lg text-caption leading-relaxed text-muted">
+            <div className="mt-5 flex items-center justify-between gap-4 border-t border-line pt-4">
+              <p className="max-w-lg text-caption text-muted">
                 Imports are content-addressed. Reimporting changed text creates a new immutable version while retaining prior findings and review history.
               </p>
-              <button type="submit" disabled={isImporting} className="rounded-lg border border-highlight/30 bg-highlight/20 px-4 py-2 text-caption font-semibold text-highlight transition hover:bg-highlight/20 disabled:cursor-wait disabled:opacity-60">
+              <Button type="submit" variant="primary" disabled={isImporting} className="focus-ring">
                 {isImporting ? 'Parsing and indexing…' : 'Index authority'}
-              </button>
+              </Button>
             </div>
           </form>
         </section>
       </div>
-    </DialogBackdrop>
+    </Dialog>
   );
 }
 
-function AuthorityVersionWorkspace({ versions, leftVersionId, rightVersionId, leftVersion, rightVersion, error, onLeftChange, onRightChange }: { versions: LegalAuthorityVersionSummary[]; leftVersionId: string | null; rightVersionId: string | null; leftVersion: LegalAuthorityVersionDetail | null; rightVersion: LegalAuthorityVersionDetail | null; error: string | null; onLeftChange: (value: string) => void; onRightChange: (value: string) => void }) {
-  const changes = leftVersion && rightVersion ? compareAuthorityText(leftVersion.fullText, rightVersion.fullText) : null;
+function AuthorityVersionWorkspace({ citation, versions, leftVersionId, rightVersionId, leftVersion, rightVersion, error, onLeftChange, onRightChange }: { citation: string; versions: LegalAuthorityVersionSummary[]; leftVersionId: string | null; rightVersionId: string | null; leftVersion: LegalAuthorityVersionDetail | null; rightVersion: LegalAuthorityVersionDetail | null; error: string | null; onLeftChange: (value: string) => void; onRightChange: (value: string) => void }) {
+  // A comparison needs two versions; with one there is nothing to count, not zero changes.
+  const changes = versions.length > 1 && leftVersion && rightVersion ? compareAuthorityText(leftVersion.fullText, rightVersion.fullText) : null;
   return (
-    <section className="border-b border-line bg-surface/40 px-5 py-3" aria-label="Authority version comparison">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <div className="text-caption font-semibold text-fg-secondary">
+    <section className="border-b border-line bg-raised/40 px-5 py-4" aria-label="Authority version comparison">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="truncate text-heading text-fg">{citation}</h3>
+          <div className="mt-0.5 text-caption text-fg-secondary">
             Effective-date timeline and immutable text comparison
           </div>
           <div className="mt-0.5 text-caption text-muted">
@@ -479,7 +459,7 @@ function AuthorityVersionWorkspace({ versions, leftVersionId, rightVersionId, le
                 <select
                   value={selected ?? ''}
                   onChange={(event) => change(event.target.value)}
-                  className="focus-ring ml-2 h-7 rounded-md border border-control bg-canvas px-2 text-caption text-fg-secondary"
+                  className="focus-ring ml-2 h-7 rounded-md border border-control bg-canvas px-2 text-caption tabular-nums text-fg-secondary"
                 >
                   {versions.map((version) => (
                     <option key={version.versionId} value={version.versionId}>
