@@ -3,6 +3,9 @@ import { invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { EvidenceLink, LeadDossier, ProvenanceVerificationRecord } from '../../types';
 import { cn } from '../../utils/cn';
+import { clipPassage } from '../../utils/passage';
+import { leadProse } from '../../utils/tableLeadSources';
+import DigestCopy from '../ui/DigestCopy';
 import Icon, { type IconName } from '../ui/icons';
 import ObjectLink from './ObjectLink';
 import { claimBasisLabel, confidenceLabel, findingKindLabel, formatShortDate, provenanceVerdict, severityLabel, severityTone } from './labels';
@@ -20,11 +23,13 @@ export default function EvidenceChain({ dossier }: { dossier: LeadDossier }) {
   const { finding, evidence, evidenceTruncated } = dossier;
   const provenance = useProvenance(evidence);
   const tone = severityTone(finding.severity);
+  const prose = leadProse(finding.explanation).trim();
   return (
     <ol aria-label="Evidence chain" className="relative space-y-0">
       <ChainNode icon="flag" tone={tone} title={`${severityLabel(finding.severity)} · ${findingKindLabel(finding.kind)}`} caption={claimBasisLabel(finding.kind)}>
         <p className="font-semibold text-fg">{finding.headline}</p>
-        <p className="mt-1 text-muted">{finding.explanation}</p>
+        {/* A table lead's tables and query follow its prose; they are listed apart, in full. */}
+        {prose && <p className="mt-1 whitespace-pre-line text-muted [overflow-wrap:anywhere]">{prose}</p>}
       </ChainNode>
       <ChainNode icon="sliders" tone={finding.confidence.kind === 'MEASURED' ? 'accent' : 'muted'} title="Basis" caption={confidenceLabel(finding.confidence)}>
         <p className="text-muted">
@@ -47,7 +52,7 @@ export default function EvidenceChain({ dossier }: { dossier: LeadDossier }) {
           >
             <SourceLink link={link} />
             {link.quote
-              ? <blockquote className="mt-1.5 border-l-2 border-accent/40 pl-2 text-fg-secondary">“{link.quote}”</blockquote>
+              ? <blockquote className="mt-1.5 border-l-2 border-accent/40 pl-2 text-fg-secondary">“{clipPassage(link.quote)}”</blockquote>
               : <p className="mt-1.5 text-muted">No quoted passage was recorded for this citation.</p>}
             <DigestLine link={link} provenance={provenance.get(provenanceKey(link))} />
           </ChainNode>
@@ -103,16 +108,16 @@ function SourceLink({ link }: { link: EvidenceLink }) {
 }
 
 function DigestLine({ link, provenance }: { link: EvidenceLink; provenance: ProvenanceState | undefined }) {
-  const digest = link.rawFileSha256
-    ? <span>SHA-256 <span className="font-mono">{link.rawFileSha256.slice(0, 12)}…</span> recorded at capture</span>
-    : <span className="text-warning">No capture digest recorded</span>;
   return (
-    <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-caption text-muted">
-      <Icon name="shield" className="h-3 w-3" />
-      {digest}
-      <span aria-hidden="true">·</span>
-      <ProvenanceLabel state={provenance} />
-    </p>
+    <div className="mt-1.5 text-caption text-muted">
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+        <Icon name="shield" className="h-3 w-3" />
+        {link.rawFileSha256 ? <span>Digest recorded at capture</span> : <span className="text-warning">No capture digest recorded</span>}
+        <span aria-hidden="true">·</span>
+        <ProvenanceLabel state={provenance} />
+      </p>
+      {link.rawFileSha256 && <DigestCopy sha256={link.rawFileSha256} className="mt-0.5 pl-5" />}
+    </div>
   );
 }
 

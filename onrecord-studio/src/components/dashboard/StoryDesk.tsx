@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
@@ -14,7 +14,14 @@ import InlineError from '../ui/InlineError';
 import SeverityGlyph from './SeverityGlyph';
 import { findingToBriefingEvidence } from './BriefingWorkspace';
 import FindingsInbox from './FindingsInbox';
-import PageHeader from '../ui/PageHeader';
+import MethodNote from '../ui/MethodNote';
+import { comparisonHeadline, comparisonOf, COUNTED_FACTOR, EVIDENCE_FACTOR, FACTOR_ORDER, FACTOR_SCALE_MAX_BP, FACTOR_SHORT, factorLabel, factorPoints, isKnownFactor, points } from '../../utils/attentionFactors';
+import { useRankedLeads } from '../../hooks/useRankedLeads';
+import Masthead from '../workbench/Masthead';
+import LeadCard from '../workbench/LeadCard';
+import LeadDetail from '../workbench/LeadDetail';
+import Workbench, { LeadQueue, Pane, QueueSkeleton, useWorkbenchQueue } from '../workbench/Workbench';
+import { PendingDetail } from '../workbench/OverviewWorkbench';
 import EmptyState from '../ui/EmptyState';
 import ObjectLink from '../objects/ObjectLink';
 import { openSourceConnector } from './sourceEvents';
@@ -23,27 +30,20 @@ import CaseScopeBar from './CaseScopeBar';
 import { useCaseScope } from '../../hooks/useCaseScope';
 import { cn } from '../../utils/cn';
 import ArtifactDrafts from './ArtifactDrafts';
+import StoredLeadFigure from './StoredLeadFigure';
 import BarTable, { type BarTableColumn, type BarTableRow } from '../charts/figures/BarTable';
 import { absent, measured } from '../charts/core/nulls';
-
-type DeskState =
-  | { status: 'PENDING' }
-  | { status: 'READY'; leads: StoryLead[] }
-  | { status: 'FAILED'; message: string };
 
 /**
  * Findings ordered by observable public-interest factors. The score is a ranking heuristic over
  * facts the detectors recorded; every factor shows the fact behind it, and none of it is a claim
  * about the record. Pattern signals stay labelled as such; only a counted violation may say so.
+ * The ranking is the one the overview queues, read once through useRankedLeads.
  */
 export default function StoryDesk() {
-  const [state, setState] = useState<DeskState>({ status: 'PENDING' });
   // Keyed by lead, so the outcome shows beside the button that caused it.
   const [notices, setNotices] = useState<Record<string, { text: string; failed: boolean }>>({});
-  const [refreshing, setRefreshing] = useState(false);
-  const gate = useLatestRequestGate();
   const briefingGate = useLatestRequestGate();
-  const findingsRefreshRequests = useAppStore((s) => s.findingsRefreshRequests);
   const setActivePortal = useAppStore((s) => s.setActivePortal);
   const setSearchFilters = useAppStore((s) => s.setSearchFilters);
   const setWorkspaceView = useAppStore((s) => s.setWorkspaceView);
@@ -55,40 +55,13 @@ export default function StoryDesk() {
   const fetchingCoreData = useFirstRunDataStore((s) => s.running);
   // A schema that has not loaded, or failed to load, is not an empty library.
   const noTables = discovery?.schema?.datasets.length === 0;
-  const [mode, setMode] = useState<'ranked' | 'all'>('ranked');
+  const [mode, setMode] = useState<'ranked' | 'table' | 'all'>('ranked');
   const since = useSinceInstant();
   const setSincePreset = useAppStore((s) => s.setSincePreset);
   const caseScope = useCaseScope();
-  const visibleLeads = useMemo(
-    () => state.status === 'READY'
-      ? state.leads.filter((lead) => (!since || lead.firstSeenAt > since) && (caseScope.status !== 'ready' || caseScope.value.findingIds.has(lead.findingId)))
-      : [],
-    [caseScope, since, state],
-  );
-
-  const load = useCallback(() => {
-    const token = gate.begin();
-    // A refresh keeps the ranked list on screen, so the page neither collapses nor loses its place.
-    setState((current) => (current.status === 'READY' ? current : { status: 'PENDING' }));
-    setRefreshing(true);
-    invokeCommand('list_story_leads', { limit: 100 })
-      .then((leads) => {
-        if (!gate.isCurrent(token)) return;
-        setState({ status: 'READY', leads });
-      })
-      .catch((reason) => {
-        if (!gate.isCurrent(token)) return;
-        setState({ status: 'FAILED', message: formatNativeError(reason) });
-      })
-      .finally(() => {
-        if (gate.isCurrent(token)) setRefreshing(false);
-      });
-  }, [gate]);
-
-  useEffect(() => {
-    load();
-    return gate.invalidate;
-  }, [findingsRefreshRequests, gate, load]);
+  const ranked = useRankedLeads();
+  const visibleLeads = ranked.leads;
+  const refreshing = ranked.refreshing;
 
   const inspect = useCallback(
     (lead: StoryLead) => {
@@ -124,39 +97,76 @@ export default function StoryDesk() {
     [addBriefingEvidence, briefingGate],
   );
 
-  const hasLeads = state.status === 'READY' && state.leads.length > 0;
+  const hasLeads = ranked.status === 'ready' && ranked.total > 0;
   // While the load has failed, the error's own Try again is the one retry on screen.
-  const showRefresh = mode === 'all' || state.status === 'PENDING' || hasLeads;
+  const showRefresh = mode === 'all' || ranked.status === 'pending' || hasLeads;
+  const isRanked = mode !== 'all';
+  const workbench = mode === 'ranked' && (ranked.status === 'pending' || visibleLeads.length > 0);
+
+  const renderDetail = (lead: StoryLead) => (
+    <div className="flex flex-col gap-3">
+      <FamilyBadge family={findingFamily(lead.kind)} />
+      <StoredLeadFigure findingId={lead.findingId} fallback={null} />
+      <LeadDraftButton findingId={lead.findingId} headline={lead.headline} />
+      <ul className="grid gap-1 text-caption text-fg-secondary" aria-label="Ranking factors">
+        {lead.publicInterest.factors.map((factor) => (
+          <li key={factor.name}>
+            <span className="font-medium text-fg">{factorLabel(factor.name)}</span>{' '}
+            <span className="tabular-nums">+{(factor.basisPoints / 100).toFixed(0)}</span>
+            <span className="text-muted"> · {factor.evidence}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" onClick={() => openLeadDossier(lead.findingId)} aria-label={`Open evidence chain: ${lead.headline}`}>
+          Open evidence chain
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => inspect(lead)}>Inspect records</Button>
+        <Button size="sm" variant="ghost" onClick={() => void addToBriefing(lead)}>Add to briefing</Button>
+        {lead.relatedFindingIds.length > 0 && (
+          <span className="text-caption tabular-nums text-muted">
+            {lead.relatedFindingIds.length} related finding{lead.relatedFindingIds.length === 1 ? '' : 's'} on the same subject
+          </span>
+        )}
+        <Notice notice={notices[lead.findingId]} />
+      </div>
+    </div>
+  );
 
   return (
     <main className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto w-full max-w-6xl space-y-6 px-4 pb-10 pt-6 md:px-6">
-        <PageHeader
+      <div className={cn('mx-auto flex w-full flex-col gap-3 px-3 pt-4 md:px-4', workbench ? 'h-full min-h-[36rem] max-w-content pb-3' : 'max-w-content pb-10')}>
+        <Masthead
+          overline="Story desk"
           title="What the records point to"
-          summary="Findings ranked by what the records show, with every claim one click from its source."
-          method={<>
-            The ranking weighs money at stake, how many documents, requests and agencies repeat the
-            pattern, a record contradicting a statement, a counted violation, evidence strength and
-            freshness. The score ranks attention; it is not a measure of newsworthiness and not a claim
-            about any record. Only a counted violation is a legal claim; everything else is a pattern signal.
-          </>}
-          actions={<>
+          aside={(
+            <MethodNote label="How to read this">
+              The ranking weighs money at stake, how many documents, requests and agencies repeat the
+              pattern, a record contradicting a statement, a counted violation, evidence strength and
+              freshness. The score ranks attention; it is not a measure of newsworthiness and not a claim
+              about any record. Only a counted violation is a legal claim; everything else is a pattern signal.
+            </MethodNote>
+          )}
+          tabs={(
             <SegmentedControl
               label="Story desk view"
               mode="tabs"
+              size="sm"
               value={mode}
               onChange={setMode}
               panelId={() => 'story-desk-panel'}
-              options={[{ value: 'ranked', label: 'Ranked leads' }, { value: 'all', label: 'All findings' }]}
+              options={[{ value: 'ranked', label: 'Ranked leads' }, { value: 'table', label: 'Factor table' }, { value: 'all', label: 'All findings' }]}
             />
-            {mode === 'ranked' && (hasLeads || state.status === 'PENDING') && <SinceControl disabled={state.status === 'PENDING'} />}
+          )}
+          actions={<>
+            {isRanked && (hasLeads || ranked.status === 'pending') && <SinceControl disabled={ranked.status === 'pending'} />}
             {showRefresh && (
               <Button
-                className="min-w-[7rem]"
-                disabled={mode === 'ranked' && (refreshing || state.status === 'PENDING')}
-                onClick={mode === 'ranked' ? load : requestFindingsRefresh}
+                className="min-w-[6.5rem]"
+                disabled={isRanked && (refreshing || ranked.status === 'pending')}
+                onClick={requestFindingsRefresh}
               >
-                {mode === 'ranked' && state.status === 'PENDING' ? 'Loading…' : mode === 'ranked' && refreshing ? 'Refreshing…' : 'Refresh'}
+                {isRanked && ranked.status === 'pending' ? 'Loading…' : isRanked && refreshing ? 'Refreshing…' : 'Refresh'}
               </Button>
             )}
           </>}
@@ -164,9 +174,14 @@ export default function StoryDesk() {
 
         <CaseScopeBar state={caseScope} noun={mode === 'all' ? 'findings' : 'leads'} />
 
-        <div id="story-desk-panel" role="tabpanel" aria-label={mode === 'ranked' ? 'Ranked leads' : 'All findings'} className="space-y-4">
+        <div
+          id="story-desk-panel"
+          role="tabpanel"
+          aria-label={mode === 'ranked' ? 'Ranked leads' : mode === 'table' ? 'Factor table' : 'All findings'}
+          className={cn(workbench ? 'flex min-h-0 flex-1 flex-col' : 'space-y-4')}
+        >
         {mode === 'all' ? <FindingsInbox /> : <>
-        {state.status === 'PENDING' && (
+        {mode === 'table' && ranked.status === 'pending' && (
           <div role="status" aria-busy="true" className="space-y-3">
             <span className="sr-only">Ranking leads…</span>
             {[0, 1, 2].map((card) => (
@@ -179,20 +194,20 @@ export default function StoryDesk() {
             ))}
           </div>
         )}
-        {state.status === 'FAILED' && (
+        {ranked.status === 'failed' && (
           <InlineError
             summary="Leads couldn’t be loaded. The local evidence store is busy; try again in a moment."
-            detail={state.message}
-            onRetry={load}
+            detail={ranked.message}
+            onRetry={requestFindingsRefresh}
           />
         )}
-        {state.status === 'READY' && state.leads.length > 0 && visibleLeads.length < state.leads.length && (
+        {mode === 'table' && hasLeads && visibleLeads.length < ranked.total && (
           <p role="status" className="text-body text-muted">
-            Showing <span className="tabular-nums">{visibleLeads.length.toLocaleString()}</span> of <span className="tabular-nums">{state.leads.length.toLocaleString()}</span> leads{since ? ' first seen in this window' : ''}{caseScope.status === 'ready' ? ' in the active case' : ''}.{' '}
+            Showing <span className="tabular-nums">{visibleLeads.length.toLocaleString()}</span> of <span className="tabular-nums">{ranked.total.toLocaleString()}</span> leads{since ? ' first seen in this window' : ''}{caseScope.status === 'ready' ? ' in the active case' : ''}.{' '}
             {since && <Button variant="link" onClick={() => setSincePreset('all')}>Any time</Button>}
           </p>
         )}
-        {state.status === 'READY' && state.leads.length === 0 && (
+        {ranked.status === 'ready' && ranked.total === 0 && (
           savedSourceCount === 0 && noTables ? (
             <EmptyState
               icon="flag"
@@ -231,44 +246,25 @@ export default function StoryDesk() {
             />
           )
         )}
-        {state.status === 'READY' && visibleLeads.length > 0 && (
-          <RankedLeads
-            leads={visibleLeads}
-            allLeads={state.leads}
-            busy={refreshing}
-            renderDetail={(lead) => (
-              <div className="flex flex-col gap-3">
-                <FamilyBadge family={findingFamily(lead.kind)} />
-                <ul className="grid gap-1 text-caption text-fg-secondary" aria-label="Ranking factors">
-                  {lead.publicInterest.factors.map((factor) => (
-                    <li key={factor.name}>
-                      <span className="font-medium text-fg">{factorLabel(factor.name)}</span>{' '}
-                      <span className="tabular-nums">+{(factor.basisPoints / 100).toFixed(0)}</span>
-                      <span className="text-muted"> · {factor.evidence}</span>
-                    </li>
-                  ))}
-                </ul>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button size="sm" onClick={() => openLeadDossier(lead.findingId)} aria-label={`Open evidence chain: ${lead.headline}`}>
-                    Open evidence chain
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => inspect(lead)}>Inspect records</Button>
-                  <Button size="sm" variant="ghost" onClick={() => void addToBriefing(lead)}>Add to briefing</Button>
-                  {lead.relatedFindingIds.length > 0 && (
-                    <span className="text-caption tabular-nums text-muted">
-                      {lead.relatedFindingIds.length} related finding{lead.relatedFindingIds.length === 1 ? '' : 's'} on the same subject
-                    </span>
-                  )}
-                  {notices[lead.findingId] && (
-                    <span role={notices[lead.findingId].failed ? 'alert' : 'status'} className={cn('motion-fade text-caption', notices[lead.findingId].failed ? 'text-danger' : 'text-success')}>
-                      {notices[lead.findingId].text}
-                    </span>
-                  )}
-                </div>
-                <LeadDraftToggle findingId={lead.findingId} />
-              </div>
-            )}
+        {mode === 'ranked' && hasLeads && visibleLeads.length === 0 && (
+          <EmptyState
+            icon="flag"
+            title={since ? 'Nothing new in this window' : 'No lead in the active case'}
+            body={`All ${ranked.total.toLocaleString()} leads were first seen ${since ? 'before this window opened' : 'outside the active case'}.`}
+            actions={since ? <Button onClick={() => setSincePreset('all')}>Any time</Button> : undefined}
           />
+        )}
+        {workbench && (
+          <StoryWorkbench
+            leads={ranked.status === 'ready' ? visibleLeads : null}
+            total={ranked.status === 'ready' ? ranked.total : null}
+            busy={refreshing}
+            onAddToBriefing={(lead) => void addToBriefing(lead)}
+            notice={(lead) => <Notice notice={notices[lead.findingId]} />}
+          />
+        )}
+        {mode === 'table' && visibleLeads.length > 0 && (
+          <RankedLeads leads={visibleLeads} allLeads={ranked.all} busy={refreshing} renderDetail={renderDetail} />
         )}
         </>}
         </div>
@@ -277,74 +273,93 @@ export default function StoryDesk() {
   );
 }
 
-// The backend names factors in lowercase prose; the card shows one consistent label per factor.
-const FACTOR_LABELS: Record<string, string> = {
-  'money at stake': 'Money',
-  scale: 'Scale',
-  recurrence: 'Recurrence',
-  'record contradicts statement': 'Contradiction',
-  'counted statutory or policy violation': 'Counted violation',
-  'evidence strength': 'Evidence strength',
-  freshness: 'Freshness',
-};
-
-function factorLabel(name: string) {
-  return FACTOR_LABELS[name] ?? name.charAt(0).toUpperCase() + name.slice(1);
+function Notice({ notice }: { notice: { text: string; failed: boolean } | undefined }) {
+  if (!notice) return null;
+  return (
+    <span role={notice.failed ? 'alert' : 'status'} className={cn('motion-fade text-caption', notice.failed ? 'text-danger' : 'text-success')}>
+      {notice.text}
+    </span>
+  );
 }
-
-/** The seven factors the ranker can emit (analysis/story_desk.rs), in the figure's fixed order. */
-const FACTOR_ORDER = [
-  'money at stake',
-  'scale',
-  'recurrence',
-  'record contradicts statement',
-  'counted statutory or policy violation',
-  'evidence strength',
-  'freshness',
-] as const;
-const isKnownFactor = (name: string) => (FACTOR_ORDER as readonly string[]).includes(name);
-/** Header labels for a frame too narrow for the full ones; the full wording stays in the title. */
-const FACTOR_SHORT: Record<string, string> = {
-  'money at stake': 'Money',
-  scale: 'Scale',
-  recurrence: 'Recur.',
-  'record contradicts statement': 'Contra.',
-  'counted statutory or policy violation': 'Counted',
-  'evidence strength': 'Evid.',
-  freshness: 'Fresh',
-};
-const COUNTED_FACTOR = 'counted statutory or policy violation';
-const EVIDENCE_FACTOR = 'evidence strength';
-/** The largest single factor (money at stake), so every factor column shares one 0–2500 bp scale. */
-const FACTOR_SCALE_MAX_BP = 2500;
-const SCORE_KEY = 'score';
-
-const points = (basisPoints: number) => Math.round(basisPoints / 100);
-const factorPoints = (lead: StoryLead, name: string) => lead.publicInterest.factors.find((factor) => factor.name === name)?.basisPoints ?? 0;
 
 /**
- * The deterministic headline: what lifts #1, and on which factor it is ahead of #2. Factor names
- * are the ranker's own lowercase prose.
+ * The ranked leads as a workbench: the queue in rank order with each lead's score on one shared
+ * scale, the selected lead with why it ranks there and its evidence, and the records around it.
  */
-export function storyHeadline(leads: readonly StoryLead[]): string {
-  const [first, second] = leads;
-  if (!first) return '';
-  const top = [...first.publicInterest.factors].filter((factor) => factor.basisPoints > 0).sort((a, b) => b.basisPoints - a.basisPoints).slice(0, 2);
-  const lead = `#1 scores ${points(first.publicInterest.totalBasisPoints)}`;
-  const from = top.length === 0 ? '' : `: most from ${top.map((factor) => `${factor.name} (+${points(factor.basisPoints)})`).join(' and ')}`;
-  if (!second) return `${lead}${from}.`;
-  const delta = points(first.publicInterest.totalBasisPoints) - points(second.publicInterest.totalBasisPoints);
-  if (delta === 0) return `${lead}${from}. It ties #2.`;
-  const names = [...new Set([...first.publicInterest.factors, ...second.publicInterest.factors].map((factor) => factor.name))];
-  const lead1Ahead = (name: string) => factorPoints(first, name) - factorPoints(second, name);
-  const gap = names.reduce((best, name) => (lead1Ahead(name) > lead1Ahead(best) ? name : best), names[0]);
-  return `${lead}${from}. It is ahead of #2 by ${delta}, mostly on ${gap}.`;
+function StoryWorkbench({ leads, total, busy, onAddToBriefing, notice }: {
+  leads: StoryLead[] | null;
+  total: number | null;
+  busy: boolean;
+  onAddToBriefing(lead: StoryLead): void;
+  notice(lead: StoryLead): ReactNode;
+}) {
+  const selected = useAppStore((s) => s.workbenchSelection.story ?? null);
+  const selectWorkbenchLead = useAppStore((s) => s.selectWorkbenchLead);
+  const portals = useAppStore((s) => s.portals);
+  const queue = useMemo(() => leads?.map((lead, index) => ({ id: lead.findingId, headline: lead.headline, kind: findingFamily(lead.kind), rank: index + 1, lead })) ?? null, [leads]);
+  const index = Math.max(0, leads?.findIndex((lead) => lead.findingId === selected) ?? 0);
+  const current = leads?.[index] ?? null;
+  useWorkbenchQueue('story', queue, current?.findingId ?? null);
+  const select = useCallback((id: string) => selectWorkbenchLead('story', id), [selectWorkbenchLead]);
+  const scaleMax = leads?.[0]?.publicInterest.totalBasisPoints ?? 1;
+  const spansSources = new Set((leads ?? []).map((lead) => lead.portalKey).filter(Boolean)).size > 1;
+  const sourceName = (portalKey: string | null) => portals.find((saved) => saved.registration.portalKey === portalKey)?.registration.displayName;
+  const items = (leads ?? []).map((lead, at) => ({
+    id: lead.findingId,
+    content: <LeadCard lead={lead} rank={at + 1} scaleMax={scaleMax} source={spansSources ? sourceName(lead.portalKey) : undefined} />,
+  }));
+  const selectIfQueued = useCallback((id: string) => {
+    if (!leads?.some((lead) => lead.findingId === id)) return false;
+    select(id);
+    return true;
+  }, [leads, select]);
+
+  return (
+    <Workbench
+      navigator={(
+        <div className="workbench-nav">
+          <Pane
+            label="Ranked lead queue"
+            title="Ranked"
+            meta={leads && total !== null ? (leads.length < total ? `${leads.length.toLocaleString()} of ${total.toLocaleString()}` : leads.length.toLocaleString()) : undefined}
+            actions={<span className="text-caption text-muted">by attention score</span>}
+            className="workbench-queue"
+            bodyClassName="overflow-y-auto"
+          >
+            <div aria-busy={busy || undefined}>
+              {leads === null ? (
+                <QueueSkeleton />
+              ) : (
+                <LeadQueue label="Leads by attention score" items={items} selectedId={current?.findingId ?? null} onSelect={select} />
+              )}
+            </div>
+          </Pane>
+        </div>
+      )}
+    >
+      {current && leads ? (
+        <LeadDetail
+          findingId={current.findingId}
+          storyLead={current}
+          position={{ index: index + 1, total: leads.length }}
+          compare={comparisonOf(leads, index)}
+          source={spansSources ? sourceName(current.portalKey) : undefined}
+          onSelectFinding={selectIfQueued}
+          actions={<Button size="sm" variant="ghost" onClick={() => onAddToBriefing(current)}>Add to briefing</Button>}
+          notice={notice(current)}
+        />
+      ) : <PendingDetail />}
+    </Workbench>
+  );
 }
+
+const SCORE_KEY = 'score';
 
 /**
  * The ranked leads as a bar-table: the attention score, then the seven factors on one shared
- * basis-point scale. An absent factor is a muted dot; an unassessed evidence strength is the
- * dashed not-recorded slot, never a zero bar. A row expands in place to the lead's actions.
+ * basis-point scale, violet as every lead figure is and crimson only for the counted factor. An
+ * absent factor's cell is empty and says so to a screen reader; an unassessed evidence strength is
+ * the dashed not-recorded slot, never a zero bar. A row expands in place to the lead's actions.
  */
 function RankedLeads({ leads, allLeads, busy, renderDetail }: { leads: StoryLead[]; allLeads: readonly StoryLead[]; busy: boolean; renderDetail(lead: StoryLead): ReactNode }) {
   const [sortKey, setSortKey] = useState<string>(SCORE_KEY);
@@ -360,7 +375,7 @@ function RankedLeads({ leads, allLeads, busy, renderDetail }: { leads: StoryLead
   const byId = new Map(leads.map((lead) => [lead.findingId, lead]));
 
   const columns: BarTableColumn[] = [
-    { key: SCORE_KEY, label: 'Score', title: 'Attention score: ranks reading order; not newsworthiness and not a claim about any record', scale: 'own-max', max: scoreMax, sortable: true, barWidth: 44 },
+    { key: SCORE_KEY, label: 'Score', title: 'Attention score: ranks reading order; not newsworthiness and not a claim about any record', scale: 'own-max', max: scoreMax, paint: 'lead', sortable: true, barWidth: 44 },
     ...factorNames.map((name): BarTableColumn => ({
       key: name,
       label: name === COUNTED_FACTOR ? 'Counted violation (legal claim)' : factorLabel(name),
@@ -370,9 +385,10 @@ function RankedLeads({ leads, allLeads, busy, renderDetail }: { leads: StoryLead
       title: isKnownFactor(name) ? name : `${name} (factor not recognised by this version)`,
       scale: 'shared',
       claim: name === COUNTED_FACTOR ? 'counted' : undefined,
+      paint: 'lead',
       sortable: true,
       barWidth: 32,
-      missing: { text: '·', title: 'not in this finding’s record' },
+      missing: { text: '', title: 'not in this finding’s record' },
     })),
   ];
 
@@ -423,10 +439,10 @@ function RankedLeads({ leads, allLeads, busy, renderDetail }: { leads: StoryLead
     <div aria-busy={busy || undefined} className="rounded-xl border border-line bg-panel p-4 shadow-panel">
       <BarTable
         title="Ranked leads"
-        headline={storyHeadline(leads)}
+        headline={leads[0] ? comparisonHeadline(leads[0], 1, comparisonOf(leads, 0)) : ''}
         claim="descriptive"
         sources={{ tables: ['findings'], note: 'Attention score ranks reading order; it is not newsworthiness and not a claim about any record' }}
-        summary={`${leads.length} leads. Factor columns share one scale of 0 to ${points(factorMax)} points. A dot means the factor did not apply; not assessed means the finding's confidence was never measured.`}
+        summary={`${leads.length} leads. Factor columns share one scale of 0 to ${points(factorMax)} points. An empty cell means the factor is not in that finding's record; not assessed means the finding's confidence was never measured.`}
         status="ready"
         layout="stacked"
         rowHeader="Lead"
@@ -479,21 +495,18 @@ function AgencyReference({ lead }: { lead: StoryLead }) {
   );
 }
 
-/** Mounts the drafts panel only once opened, so loading the desk does not ask which drafts apply to every lead. */
-function LeadDraftToggle({ findingId }: { findingId: string }) {
+/**
+ * Draft records request: mounts the drafts panel only once pressed, so loading the desk does not
+ * ask which drafts apply to every lead.
+ */
+function LeadDraftButton({ findingId, headline }: { findingId: string; headline: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <details open={open} className="group border-t border-line pt-3">
-      <summary
-        onClick={(event) => {
-          event.preventDefault();
-          setOpen((current) => !current);
-        }}
-        className="focus-ring inline-flex cursor-pointer list-none select-none items-center gap-1.5 rounded text-body text-fg-secondary hover:text-fg [&::-webkit-details-marker]:hidden"
-      >
-        Draft a records request or appeal
-      </summary>
+    <div>
+      <Button size="sm" icon="filePlus" aria-expanded={open} aria-label={`Draft records request: ${headline}`} onClick={() => setOpen((current) => !current)}>
+        Draft records request
+      </Button>
       {open && <div className="mt-3"><ArtifactDrafts findingId={findingId} /></div>}
-    </details>
+    </div>
   );
 }

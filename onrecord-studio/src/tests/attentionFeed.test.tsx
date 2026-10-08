@@ -39,7 +39,7 @@ describe('rankFeed', () => {
     const profile = (agencyName: string, statutoryViolationCount: number, totalRequestsProcessed: number) => ({
       agencyId: 1, portalSubdomain: 'p', agencyName, totalRequestsProcessed, totalClosed: 0, validLatencySampleSize: 0, excludedInvalidLifetimeCount: 0,
       averageClosureDays: null, globalMeanClosureDays: null, globalStddevClosureDays: null, performanceZScore: null, complianceIndicator: 'Compliant' as const,
-      anomalyCount: 0, statutoryViolationCount, statutoryViolationRate: 0, suspiciousFastClosureCount: 0, totalDocumentsReleased: 0, keywordFrequencyMap: {},
+      anomalyCount: 0, statutoryViolationCount, statutoryViolationRate: 0, statutoryMaturedCount: 0, statutoryMaturedViolationCount: 0, suspiciousFastClosureCount: 0, totalDocumentsReleased: 0, keywordFrequencyMap: {},
     });
     expect(deadlineLedgerHeadline([profile('Parks', 0, 12)])).toBeNull();
     expect(deadlineLedgerHeadline([profile('Police', 22, 268), profile('Library', 3, 40), profile('Parks', 0, 12)]))

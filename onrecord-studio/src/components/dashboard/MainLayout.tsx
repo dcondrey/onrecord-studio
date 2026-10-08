@@ -40,7 +40,7 @@ import Dialog, { DialogBody, DialogFooter, DialogHeader } from '../ui/Dialog';
 import AnalysisWorkbench from './AnalysisWorkbench';
 import CaseTimeline from './CaseTimeline';
 import { formatMatchCount, MATCH_BASIS_LABELS, matchBasis, SEARCH_PAGE_SIZE } from '../../utils/searchResults';
-import { formatShortDate } from '../objects/labels';
+import { formatDateTime, formatShortDate } from '../objects/labels';
 import VirtualList from '../ui/VirtualList';
 import { displayError } from '../../utils/errorMessage';
 import PageHeader from '../ui/PageHeader';
@@ -523,8 +523,8 @@ export default function MainLayout() {
                         <CaseField label="Documents" value={String(selected.documentCount)} />
                       </dl>
                       <dl className="sr-only">
-                        <dt>Created</dt><dd>{selected.createdAt}</dd>
-                        <dt>Closed</dt><dd>{selected.closedAt ?? 'Not recorded'}</dd>
+                        <dt>Created</dt><dd>{formatDateTime(selected.createdAt)}</dd>
+                        <dt>Closed</dt><dd>{selected.closedAt ? formatDateTime(selected.closedAt) : 'Not recorded'}</dd>
                       </dl>
                       <div className="mt-4">
                         <ClockStrip
@@ -788,16 +788,18 @@ function EmptyResults({ error, sourceCount }: { error: string | null; sourceCoun
   const agencyId = useAppStore((state) => state.selectedAgencyId);
   const status = useAppStore((state) => state.selectedStatus);
   const policy = useAppStore((state) => state.selectedPolicyDeviation);
+  const statutoryOnly = useAppStore((state) => state.selectedStatutoryOnly);
   const activePortalKey = useAppStore((state) => state.activePortalKey);
   const activePortalName = useAppStore((state) => state.portals.find(({ registration }) => registration.portalKey === state.activePortalKey)?.registration.displayName ?? state.activePortalKey);
   const setSearchFilters = useAppStore((state) => state.setSearchFilters);
   const setActivePortal = useAppStore((state) => state.setActivePortal);
   const requestEvidenceRefresh = useAppStore((state) => state.requestEvidenceRefresh);
   const narrowing = [
-    searchTerm.trim() && { label: `the text "${searchTerm.trim()}"`, remove: () => setSearchFilters('', agencyId, status, policy) },
-    agencyId !== null && { label: 'the department filter', remove: () => setSearchFilters(searchTerm, null, status, policy) },
-    status && { label: `status "${status}"`, remove: () => setSearchFilters(searchTerm, agencyId, null, policy) },
-    policy && { label: 'the policy-deviation filter', remove: () => setSearchFilters(searchTerm, agencyId, status, null) },
+    searchTerm.trim() && { label: `the text "${searchTerm.trim()}"`, remove: () => setSearchFilters('', agencyId, status, policy, statutoryOnly) },
+    agencyId !== null && { label: 'the department filter', remove: () => setSearchFilters(searchTerm, null, status, policy, statutoryOnly) },
+    status && { label: `status "${status}"`, remove: () => setSearchFilters(searchTerm, agencyId, null, policy, statutoryOnly) },
+    policy && { label: 'the policy-deviation filter', remove: () => setSearchFilters(searchTerm, agencyId, status, null, statutoryOnly) },
+    statutoryOnly && { label: 'the statutory-deadline filter', remove: () => setSearchFilters(searchTerm, agencyId, status, policy, false) },
     activePortalKey && { label: `the ${activePortalName} filter`, remove: () => setActivePortal(null) },
   ].filter((item): item is { label: string; remove: () => void } => Boolean(item));
   return (

@@ -828,6 +828,29 @@ mod tests {
         );
     }
 
+    /// The command bar offers these three questions before anything is typed (`SUGGESTED_QUESTIONS`
+    /// in CommandPalette.tsx). Each must reach its own plan outright: an ambiguous or unresolved
+    /// parse would answer a one-click suggestion with a clarifying question.
+    #[test]
+    fn the_command_bar_suggestions_parse_to_their_plans() {
+        assert_eq!(
+            plan("which agencies changed behavior"),
+            QueryPlan::CrossCorpusSignal {
+                signal: CrossCorpusSignal::BehaviorShift
+            }
+        );
+        assert_eq!(
+            plan("same denial language across agencies"),
+            QueryPlan::CrossCorpusSignal {
+                signal: CrossCorpusSignal::SharedDenialLanguage
+            }
+        );
+        assert_eq!(
+            plan("show contradictions"),
+            QueryPlan::ContradictionsInAgency { agency: None }
+        );
+    }
+
     /// The listed examples are what the not-understood answer tells an investigator to type, so
     /// each must actually parse to the intent it is listed under.
     #[test]

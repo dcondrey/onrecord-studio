@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import TemporalMap from '../charts/TemporalMap';
 import DepartmentLedger, { ledgerOrder, SMALL_SAMPLE_CLOSURES } from '../charts/figures/DepartmentLedger';
 import Dumbbells, { changeText, type DumbbellKind, type DumbbellRow } from '../charts/figures/Dumbbells';
 import { formatDateRange, formatValue } from '../charts/core/format';
 import { absent, measured, type Measured } from '../charts/core/nulls';
-import { useAppStore } from '../../store/useAppStore';
+import { useAppStore, type CaseworkTab, type OverviewPerspective } from '../../store/useAppStore';
+import { scrollWithin } from '../../utils/scrollWithin';
 import MetricsGrid from './MetricsGrid';
 import Icon from '../ui/icons';
-import PageHeader from '../ui/PageHeader';
+import Skeleton from '../ui/Skeleton';
 import Panel, { PanelHeader } from '../ui/Panel';
 import Button from '../ui/Button';
 import { Select } from '../ui/Field';
@@ -24,7 +25,9 @@ import AutomaticDiscovery from './AutomaticDiscovery';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { AgencyPerformanceProfile } from '../../types';
-import AttentionFeed, { AttentionFeedSkeleton } from './AttentionFeed';
+import OverviewWorkbench, { WorkbenchSkeleton } from '../workbench/OverviewWorkbench';
+import Masthead, { Dateline } from '../workbench/Masthead';
+import EmptyState from '../ui/EmptyState';
 import SinceControl from './SinceControl';
 import WatchlistPanel from './WatchlistPanel';
 import StandingSearchPanel from './StandingSearchPanel';
@@ -36,17 +39,27 @@ import StarterSets from './StarterSets';
 import FirstRunData from './FirstRunData';
 import { useStarterRunStore } from '../../store/useStarterRunStore';
 
+const PERSPECTIVES: { value: OverviewPerspective; label: string }[] = [
+  { value: 'leads', label: 'Leads' },
+  { value: 'following', label: 'Following' },
+  { value: 'analytics', label: 'Analytics' },
+  { value: 'casework', label: 'Casework' },
+  { value: 'tools', label: 'Tools' },
+];
+
 export default function OverviewDashboard() {
   const portals = useAppStore((state) => state.portals);
-  const [showAnalytics, setShowAnalytics] = useState(false);
-  const [workbench, setWorkbench] = useState<{ reportId: string; review: boolean } | null>(null);
+  const perspective = useAppStore((state) => state.overviewPerspective);
+  const setPerspective = useAppStore((state) => state.setOverviewPerspective);
+  const [casework, setCasework] = useState<{ reportId: string; tab: CaseworkTab; opened: number }>({ reportId: '', tab: 'Cases', opened: 0 });
   const requestedCasework = useAppStore((state) => state.requestedCasework);
   const consumeCasework = useAppStore((state) => state.consumeCasework);
-  // Casework opened from the case switcher or the inspector lands here.
+  const openCasework = useAppStore((state) => state.openCasework);
+  // Casework opened from the case switcher, the inspector or the command bar lands on its tab.
   useEffect(() => {
     if (!requestedCasework) return;
     const request = consumeCasework();
-    if (request) setWorkbench({ reportId: request.reportId, review: false });
+    if (request) setCasework((current) => ({ reportId: request.reportId, tab: request.tab ?? 'Cases', opened: current.opened + 1 }));
   }, [consumeCasework, requestedCasework]);
   const workspaceInitializationStatus = useAppStore((state) => state.workspaceInitializationStatus);
   // Stays up after the first source lands, so the outcome of every source in a run is visible.
@@ -69,110 +82,116 @@ export default function OverviewDashboard() {
   const caseScoped = useAppStore((state) => state.activeCaseId !== null && state.scopeToCase);
   const inspectDepartment = useInspectDepartment();
   const portalName = usePortalName();
+  const scroller = useRef<HTMLDivElement>(null);
+  // Scrolls the overview's own column to the ledger; never the shell around it.
   const openLedger = useCallback(() => {
-    setShowAnalytics(true);
-    requestAnimationFrame(() => document.getElementById('deadline-ledger')?.scrollIntoView({ block: 'start' }));
-  }, []);
-  const openWorkbench = () => setWorkbench({ reportId: '', review: false });
+    setPerspective('analytics');
+    requestAnimationFrame(() => {
+      const ledger = document.getElementById('deadline-ledger');
+      if (ledger && scroller.current) scrollWithin(scroller.current, ledger, 'start');
+    });
+  }, [setPerspective]);
+  const hasSources = portals.length > 0;
+  const ledger = (
+    <DepartmentLedger
+      variant="overview"
+      profiles={ledgerOrder(scopedProfiles)}
+      scaleProfiles={scopedProfiles}
+      status={caseScoped ? 'scoped-out' : profiles.length === 0 && analyticsStatus === 'pending' ? 'loading' : 'ready'}
+      scopedOutText="Hidden while a case scope is active: these are all-time totals for every request, not the case's."
+      portalName={portalName}
+      onInspect={(profile) => inspectDepartment(profile.portalSubdomain, profile.agencyId, true)}
+    />
+  );
+  const loading = workspaceInitializationStatus === 'loading';
+  const failed = workspaceInitializationStatus === 'error';
+  const showStarter = workspaceInitializationStatus === 'ready' && (portals.length === 0 || starterRunShown);
+  const leadsWorkbench = perspective === 'leads' && hasSources && !showStarter && workspaceInitializationStatus === 'ready';
+  const fillsView = perspective === 'leads' && (leadsWorkbench || loading);
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto w-full max-w-content space-y-6 px-4 pb-10 pt-6 md:px-6">
-        {workbench ? (
-          <div>
-            <button type="button" onClick={() => setWorkbench(null)} className="focus-ring mb-2 inline-flex items-center gap-1 rounded text-body text-accent hover:underline">
-              <Icon name="back" size="sm" /> Overview
-            </button>
-            <PageHeader title="Casework" summary="Track requests and commitments, reconcile spending, and challenge the evidence." />
-          </div>
-        ) : (
-          <PageHeader
-            title="Overview"
-            summary="New leads, what you follow, and the state of your sources."
-            actions={<>
-              {portals.length > 0 && <SinceControl />}
-              <Button onClick={() => setWorkspaceView('evidence')}>Review evidence</Button>
-            </>}
-          />
-        )}
+    <div ref={scroller} className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <div className={cn('mx-auto flex w-full max-w-content flex-1 flex-col gap-3 px-3 pt-4 md:px-4', fillsView ? 'min-h-[36rem] pb-3' : 'pb-10')}>
+        <Masthead
+          overline={<Dateline />}
+          title="Overview"
+          tabs={(
+            <SegmentedControl<OverviewPerspective>
+              label="Overview perspective"
+              mode="tabs"
+              size="sm"
+              value={perspective}
+              onChange={setPerspective}
+              panelId={() => 'overview-perspective'}
+              options={PERSPECTIVES}
+            />
+          )}
+          actions={<>
+            {hasSources && !loading && !showStarter && <SinceControl />}
+            <Button onClick={() => setWorkspaceView('evidence')}>Review evidence</Button>
+          </>}
+        />
 
         <FirstRunData />
-        {workspaceInitializationStatus === 'loading' ? (
-          <section aria-label="Needs attention" className="app-panel overflow-hidden"><AttentionFeedSkeleton /></section>
-        ) : workspaceInitializationStatus === 'error' ? (
-          <WorkspaceSourcesUnavailable detail={workspaceInitializationError} />
-        ) : portals.length === 0 || starterRunShown ? (
-          <section className="app-panel p-5"><StarterSets /></section>
-        ) : null}
-
         <PostIngestBrief />
-        {workbench ? (
-          <ProfessionalWorkbench key={`${workbench.reportId}:${workbench.review}`} initialReportId={workbench.reportId} initialTab={workbench.review ? 'Evidence review' : 'Cases'} />
-        ) : <>
-          <SubjectDossier />
-          {portals.length > 0 && <AttentionFeed onOpenLedger={openLedger} />}
-          <section aria-label="Following" className="grid grid-cols-1 items-start gap-4 2xl:grid-cols-2">
-            <WatchlistPanel />
-            <StandingSearchPanel />
-          </section>
-          <ResearchWorkspace onReview={(reportId) => setWorkbench({ reportId, review: true })} />
-
-          {portals.length > 0 && (
-            <Panel aria-labelledby="response-analytics-title" className={cn(!showAnalytics && '[&>div:first-child]:border-b-0')}>
-              <PanelHeader
-                titleId="response-analytics-title"
-                title="Response analytics"
-                description={analyticsError && !analyticsUnavailable
-                  ? (analyticsUpdatedAt ? `Stale: the last refresh failed. Last updated ${formatRelativeTime(analyticsUpdatedAt)}.` : 'Analytics couldn’t be calculated.')
-                  : analyticsUpdatedAt ? `Updated ${formatRelativeTime(analyticsUpdatedAt)}` : 'How quickly and completely agencies answer requests.'}
-                actions={(
-                  <Button aria-expanded={showAnalytics} aria-controls="response-analytics-body" aria-label={showAnalytics ? 'Hide response analytics' : 'Show response analytics'} onClick={() => setShowAnalytics((visible) => !visible)}>
-                    {showAnalytics ? 'Hide' : 'Show'}
-                  </Button>
-                )}
-              />
-              {showAnalytics && (
-                <div id="response-analytics-body" className="motion-reveal space-y-4 p-5">
+        <div id="overview-perspective" role="tabpanel" aria-label={PERSPECTIVES.find((option) => option.value === perspective)?.label} className={cn('flex flex-col gap-3', fillsView ? 'min-h-0 flex-1' : perspective !== 'leads' && 'motion-fade')}>
+          {failed ? (
+            <div className="mx-auto w-full max-w-[46rem] pt-6"><WorkspaceSourcesUnavailable detail={workspaceInitializationError} /></div>
+          ) : <>
+            <SubjectDossier />
+            {perspective === 'leads' && (
+              loading ? <WorkbenchSkeleton />
+                : showStarter ? <section className="app-panel mx-auto w-full max-w-[46rem] p-5"><StarterSets /></section>
+                  : leadsWorkbench && <OverviewWorkbench ledgerFigure={ledger} onOpenLedger={openLedger} onOpenFollowing={() => setPerspective('following')} />
+            )}
+            {perspective === 'following' && (
+              <section aria-label="Following" className="grid grid-cols-1 items-start gap-4 2xl:grid-cols-2">
+                <WatchlistPanel />
+                <StandingSearchPanel />
+              </section>
+            )}
+            {perspective === 'analytics' && (loading ? (
+              <Panel aria-label="Response analytics"><Skeleton variant="lines" lines={5} label="Loading your saved sources" className="p-5" /></Panel>
+            ) : hasSources ? (
+              <Panel aria-labelledby="response-analytics-title">
+                <PanelHeader
+                  titleId="response-analytics-title"
+                  title="Response analytics"
+                  description={analyticsError && !analyticsUnavailable
+                    ? (analyticsUpdatedAt ? `Stale: the last refresh failed. Last updated ${formatRelativeTime(analyticsUpdatedAt)}.` : 'Analytics couldn’t be calculated.')
+                    : analyticsUpdatedAt ? `Updated ${formatRelativeTime(analyticsUpdatedAt)}` : 'How quickly and completely agencies answer requests.'}
+                />
+                <div id="response-analytics-body" className="space-y-4 p-5">
                   {analyticsUnavailable ? <MetricsGrid /> : <>
                     <MetricsGrid />
-                    <div id="deadline-ledger" className="scroll-mt-4 rounded-lg border border-line p-4">
-                      <DepartmentLedger
-                        variant="overview"
-                        profiles={ledgerOrder(scopedProfiles)}
-                        scaleProfiles={scopedProfiles}
-                        status={caseScoped ? 'scoped-out' : profiles.length === 0 && analyticsStatus === 'pending' ? 'loading' : 'ready'}
-                        scopedOutText="Hidden while a case scope is active: these are all-time totals for every request, not the case's."
-                        portalName={portalName}
-                        onInspect={(profile) => inspectDepartment(profile.portalSubdomain, profile.agencyId)}
-                      />
-                    </div>
+                    <div id="deadline-ledger" className="scroll-mt-4 rounded-lg border border-line p-4">{ledger}</div>
                     <PeriodComparison activePortalKey={activePortalKey} />
                     <TemporalMap />
                   </>}
                 </div>
-              )}
-            </Panel>
-          )}
-
-          <Panel aria-labelledby="more-tools-title">
-            <PanelHeader titleId="more-tools-title" title="More tools" />
-            <div className="divide-y divide-line px-5">
-              <div className="flex items-center justify-between gap-4 py-3">
-                <div className="min-w-0">
-                  <p className="text-body font-medium text-fg">Develop a lead into a durable case</p>
-                  <p className="text-caption text-muted">Track requests, productions and commitments; reconcile spending; challenge the evidence.</p>
+              </Panel>
+            ) : (
+              <EmptyState icon="bars" title="No requests to measure yet" body="Response analytics measure how quickly and completely agencies answer the requests in your saved sources. Add a records portal to start." />
+            ))}
+            {perspective === 'casework' && (
+              <ProfessionalWorkbench key={casework.opened} initialReportId={casework.reportId} initialTab={casework.tab} />
+            )}
+            {perspective === 'tools' && <>
+              <ResearchWorkspace onReview={(reportId) => openCasework(reportId, 'Evidence review')} />
+              <Panel aria-labelledby="more-tools-title">
+                <PanelHeader titleId="more-tools-title" title="More tools" />
+                <div className="divide-y divide-line px-5">
+                  <ToolDrawer label="Discoveries across your library"><AutomaticDiscovery /></ToolDrawer>
+                  <ToolDrawer label="Topic packs"><TopicPacks /></ToolDrawer>
+                  <ToolDrawer label="Shared language across sources"><CrossCorpusExplorer /></ToolDrawer>
+                  <ToolDrawer label="Plan an investigation or draft a request"><InvestigationDesk /></ToolDrawer>
+                  <ToolDrawer label="Browse sources and add records"><SanDiegoWorkspace /></ToolDrawer>
+                  <ToolDrawer label="Data upkeep and storage"><div className="space-y-6"><DataMaintenance /><ResearchSnapshotExport /><RegistrySnapshots /></div></ToolDrawer>
                 </div>
-                <Button onClick={openWorkbench}>Open casework and research tools</Button>
-              </div>
-              <ToolDrawer label="Discoveries across your library"><AutomaticDiscovery /></ToolDrawer>
-              <ToolDrawer label="Topic packs"><TopicPacks /></ToolDrawer>
-              <ToolDrawer label="Shared language across sources"><CrossCorpusExplorer /></ToolDrawer>
-              <ToolDrawer label="Plan an investigation or draft a request"><InvestigationDesk /></ToolDrawer>
-              <ToolDrawer label="Browse sources and add records"><SanDiegoWorkspace /></ToolDrawer>
-              <ToolDrawer label="Data upkeep and storage"><div className="space-y-6"><DataMaintenance /><ResearchSnapshotExport /><RegistrySnapshots /></div></ToolDrawer>
-            </div>
-          </Panel>
-        </>}
+              </Panel>
+            </>}
+          </>}
+        </div>
       </div>
     </div>
   );
@@ -201,18 +220,18 @@ const PERIOD_MEASURES: { value: PeriodMeasure; label: string }[] = [
 ];
 
 const NO_REQUESTS = 'no requests in window';
+const NONE_MATURED = 'no request in window is old enough for its statutory clock to have run out';
 
 /**
- * A request's statutory clock can still be running this many days after it was created: 10 days to
- * determine plus a 14-day extension (statute.rs CPRA_INITIAL_DETERMINATION_DAYS and
- * CPRA_MAXIMUM_EXTENSION_DAYS), a last day carried past a weekend and holidays, and one more day
- * because a miss is counted only once the elapsed days exceed the entitlement. A window ending
- * sooner would count its young requests as on time and show an improvement that is only censoring.
+ * Closure has no deadline to mature against, so a closure measure's windows end this many days
+ * ago: a request created last week has had no time to close, and counting it would show a decline
+ * that is only censoring. The miss rate needs no lag: its denominator is the requests whose
+ * longest deadline has passed (`statutoryMaturedCount`, decided by age alone), and younger ones
+ * are left out.
  */
 export const PERIOD_MATURITY_DAYS = 30;
 
-/** Every measure but the request count depends on how a request ended, so it waits for maturity. */
-const maturityLag = (measure: PeriodMeasure) => (measure === 'requests' ? 0 : PERIOD_MATURITY_DAYS);
+const maturityLag = (measure: PeriodMeasure) => (measure === 'closure' || measure === 'latency' ? PERIOD_MATURITY_DAYS : 0);
 
 interface PeriodWindows {
   current: AgencyPerformanceProfile[];
@@ -277,7 +296,7 @@ export function PeriodComparison({ activePortalKey }: { activePortalKey: string 
         sources={{
           tables: ['requests', 'statutory_extensions', 'agencies'],
           note: range
-            ? `requests created ${range.current} vs ${range.prior}${lag > 0 ? `; both windows end ${lag} days ago, so every request in them is past its longest statutory deadline (10 days plus a 14-day extension, carried to a court day)` : ''}`
+            ? `requests created ${range.current} vs ${range.prior}${lag > 0 ? `; both windows end ${lag} days ago, so no request in them is younger than ${lag} days` : ''}${measure === 'counted' ? '; the rate counts only requests older than the longest statutory deadline (10 days plus a 14-day extension, carried to a court day), so no clock in it is still running' : ''}`
             : undefined,
         }}
         status={status}
@@ -305,6 +324,10 @@ interface PeriodSide {
   requests: number;
   closed: number;
   violations: number;
+  /** Requests older than any statutory deadline: the only ones a miss rate may count. */
+  matured: number;
+  /** Counted misses among the matured requests. */
+  maturedViolations: number;
   closures: number;
   /** Closure days weighted by the closures each average rests on; null when nothing closed. */
   averageClosureDays: number | null;
@@ -314,10 +337,12 @@ function summarizePeriod(profiles: readonly AgencyPerformanceProfile[]): PeriodS
   const requests = profiles.reduce((sum, profile) => sum + profile.totalRequestsProcessed, 0);
   const closed = profiles.reduce((sum, profile) => sum + profile.totalClosed, 0);
   const violations = profiles.reduce((sum, profile) => sum + profile.statutoryViolationCount, 0);
+  const matured = profiles.reduce((sum, profile) => sum + profile.statutoryMaturedCount, 0);
+  const maturedViolations = profiles.reduce((sum, profile) => sum + profile.statutoryMaturedViolationCount, 0);
   const measuredProfiles = profiles.filter((profile) => profile.averageClosureDays !== null && profile.validLatencySampleSize > 0);
   const closures = measuredProfiles.reduce((sum, profile) => sum + profile.validLatencySampleSize, 0);
   const latencyTotal = measuredProfiles.reduce((sum, profile) => sum + (profile.averageClosureDays as number) * profile.validLatencySampleSize, 0);
-  return { requests, closed, violations, closures, averageClosureDays: closures > 0 ? latencyTotal / closures : null };
+  return { requests, closed, violations, matured, maturedViolations, closures, averageClosureDays: closures > 0 ? latencyTotal / closures : null };
 }
 
 /** One window's value of the measure; a window with no requests has no rate, never a 0% rate. */
@@ -325,7 +350,7 @@ function sideValue(side: PeriodSide, measure: PeriodMeasure): Measured {
   if (measure === 'requests') return measured(side.requests);
   if (side.requests === 0) return absent('not-recorded', NO_REQUESTS);
   if (measure === 'closure') return measured(side.closed / side.requests);
-  if (measure === 'counted') return measured(side.violations / side.requests);
+  if (measure === 'counted') return side.matured === 0 ? absent('not-recorded', NONE_MATURED) : measured(side.maturedViolations / side.matured);
   return side.averageClosureDays === null ? absent('not-recorded', 'no measurable closure in window') : measured(side.averageClosureDays);
 }
 
@@ -335,7 +360,10 @@ function sideBasis(side: PeriodSide, measure: PeriodMeasure): string {
     const open = side.requests - side.closed;
     return `${plural(side.closures, 'closure')}${open > 0 ? `; ${open.toLocaleString('en-US')} still open, not measured` : ''}`;
   }
-  if (measure === 'counted') return `${side.violations.toLocaleString('en-US')} of ${plural(side.requests, 'request')}`;
+  if (measure === 'counted') {
+    const recent = side.requests - side.matured;
+    return `${side.maturedViolations.toLocaleString('en-US')} of ${plural(side.matured, 'request')} old enough to judge${recent > 0 ? `; ${recent.toLocaleString('en-US')} too recent, not counted` : ''}`;
+  }
   if (measure === 'closure') return `${side.closed.toLocaleString('en-US')} of ${plural(side.requests, 'request')}`;
   return plural(side.requests, 'request');
 }
@@ -378,7 +406,7 @@ function periodModel(
     const a = summarizePeriod(entry.prior);
     const b = summarizePeriod(entry.current);
     const label = spansPortals ? `${entry.name} (${portalName(entry.portalKey)})` : entry.name;
-    const basisOf = (side: PeriodSide) => (measure === 'latency' ? side.closures : side.requests);
+    const basisOf = (side: PeriodSide) => (measure === 'latency' ? side.closures : measure === 'counted' ? side.matured : side.requests);
     if (measure !== 'requests' && (basisOf(a) < PERIOD_MINIMUM || basisOf(b) < PERIOD_MINIMUM) && (basisOf(a) > 0 || basisOf(b) > 0)) {
       tooFew.push(label);
       continue;
@@ -397,7 +425,7 @@ function periodModel(
     kind,
     rows,
     empty,
-    tooFew: { labels: tooFew.sort((x, y) => x.localeCompare(y)), reason: `fewer than ${PERIOD_MINIMUM} ${measure === 'latency' ? 'closures' : 'requests'} in a window` },
+    tooFew: { labels: tooFew.sort((x, y) => x.localeCompare(y)), reason: `fewer than ${PERIOD_MINIMUM} ${measure === 'latency' ? 'closures' : measure === 'counted' ? 'requests old enough to judge' : 'requests'} in a window` },
     headline: periodHeadline(totalPrior, totalCurrent, measure, lag > 0 ? `created ${formatDateRange(bounds[1], bounds[2])}` : `created in the last ${days} days`, days),
   };
 }
@@ -411,9 +439,11 @@ function periodHeadline(prior: PeriodSide, current: PeriodSide, measure: PeriodM
   const before = sideValue(prior, measure);
   const name = measure === 'counted' ? 'Counted deadline-miss rate' : measure === 'closure' ? 'Closure rate' : 'Average closure';
   const show = (value: number) => (kind === 'rate' ? formatValue(value, { kind: 'percent' }) : formatValue(value, { kind: 'days' }));
-  if (now.state !== 'value') return `${name}: no measurable closure among the ${requests}.`;
-  if (before.state !== 'value') return `${name} ${show(now.value)} across ${requests}; no comparable prior window.`;
-  return `${name} ${show(now.value)} vs ${show(before.value)} (${changeText(before.value, now.value, kind)}) across ${requests}.`;
+  // The miss rate rests on the requests past their deadline, never the ones still within their clock.
+  const basis = measure === 'counted' ? `${current.matured.toLocaleString('en-US')} of the ${requests} old enough to judge` : requests;
+  if (now.state !== 'value') return measure === 'counted' ? `${name}: none of the ${requests} is old enough for its statutory clock to have run out.` : `${name}: no measurable closure among the ${requests}.`;
+  if (before.state !== 'value') return `${name} ${show(now.value)} across ${basis}; no comparable prior window.`;
+  return `${name} ${show(now.value)} vs ${show(before.value)} (${changeText(before.value, now.value, kind)}) across ${basis}.`;
 }
 
 function WorkspaceSourcesUnavailable({ detail }: { detail: string | null }) {
@@ -440,14 +470,18 @@ function WorkspaceSourcesUnavailable({ detail }: { detail: string | null }) {
   );
 }
 
-/** The overview's department action: scope Evidence to that department's requests. */
+/**
+ * The overview's department action: scope Evidence to that department's requests. From the counted
+ * ledger it also keeps only the requests whose statutory deadline was exceeded, so the misses the
+ * reader clicked are the list they land on.
+ */
 function useInspectDepartment() {
   const setActivePortal = useAppStore((state) => state.setActivePortal);
   const setSearchFilters = useAppStore((state) => state.setSearchFilters);
   const setWorkspaceView = useAppStore((state) => state.setWorkspaceView);
-  return useCallback((portalKey: string, agencyId: number) => {
+  return useCallback((portalKey: string, agencyId: number, statutoryOnly = false) => {
     setActivePortal(portalKey);
-    setSearchFilters('', agencyId, null, null);
+    setSearchFilters('', agencyId, null, null, statutoryOnly);
     setWorkspaceView('evidence');
   }, [setActivePortal, setSearchFilters, setWorkspaceView]);
 }

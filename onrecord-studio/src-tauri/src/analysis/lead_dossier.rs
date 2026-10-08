@@ -444,8 +444,132 @@ pub fn falsification_for(kind: FindingKind) -> DossierFalsification {
 
 #[cfg(test)]
 mod tests {
-    use super::falsification_for;
-    use crate::analysis::finding::FindingKind;
+    use super::{build, falsification_for};
+    use crate::analysis::finding::{
+        Finding, FindingCitation, FindingConfidence, FindingKind, FindingSeverity, FindingSubject,
+    };
+    use crate::storage::sqlite::DuckDbRepository;
+    use crate::types::DossierGap;
+
+    fn cited(id: &str, kind: FindingKind, document_id: i64, quote: &str) -> Finding {
+        let now = chrono::DateTime::parse_from_rfc3339("2026-01-02T03:04:05Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        Finding {
+            id: id.into(),
+            kind,
+            severity: FindingSeverity::Serious,
+            confidence: FindingConfidence::measured(9000),
+            subject: FindingSubject {
+                portal_key: Some("sd-city".into()),
+                request_id: Some(1),
+                ..FindingSubject::default()
+            },
+            headline: format!("{id} headline"),
+            explanation: String::new(),
+            citations: vec![FindingCitation {
+                portal_key: "sd-city".into(),
+                document_id,
+                character_start: Some(0),
+                character_end: Some(quote.len() as i64),
+                quote: Some(quote.into()),
+                label: None,
+            }],
+            discovered_at: now,
+            last_seen_at: now,
+            dismissed_at: None,
+            source_detector: "test".into(),
+        }
+    }
+
+    /// Two findings on one request, each citing its own document: every part of a dossier comes
+    /// from the finding it was built for, and an unknown id builds nothing in its place.
+    #[tokio::test]
+    async fn a_dossier_describes_only_the_finding_asked_for() {
+        let repo = DuckDbRepository::new(":memory:").unwrap();
+        repo.run_migrations(include_str!("../../migrations/0001_initial_schema.sql"))
+            .await
+            .unwrap();
+        repo.query_connection("seed dossier fixture", |conn| {
+            conn.execute_batch(
+                "INSERT INTO portals(subdomain,display_name,base_url,lifecycle_state) VALUES
+                   ('sd-city','City','https://www.sandiego.gov','ACTIVE');
+                 INSERT INTO requests(id,portal_subdomain,title,status,created_at,updated_at) VALUES
+                   (1,'sd-city','R','closed','2026-01-01','2026-01-01');
+                 INSERT INTO documents(id,request_id,portal_subdomain,file_name,download_url,visibility,created_at,updated_at,raw_file_sha256,extraction_status) VALUES
+                   (7,1,'sd-city','invoices.pdf','https://x.example/7','public','2026-01-01','2026-01-01',repeat('a',64),'SEARCHABLE'),
+                   (9,1,'sd-city','letter.pdf','https://x.example/9','public','2026-01-01','2026-01-01',repeat('b',64),'SEARCHABLE');",
+            )
+            .map_err(|error| crate::error::AppError::Storage(error.to_string()))
+        })
+        .await
+        .unwrap();
+        repo.record_findings(vec![
+            cited(
+                "aaaa",
+                FindingKind::ContractCeilingExceeded,
+                7,
+                "Payments total $1,486,200.",
+            ),
+            cited(
+                "bbbb",
+                FindingKind::PolicyViolationDetected,
+                9,
+                "The search is complete.",
+            ),
+        ])
+        .await
+        .unwrap();
+
+        for (id, kind, document, file, quote, other) in [
+            (
+                "aaaa",
+                FindingKind::ContractCeilingExceeded,
+                7,
+                "invoices.pdf",
+                "Payments total $1,486,200.",
+                "bbbb",
+            ),
+            (
+                "bbbb",
+                FindingKind::PolicyViolationDetected,
+                9,
+                "letter.pdf",
+                "The search is complete.",
+                "aaaa",
+            ),
+        ] {
+            let dossier = build(&repo, id.into())
+                .await
+                .unwrap()
+                .expect("a stored finding");
+            assert_eq!(dossier.finding.id, id);
+            let cited: Vec<_> = dossier
+                .evidence
+                .iter()
+                .map(|link| {
+                    (
+                        link.document_id,
+                        link.file_name.as_deref(),
+                        link.quote.as_deref(),
+                    )
+                })
+                .collect();
+            assert_eq!(cited, [(document, Some(file), Some(quote))], "{id}");
+            assert_eq!(dossier.falsification, falsification_for(kind), "{id}");
+            for gap in &dossier.gaps {
+                let (DossierGap::NotComputed { document_id, .. }
+                | DossierGap::UnreconciledClaim { document_id, .. }) = gap;
+                assert_eq!(
+                    *document_id, document,
+                    "{id}: a gap in another finding's document"
+                );
+            }
+            let related: Vec<_> = dossier.related.iter().map(|r| r.id.as_str()).collect();
+            assert_eq!(related, [other], "{id}");
+        }
+        assert!(build(&repo, "zzzz".into()).await.unwrap().is_none());
+    }
 
     #[test]
     fn every_kind_names_records_that_would_disconfirm_it() {

@@ -59,6 +59,8 @@ function profile(overrides: Partial<AgencyPerformanceProfile> & { agencyId: numb
     anomalyCount: 0,
     statutoryViolationCount: 0,
     statutoryViolationRate: 0,
+    statutoryMaturedCount: 0,
+    statutoryMaturedViolationCount: 0,
     suspiciousFastClosureCount: 0,
     totalDocumentsReleased: 0,
     keywordFrequencyMap: {},
@@ -73,7 +75,9 @@ function renderLedger(profiles: AgencyPerformanceProfile[], onInspect = vi.fn())
   return onInspect;
 }
 
-const row = (name: string) => screen.getByRole('img', { name: new RegExp(`^${name}:`) });
+/** A ledger row's button is its hit area; the marks it names are drawn beside it in the row's group. */
+const button = (name: string) => screen.getByRole('button', { name: new RegExp(`^${name}:`) });
+const row = (name: string) => button(name).parentElement!;
 const painted = (element: Element, token: string) => [...element.querySelectorAll('*')].filter((node) => (node.getAttribute('style') ?? '').includes(token));
 
 afterEach(() => {
@@ -86,7 +90,7 @@ describe('DepartmentLedger', () => {
   it('draws no dot for a department with no measurable closure and says so', () => {
     renderLedger([profile({ agencyId: 1, agencyName: 'Water', averageClosureDays: null, validLatencySampleSize: 0, performanceZScore: null })]);
     const water = row('Water');
-    expect(water.getAttribute('aria-label')).toContain(NO_MEASURABLE_CLOSURE);
+    expect(button('Water').getAttribute('aria-label')).toContain(NO_MEASURABLE_CLOSURE);
     expect(water.textContent).toContain(NO_MEASURABLE_CLOSURE);
     expect(water.querySelectorAll('circle')).toHaveLength(0);
   });
@@ -136,14 +140,14 @@ describe('DepartmentLedger', () => {
 
   it('opens a department with Enter', () => {
     const onInspect = renderLedger([profile({ agencyId: 7, agencyName: 'Police' })]);
-    fireEvent.keyDown(row('Police'), { key: 'Enter' });
+    fireEvent.keyDown(button('Police'), { key: 'Enter' });
     expect(onInspect).toHaveBeenCalledWith(expect.objectContaining({ agencyId: 7 }));
   });
 
   it('draws nothing under a case scope and says why', () => {
     render(<DepartmentLedger variant="overview" profiles={[profile({ agencyId: 1, agencyName: 'Police' })]} status="scoped-out" scopedOutText="Hidden while a case scope is active." portalName={(key) => key} onInspect={vi.fn()} />);
     expect(screen.getByText('Hidden while a case scope is active.')).toBeTruthy();
-    expect(screen.queryByRole('img', { name: /^Police:/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Police:/ })).toBeNull();
   });
 });
 
@@ -153,7 +157,7 @@ describe('PeriodComparison', () => {
     expect(bridge.pending).toHaveLength(2);
     fireEvent.change(screen.getByRole('combobox', { name: 'Interval' }), { target: { value: '7' } });
     expect(bridge.pending).toHaveLength(4);
-    const window = (requests: number) => [profile({ agencyId: 1, agencyName: 'Police', totalRequestsProcessed: requests, statutoryViolationCount: 1 })];
+    const window = (requests: number) => [profile({ agencyId: 1, agencyName: 'Police', totalRequestsProcessed: requests, statutoryMaturedCount: requests, statutoryViolationCount: 1, statutoryMaturedViolationCount: 1 })];
     await act(async () => {
       bridge.pending[2](window(10));
       bridge.pending[3](window(10));
@@ -167,23 +171,28 @@ describe('PeriodComparison', () => {
     expect(headline.textContent).not.toContain('99');
   });
 
-  it('compares a deadline measure only over requests whose statutory clock has run out', () => {
+  it('rates counted misses only over requests older than any statutory deadline, and lags only closure measures', async () => {
     const now = Date.now();
     render(<PeriodComparison activePortalKey={null} />);
-    fireEvent.change(screen.getByRole('combobox', { name: 'Interval' }), { target: { value: '7' } });
+    // The miss rate's windows end today: requests still within their clock are left out, not lagged.
+    expect(Date.parse(bridge.windows[0].created_to)).toBeGreaterThanOrEqual(now);
+    await act(async () => {
+      bridge.pending[0]([profile({ agencyId: 1, agencyName: 'Police', totalRequestsProcessed: 12, statutoryMaturedCount: 4, statutoryViolationCount: 1, statutoryMaturedViolationCount: 1 })]);
+      bridge.pending[1]([profile({ agencyId: 1, agencyName: 'Police', totalRequestsProcessed: 12, statutoryMaturedCount: 12, statutoryViolationCount: 3, statutoryMaturedViolationCount: 3 })]);
+    });
+    const headline = screen.getByText(/Counted deadline-miss rate/).textContent ?? '';
+    expect(headline).toContain('25.0% vs 25.0%');
+    expect(headline).toContain('across 4 of the 12 requests');
+    // Closure has no deadline to mature against, so its windows end PERIOD_MATURITY_DAYS ago.
+    fireEvent.click(screen.getByRole('radio', { name: 'Closure rate' }));
     const day = 86_400_000;
-    // Each 7-day window's requests would all still be within a 10-to-24-day clock if it ended today.
-    for (const window of bridge.windows) expect(Date.parse(window.created_to)).toBeLessThanOrEqual(now - PERIOD_MATURITY_DAYS * day + 1000);
-    expect(bridge.windows.length).toBe(4);
-    // The request count is not censored, so it reads the latest days.
-    fireEvent.click(screen.getByRole('radio', { name: 'Requests' }));
-    expect(Date.parse(bridge.windows[4].created_to)).toBeGreaterThanOrEqual(now);
+    for (const window of bridge.windows.slice(2)) expect(Date.parse(window.created_to)).toBeLessThanOrEqual(now - PERIOD_MATURITY_DAYS * day + 1000);
   });
 
   it('reads a window with no requests as absent, never as a 0% rate', async () => {
     render(<PeriodComparison activePortalKey={null} />);
     await act(async () => {
-      bridge.pending[0]([profile({ agencyId: 1, agencyName: 'Police', totalRequestsProcessed: 12, statutoryViolationCount: 3 })]);
+      bridge.pending[0]([profile({ agencyId: 1, agencyName: 'Police', totalRequestsProcessed: 12, statutoryMaturedCount: 12, statutoryViolationCount: 3, statutoryMaturedViolationCount: 3 })]);
       bridge.pending[1]([]);
     });
     expect(screen.getByText(/Counted deadline-miss rate/).textContent).toContain('no comparable prior window');

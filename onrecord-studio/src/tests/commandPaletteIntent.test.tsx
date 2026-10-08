@@ -34,6 +34,8 @@ const bridge = vi.hoisted(() => ({
 vi.mock('@tauri-apps/api/core', () => ({
   isTauri: () => false,
   invoke: (command: string, args: { utterance?: string; limit?: number }) => {
+    // The palette's top-leads read on open is not part of the intent router under test.
+    if (command === 'list_story_leads') return Promise.resolve([]);
     bridge.invoked.push({ command, args });
     if (command !== 'run_intent_query') return Promise.resolve(null);
     return new Promise((resolve, reject) => {
@@ -200,7 +202,8 @@ describe('CommandPalette intent router', () => {
       bridge.pending[0].resolve(answer('Answer for the City Attorney.'));
     });
     expect(screen.queryByText('Answer for the City Attorney.')).toBeNull();
-    expect(screen.queryByRole('status')).toBeNull();
+    // No question is being asked about the edited text; the object search for it may still run.
+    expect(screen.queryByText('Searching findings, the entity graph and document text…')).toBeNull();
   });
 
   it('discards an answer that arrives after the palette was closed and reopened', async () => {

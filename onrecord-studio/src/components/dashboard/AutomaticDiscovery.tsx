@@ -209,7 +209,7 @@ export default function AutomaticDiscovery() {
         key={item.id}
         nested
         badges={
-          item.kind === 'lead' ? <FamilyBadge family={spending ? 'Spending' : 'Records request'} />
+          item.kind === 'lead' ? <FamilyBadge family={spending ? 'Spending' : 'Pattern'} />
             : item.kind === 'pattern' ? <FamilyBadge family="Pattern" />
               : item.kind === 'quality' ? <Badge tone="neutral">Data quality</Badge>
                 : <FamilyBadge family="Data gap" />
@@ -247,7 +247,7 @@ export default function AutomaticDiscovery() {
               </div>
             </details>
           )}
-          <p className="text-caption text-lead">Investigate: {item.question}</p>
+          <p className="text-caption text-fg-secondary">Investigate: {item.question}</p>
           <details className="text-caption text-muted">
             <summary className="focus-ring w-fit cursor-pointer rounded hover:text-fg">Evidence and method</summary>
             <div className="mt-1 space-y-0.5 break-all font-mono text-code">
@@ -258,7 +258,7 @@ export default function AutomaticDiscovery() {
           </details>
         </>}
         subject={<span title={dataset.sourceUri ?? 'Local export'}>{dataset.displayName}{dataset.partialDataset ? ' · Partial or unverified' : ''}</span>}
-        actions={item.query && <Button size="sm" onClick={() => { controller.inspect(item.query!.sql); openAnalysis(); }}>Explore this finding</Button>}
+        actions={item.query && <Button size="sm" aria-label={`Explore this finding: ${item.title}`} onClick={() => { controller.inspect(item.query!.sql); openAnalysis(); }}>Explore this finding</Button>}
       />
     );
   };

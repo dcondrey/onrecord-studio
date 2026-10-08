@@ -7,7 +7,7 @@
 //! lists; the frontend names a pack, a version and tables, never a URL or a path.
 
 use super::catalog::{pack_names, SNAPSHOT_PACK};
-use super::import::{file_source, import_files, manifest_sha256, summarize};
+use super::import::{file_source, import_files, listed_change_record, manifest_sha256, summarize};
 use super::{
     check_pack_file, latest_retrieved, pack_relative, refused, verify_manifest,
     verify_manifest_bytes, PackFile, PackFileFormat, PackManifest, PinnedPackKey, SignedManifest,
@@ -264,7 +264,6 @@ pub(crate) async fn fetch_signed_manifest(
 /// Fetches `file`, listed by the manifest of `pack` `pack_version` that [`fetch_signed_manifest`]
 /// kept under `root`, from the commit that manifest came from, and returns where it was kept once
 /// its size and SHA-256 matched.
-#[cfg_attr(not(feature = "pack-builder"), allow(dead_code))]
 pub(crate) async fn fetch_listed_file(
     root: &Path,
     pack: &str,
@@ -278,6 +277,22 @@ pub(crate) async fn fetch_listed_file(
     let relative = pack_relative(&file.path)
         .ok_or_else(|| refused(format!("it lists a path outside the pack: {}", file.path)))?;
     Ok(directory.join(relative))
+}
+
+/// The change record `record` that `pack` `pack_version`'s kept manifest lists, while that
+/// manifest is the one inspected, and where it is kept; downloaded on first use.
+pub(crate) async fn change_record(
+    root: PathBuf,
+    pack: &str,
+    pack_version: &str,
+    inspected_manifest_sha256: String,
+    record: String,
+    pinned: Vec<PinnedPackKey>,
+) -> Result<(PathBuf, PackFile), AppError> {
+    let directory = version_directory(&root, published_pack(pack)?, pack_version)?;
+    let file = listed_change_record(directory, inspected_manifest_sha256, record, pinned).await?;
+    let path = fetch_listed_file(&root, pack, pack_version, &file).await?;
+    Ok((path, file))
 }
 
 /// The original files `selection` names, each once, refused as a whole before anything is

@@ -3,20 +3,24 @@ import { open as chooseFolder } from '@tauri-apps/plugin-dialog';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
-import type { AnalyticalDatasetSummary, DataPackFileSummary, DataPackImportOutcome, DataPackSummary, DataPackTable, PublishedPack, PublishedPackSelection } from '../../types';
+import type { AnalyticalDatasetSummary, DataPackChange, DataPackFileSummary, DataPackImportOutcome, DataPackLocation, DataPackSummary, DataPackTable, PublishedPack, PublishedPackSelection } from '../../types';
 import { profileObservations, recurringObservations } from '../../utils/automaticDiscovery';
 import { gapRequestInput, recordGaps, type RecordGap } from '../../utils/recordGaps';
 import { useAutomaticDiscovery } from './AutomaticDiscoveryProvider';
 import Icon from '../ui/icons';
+import { formatDateTime } from '../objects/labels';
 import { formatValue } from '../charts/core/format';
 import { absent } from '../charts/core/nulls';
 import ChangeTimeline from '../charts/figures/ChangeTimeline';
+import ChangeRecordRows from './ChangeRecordRows';
 import StateGrid, { type StateGridCell, type StateGridRow } from '../charts/figures/StateGrid';
 import { seqStep } from '../charts/marks/HeatCell';
 
 const IMPORTING = 'Importing files';
 const DOWNLOADING = 'Downloading, verifying and importing';
-const PARTIAL_NOTE = ' · period not over, later rows may be published';
+// The manifest's `partial` is a bare flag (approvals are flagged every year because their records
+// are revised after the year closes), so the words claim only that rows may change, never why.
+const PARTIAL_NOTE = ' · may still gain or change rows';
 
 function megabytes(bytes: number): string {
   return `${(bytes / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 1 })} MB`;
@@ -163,11 +167,25 @@ function snapshotHistory(table: DataPackTable): string | null {
 }
 
 /** The change timeline when the manifest reports its change records; the summary line otherwise. */
-function SnapshotHistory({ table, pack }: { table: DataPackTable; pack: string }) {
+function SnapshotHistory({ table, summary, location }: { table: DataPackTable; summary: DataPackSummary; location: DataPackLocation }) {
+  const [open, setOpen] = useState<DataPackChange | null>(null);
   // A manifest summary from before change records were reported carries no `changes` at all.
   const changes: DataPackTable['changes'] | undefined = table.changes;
   if (Array.isArray(changes) && (changes.length > 0 || table.unchangedChecks > 0)) {
-    return <ChangeTimeline table={table.table} changes={changes} unchangedChecks={table.unchangedChecks} lastCheckedAt={table.lastCheckedAt} storageKey={`pack-changes:${pack}:${table.table}`} />;
+    return (
+      <>
+        <ChangeTimeline
+          table={table.table}
+          changes={changes}
+          unchangedChecks={table.unchangedChecks}
+          lastCheckedAt={table.lastCheckedAt}
+          storageKey={`pack-changes:${summary.pack}:${table.table}`}
+          onOpen={(change) => setOpen((current) => (current?.path === change.path ? null : change))}
+          openPath={open?.path ?? null}
+        />
+        {open && <ChangeRecordRows key={`${summary.manifestSha256}:${open.path}`} location={location} manifestSha256={summary.manifestSha256} change={open} onClose={() => setOpen(null)} />}
+      </>
+    );
   }
   const history = snapshotHistory(table);
   return history ? <p className="text-muted">{history}</p> : null;
@@ -208,10 +226,10 @@ function fileCell(choice: CoverageChoice, maxRows: number, selected: boolean, im
       { key: 'retrieved', value: latest.retrievedAt.slice(0, 10), label: 'retrieved by the pack builder' },
       ...(latest.licence ? [{ key: 'licence', value: latest.licence.id, label: 'licence' }] : []),
     ],
-    note: [partial ? 'Period not over: later rows may be published.' : null, imported === true ? 'Already imported into the library.' : imported === false ? 'In the pack, not imported.' : null].filter(Boolean).join(' ') || undefined,
+    note: [partial ? 'May still gain or change rows.' : null, imported === true ? 'Already imported into the library.' : imported === false ? 'In the pack, not imported.' : null].filter(Boolean).join(' ') || undefined,
   };
   if (choice.files.some((file) => file.datasetKind === null)) {
-    return { kind: 'state', tone: 'quiet', glyph: 'bar', text: 'not importable', short: 'n/i', legend: 'In the pack; this app does not import it (n/i)', span, name: `${where}: in the pack, but this app does not import this file.`, tip };
+    return { kind: 'state', tone: 'quiet', glyph: 'bar', text: 'not importable', short: 'no import', legend: 'In the pack; not imported by this app', span, name: `${where}: in the pack, but this app does not import this file.`, tip };
   }
   const count = formatValue(rows, { kind: 'count', compact: true });
   const text = choice.year === null ? `${count} · all years` : count;
@@ -219,7 +237,7 @@ function fileCell(choice: CoverageChoice, maxRows: number, selected: boolean, im
   const common = {
     glyph: partial ? 'triangle' as const : 'circle' as const, actionable: true, tip, span, text, short: count,
     tableText: `${rows.toLocaleString()} rows · ${megabytes(bytes)} · retrieved ${latest.retrievedAt.slice(0, 10)}${partial ? ' · partial' : ''}${imported === true ? ' · imported' : imported === false ? ' · not imported' : ''}`,
-    name: `${where}: ${rows.toLocaleString()} rows, retrieved ${latest.retrievedAt.slice(0, 10)}${partial ? ', period not over' : ''}. ${status}${selected ? 'Selected for import.' : 'Not selected.'} Press Enter to ${selected ? 'deselect' : 'select'} it for import.`,
+    name: `${where}: ${rows.toLocaleString()} rows, retrieved ${latest.retrievedAt.slice(0, 10)}${partial ? ', may still gain or change rows' : ''}. ${status}${selected ? 'Selected for import.' : 'Not selected.'} Press Enter to ${selected ? 'deselect' : 'select'} it for import.`,
   };
   // Imported files fill the ramp; a file only in the pack is an outline with its row count.
   if (imported === false) return { ...common, kind: 'state', tone: 'neutral', legend: 'In the pack, not imported (rows)' };
@@ -331,7 +349,7 @@ export function coverageMatrix(summary: DataPackSummary, choices: readonly Cover
   const headline = [
     `${present} of ${present + missing} table-years have a file in this pack`,
     missing > 0 ? `${missing} ${missing === 1 ? 'has' : 'have'} none` : null,
-    partial > 0 ? `${partial} ${partial === 1 ? 'covers a period' : 'cover periods'} not yet over` : null,
+    partial > 0 ? `${partial} may still change` : null,
     open.length > 0 ? `${open.length} ${open.length === 1 ? 'record' : 'records'} needed by leads` : null,
   ].filter(Boolean).join('; ');
   return { columns, rows, positions, keys, headline: `${headline}.`, gaps: open };
@@ -392,7 +410,7 @@ function PackCoverage({ summary, choices, selected, onToggle }: { summary: DataP
           const key = matrix.keys[row]?.[col];
           if (key) onToggle(key);
         }}
-        legend={[{ key: 'partial', label: '▲ period not over', swatch: 'rect', icon: <span aria-hidden="true">▲</span> }]}
+        legend={[{ key: 'partial', label: 'may still change', swatch: 'rect', icon: <span aria-hidden="true">▲</span> }]}
       />
       <Status busy={busy} error={error} />
       {tracked && !busy && !error && <p className="mt-1 text-label text-muted" role="status">Tracked a request for {tracked}. Record the submission date in casework once you have filed it.</p>}
@@ -480,12 +498,13 @@ function PublishedPacks({ onImported }: { onImported?: () => void }) {
         <option value="">Choose a pack</option>
         {packs?.map((pack) => <option key={pack.pack} value={pack.pack}>{pack.pack}</option>)}
       </select>
-      <Status busy={busy} error={error} />
+      {/* Once a manifest is open, progress and failure sit under its Download button instead. */}
+      {!summary && <Status busy={busy} error={error} />}
       {summary && (
         <div className="mt-3 space-y-3 text-label leading-relaxed">
           <div>
             <p className="font-semibold text-fg">{summary.pack} {summary.packVersion}</p>
-            <p className="text-fg-secondary">Manifest verified: signed by publisher key {summary.signerKeyId.slice(0, 16)}. Built {summary.builtAt}; schema {summary.schemaVersion}. Each file you choose is checked against this manifest when you download it.</p>
+            <p className="text-fg-secondary">Manifest verified: signed by publisher key {summary.signerKeyId.slice(0, 16)}. Built <time dateTime={summary.builtAt}>{formatDateTime(summary.builtAt)}</time>; schema {summary.schemaVersion}. Each file you choose is checked against this manifest when you download it.</p>
             <p className="text-muted">Each file was retrieved by the pack builder on the date it lists, not by you. Anything published after that is not in it.</p>
           </div>
           <Licence summary={summary} />
@@ -493,18 +512,19 @@ function PublishedPacks({ onImported }: { onImported?: () => void }) {
           {summary.tables.map((table) => (
             <fieldset key={table.table} className="space-y-1">
               <legend className="font-semibold text-fg">{table.table}</legend>
-              <SnapshotHistory table={table} pack={summary.pack} />
+              <SnapshotHistory table={table} summary={summary} location={{ kind: 'PUBLISHED', pack: summary.pack, packVersion: summary.packVersion }} />
               {choices.filter((choice) => choice.table === table.table).map((choice) => (
-                <label key={choice.key} className="flex items-center gap-2 text-fg-secondary">
-                  <input type="checkbox" disabled={!importable(choice)} checked={selected.has(choice.key)} onChange={() => toggle(choice.key)} />
+                <label key={choice.key} className="flex items-start gap-2 text-fg-secondary">
+                  <input type="checkbox" className="mt-1" disabled={!importable(choice)} checked={selected.has(choice.key)} onChange={() => toggle(choice.key)} />
                   {choiceLabel(choice)}{!importable(choice) && ' · this app does not import this file'}
                 </label>
               ))}
             </fieldset>
           ))}
           <button type="button" className="analysis-button w-fit" disabled={Boolean(busy) || chosen.length === 0} onClick={() => download(summary)}>
-            Download and import {megabytes(chosenBytes)}
+            {busy === DOWNLOADING ? `Downloading and importing ${megabytes(chosenBytes)}…` : `Download and import ${megabytes(chosenBytes)}`}
           </button>
+          <Status busy={busy} error={error} />
         </div>
       )}
       {outcomes && summary && <Outcomes outcomes={outcomes} label="Published pack import results" />}
@@ -552,7 +572,7 @@ export default function DataPackImport({ onImported }: { onImported?: () => void
     <section className="app-panel p-4">
       <div className="mb-3 flex items-center gap-2">
         <Icon name="shield" className="h-4 w-4 text-accent" />
-        <h2 className="text-sm font-semibold text-fg">Data pack import</h2>
+        <h3 id="data-pack-import-heading" className="text-heading text-fg">Data pack import</h3>
       </div>
       <p className="mb-3 text-label leading-relaxed text-muted">Import tables from a signed OnRecord data pack. The pack is checked against the publisher key built into this app, and every file against its SHA-256, before anything is imported.</p>
       <div className="flex items-center gap-2">
@@ -564,7 +584,7 @@ export default function DataPackImport({ onImported }: { onImported?: () => void
         <div className="mt-3 space-y-3 text-label leading-relaxed">
           <div>
             <p className="font-semibold text-fg">{summary.pack} {summary.packVersion}</p>
-            <p className="text-fg-secondary">Verified: signed by publisher key {summary.signerKeyId.slice(0, 16)}, and every file matches its SHA-256. Built {summary.builtAt}; schema {summary.schemaVersion}.</p>
+            <p className="text-fg-secondary">Verified: signed by publisher key {summary.signerKeyId.slice(0, 16)}, and every file matches its SHA-256. Built <time dateTime={summary.builtAt}>{formatDateTime(summary.builtAt)}</time>; schema {summary.schemaVersion}.</p>
             <p className="text-muted">Each file was retrieved by the pack builder on the date it lists, not by you. Anything published after that is not in it.</p>
           </div>
           <Licence summary={summary} />
@@ -572,10 +592,10 @@ export default function DataPackImport({ onImported }: { onImported?: () => void
           {summary.tables.map((table) => (
             <fieldset key={table.table} className="space-y-1">
               <legend className="font-semibold text-fg">{table.table}</legend>
-              <SnapshotHistory table={table} pack={summary.pack} />
+              <SnapshotHistory table={table} summary={summary} location={{ kind: 'FOLDER', path: folder }} />
               {table.files.map((file) => (
-                <label key={file.path} className="flex items-center gap-2 text-fg-secondary">
-                  <input type="checkbox" disabled={file.datasetKind === null} checked={selected.has(file.path)} onChange={() => toggle(file.path)} />
+                <label key={file.path} className="flex items-start gap-2 text-fg-secondary">
+                  <input type="checkbox" className="mt-1" disabled={file.datasetKind === null} checked={selected.has(file.path)} onChange={() => toggle(file.path)} />
                   {fileLabel(file)}{file.datasetKind === null && ' · this app does not import this file'}
                 </label>
               ))}

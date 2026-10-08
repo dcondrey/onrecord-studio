@@ -19,6 +19,7 @@ import type {
   SearchPageArgs,
   SearchPaging,
   SourceLifecycleState,
+  StoryLead,
 } from '../types';
 import {
   loadBriefingProject,
@@ -34,6 +35,33 @@ export interface IngestionMetrics {
   bytesTransferred: number;
 }
 
+export type WorkbenchSurface = 'overview' | 'story';
+/** One lead as the command bar lists it. */
+export interface WorkbenchQueueLead {
+  id: string;
+  headline: string;
+  /** The family or kind the lead is filed under, as its badge reads. */
+  kind: string;
+  /** 1-based position in the queue, which is the rank both workbenches show. */
+  rank: number;
+  /** The ranker's record, so a palette row can draw the lead's score. */
+  lead: StoryLead;
+}
+export type OverviewPerspective = 'leads' | 'following' | 'analytics' | 'casework' | 'tools';
+/** Casework tabs a request can open on; the names are ProfessionalWorkbench's tab labels. */
+export type CaseworkTab = 'Cases' | 'Spending' | 'Coverage' | 'Evidence review' | 'Organization filings';
+/** An Analysis panel the command bar can open: Budget versus actuals, or Data pack import. */
+export type AnalysisPanel = 'budget' | 'pack';
+export interface WorkbenchQueue {
+  surface: WorkbenchSurface;
+  leads: WorkbenchQueueLead[];
+  /**
+   * What the stage shows: the selection, or the lead the workbench fell back to when nothing is
+   * selected or the selection left the queue. An id outside `leads` (the deadline ledger) steps
+   * to the first lead.
+   */
+  current: string | null;
+}
 export type WorkspaceView = 'overview' | 'story' | 'patterns' | 'analysis' | 'evidence' | 'activity' | 'briefing' | 'meetings' | 'compare';
 export type EvidenceMode = 'records' | 'timeline';
 export type AppTheme = ThemePreference;
@@ -62,6 +90,7 @@ export interface NavigationEntry {
   selectedAgencyId: number | null;
   selectedStatus: string | null;
   selectedPolicyDeviation: string | null;
+  selectedStatutoryOnly: boolean;
   selectedRequestId: number | null;
   selectedRequestPortalKey: string | null;
   scrollTop: number;
@@ -207,6 +236,8 @@ interface AppState {
   selectedAgencyId: number | null;
   selectedStatus: string | null;
   selectedPolicyDeviation: string | null;
+  /** Only requests whose statutory deadline the evaluator counts as exceeded. */
+  selectedStatutoryOnly: boolean;
   filteredResults: RequestSearchResult[];
   /** The free-text term that produced `filteredResults`, kept with them so basis labels never describe a newer query. */
   filteredResultsTerm: string;
@@ -253,10 +284,27 @@ interface AppState {
   /** With a case active, views that can be scoped show only what the case covers. */
   scopeToCase: boolean;
   setScopeToCase: (scoped: boolean) => void;
-  /** Casework to open in the overview workbench, from any surface. */
-  requestedCasework: { reportId: string } | null;
-  openCasework: (reportId: string) => void;
-  consumeCasework: () => { reportId: string } | null;
+  /** Casework to open on the overview's Casework tab, from any surface. */
+  requestedCasework: { reportId: string; tab?: CaseworkTab } | null;
+  openCasework: (reportId: string, tab?: CaseworkTab) => void;
+  /** The overview's tab; not persisted, so every launch opens on Leads. */
+  overviewPerspective: OverviewPerspective;
+  setOverviewPerspective: (perspective: OverviewPerspective) => void;
+  /** An Analysis panel to scroll to and focus once the Analysis view renders. */
+  requestedAnalysisPanel: AnalysisPanel | null;
+  requestAnalysisPanel: (panel: AnalysisPanel | null) => void;
+  /**
+   * The lead queue the visible workbench (overview or Story desk) shows, published so the command
+   * bar can list and step through it; null when no workbench is mounted.
+   */
+  workbenchQueue: WorkbenchQueue | null;
+  setWorkbenchQueue: (queue: WorkbenchQueue | null) => void;
+  /** The selected lead per workbench surface, by lead id. */
+  workbenchSelection: Partial<Record<WorkbenchSurface, string>>;
+  selectWorkbenchLead: (surface: WorkbenchSurface, id: string) => void;
+  /** Moves the visible workbench's selection by `delta` along its queue, stopping at either end. */
+  stepWorkbenchLead: (delta: 1 | -1) => void;
+  consumeCasework: () => { reportId: string; tab?: CaseworkTab } | null;
   sincePreset: SincePreset;
   previousOpenAt: string | null;
   setSincePreset: (preset: SincePreset) => void;
@@ -321,6 +369,7 @@ interface AppState {
     agencyId: number | null,
     status: string | null,
     policyDeviation?: string | null,
+    statutoryOnly?: boolean,
   ) => void;
   setFilteredResults: (
     results: RequestSearchResult[],
@@ -400,6 +449,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectedAgencyId: null,
   selectedStatus: null,
   selectedPolicyDeviation: null,
+  selectedStatutoryOnly: false,
   filteredResults: [],
   filteredResultsTerm: '',
   filteredResultsTotal: 0,
@@ -438,11 +488,26 @@ export const useAppStore = create<AppState>((set, get) => ({
   }),
   scopeToCase: true,
   setScopeToCase: (scopeToCase) => set({ scopeToCase }),
-  requestedCasework: null,
-  openCasework: (reportId) => {
-    get().setWorkspaceView('overview');
-    set({ requestedCasework: { reportId }, inspectorStack: [] });
+  workbenchQueue: null,
+  setWorkbenchQueue: (workbenchQueue) => set({ workbenchQueue }),
+  workbenchSelection: {},
+  selectWorkbenchLead: (surface, id) => set((state) => ({ workbenchSelection: { ...state.workbenchSelection, [surface]: id } })),
+  stepWorkbenchLead: (delta) => {
+    const queue = get().workbenchQueue;
+    if (!queue || queue.leads.length === 0) return;
+    const current = queue.leads.findIndex((lead) => lead.id === queue.current);
+    const next = current < 0 ? 0 : Math.max(0, Math.min(queue.leads.length - 1, current + delta));
+    get().selectWorkbenchLead(queue.surface, queue.leads[next].id);
   },
+  requestedCasework: null,
+  openCasework: (reportId, tab) => {
+    get().setWorkspaceView('overview');
+    set({ requestedCasework: { reportId, tab }, overviewPerspective: 'casework', inspectorStack: [] });
+  },
+  overviewPerspective: 'leads',
+  setOverviewPerspective: (overviewPerspective) => set({ overviewPerspective }),
+  requestedAnalysisPanel: null,
+  requestAnalysisPanel: (requestedAnalysisPanel) => set({ requestedAnalysisPanel }),
   consumeCasework: () => {
     const request = get().requestedCasework;
     if (request) set({ requestedCasework: null });
@@ -616,6 +681,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       selectedAgencyId: null,
       selectedStatus: null,
       selectedPolicyDeviation: null,
+      selectedStatutoryOnly: false,
       activeLegalFindings: [],
     }),
   setPortalSyncState: (portalKey, syncing, syncRunId) =>
@@ -698,8 +764,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     selectedAgencyId,
     selectedStatus,
     selectedPolicyDeviation = null,
+    selectedStatutoryOnly = false,
   ) =>
-    set({ searchTerm, selectedAgencyId, selectedStatus, selectedPolicyDeviation }),
+    set({ searchTerm, selectedAgencyId, selectedStatus, selectedPolicyDeviation, selectedStatutoryOnly }),
   setFilteredResults: (filteredResults, filteredResultsTerm = '', paging) =>
     set(() => ({
       filteredResults,
@@ -805,6 +872,7 @@ function navigationEntry(state: AppState): NavigationEntry {
     selectedAgencyId: state.selectedAgencyId,
     selectedStatus: state.selectedStatus,
     selectedPolicyDeviation: state.selectedPolicyDeviation,
+    selectedStatutoryOnly: state.selectedStatutoryOnly,
     selectedRequestId: state.selectedRequestId,
     selectedRequestPortalKey: state.selectedRequestPortalKey,
     scrollTop: currentViewScrollTop(),

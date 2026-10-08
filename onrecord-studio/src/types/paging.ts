@@ -50,6 +50,8 @@ export interface SearchPageArgs {
   agencyId: number | null;
   status: string | null;
   policyDeviation: string | null;
+  /** Only requests whose statutory deadline the evaluator counts as exceeded (the ledger's misses). */
+  statutoryDeadlineExceeded: boolean;
 }
 
 /** Where a paged result list stands. `null` paging on the store means the list is complete as given. */

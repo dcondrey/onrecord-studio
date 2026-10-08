@@ -88,7 +88,7 @@ describe('DataPackImport', () => {
     await act(async () => { fireEvent.change(screen.getByRole('combobox', { name: 'Published pack' }), { target: { value: 'san-diego-reports' } }); });
 
     expect(invokeCommand).toHaveBeenCalledWith('fetch_published_pack_manifest', { pack: 'san-diego-reports' });
-    expect(screen.getByText(/Built 2026-10-06T22:59:25Z/)).toBeTruthy();
+    expect(document.querySelector('time[datetime="2026-10-06T22:59:25Z"]')).toBeTruthy();
     expect(screen.getByText('Informational only.')).toBeTruthy();
     fireEvent.click(screen.getByRole('checkbox', { name: /^2025 · 10 rows · 3 MB/ }));
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Download and import 3 MB' })); });
@@ -150,6 +150,37 @@ describe('DataPackImport', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'View as table' }).at(-1)!);
     const row = screen.getByRole('cell', { name: /^not separated: counted in added and removed/ }).closest('tr')!;
     expect(row.textContent).not.toMatch(/(^|[^\d,])0($|[^\d,])/);
+  });
+
+  it('opens a change pair\'s rows from the inspected folder and never shows a page the user paged away from', async () => {
+    const original = (stamp: string) => ({ path: `originals/call_types/${stamp}/types.csv`, year: null, rows: 10, bytes: 10, partial: false, sourceUrl: 'https://example.test/', retrievedAt: `${stamp}T13:23:00Z`, datasetKind: 'REGIONAL_DATA' as const, licence: null });
+    const record = 'changes/call_types/2026-09-15T132300Z.parquet';
+    const changes = [{ path: record, previous: original('2026-09-01').path, previousRetrievedAt: '2026-09-01T13:23:00Z', current: original('2026-09-15').path, currentRetrievedAt: '2026-09-15T13:23:00Z', added: 250, removed: 0, changed: 0, wholeRecords: false }];
+    const manifest = { ...summary('snapshots'), snapshots: true, tables: [{ table: 'call_types', files: [original('2026-09-01'), original('2026-09-15')], unchangedChecks: 0, lastCheckedAt: null, changeRecords: 1, changes }] };
+    const reads: Array<{ args: Record<string, unknown>; resolve(value: unknown): void }> = [];
+    const page = (offset: number) => ({ path: record, total: 250, offset, rows: [{ change: 'added', publisherRecordId: `R-${offset}`, keyOccurrence: 1, field: null, before: null, after: JSON.stringify({ id: `R-${offset}`, amount: '01' }), note: null }] });
+    vi.mocked(open).mockResolvedValueOnce('/packs/snapshots');
+    vi.mocked(invokeCommand).mockImplementation(((command: string, args: Record<string, unknown>) => command === 'read_data_pack_change_record'
+      ? new Promise((resolve) => reads.push({ args, resolve }))
+      : Promise.resolve(command === 'list_published_packs' ? [] : manifest)) as unknown as typeof invokeCommand);
+    render(<DataPackImport />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Choose pack folder' })); });
+
+    await act(async () => { fireEvent.click(screen.getByRole('img', { name: /^Sep 1, 2026 to Sep 15, 2026: 250 added/ })); });
+    expect(reads[0].args).toEqual({ location: { kind: 'FOLDER', path: '/packs/snapshots' }, manifestSha256: 'cd'.repeat(32), path: record, offset: 0, limit: 100 });
+    await act(async () => { reads[0].resolve(page(0)); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Next' })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Previous' })); });
+    await act(async () => { reads[2].resolve(page(0)); });
+    await act(async () => { reads[1].resolve(page(100)); });
+
+    expect(reads.map((read) => read.args.offset)).toEqual([0, 100, 0]);
+    expect(screen.getByText('Rows 1–1 of 250')).toBeTruthy();
+    expect(screen.getByText('R-0')).toBeTruthy();
+    // An added record is shown whole from the later retrieval; its earlier side is stated as absent.
+    expect(screen.getByText('id: R-0 · amount: 01')).toBeTruthy();
+    expect(screen.getByText('not in the earlier retrieval')).toBeTruthy();
+    expect(screen.queryByText('R-100')).toBeNull();
   });
 
   it('never shows a published manifest that resolves after another pack was chosen', async () => {

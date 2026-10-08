@@ -52,19 +52,17 @@ FROM (
 ) AS required_layout
 "#;
 
-/// Per-agency aggregate over every request, rendered from `analysis::statute`.
-///
-/// Only the aggregation belongs to this module. The determination proxy, the extension-validity
-/// rule, the calendar-day derivation, and every threshold are rendered from `statute::sql`, which
-/// is the same model `analysis::timeline` evaluates one request at a time. The two therefore
-/// cannot drift apart without failing `statutory_verdicts_match_the_per_request_evaluator`.
+/// The per-request statutory evaluation, as the `court_holidays`, `parsed`, `milestones`,
+/// `extended` and `evaluated` CTEs (no leading `WITH`), over every request with an agency and
+/// narrowed by `{created_window}`. The deadline ledger aggregates it and the evidence search's
+/// statutory filter selects from it, so the requests a ledger count names are the ones the
+/// filter lists.
 ///
 /// The `parsed` CTE establishes the column names `statute::sql` documents as its contract. Note
 /// that instants and calendar dates are derived separately and deliberately: durations and
 /// ordering use the `TIMESTAMPTZ`-derived instants, while every day count uses the recorded-offset
 /// date, because the statute counts days in the offset the agency wrote down.
-const AGENCY_PERFORMANCE_QUERY_TEMPLATE: &str = r#"
-WITH {court_holidays_cte},
+const EVALUATED_REQUESTS_TEMPLATE: &str = r#"{court_holidays_cte},
 parsed AS (
     SELECT
         requests.id,
@@ -91,9 +89,7 @@ parsed AS (
     LEFT JOIN {db}statutory_extensions AS statutory_extensions
       ON statutory_extensions.request_id = requests.id
      AND statutory_extensions.portal_subdomain = requests.portal_subdomain
-    WHERE requests.agency_id IS NOT NULL
-      AND (?2 = '' OR TRY_CAST(requests.created_at AS TIMESTAMPTZ) >= TRY_CAST(?2 AS TIMESTAMPTZ))
-      AND (?3 = '' OR TRY_CAST(requests.created_at AS TIMESTAMPTZ) < TRY_CAST(?3 AS TIMESTAMPTZ))
+    WHERE requests.agency_id IS NOT NULL{created_window}
 ),
 milestones AS (
     SELECT
@@ -121,7 +117,21 @@ evaluated AS (
             ELSE NULL
         END AS latency_seconds
     FROM extended
-),
+)"#;
+
+/// The created-at window the aggregate binds as `?2` and `?3`; an empty bound is open.
+const CREATED_WINDOW: &str = "
+      AND (?2 = '' OR TRY_CAST(requests.created_at AS TIMESTAMPTZ) >= TRY_CAST(?2 AS TIMESTAMPTZ))
+      AND (?3 = '' OR TRY_CAST(requests.created_at AS TIMESTAMPTZ) < TRY_CAST(?3 AS TIMESTAMPTZ))";
+
+/// Per-agency aggregate over every request, rendered from `analysis::statute`.
+///
+/// Only the aggregation belongs to this module. The determination proxy, the extension-validity
+/// rule, the calendar-day derivation, and every threshold are rendered from `statute::sql`, which
+/// is the same model `analysis::timeline` evaluates one request at a time. The two therefore
+/// cannot drift apart without failing `statutory_verdicts_match_the_per_request_evaluator`.
+const AGENCY_PERFORMANCE_QUERY_TEMPLATE: &str = r#"
+WITH {evaluated_requests},
 request_counts AS (
     SELECT
         agency_id,
@@ -142,6 +152,12 @@ request_counts AS (
         COUNT(*) FILTER (
             WHERE {statutory_violation_predicate}
         ) AS statutory_violation_count,
+        COUNT(*) FILTER (
+            WHERE {statutory_clock_matured_predicate}
+        ) AS statutory_matured_count,
+        COUNT(*) FILTER (
+            WHERE ({statutory_violation_predicate}) AND ({statutory_clock_matured_predicate})
+        ) AS statutory_matured_violation_count,
         COUNT(*) FILTER (
             WHERE {suspicious_fast_closure_predicate}
         ) AS suspicious_fast_closure_count
@@ -213,7 +229,9 @@ SELECT
     CAST(request_counts.statutory_violation_count AS DOUBLE)
         / NULLIF(CAST(request_counts.total_requests AS DOUBLE), 0.0),
     request_counts.suspicious_fast_closure_count,
-    COALESCE(released_documents.total_documents_released, 0)
+    COALESCE(released_documents.total_documents_released, 0),
+    request_counts.statutory_matured_count,
+    request_counts.statutory_matured_violation_count
 FROM request_counts
 CROSS JOIN global_latency
 LEFT JOIN agency_latency
@@ -286,6 +304,8 @@ struct RawAgencyPerformanceProfile {
     statutory_violation_rate: f64,
     suspicious_fast_closure_count: i64,
     total_documents_released: i64,
+    statutory_matured_count: i64,
+    statutory_matured_violation_count: i64,
 }
 
 struct KeywordPattern {
@@ -404,13 +424,25 @@ impl AnalyticsEngine {
 /// Statutory placeholders are expanded before `{db}` so the two substitution passes stay
 /// independent: `statute::sql` never sees a table qualifier and `qualify` never sees a rule.
 fn agency_performance_query(table_prefix: &str) -> String {
-    qualify(
-        &statute::sql::render(AGENCY_PERFORMANCE_QUERY_TEMPLATE),
-        table_prefix,
-    )
+    let template = AGENCY_PERFORMANCE_QUERY_TEMPLATE.replace(
+        "{evaluated_requests}",
+        &EVALUATED_REQUESTS_TEMPLATE.replace("{created_window}", CREATED_WINDOW),
+    );
+    qualify(&statute::sql::render(&template), table_prefix)
 }
 
-fn query_agency_performance_profiles(
+/// A query listing `portal_subdomain:id` for every request the statutory model counts as past
+/// its deadline, all-time: the rows behind the ledger's `statutory_violation_count`. It binds no
+/// parameter, so it can be embedded in another statement's predicate.
+pub fn statutory_violation_keys_query() -> String {
+    let template = format!(
+        "WITH {} SELECT portal_subdomain || ':' || CAST(id AS VARCHAR) FROM evaluated WHERE {{statutory_violation_predicate}}",
+        EVALUATED_REQUESTS_TEMPLATE.replace("{created_window}", "")
+    );
+    qualify(&statute::sql::render(&template), "")
+}
+
+pub(crate) fn query_agency_performance_profiles(
     connection: &Connection,
     latency_threshold_days: f64,
     created_from: &str,
@@ -441,6 +473,8 @@ fn query_agency_performance_profiles(
                     statutory_violation_rate: row.get(13)?,
                     suspicious_fast_closure_count: row.get(14)?,
                     total_documents_released: row.get(15)?,
+                    statutory_matured_count: row.get(16)?,
+                    statutory_matured_violation_count: row.get(17)?,
                 })
             },
         )
@@ -650,6 +684,11 @@ fn convert_raw_profile(
         anomaly_count: count(raw.anomaly_count, "latency anomaly count")?,
         statutory_violation_count,
         statutory_violation_rate: raw.statutory_violation_rate,
+        statutory_matured_count: count(raw.statutory_matured_count, "matured request count")?,
+        statutory_matured_violation_count: count(
+            raw.statutory_matured_violation_count,
+            "matured violation count",
+        )?,
         suspicious_fast_closure_count: count(
             raw.suspicious_fast_closure_count,
             "fast closure count",
@@ -801,6 +840,54 @@ mod tests {
                 .unwrap(),
             Vec::new()
         );
+    }
+
+    /// Maturity is decided by age alone. Two 18-day-old requests, one past its 10-day deadline
+    /// and one inside a valid extension, are both left out: keeping the unextended miss and
+    /// dropping the extended one would select on how requests ended and skew the rate. The
+    /// miss-rate numerator counts only matured misses, so it stays inside its denominator.
+    #[test]
+    fn matures_requests_by_age_alone_and_counts_misses_among_them() {
+        let connection = connection();
+        let day = |offset: i64| (chrono::Utc::now() + chrono::Duration::days(offset)).to_rfc3339();
+        connection
+            .execute_batch(&format!(
+                "DELETE FROM db.requests;
+                 INSERT INTO db.requests VALUES
+                    (20, 'city', 1, 'Young, active', 'x', 'open', '{young}', '{young_update}', NULL, NULL, NULL),
+                    (21, 'city', 1, 'Mid, unextended', 'x', 'open', '{mid}', NULL, NULL, NULL, NULL),
+                    (24, 'city', 1, 'Mid, extended', 'x', 'open', '{mid}', NULL, NULL, NULL, NULL),
+                    (22, 'city', 1, 'Answered in time', 'x', 'closed', '{old}', '{old_answer}', '{old_answer}', NULL, NULL),
+                    (23, 'city', 1, 'Never answered', 'x', 'open', '{old}', NULL, NULL, NULL, NULL);
+                 INSERT INTO db.statutory_extensions VALUES
+                    (24, 'city', '{notice}', '{expected}', '{reason}', 'email');",
+                young = day(-3),
+                young_update = day(-1),
+                mid = day(-18),
+                notice = day(-16),
+                expected = day(2),
+                reason = StatutoryExtensionReason::VoluminousRecords.as_str(),
+                old = day(-60),
+                old_answer = day(-55),
+            ))
+            .unwrap();
+        let profiles = query_agency_performance_profiles(
+            &connection,
+            90.0,
+            "",
+            "",
+            AnalyticsSource::ForeignSqlite.table_prefix(),
+        )
+        .unwrap();
+        let routine = profiles
+            .iter()
+            .find(|profile| profile.agency_id == 1)
+            .unwrap();
+        assert_eq!(routine.total_requests_processed, 5);
+        assert_eq!(routine.statutory_matured_count, 2);
+        assert_eq!(routine.statutory_matured_violation_count, 1);
+        // The 18-day unextended miss is counted, just not in the matured rate.
+        assert_eq!(routine.statutory_violation_count, 2);
     }
 
     #[test]

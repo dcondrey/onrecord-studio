@@ -87,6 +87,11 @@ afterEach(() => {
 const CORE_DATA = 'Get San Diego’s core public data';
 const NO_SOURCE_COPY = /Leads come from findings on the records you collect/;
 
+/** These cases read the factor table: the bar-table figure, its rows and their in-place details. */
+function showFactorTable() {
+  fireEvent.click(screen.getByRole('tab', { name: 'Factor table' }));
+}
+
 async function renderWithNoLeads(schema: { datasets: unknown[] } | null) {
   bridge.discovery = { controller: null, state: { schema } };
   render(<StoryDesk />);
@@ -98,6 +103,7 @@ async function renderWithNoLeads(schema: { datasets: unknown[] } | null) {
 describe('StoryDesk', () => {
   it('renders leads with their score and every factor and its evidence', async () => {
     render(<StoryDesk />);
+    showFactorTable();
     expect(screen.getByRole('status').textContent).toContain('Ranking leads');
     await waitFor(() => expect(bridge.pending).toHaveLength(1));
     act(() => bridge.pending[0]([lead('a', 'Stated total does not match the table')]));
@@ -105,7 +111,7 @@ describe('StoryDesk', () => {
     const row = screen.getByRole('row', { name: /^#1, Stated total does not match the table, score 52:/ });
     expect(row.querySelectorAll('td')[0].textContent).toBe('52');
     expect(screen.getAllByText('pattern signal').length).toBeGreaterThan(0);
-    fireEvent.click(within(row).getByRole('button', { name: 'Details' }));
+    fireEvent.click(within(row).getByRole('button', { name: 'Details: Stated total does not match the table' }));
     expect(screen.getByText(/largest figure named/)).toBeTruthy();
     expect(screen.getByText(/1 related finding/)).toBeTruthy();
   });
@@ -119,6 +125,7 @@ describe('StoryDesk', () => {
     measuredZero.publicInterest.factors.push({ name: 'evidence strength', basisPoints: 0, evidence: 'confidence 0.03%' });
     measuredZero.publicInterest.factors.push({ name: 'counted statutory or policy violation', basisPoints: 1800, evidence: 'counted' });
     render(<StoryDesk />);
+    showFactorTable();
     await waitFor(() => expect(bridge.pending).toHaveLength(1));
     act(() => bridge.pending[0]([unassessed, measuredZero]));
     await screen.findByText('Unassessed lead');
@@ -132,7 +139,10 @@ describe('StoryDesk', () => {
     expect(zero.textContent).toBe('+0');
     expect(zero.querySelector('line')).toBeTruthy();
     expect(zero.querySelector('[data-absence]')).toBeNull();
-    expect(screen.getByRole('row', { name: /^#1, Unassessed lead/ }).querySelectorAll('td')[column('counted statutory or policy violation')].textContent).toBe('·');
+    // A factor the record lacks prints nothing; a screen reader hears why the cell is empty.
+    const lacking = screen.getByRole('row', { name: /^#1, Unassessed lead/ }).querySelectorAll('td')[column('counted statutory or policy violation')];
+    expect(lacking.querySelector('.sr-only')?.textContent).toBe('not in this finding’s record');
+    expect(lacking.querySelector('svg')).toBeNull();
     expect(screen.getByText('Counted violation (legal claim)')).toBeTruthy();
   });
 
@@ -140,6 +150,7 @@ describe('StoryDesk', () => {
     const unknown = lead('a', 'Lead with a new factor');
     unknown.publicInterest.factors = [{ name: 'novel factor', basisPoints: 300, evidence: 'new' }];
     render(<StoryDesk />);
+    showFactorTable();
     await waitFor(() => expect(bridge.pending).toHaveLength(1));
     act(() => bridge.pending[0]([unknown]));
     await screen.findByText('Lead with a new factor');
@@ -149,10 +160,11 @@ describe('StoryDesk', () => {
 
   it('opens the dossier for the lead whose button was pressed', async () => {
     render(<StoryDesk />);
+    showFactorTable();
     await waitFor(() => expect(bridge.pending).toHaveLength(1));
     act(() => bridge.pending[0]([lead('a', 'First lead'), lead('b', 'Second lead')]));
     await screen.findByText('Second lead');
-    fireEvent.click(within(screen.getByRole('row', { name: /^#2, Second lead/ })).getByRole('button', { name: 'Details' }));
+    fireEvent.click(within(screen.getByRole('row', { name: /^#2, Second lead/ })).getByRole('button', { name: 'Details: Second lead' }));
     act(() => {
       screen.getByRole('button', { name: 'Open evidence chain: Second lead' }).click();
     });
@@ -162,6 +174,7 @@ describe('StoryDesk', () => {
 
   it('asks which drafts apply to a lead only once its draft toggle is opened', async () => {
     render(<StoryDesk />);
+    showFactorTable();
     await waitFor(() => expect(bridge.pending).toHaveLength(1));
     act(() => bridge.pending[0]([lead('a', 'First lead'), lead('b', 'Second lead')]));
     await screen.findByText('Second lead');
@@ -170,13 +183,12 @@ describe('StoryDesk', () => {
     });
     expect(bridge.availabilityRequests).toEqual([]);
     expect(screen.queryByRole('region', { name: 'Drafted artifacts' })).toBeNull();
-    const summaries = screen.getAllByText('Draft a records request or appeal');
-    expect(summaries).toHaveLength(2);
-    fireEvent.click(within(screen.getByRole('row', { name: /^#2, Second lead/ })).getByRole('button', { name: 'Details' }));
+    expect(screen.getAllByRole('button', { name: /^Draft records request: /, hidden: true })).toHaveLength(2);
+    fireEvent.click(within(screen.getByRole('row', { name: /^#2, Second lead/ })).getByRole('button', { name: 'Details: Second lead' }));
     act(() => {
-      summaries[1].click();
+      screen.getByRole('button', { name: 'Draft records request: Second lead' }).click();
     });
-    await screen.findByRole('button', { name: /draft records request/i });
+    await screen.findByRole('region', { name: 'Drafted artifacts' });
     expect(bridge.availabilityRequests).toEqual(['b']);
     expect(screen.getAllByRole('region', { name: 'Drafted artifacts' })).toHaveLength(1);
   });
@@ -222,6 +234,7 @@ describe('StoryDesk', () => {
 
   it('discards a lead list that resolves after a findings refresh superseded it', async () => {
     render(<StoryDesk />);
+    showFactorTable();
     await waitFor(() => expect(bridge.pending).toHaveLength(1));
     act(() => useAppStore.getState().requestFindingsRefresh());
     await waitFor(() => expect(bridge.pending).toHaveLength(2));
@@ -238,9 +251,10 @@ describe('StoryDesk', () => {
 
   it('finishes a briefing add that was in flight when the leads were refreshed', async () => {
     render(<StoryDesk />);
+    showFactorTable();
     await waitFor(() => expect(bridge.pending).toHaveLength(1));
     act(() => bridge.pending[0]([lead('kept', 'Kept lead')]));
-    fireEvent.click(await screen.findByRole('button', { name: 'Details' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Details: Kept lead' }));
     fireEvent.click(screen.getByRole('button', { name: 'Add to briefing' }));
     await waitFor(() => expect(bridge.findings).not.toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));

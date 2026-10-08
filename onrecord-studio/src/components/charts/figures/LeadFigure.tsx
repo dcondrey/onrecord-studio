@@ -794,7 +794,7 @@ function legendOf(figure: LeadFigureData): LegendItem[] {
         : [];
     case 'paired':
       return figure.display === 'bullet'
-        ? [{ key: 'subject', label: figure.subjectLabel, swatch: 'rect', tone: 'ink' }, { key: 'comparison', label: `${figure.comparisonLabel} (track and tick)`, swatch: 'rect', tone: 'track' },
+        ? [{ key: 'subject', label: figure.subjectLabel, swatch: 'rect', tone: 'ink' }, { key: 'comparison', label: `${figure.comparisonLabel} (tick)`, swatch: 'rect', tone: 'track' },
           ...(figure.band ? [{ key: 'band', label: figure.band.label, swatch: 'dashed-line' as const, tone: 'context' as const }] : [])]
         : [{ key: 'subject', label: figure.subjectLabel, swatch: 'dot', tone: 'ink' }, { key: 'comparison', label: figure.comparisonLabel, swatch: 'hollow', tone: 'context' }];
     case 'bins':

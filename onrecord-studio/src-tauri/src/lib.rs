@@ -101,6 +101,7 @@ fn licensed_invoke_handler(invoke: tauri::ipc::Invoke<tauri::Wry>) -> bool {
         commands::analysis_workbench::fetch_city_dataset,
         commands::data_packs::inspect_data_pack,
         commands::data_packs::import_data_pack_files,
+        commands::data_packs::read_data_pack_change_record,
         commands::data_packs::list_published_packs,
         commands::data_packs::fetch_published_pack_manifest,
         commands::data_packs::fetch_published_pack_files,

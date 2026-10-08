@@ -8,10 +8,14 @@ import { cn } from '../../utils/cn';
 export default function Table({ label, className, children }: { label?: string; className?: string; children: ReactNode }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [moreRight, setMoreRight] = useState(false);
+  const [overflows, setOverflows] = useState(false);
   useEffect(() => {
     const element = scroller.current;
     if (!element) return;
-    const measure = () => setMoreRight(element.scrollLeft + element.clientWidth < element.scrollWidth - 1);
+    const measure = () => {
+      setMoreRight(element.scrollLeft + element.clientWidth < element.scrollWidth - 1);
+      setOverflows(element.clientWidth < element.scrollWidth - 1);
+    };
     measure();
     element.addEventListener('scroll', measure, { passive: true });
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
@@ -24,7 +28,12 @@ export default function Table({ label, className, children }: { label?: string; 
   }, []);
   return (
     <div className={cn('relative', className)}>
-      <div ref={scroller} className="overflow-x-auto">
+      {/* Only a table that scrolls is a tab stop, so the keyboard can reach its clipped columns. */}
+      <div
+        ref={scroller}
+        className="focus-ring overflow-x-auto"
+        {...(overflows ? { tabIndex: 0, role: 'region', 'aria-label': label ?? 'Table' } : {})}
+      >
         <table aria-label={label} className="w-full border-collapse text-body">{children}</table>
       </div>
       <div

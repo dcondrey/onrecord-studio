@@ -338,7 +338,7 @@ function Detail({ claim, deadline, tracker }: { claim: ClaimedRequest; deadline:
                 data-highlighted={highlighted === event.id ? '' : undefined}
                 className={cn('flex items-start justify-between gap-2 rounded-lg border p-2 outline-none transition-colors', highlighted === event.id ? 'border-line-strong bg-raised' : 'border-line')}
               >
-                <span>
+                <span className="text-fg-secondary">
                   <strong className="font-medium text-fg">{KIND_LABELS[event.kind]}</strong> on{' '}
                   <time dateTime={event.occurredAt} title={event.occurredAt} className="whitespace-nowrap tabular-nums">{formatShortDate(event.occurredAt)}</time> ·{' '}
                   {event.basis === 'EMAIL_CONFIRMED' ? 'confirmed from an email' : 'entered by you'}

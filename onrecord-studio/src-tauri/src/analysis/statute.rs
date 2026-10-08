@@ -272,6 +272,22 @@ pub mod sql {
         )
     }
 
+    /// A request old enough that no entitlement could still be running: the observation date is
+    /// past the longest deadline any request created that day could have (the initial period
+    /// plus the maximum extension, carried to a court day). Decided by age alone, never by the
+    /// request's own extension or determination, so a miss rate over matured requests does not
+    /// select on how they ended; until then the determination proxy can still move.
+    pub fn statutory_clock_matured_predicate() -> String {
+        format!(
+            "created_timestamp IS NOT NULL
+          AND created_date IS NOT NULL
+          AND {OBSERVATION_CALENDAR_DATE} > {}",
+            court_day_on_or_after(&format!(
+                "initial_deadline_date + {CPRA_MAXIMUM_EXTENSION_DAYS}"
+            ))
+        )
+    }
+
     /// Lifecycle anomaly, not a statutory finding: a closure too fast to represent real review.
     pub fn suspicious_fast_closure_predicate() -> String {
         format!(
@@ -311,6 +327,10 @@ pub mod sql {
             .replace(
                 "{statutory_violation_predicate}",
                 &statutory_violation_predicate(),
+            )
+            .replace(
+                "{statutory_clock_matured_predicate}",
+                &statutory_clock_matured_predicate(),
             )
             .replace(
                 "{suspicious_fast_closure_predicate}",

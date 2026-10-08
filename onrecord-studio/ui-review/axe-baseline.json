@@ -1,9 +1,9 @@
 {
   "note": "Serious and critical axe-core violations accepted as of this run; regenerate with `npm run ui:check -- <run> --write-baseline` after fixing some.",
   "generatedFrom": {
-    "label": "27008dec-202610081454",
-    "gitHead": "27008dec",
-    "generatedAt": "2026-10-08T14:54:02.970Z",
+    "label": "5cbc4ae0-202610081829",
+    "gitHead": "5cbc4ae0",
+    "generatedAt": "2026-10-08T18:29:37.396Z",
     "data": "real",
     "browser": "bundled chromium 156.0.8078.4",
     "axeVersion": "4.14.0",
@@ -29,6 +29,7 @@
     "chart-gallery",
     "collection-plan",
     "command-palette",
+    "command-palette-pending",
     "command-palette-question",
     "compare",
     "compare-dispositions",
@@ -66,23 +67,39 @@
     "overview-casework-case",
     "overview-casework-tools",
     "overview-casework-tools-drawer-assess-usefulness",
+    "overview-casework-tools-tab-analytics",
     "overview-casework-tools-tab-coverage",
     "overview-casework-tools-tab-evidence-review",
+    "overview-casework-tools-tab-following",
+    "overview-casework-tools-tab-leads",
     "overview-casework-tools-tab-organization-filings",
     "overview-casework-tools-tab-spending",
-    "overview-drawer-browse-sources-and-add-records",
-    "overview-drawer-data-upkeep-and-storage",
-    "overview-drawer-discoveries-across-your-library",
-    "overview-drawer-plan-an-investigation-or-draft-a-request",
-    "overview-drawer-research-controls-and-saved-dossiers",
-    "overview-drawer-research-run-sources-and-issues",
-    "overview-drawer-shared-language-across-sources",
-    "overview-drawer-topic-packs",
+    "overview-casework-tools-tab-tools",
     "overview-following",
+    "overview-lead-3",
+    "overview-ledger-stage",
     "overview-post-ingest-brief",
     "overview-response-analytics",
     "overview-sidebar-collapsed",
     "overview-subject-dossier",
+    "overview-tab-analytics",
+    "overview-tab-casework",
+    "overview-tab-following",
+    "overview-tab-tools",
+    "overview-tools",
+    "overview-tools-drawer-browse-sources-and-add-records",
+    "overview-tools-drawer-data-upkeep-and-storage",
+    "overview-tools-drawer-discoveries-across-your-library",
+    "overview-tools-drawer-plan-an-investigation-or-draft-a-request",
+    "overview-tools-drawer-research-controls-and-saved-dossiers",
+    "overview-tools-drawer-research-run-sources-and-issues",
+    "overview-tools-drawer-shared-language-across-sources",
+    "overview-tools-drawer-topic-packs",
+    "overview-tools-tab-analytics",
+    "overview-tools-tab-casework",
+    "overview-tools-tab-following",
+    "overview-tools-tab-leads",
+    "overview-watching-collapsed",
     "patterns",
     "patterns-drawer-entity-graph",
     "patterns-drawer-resolve-entities",
@@ -91,25 +108,10 @@
     "profile-settings",
     "self-review",
     "story",
+    "story-desk-workbench",
     "story-ranked-leads",
-    "story-tab-all-findings"
+    "story-tab-all-findings",
+    "story-tab-factor-table"
   ],
-  "violations": {
-    "compare": {
-      "scrollable-region-focusable": {
-        "impact": "serious",
-        "targets": [
-          {
-            "target": ".overflow-x-auto",
-            "states": [
-              "loading"
-            ],
-            "widths": [
-              1024
-            ]
-          }
-        ]
-      }
-    }
-  }
+  "violations": {}
 }

@@ -27,9 +27,9 @@ app-store = []
 # self-update. An update replaces the binary and never touches the license.
 direct-license = ["dep:tauri-plugin-updater", "dep:tauri-plugin-process"]
 # The data-pack builder (`onrecord-pack-builder`): Keychain access for the publisher key (a
-# macOS-only dependency, so the feature also builds on the Linux snapshot runner) and Parquet
-# writing. Never enabled for the app.
-pack-builder = ["dep:security-framework", "duckdb/parquet"]
+# macOS-only dependency, so the feature also builds on the Linux snapshot runner). Never enabled
+# for the app.
+pack-builder = ["dep:security-framework"]
 
 [dependencies]
 tauri = { version = "2.11.5", features = [] }
@@ -55,7 +55,9 @@ scraper = "0.27"
 base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
 rusqlite = { version = "0.31", default-features = false, features = ["bundled", "limits"] }
-duckdb = { version = "1.10505.0", features = ["bundled", "json", "appender-arrow"] }
+# `parquet` is compiled in, never loaded at runtime: the pack builder writes Parquet copies and
+# change records, and the app reads a pack's change records.
+duckdb = { version = "1.10505.0", features = ["bundled", "json", "parquet", "appender-arrow"] }
 lopdf = "0.44"
 png = "0.18"
 calamine = { version = "0.36", features = ["dates"] }

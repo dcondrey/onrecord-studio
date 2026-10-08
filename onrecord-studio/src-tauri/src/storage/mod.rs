@@ -117,6 +117,30 @@ mod tests {
     }
 
     #[test]
+    fn parquet_round_trips_without_installing_an_extension() {
+        let directory = tempfile::tempdir().expect("temp dir");
+        let path = directory.path().join("record.parquet");
+        let connection = super::open_duckdb(None).expect("in-memory DuckDB must open");
+        connection
+            .execute(
+                &format!(
+                    "COPY (SELECT 'added' AS change, NULL::VARCHAR AS before) TO '{}' (FORMAT parquet)",
+                    path.display()
+                ),
+                [],
+            )
+            .expect("parquet writing must be compiled in");
+        let (change, before): (String, Option<String>) = connection
+            .query_row(
+                "SELECT change, before FROM read_parquet(?1)",
+                [path.to_string_lossy()],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("read_parquet must be compiled in");
+        assert_eq!((change.as_str(), before), ("added", None));
+    }
+
+    #[test]
     fn timestamps_render_in_utc_without_a_session_time_zone() {
         // Stored timestamps carry a literal `Z`; that is only honest while no ICU extension can
         // give the session a local zone.

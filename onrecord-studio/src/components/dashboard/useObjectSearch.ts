@@ -3,6 +3,7 @@ import { invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore, type InspectorTarget } from '../../store/useAppStore';
 import type { CorpusEntityNode, Finding } from '../../types';
+import { matchesTokens, wordTokens } from '../../utils/tokenMatch';
 import { enumLabel, severityLabel } from '../objects/labels';
 
 export type ObjectGroup = 'Findings' | 'Agencies' | 'Entities' | 'Records' | 'Passages';
@@ -15,32 +16,40 @@ export interface ObjectResult {
   target: InspectorTarget;
 }
 
+export interface ObjectSearch {
+  results: ObjectResult[];
+  /** A search for the current text is still running: no result yet is not "no match". */
+  pending: boolean;
+}
+
 const DEBOUNCE_MS = 180;
 const PER_GROUP = 4;
 const MIN_QUERY = 2;
 
 /**
- * Searches every kind of object at once for the palette. Findings and entities are matched locally
- * against one snapshot per palette session; records and passages are queried natively. Results for
- * an older query are dropped, so fast typing never shows matches for text no longer in the box.
+ * Searches every kind of object at once for the palette. Findings, agencies and entities are
+ * matched locally against one snapshot per palette session, word by word (every typed word begins a
+ * word of the name); records and passages come from the native searches as they answer. Results for an older query are dropped, so fast typing never
+ * shows matches for text no longer in the box, and `pending` stays true until this text's answer.
  */
-export function useObjectSearch(query: string): ObjectResult[] {
-  const [results, setResults] = useState<ObjectResult[]>([]);
+export function useObjectSearch(query: string): ObjectSearch {
+  const [settled, setSettled] = useState<{ query: string; results: ObjectResult[] }>({ query: '', results: [] });
   const gate = useLatestRequestGate();
   const snapshot = useRef<{ findings: Finding[]; entities: CorpusEntityNode[] } | null>(null);
   const profiles = useAppStore((state) => state.agencyProfiles);
   const trimmed = query.trim();
+  const searching = trimmed.length >= MIN_QUERY;
 
   useEffect(() => {
-    if (trimmed.length < MIN_QUERY) {
+    if (!searching) {
       gate.invalidate();
-      setResults([]);
+      setSettled({ query: trimmed, results: [] });
       if (!trimmed) snapshot.current = null;
       return;
     }
     const token = gate.begin();
     const timer = window.setTimeout(() => {
-      const needle = trimmed.toLocaleLowerCase();
+      const needle = wordTokens(trimmed);
       const local = snapshot.current
         ? Promise.resolve(snapshot.current)
         : Promise.all([
@@ -58,26 +67,31 @@ export function useObjectSearch(query: string): ObjectResult[] {
       void Promise.all([local, records, passages]).then(([{ findings, entities }, recordRows, passageRows]) => {
         if (!gate.isCurrent(token)) return;
         const next: ObjectResult[] = [];
-        for (const finding of findings.filter((row) => !row.dismissedAt && row.headline.toLocaleLowerCase().includes(needle)).slice(0, PER_GROUP)) {
+        for (const finding of findings.filter((row) => !row.dismissedAt && matchesTokens(needle, row.headline)).slice(0, PER_GROUP)) {
           next.push({ key: `finding:${finding.id}`, group: 'Findings', label: finding.headline, detail: `${severityLabel(finding.severity)} · ${enumLabel(finding.kind)}`, target: { kind: 'finding', id: finding.id, label: finding.headline } });
         }
-        for (const profile of profiles.filter((row) => row.agencyName.toLocaleLowerCase().includes(needle)).slice(0, PER_GROUP)) {
+        for (const profile of profiles.filter((row) => matchesTokens(needle, row.agencyName)).slice(0, PER_GROUP)) {
           next.push({ key: `agency:${profile.portalSubdomain}:${profile.agencyId}`, group: 'Agencies', label: profile.agencyName, detail: `${profile.portalSubdomain} · ${profile.totalRequestsProcessed.toLocaleString()} requests`, target: { kind: 'agency', portalKey: profile.portalSubdomain, agencyId: profile.agencyId, label: profile.agencyName } });
         }
-        for (const entity of entities.filter((row) => row.displayValue.toLocaleLowerCase().includes(needle)).slice(0, PER_GROUP)) {
+        for (const entity of entities.filter((row) => matchesTokens(needle, row.displayValue)).slice(0, PER_GROUP)) {
           next.push({ key: `entity:${entity.entityId}`, group: 'Entities', label: entity.displayValue, detail: `${enumLabel(entity.kind)} · ${entity.documentCount.toLocaleString()} documents`, target: { kind: 'entity', entityId: entity.entityId, label: entity.displayValue } });
         }
+        // Records come from the native search, which already matches whole index tokens across the
+        // request and its documents' text; a preview-only filter here would drop real matches.
         for (const record of recordRows) {
           next.push({ key: `request:${record.portalKey}:${record.requestId}`, group: 'Records', label: record.title || `Request ${record.requestId}`, detail: `${record.agencyName} · ${record.status}`, target: { kind: 'request', portalKey: record.portalKey, requestId: record.requestId, label: record.title || `Request ${record.requestId}` } });
         }
         for (const passage of passageRows) {
           next.push({ key: `passage:${passage.stableId}`, group: 'Passages', label: passage.excerpt, detail: `${passage.fileName} · ${passage.agencyName}`, target: { kind: 'document', portalKey: passage.portalKey, documentId: passage.documentId, requestId: passage.requestId, characterStart: passage.characterStart, characterEnd: passage.characterEnd, label: passage.fileName } });
         }
-        setResults(next);
+        setSettled({ query: trimmed, results: next });
       });
     }, DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
-  }, [gate, profiles, trimmed]);
+  }, [gate, profiles, searching, trimmed]);
 
-  return results;
+  // Decided in render from the text the answer belongs to, so the first frame after a keystroke
+  // already reads as searching rather than as an empty result.
+  const current = settled.query === trimmed;
+  return { results: current ? settled.results : [], pending: searching && !current };
 }

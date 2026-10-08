@@ -193,7 +193,7 @@
     "sections": [
       {
         "paragraphs": [
-          "Press Cmd/Ctrl+K. Type to filter commands. A phrase of several words, or one ending in ?, adds an Ask row."
+          "Press Cmd/Ctrl+K. Before you type, the palette lists the top leads (or, on a workbench, the next leads in its queue), three questions it can answer at once under Questions, and the views. Type to filter commands and search findings, records and passages: each word you type must begin a word of the name, so lease finds Lease agreement and not release. While the search runs the palette says so; when nothing matches it offers to search all records for the text. A phrase of several words, or one ending in ?, adds an Ask row."
         ]
       },
       {

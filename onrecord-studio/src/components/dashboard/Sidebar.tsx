@@ -149,7 +149,7 @@ export default function Sidebar() {
                           className={badge.tone === 'warning' ? 'bg-warning/10 text-warning' : 'bg-accent/10 text-accent'}
                         />
                       )}
-                      {badge && <span className="sr-only">{badge.label}</span>}
+                      {badge && <span className="sr-only">, {badge.label}</span>}
                     </>
                   )}
                 </button>

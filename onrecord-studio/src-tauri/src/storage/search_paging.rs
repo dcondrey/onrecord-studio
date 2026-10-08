@@ -7,6 +7,7 @@
 //! (never shown by later pages, counted by the next `count`) or after it (shown once). Offsets
 //! would shift by one for every insert and repeat or skip a row.
 
+use crate::analysis::anomaly::statutory_violation_keys_query;
 use crate::error::AppError;
 use crate::storage::fts::{core_query_phrases, core_query_tokens};
 use crate::storage::pii::mask_pii;
@@ -111,12 +112,16 @@ fn trimmed(value: Option<&str>) -> Option<String> {
         .map(str::to_string)
 }
 
+/// The flat search filters. `statutory_deadline_exceeded` keeps only requests the statutory model
+/// counts as past their deadline: the same rows, read through the same evaluation, as the deadline
+/// ledger's counts, so a ledger row's misses are exactly the list it opens.
 pub(crate) fn build_filters(
     search_term: &str,
     portal_key: Option<&str>,
     agency_id: Option<u64>,
     status: Option<&str>,
     policy_deviation: Option<&str>,
+    statutory_deadline_exceeded: bool,
 ) -> Result<Filters, AppError> {
     let tokens = core_query_tokens(search_term)
         .map_err(|message| AppError::DataParsing(message.to_string()))?;
@@ -130,7 +135,15 @@ pub(crate) fn build_filters(
         status: trimmed(status),
         policy_deviation: trimmed(policy_deviation),
         fts_query: (!tokens.is_empty()).then(|| search_term.trim().to_string()),
-        sql: request_search_filters(&tokens, &phrases),
+        sql: if statutory_deadline_exceeded {
+            format!(
+                "{} AND (requests.portal_subdomain || ':' || CAST(requests.id AS VARCHAR)) IN ({})",
+                request_search_filters(&tokens, &phrases),
+                statutory_violation_keys_query()
+            )
+        } else {
+            request_search_filters(&tokens, &phrases)
+        },
     })
 }
 
@@ -160,8 +173,16 @@ impl DuckDbRepository {
         agency_id: Option<u64>,
         status: Option<&str>,
         policy_deviation: Option<&str>,
+        statutory_deadline_exceeded: bool,
     ) -> Result<u64, AppError> {
-        let filters = build_filters(search_term, portal_key, agency_id, status, policy_deviation)?;
+        let filters = build_filters(
+            search_term,
+            portal_key,
+            agency_id,
+            status,
+            policy_deviation,
+            statutory_deadline_exceeded,
+        )?;
         self.query_connection("Request match count", move |conn| {
             count_matches(conn, &filters)
         })
@@ -178,6 +199,7 @@ impl DuckDbRepository {
         agency_id: Option<u64>,
         status: Option<&str>,
         policy_deviation: Option<&str>,
+        statutory_deadline_exceeded: bool,
         cursor: Option<&str>,
         page_size: usize,
     ) -> Result<AuditRecordPage, AppError> {
@@ -186,7 +208,14 @@ impl DuckDbRepository {
                 "A results page must hold between 1 and {MAXIMUM_PAGE_SIZE} rows"
             )));
         }
-        let filters = build_filters(search_term, portal_key, agency_id, status, policy_deviation)?;
+        let filters = build_filters(
+            search_term,
+            portal_key,
+            agency_id,
+            status,
+            policy_deviation,
+            statutory_deadline_exceeded,
+        )?;
         let cursor = cursor.map(decode_cursor).transpose()?;
         // One row past the page says whether another page exists, so the cursor is absent exactly
         // at the end rather than present-and-empty.
@@ -400,7 +429,16 @@ mod tests {
         let mut total = None;
         loop {
             let page = repo
-                .search_requests_page(term, None, None, None, None, cursor.as_deref(), page_size)
+                .search_requests_page(
+                    term,
+                    None,
+                    None,
+                    None,
+                    None,
+                    false,
+                    cursor.as_deref(),
+                    page_size,
+                )
                 .await
                 .expect("page");
             assert!(page.records.len() <= page_size);
@@ -417,13 +455,81 @@ mod tests {
         }
     }
 
+    /// The ledger's "22 counted deadline misses" opens a list of exactly those 22 requests: the
+    /// statutory filter reads the same per-request evaluation the ledger aggregates. A request id
+    /// reused by another portal, a miss filed under another agency, and an answer in time are all
+    /// kept out of the list.
+    #[tokio::test]
+    async fn statutory_filter_lists_exactly_the_requests_the_ledger_counts() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let repo = DuckDbRepository::new(dir.path().join("core.duckdb")).expect("core opens");
+        repo.run_migrations(MIGRATION).await.expect("migrations");
+        let day = |offset: i64| (chrono::Utc::now() + chrono::Duration::days(offset)).to_rfc3339();
+        let (created, late, prompt) = (day(-60), day(-30), day(-58));
+        repo.query_connection("seed", move |conn| {
+            conn.execute_batch(&format!(
+                "INSERT INTO portals (subdomain, display_name, base_url, origin_url) VALUES
+                    ('la', 'Los Angeles', 'https://la.example', 'https://la.example'),
+                    ('sd', 'San Diego', 'https://sd.example', 'https://sd.example');
+                 INSERT INTO agencies (id, portal_subdomain, name) VALUES
+                    (5, 'sd', 'Environmental Services'), (6, 'sd', 'Police'), (5, 'la', 'Sanitation');
+                 INSERT INTO requests (id, portal_subdomain, agency_id, status, created_at, updated_at)
+                 SELECT i, 'sd', 5, 'open', '{created}', '{late}' FROM range(1, 23) t(i);
+                 INSERT INTO requests (id, portal_subdomain, agency_id, status, created_at, updated_at, closed_at)
+                 SELECT i, 'sd', 5, 'closed', '{created}', '{prompt}', '{prompt}' FROM range(23, 28) t(i);
+                 INSERT INTO requests (id, portal_subdomain, agency_id, status, created_at, updated_at)
+                 SELECT i, 'sd', 6, 'open', '{created}', '{late}' FROM range(28, 31) t(i);
+                 INSERT INTO requests (id, portal_subdomain, agency_id, status, created_at, updated_at)
+                 SELECT i, 'la', 5, 'open', '{created}', '{late}' FROM range(1, 5) t(i);"
+            ))
+            .map_err(|error| AppError::Storage(error.to_string()))
+        })
+        .await
+        .expect("seed");
+
+        let ledger = repo
+            .query_connection("ledger", |conn| {
+                crate::analysis::anomaly::query_agency_performance_profiles(conn, 90.0, "", "", "")
+            })
+            .await
+            .expect("ledger");
+        let misses = ledger
+            .iter()
+            .find(|profile| profile.portal_subdomain == "sd" && profile.agency_id == 5)
+            .expect("agency profile")
+            .statutory_violation_count;
+        assert_eq!(misses, 22);
+
+        let total = repo
+            .count_requests("", Some("sd"), Some(5), None, None, true)
+            .await
+            .expect("count");
+        assert_eq!(total, misses as u64);
+        let page = repo
+            .search_requests_page("", Some("sd"), Some(5), None, None, true, None, 100)
+            .await
+            .expect("page");
+        assert_eq!(page.total, Some(total));
+        assert!(page
+            .records
+            .iter()
+            .all(|record| record.portal_key == "sd" && record.request_id <= 22));
+        // Without the filter the same scope also lists the five answered in time.
+        assert_eq!(
+            repo.count_requests("", Some("sd"), Some(5), None, None, false)
+                .await
+                .expect("count"),
+            27
+        );
+    }
+
     #[tokio::test]
     async fn pages_cover_the_exact_total_once_in_order_for_every_query_shape() {
         let (_dir, repo) = seeded(2_503).await;
         for term in ["", "zebra", "quasar", "zebra quasar", "nomatchtoken"] {
             let (keys, total) = all_pages(&repo, term, 97).await;
             let counted = repo
-                .count_requests(term, None, None, None, None)
+                .count_requests(term, None, None, None, None, false)
                 .await
                 .unwrap();
             assert_eq!(
@@ -458,7 +564,7 @@ mod tests {
         let (_dir, repo) = seeded(1_000).await;
         let before = all_pages(&repo, "", 1_000).await.0;
         let first = repo
-            .search_requests_page("", None, None, None, None, None, 300)
+            .search_requests_page("", None, None, None, None, false, None, 300)
             .await
             .unwrap();
         let mut seen: Vec<Key> = first.records.iter().map(key).collect();
@@ -476,7 +582,7 @@ mod tests {
         let mut cursor = first.next_cursor;
         while let Some(next) = cursor {
             let page = repo
-                .search_requests_page("", None, None, None, None, Some(&next), 300)
+                .search_requests_page("", None, None, None, None, false, Some(&next), 300)
                 .await
                 .unwrap();
             seen.extend(page.records.iter().map(key));
@@ -568,12 +674,12 @@ mod tests {
     async fn a_malformed_cursor_and_an_out_of_range_page_size_are_rejected() {
         let (_dir, repo) = seeded(10).await;
         let bad = repo
-            .search_requests_page("", None, None, None, None, Some("v1\u{1f}x"), 5)
+            .search_requests_page("", None, None, None, None, false, Some("v1\u{1f}x"), 5)
             .await;
         assert!(bad.is_err());
         for size in [0, MAXIMUM_PAGE_SIZE + 1] {
             let result = repo
-                .search_requests_page("", None, None, None, None, None, size)
+                .search_requests_page("", None, None, None, None, false, None, size)
                 .await;
             assert!(result.is_err(), "page size {size}");
         }
@@ -590,13 +696,13 @@ mod tests {
         for term in ["", "zebra", "quasar"] {
             let started = Instant::now();
             let total = repo
-                .count_requests(term, None, None, None, None)
+                .count_requests(term, None, None, None, None, false)
                 .await
                 .unwrap();
             let count_time = started.elapsed();
             let started = Instant::now();
             let first = repo
-                .search_requests_page(term, None, None, None, None, None, 200)
+                .search_requests_page(term, None, None, None, None, false, None, 200)
                 .await
                 .unwrap();
             let first_time = started.elapsed();
@@ -608,6 +714,7 @@ mod tests {
                     None,
                     None,
                     None,
+                    false,
                     first.next_cursor.as_deref(),
                     200,
                 )

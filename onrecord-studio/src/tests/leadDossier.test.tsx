@@ -111,7 +111,7 @@ describe('LeadDossier', () => {
 
   it('shows every table a table lead read, with its source, retrieval date and full digest, and the query', async () => {
     render(<LeadDossier findingId="table-lead" />);
-    await screen.findByText('Tables read (2) and query');
+    await screen.findByText('Tables read (2)');
     expect(screen.getByText('Get It Done open reports')).toBeTruthy();
     expect(screen.getByText('Source: https://example.test/open.csv')).toBeTruthy();
     expect(screen.getByText('Source: no source address recorded')).toBeTruthy();
@@ -163,7 +163,7 @@ describe('LeadDossier', () => {
     const prose = screen.getByText('Figures as text').closest('details')!;
     expect(prose.textContent).toContain('Open reports exceed the budgeted crew capacity.');
     expect(prose.textContent).not.toContain('SELECT category');
-    expect(screen.getByText('Tables read (2) and query')).toBeTruthy();
+    expect(screen.getByText('Tables read (2)')).toBeTruthy();
   });
 
   it('discards a figure that resolves after the reader opened another finding', async () => {

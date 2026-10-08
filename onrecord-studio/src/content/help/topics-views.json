@@ -3,7 +3,7 @@
     "id": "view-overview",
     "title": "San Diego view",
     "group": "Views",
-    "summary": "The research desk: findings inbox, drafts, subject dossier, research, and the case workbench.",
+    "summary": "The workbench: ranked leads, the lead on the stage, what you watch, analytics, casework and tools.",
     "keywords": [
       "overview",
       "san diego",
@@ -15,19 +15,25 @@
       "cross-corpus",
       "analytics",
       "drawer",
-      "dossier"
+      "dossier",
+      "casework",
+      "workbench",
+      "watching"
     ],
     "sections": [
       {
         "paragraphs": [
-          "The default view. From top to bottom it holds the post-ingest brief, the subject dossier, Needs attention, the watchlist and standing searches, autonomous research, and a panel that opens the case workbench."
+          "The default view. Under the dateline and the title, five tabs: Leads, Following, Analytics, Casework and Tools. Leads is a workbench: the ranked leads on the left, the selected lead on the stage in the centre, and the records around it on the right. The queue is the Story desk ranking, so #3 is the same lead in both places. J and K step to the next and previous lead."
         ]
       },
       {
         "heading": "Parts",
         "items": [
           "Post-ingest brief (headed Just landed): a non-modal panel that opens after a sync stops and lists findings discovered in the last 15 minutes. It appears only on this view.",
-          "Needs attention: one ranked list of new findings, agencies with counted statutory violations, the next meeting within two weeks, and watch changes. The window control beside the title sets how far back \"new\" reaches: since you last opened the app, the last day, week or month, or any time. A source that did not load is named under the list rather than leaving it silently shorter.",
+          "Leads: each card shows the lead's rank, family, headline and attention score as a bar split into its factors. The window control beside the title sets how far back \"new\" reaches: since you last opened the app, the last day, week or month, or any time.",
+          "The stage: the lead's headline and account, why it ranks where it does (compared with the lead above it), its evidence chain or the tables it was computed from, and what would disconfirm it. Draft records request opens the drafts beside it.",
+          "Watching: collection across every source, the counted deadline ledger, the next meeting within two weeks, and watch changes. Fold it to a one-line summary; the app remembers your choice.",
+          "Casework: cases and follow-through, spending, coverage, evidence review and organization filings, on their own tab. The command palette opens it, and its Spending and Organization filings tabs, directly.",
           "All findings are in the Story desk view, under All findings. See Findings inbox.",
           "Cross-corpus explorer (in a drawer): shared language, temporal shifts, orphan topics and reused grounds across agencies, with a jurisdiction by detector heat map.",
           "Collapsed drawers: cross-corpus patterns; topics; plan an investigation or draft a request manually; collection, coverage and storage; browse sources and add records.",

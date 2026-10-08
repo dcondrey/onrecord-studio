@@ -22,6 +22,7 @@ export default function SearchFilter({ onPendingChange }: { onPendingChange?: (p
   const selectedAgencyId = useAppStore((state) => state.selectedAgencyId);
   const selectedStatus = useAppStore((state) => state.selectedStatus);
   const selectedPolicyDeviation = useAppStore((state) => state.selectedPolicyDeviation);
+  const selectedStatutoryOnly = useAppStore((state) => state.selectedStatutoryOnly);
   const setSearchFilters = useAppStore((state) => state.setSearchFilters);
   const setFilteredResults = useAppStore((state) => state.setFilteredResults);
   const error = useAppStore((state) => state.searchError);
@@ -82,6 +83,7 @@ export default function SearchFilter({ onPendingChange }: { onPendingChange?: (p
           agencyId: compiledQuery.agencyId ?? selectedAgencyId,
           status: compiledQuery.status ?? selectedStatus,
           policyDeviation: compiledQuery.policyDeviation ?? selectedPolicyDeviation,
+          statutoryDeadlineExceeded: selectedStatutoryOnly,
         };
         const page = await invokeCommand('query_audit_records_page', { ...args, cursor: null, pageSize: SEARCH_PAGE_SIZE });
         if (page.total === null) throw new Error('The search did not report how many records match.');
@@ -95,6 +97,7 @@ export default function SearchFilter({ onPendingChange }: { onPendingChange?: (p
               ...((compiledQuery.agencyId ?? selectedAgencyId) !== null ? [{ label: 'Department', value: agencyProfiles.find((profile) => profile.agencyId === (compiledQuery.agencyId ?? selectedAgencyId))?.agencyName ?? String(compiledQuery.agencyId ?? selectedAgencyId) }] : []),
               ...((compiledQuery.status ?? selectedStatus) ? [{ label: 'Status', value: String(compiledQuery.status ?? selectedStatus) }] : []),
               ...((compiledQuery.policyDeviation ?? selectedPolicyDeviation) ? [{ label: 'Policy deviation', value: formatPolicy(String(compiledQuery.policyDeviation ?? selectedPolicyDeviation)) }] : []),
+              ...(selectedStatutoryOnly ? [{ label: 'Statutory deadline', value: 'exceeded' }] : []),
               ...((compiledQuery.portalKey ?? activePortalKey) ? [{ label: 'Source', value: String(compiledQuery.portalKey ?? activePortalKey) }] : []),
             ],
             sourceCount: (compiledQuery.portalKey ?? activePortalKey) ? 1 : portalCount,
@@ -115,11 +118,11 @@ export default function SearchFilter({ onPendingChange }: { onPendingChange?: (p
       }
     }, 220);
     return () => window.clearTimeout(timer);
-  }, [activePortalKey, compiledQuery, evidenceRefreshRequests, inputValue, requestGate, selectedAgencyId, selectedPolicyDeviation, selectedStatus, setFilteredResults, setSearchError, setSearchStatus, onPendingChange]);
+  }, [activePortalKey, compiledQuery, evidenceRefreshRequests, inputValue, requestGate, selectedAgencyId, selectedPolicyDeviation, selectedStatus, selectedStatutoryOnly, setFilteredResults, setSearchError, setSearchStatus, onPendingChange]);
 
   const updateTerm = (value: string) => {
     setInputValue(value);
-    setSearchFilters(value, selectedAgencyId, selectedStatus, selectedPolicyDeviation);
+    setSearchFilters(value, selectedAgencyId, selectedStatus, selectedPolicyDeviation, selectedStatutoryOnly);
   };
 
   const clear = () => {
@@ -153,7 +156,8 @@ export default function SearchFilter({ onPendingChange }: { onPendingChange?: (p
     status: compiledQuery.status ?? selectedStatus,
     policyDeviation: compiledQuery.policyDeviation ?? selectedPolicyDeviation,
   };
-  const canStand = compiledQuery.deferredFilters.length === 0
+  // A standing query has no statutory filter, so one saved under it would re-run looser than shown.
+  const canStand = compiledQuery.deferredFilters.length === 0 && !selectedStatutoryOnly
     && (standingFilters.searchTerm.trim() !== '' || standingFilters.status !== null || standingFilters.policyDeviation !== null || standingFilters.agencyId !== null || standingFilters.portalKey !== null);
   const saveStanding = async () => {
     setWatchStatus(null);
@@ -185,7 +189,7 @@ export default function SearchFilter({ onPendingChange }: { onPendingChange?: (p
     }
   };
 
-  const hasFilters = Boolean(inputValue || selectedAgencyId || selectedStatus || selectedPolicyDeviation);
+  const hasFilters = Boolean(inputValue || selectedAgencyId || selectedStatus || selectedPolicyDeviation || selectedStatutoryOnly);
 
   return (
     <section aria-label="Evidence search" className="shrink-0 px-5 py-3 lg:px-6">
@@ -203,7 +207,7 @@ export default function SearchFilter({ onPendingChange }: { onPendingChange?: (p
         <Select
           aria-label="Request status"
           value={selectedStatus ?? ''}
-          onChange={(event) => setSearchFilters(inputValue, selectedAgencyId, event.target.value || null, selectedPolicyDeviation)}
+          onChange={(event) => setSearchFilters(inputValue, selectedAgencyId, event.target.value || null, selectedPolicyDeviation, selectedStatutoryOnly)}
           className="focus-ring w-32 xl:w-36"
         >
           <option value="">All statuses</option>
@@ -249,8 +253,19 @@ export default function SearchFilter({ onPendingChange }: { onPendingChange?: (p
           <span className="text-caption text-warning" title="Some query tokens need review">Query syntax needs review</span>
         )}
         {selectedPolicyDeviation && (
-          <button type="button" onClick={() => setSearchFilters(inputValue, selectedAgencyId, selectedStatus, null)} className="focus-ring inline-flex h-6 items-center rounded-full border border-warning/30 bg-warning/10 px-2 font-medium text-warning">
+          <button type="button" onClick={() => setSearchFilters(inputValue, selectedAgencyId, selectedStatus, null, selectedStatutoryOnly)} className="focus-ring inline-flex h-6 items-center rounded-full border border-warning/30 bg-warning/10 px-2 font-medium text-warning">
             {formatPolicy(selectedPolicyDeviation)} ×
+          </button>
+        )}
+        {selectedStatutoryOnly && (
+          <button
+            type="button"
+            aria-label="Remove the filter: statutory deadline exceeded"
+            onClick={() => setSearchFilters(inputValue, selectedAgencyId, selectedStatus, selectedPolicyDeviation, false)}
+            className="focus-ring inline-flex h-6 items-center gap-1 rounded-full border border-line-strong bg-raised px-2 font-medium text-fg"
+          >
+            <span aria-hidden="true" className="text-[rgb(var(--violation))]">§</span>
+            Statutory deadline exceeded ×
           </button>
         )}
         <button type="button" onClick={() => void copyRecord()} disabled={isSearching} className="focus-ring inline-flex h-6 items-center whitespace-nowrap rounded-full border border-control px-2 font-medium text-fg-secondary hover:bg-raised disabled:opacity-50 ml-auto">

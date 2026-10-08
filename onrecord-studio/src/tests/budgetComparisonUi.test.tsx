@@ -13,7 +13,7 @@ const schema: AnalyticalSchema = {
 
 describe('budget comparison selection', () => {
   it('requires two compatible roles and passes explicit fiscal scope into the executable comparison', () => {
-    const compare = vi.fn();
+    const compare = vi.fn<(sql: string) => Promise<boolean>>(() => Promise.resolve(true));
     render(<BudgetComparison schema={schema} onCompare={compare} />);
     expect(screen.getByRole('button', { name: 'Compare budget and actuals' })).toHaveProperty('disabled', true);
     const actuals = screen.getByLabelText('Actuals snapshot') as HTMLSelectElement;

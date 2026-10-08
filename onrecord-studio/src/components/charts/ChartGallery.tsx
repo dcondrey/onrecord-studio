@@ -798,7 +798,7 @@ export default function ChartGallery() {
             {(width) => <Timeline width={width} />}
           </Plain>
           <div className="grid gap-6 lg:grid-cols-2">
-            <Plain title="Review priority (not confidence or wrongdoing)" headline="Ranked by money and recency; evidence strength is not assessed." height={56} tables={['casework_leads']}>
+            <Plain title="Case priority (not confidence or wrongdoing)" headline="Ordered by money and recency; evidence strength is not assessed." height={56} tables={['casework_leads']}>
               {(width) => <ScoreSegments width={width} />}
             </Plain>
             <div className="grid content-start gap-2">

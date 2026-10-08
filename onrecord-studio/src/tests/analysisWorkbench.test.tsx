@@ -330,6 +330,49 @@ describe('AnalysisWorkbench SQL result gating', () => {
 
     expect(screen.queryByText('Loading supporting records')).toBeNull();
   });
+
+  // A rerun that fails must not leave the previous query's table under the new text: that would
+  // present a result for a query the editor no longer shows.
+  it('clears the previous result the moment a new run starts, so a failed run shows none', async () => {
+    const rejecters = new Map<string, (reason: Error) => void>();
+    bridge.invoke.mockImplementation(async (name: string, args?: { sql?: string }) => {
+      switch (name) {
+        case 'get_analytical_schema':
+          return { datasets: [], columns: [], templates: [] };
+        case 'list_analytical_import_candidates':
+        case 'query_corpus_patterns':
+          return [];
+        case 'get_data_maintenance_status':
+          return upkeep;
+        case 'run_analytical_sql':
+          return new Promise((resolve, reject) => {
+            resolvers.set(String(args?.sql ?? ''), resolve);
+            rejecters.set(String(args?.sql ?? ''), reject);
+          });
+        default:
+          return null;
+      }
+    });
+
+    render(<Harness />);
+    const editor = await screen.findByLabelText('Analytical SQL');
+    fireEvent.change(editor, { target: { value: 'SELECT first_query' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await waitFor(() => expect(resolvers.has('SELECT first_query')).toBe(true));
+    act(() => resolvers.get('SELECT first_query')!(result('first_col')));
+    await screen.findByText('first_col');
+
+    fireEvent.change(editor, { target: { value: 'SELECT missing_table' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await waitFor(() => expect(rejecters.has('SELECT missing_table')).toBe(true));
+    await act(async () => {
+      rejecters.get('SELECT missing_table')!(new Error('Catalog Error: missing_table does not exist'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText('first_col')).toBeNull();
+  });
 });
 
 describe('AnalysisWorkbench City dataset fetch', () => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { DraftAvailability, DraftedArtifact } from '../../types';
@@ -17,7 +17,11 @@ const BUTTON =
  * Every specific claim in a draft traces back to the finding; the generator never fabricates
  * facts. The draft is always a draft: the user edits and sends it, the app sends nothing.
  */
-export default function ArtifactDrafts({ findingId }: { findingId: string }) {
+export default function ArtifactDrafts({ findingId, onSettled }: {
+  findingId: string;
+  /** Called once the drafts that apply are known (or couldn't be): their controls are now drawn. */
+  onSettled?(): void;
+}) {
   const [availability, setAvailability] = useState<DraftAvailability | null>(null);
   const [draft, setDraft] = useState<DraftedArtifact | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +47,13 @@ export default function ArtifactDrafts({ findingId }: { findingId: string }) {
       });
   }, [findingId, availabilityGate, draftGate]);
 
+  const settled = availability !== null || error !== null;
+  const latestOnSettled = useRef(onSettled);
+  latestOnSettled.current = onSettled;
+  useEffect(() => {
+    if (settled) latestOnSettled.current?.();
+  }, [settled]);
+
   const runDraft = useCallback(
     (kind: DraftKind) => {
       const request = draftGate.begin();
@@ -67,6 +78,7 @@ export default function ArtifactDrafts({ findingId }: { findingId: string }) {
   return (
     <div
       role="region"
+      data-drafts-settled={settled ? '' : undefined}
       className="mt-2 rounded-lg border border-line bg-canvas/40 p-3"
       aria-label="Drafted artifacts"
     >

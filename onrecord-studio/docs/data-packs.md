@@ -200,7 +200,8 @@ column or table here before anything is published.
    so the app's feature set and binary are unchanged. It takes URLs, years and filters from
    `ingestion::queue::city_datasets` (one source list), writes originals with SHA-256, records the
    publisher's freshness markers (year, `Last-Modified`, `ETag`), writes Parquet copies (DuckDB's
-   `parquet` feature is enabled only by `pack-builder`), and signs the manifest. Built as
+   `parquet` feature is compiled into every build, never loaded at runtime; the app uses it only
+   to read change records), and signs the manifest. Built as
    `packs::builder` and `onrecord-pack-builder`, packs `san-diego-money` and `san-diego-reports`.
 3. **Conformed layer (builder side done).** One module generates the standard columns from an
    imported table, for the builder's Parquet copies and, once wired, for the app after importing
@@ -280,8 +281,9 @@ installed hash-checked from `scripts/publish_pack.py.lock` (`uv run --locked --s
 **Layout.** `originals/<table>/<stamp>/<publisher file name>`,
 `parquet/<table>/<stamp>/<stem>.parquet`, `changes/<table>/<stamp>.parquet`, where `<stamp>` is
 the UTC retrieval time as `YYYY-MM-DDTHHMMSSZ`. Table names and conformed definitions are the
-curated packs'. A change record is `PackFileFormat::Changes`; the app lists and counts it but never
-imports it. Its rows: `change` (`added`, `removed`, `changed`, `column_added`, `column_removed`),
+curated packs'. A change record is `PackFileFormat::Changes`; the app lists and counts it, and
+shows its rows on request (`read_data_pack_change_record`, checked against the inspected manifest
+and the file's SHA-256 on every read), but never imports it. Its rows: `change` (`added`, `removed`, `changed`, `column_added`, `column_removed`),
 `publisher_record_id`, `key_occurrence`, `field`, `before`, `after`, `note`, all from the original
 cell text, never typed values. A keyed table compares records by key and the key's repeat in file
 order (so a repeated key is never multiplied); rows without a key compare by their cells in the

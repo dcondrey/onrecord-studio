@@ -50,6 +50,7 @@ export interface NativeCommandMap {
   fetch_city_dataset: { args: { dataset: Types.CityDataset; year?: number | null }; result: Types.AnalyticalImportResult };
   inspect_data_pack: { args: { path: string }; result: Types.DataPackSummary };
   import_data_pack_files: { args: { path: string; manifestSha256: string; files: string[] }; result: Types.DataPackImportOutcome[] };
+  read_data_pack_change_record: { args: { location: Types.DataPackLocation; manifestSha256: string; path: string; offset: number; limit: number }; result: Types.DataPackChangeRows };
   list_published_packs: { args: NoArgs; result: Types.PublishedPack[] };
   fetch_published_pack_manifest: { args: { pack: string }; result: Types.DataPackSummary };
   fetch_published_pack_files: { args: { pack: string; packVersion: string; manifestSha256: string; selection: Types.PublishedPackSelection[] }; result: Types.DataPackImportOutcome[] };
@@ -118,8 +119,8 @@ export interface NativeCommandMap {
   set_research_action_state: { args: { actionKey: string; state: string }; result: null };
   run_analytical_sql: { args: { sql: string; limit?: number | null }; result: Types.SqlQueryResult };
   export_analytical_sql_csv: { args: { sql: string; outputPath: string; limit?: number | null }; result: Types.SqlExportResult };
-  query_audit_records_page: { args: { searchTerm: string; portalKey?: string | null; agencyId?: number | null; status?: string | null; policyDeviation?: string | null; cursor?: string | null; pageSize: number }; result: Types.AuditRecordPage };
-  count_audit_records: { args: { searchTerm: string; portalKey?: string | null; agencyId?: number | null; status?: string | null; policyDeviation?: string | null }; result: Types.AuditRecordCount };
+  query_audit_records_page: { args: { searchTerm: string; portalKey?: string | null; agencyId?: number | null; status?: string | null; policyDeviation?: string | null; statutoryDeadlineExceeded?: boolean | null; cursor?: string | null; pageSize: number }; result: Types.AuditRecordPage };
+  count_audit_records: { args: { searchTerm: string; portalKey?: string | null; agencyId?: number | null; status?: string | null; policyDeviation?: string | null; statutoryDeadlineExceeded?: boolean | null }; result: Types.AuditRecordCount };
   page_corpus_entity_neighbors: { args: { entityId: string; cursor?: string | null; pageSize: number; filter?: Types.EntityNeighborFilter | null }; result: Types.EntityNeighborPage | null };
   count_corpus_entity_neighbors: { args: { entityId: string; filter?: Types.EntityNeighborFilter | null }; result: Types.EntityNeighborCounts | null };
   export_legal_brief: { args: { requestId: number; portalKey: string; targetPath?: string | null; authorName?: string | null }; result: Types.LegalBriefExportResult };

@@ -153,14 +153,16 @@ pub(crate) struct ChangeSummary {
 }
 
 impl ChangeSummary {
-    /// The record as the app shows it, with each side's retrieval time. A whole-records listing
-    /// has no separate changed count, so `changed` is absent rather than the manifest's 0.
+    /// The record at `path` as the app shows it, with each side's retrieval time. A whole-records
+    /// listing has no separate changed count, so `changed` is absent rather than the manifest's 0.
     pub(crate) fn exposed(
         &self,
+        path: &str,
         previous_retrieved_at: Option<String>,
         current_retrieved_at: Option<String>,
     ) -> DataPackChange {
         DataPackChange {
+            path: path.to_owned(),
             previous: self.previous.clone(),
             previous_retrieved_at,
             current: self.current.clone(),

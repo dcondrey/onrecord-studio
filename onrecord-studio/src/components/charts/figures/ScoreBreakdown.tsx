@@ -9,10 +9,11 @@ import { Segments } from '../marks/Segments';
 import { MarkGroup } from '../marks/shared';
 
 /*
- * F4 ScoreBreakdown: why each casework lead ranks where it does. Each factor is a segment as wide
- * as its maximum, filled to its score in violet (a lead the app surfaced), so the factor that
- * drives a lead is visible at a glance. The score prioritises review; it is not confidence and it
- * is not a finding of wrongdoing, which the title says.
+ * F4 ScoreBreakdown: what sets each casework finding's priority. Each factor is a segment as wide
+ * as its maximum, filled to its points in violet (the app scored it), so the factor that drives a
+ * finding's priority is visible at a glance. Priority orders review; it is not confidence and it
+ * is not a finding of wrongdoing, which the title says. It speaks of priority and points, never
+ * of leads or ranks: the overview's attention score owns those words.
  */
 
 const ROW_LABEL_CLASS = 'fill-fg text-[12px] font-medium';
@@ -51,13 +52,13 @@ export function fitText(text: string, width: number, font?: string): string {
 
 export function scoreHeadline(leads: readonly CaseworkLead[]): string {
   const rows = rowsOf(leads);
-  if (rows.length === 0) return 'No lead is ranked yet.';
+  if (rows.length === 0) return 'No saved finding has a priority yet.';
   const top = rows[0];
   const driver = [...top.factors].sort((a, b) => b.score - a.score || a.label.localeCompare(b.label))[0];
-  return `${rows.length} lead${rows.length === 1 ? '' : 's'} ranked; top: ${top.title} (${top.score} of ${top.maximum})${driver ? `, driven by ${driver.label.toLowerCase()}` : ''}.`;
+  return `${rows.length} saved finding${rows.length === 1 ? '' : 's'} by priority; first: ${top.title} (${top.score} of ${top.maximum} points)${driver ? `, driven by ${driver.label.toLowerCase()}` : ''}.`;
 }
 
-/** Most px the widest lead's bar may take, so its score stays near its title at any width. */
+/** Most px the widest finding's bar may take, so its score stays near its title at any width. */
 const MAX_BAR = 480;
 const SEGMENT_GAP = 2;
 const FACTOR_LABEL_CLASS = 'fill-fg-secondary text-[11px]';
@@ -150,18 +151,18 @@ export default function ScoreBreakdown({ leads, onOpen }: { leads: readonly Case
   const headline = scoreHeadline(leads);
   return (
     <ChartFrame
-      title="Review priority (not confidence or wrongdoing)"
+      title="Case priority (not confidence or wrongdoing)"
       headline={rows.length === 0 ? null : headline}
       sources={{ tables: ['casework_cases', 'research_reports'], note: 'deterministic factor scores; each segment is as wide as its factor can score' }}
-      summary={`${headline} ${rows.map((row) => `${row.title}: ${row.score} of ${row.maximum}`).join('; ')}.`}
+      summary={`${headline} ${rows.map((row) => `${row.title}: ${row.score} of ${row.maximum} points`).join('; ')}.`}
       status={rows.length === 0 ? 'empty' : 'ready'}
-      emptyText="Saved research findings will become ranked leads here."
+      emptyText="Saved research findings are given a priority here."
       table={{
-        caption: 'Why each lead ranks here: factor scores and reasons',
-        columns: [{ key: 'lead', label: 'Lead' }, { key: 'factor', label: 'Factor' }, { key: 'score', label: 'Score', align: 'end' }, { key: 'maximum', label: 'Of', align: 'end' }, { key: 'reason', label: 'Reason' }],
+        caption: 'What sets each finding\'s priority: factor points and reasons',
+        columns: [{ key: 'lead', label: 'Finding' }, { key: 'factor', label: 'Factor' }, { key: 'score', label: 'Points', align: 'end' }, { key: 'maximum', label: 'Of', align: 'end' }, { key: 'reason', label: 'Reason' }],
         rows: rows.flatMap((row) => row.factors.map((factor) => ({ lead: row.title, factor: factor.label, score: factor.score, maximum: factor.maximum, reason: factor.reason }))),
       }}
-      legend={[{ key: 'scored', label: 'Factor score (a lead the app surfaced)', swatch: 'rect', tone: 'lead' }, { key: 'room', label: 'Room to the factor\'s maximum', swatch: 'rect', tone: 'track' }]}
+      legend={[{ key: 'scored', label: 'Factor points (scored by the app)', swatch: 'rect', tone: 'lead' }, { key: 'room', label: 'Room to the factor\'s maximum', swatch: 'rect', tone: 'track' }]}
       minHeight={Math.max(1, rows.length) * ROW + 14}
       interactive={{ roledescription: 'score breakdown' }}
       storageKey="casework-score-breakdown"

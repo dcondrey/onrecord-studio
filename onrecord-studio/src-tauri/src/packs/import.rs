@@ -10,8 +10,8 @@ use crate::error::AppError;
 use crate::integrity::sha256_hex;
 use crate::storage::sqlite::DuckDbRepository;
 use crate::types::{
-    AnalyticalImportRequest, DataPackFileSummary, DataPackImportOutcome, DataPackSummary,
-    DataPackTable,
+    AnalyticalImportRequest, DataPackChangeKind, DataPackChangeRow, DataPackChangeRows,
+    DataPackFileSummary, DataPackImportOutcome, DataPackSummary, DataPackTable,
 };
 use chrono::{DateTime, Datelike, SecondsFormat, Utc};
 use std::path::PathBuf;
@@ -48,12 +48,7 @@ async fn verify_chosen(
 ) -> Result<(SignedManifest, Vec<PackFile>), AppError> {
     crate::blocking::spawn("Verify data pack", move || {
         let signed = verify_manifest(&directory, &pinned)?;
-        if !manifest_sha256(&signed.manifest)?.eq_ignore_ascii_case(&inspected_manifest_sha256) {
-            return Err(AppError::Provenance(
-                "Data pack refused: its manifest has changed since it was inspected; inspect it again"
-                    .into(),
-            ));
-        }
+        require_inspected(&signed.manifest, &inspected_manifest_sha256)?;
         let mut chosen: Vec<PackFile> = Vec::new();
         for path in &selected {
             if chosen.iter().any(|file| &file.path == path) {
@@ -72,6 +67,19 @@ async fn verify_chosen(
         Ok((signed, chosen))
     })
     .await?
+}
+
+fn require_inspected(
+    manifest: &PackManifest,
+    inspected_manifest_sha256: &str,
+) -> Result<(), AppError> {
+    if !manifest_sha256(manifest)?.eq_ignore_ascii_case(inspected_manifest_sha256) {
+        return Err(AppError::Provenance(
+            "Data pack refused: its manifest has changed since it was inspected; inspect it again"
+                .into(),
+        ));
+    }
+    Ok(())
 }
 
 /// SHA-256 of the manifest's canonical bytes: verification has checked they re-encode to the
@@ -148,9 +156,10 @@ pub(crate) fn summarize(
                 .map(|file| file.retrieved_at.clone())
         };
         table.changes = records
-            .filter_map(|file| file.changes.as_ref())
-            .map(|summary| {
+            .filter_map(|file| file.changes.as_ref().map(|summary| (&file.path, summary)))
+            .map(|(path, summary)| {
                 summary.exposed(
+                    path,
                     retrieved_at(&summary.previous),
                     retrieved_at(&summary.current),
                 )
@@ -193,6 +202,98 @@ pub(crate) async fn inspect(
 ) -> Result<DataPackSummary, AppError> {
     let pack = verify(directory, pinned).await?;
     summarize(pack.manifest, &pack.signer_key_id)
+}
+
+/// Most change-record rows one read returns.
+pub(crate) const MAX_CHANGE_ROWS: u64 = 500;
+
+/// The change record `record` as the manifest in `directory` lists it, once that manifest
+/// verifies against `pinned` and is still the one inspected. The record's bytes are not read.
+pub(crate) async fn listed_change_record(
+    directory: PathBuf,
+    inspected_manifest_sha256: String,
+    record: String,
+    pinned: Vec<PinnedPackKey>,
+) -> Result<PackFile, AppError> {
+    crate::blocking::spawn("Verify data pack", move || {
+        let signed = verify_manifest(&directory, &pinned)?;
+        require_inspected(&signed.manifest, &inspected_manifest_sha256)?;
+        signed
+            .manifest
+            .files
+            .into_iter()
+            .find(|file| file.format == PackFileFormat::Changes && file.path == record)
+            .ok_or_else(|| {
+                AppError::DataParsing(format!("{record} is not a change record this pack lists"))
+            })
+    })
+    .await?
+}
+
+fn change_kind(value: &str) -> Result<DataPackChangeKind, AppError> {
+    Ok(match value {
+        "added" => DataPackChangeKind::Added,
+        "removed" => DataPackChangeKind::Removed,
+        "changed" => DataPackChangeKind::Changed,
+        "column_added" => DataPackChangeKind::ColumnAdded,
+        "column_removed" => DataPackChangeKind::ColumnRemoved,
+        other => {
+            return Err(AppError::DataParsing(format!(
+                "The change record lists a change of unknown kind '{other}'"
+            )))
+        }
+    })
+}
+
+/// Rows `offset..offset + limit` of the change record `file`, kept at `path`, in file order,
+/// once its size and SHA-256 match the manifest's. Read through its own in-memory connection,
+/// never the library's.
+pub(crate) async fn read_change_rows(
+    path: PathBuf,
+    file: PackFile,
+    offset: u64,
+    limit: u64,
+) -> Result<DataPackChangeRows, AppError> {
+    let limit = limit.clamp(1, MAX_CHANGE_ROWS) as i64;
+    let start = i64::try_from(offset)
+        .map_err(|_| AppError::DataParsing("The change record has no row there".into()))?;
+    crate::blocking::spawn("Read change record", move || {
+        check_pack_file(&path, &file)?;
+        let location = path
+            .to_str()
+            .ok_or_else(|| AppError::Storage(format!("{} is not UTF-8", path.display())))?;
+        let conn = crate::storage::open_duckdb(None)?;
+        let total: u64 = conn.query_row(
+            "SELECT count(*) FROM read_parquet(?1)",
+            duckdb::params![location],
+            |row| row.get(0),
+        )?;
+        let mut statement = conn.prepare(
+            "SELECT change, publisher_record_id, key_occurrence, field, before, after, note
+             FROM read_parquet(?1, file_row_number = true)
+             ORDER BY file_row_number LIMIT ?2 OFFSET ?3",
+        )?;
+        let mut rows = Vec::new();
+        let mut cursor = statement.query(duckdb::params![location, limit, start])?;
+        while let Some(row) = cursor.next()? {
+            rows.push(DataPackChangeRow {
+                change: change_kind(&row.get::<_, String>(0)?)?,
+                publisher_record_id: row.get(1)?,
+                key_occurrence: row.get(2)?,
+                field: row.get(3)?,
+                before: row.get(4)?,
+                after: row.get(5)?,
+                note: row.get(6)?,
+            });
+        }
+        Ok(DataPackChangeRows {
+            path: file.path,
+            total,
+            offset,
+            rows,
+        })
+    })
+    .await?
 }
 
 /// The builder's retrieval time in the form the app stores its own.
@@ -376,6 +477,105 @@ mod tests {
         std::fs::write(&path, ACTUALS).unwrap();
         sign_into(directory.path(), manifest());
         directory
+    }
+
+    /// A change record is read only as the inspected manifest lists it, only while its bytes are
+    /// the listed ones, in file order a page at a time, with a cell the row lacks left absent.
+    #[tokio::test]
+    async fn a_change_record_reads_in_file_order_only_as_listed() {
+        const RECORD: &str = "changes/budget_actuals/2026-10-06T000000Z.parquet";
+        let directory = signed_pack();
+        let path = directory.path().join(RECORD);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        crate::storage::open_duckdb(None)
+            .unwrap()
+            .execute_batch(&format!(
+                "COPY (SELECT * FROM (VALUES
+                    ('column_added', NULL, NULL, 'fund', NULL, NULL, NULL),
+                    ('changed', 'A-1', 1, 'amount', '01', '1', NULL),
+                    ('removed', 'A-2', 1, NULL, NULL, NULL, NULL),
+                    ('added', 'A-3', 2, NULL, NULL, NULL, NULL))
+                  AS t(change, publisher_record_id, key_occurrence, field, before, after, note))
+                 TO '{}' (FORMAT parquet)",
+                path.display()
+            ))
+            .unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        let mut listed = manifest();
+        listed.files.push(PackFile {
+            path: RECORD.into(),
+            format: PackFileFormat::Changes,
+            sha256: sha256_hex(&bytes),
+            bytes: bytes.len() as u64,
+            rows: 4,
+            ..listed.files[0].clone()
+        });
+        let inspected = manifest_sha256(&listed).unwrap();
+        sign_into(directory.path(), listed);
+        let pinned = || {
+            vec![PinnedPackKey::test(
+                key().verifying_key(),
+                PackKeyScope::Curated,
+            )]
+        };
+        let find = |record: &str| {
+            listed_change_record(
+                directory.path().to_path_buf(),
+                inspected.clone(),
+                record.into(),
+                pinned(),
+            )
+        };
+
+        let file = find(RECORD).await.unwrap();
+        let page = read_change_rows(path.clone(), file.clone(), 1, 2)
+            .await
+            .unwrap();
+        assert_eq!((page.total, page.offset), (4, 1));
+        assert_eq!(
+            page.rows,
+            vec![
+                DataPackChangeRow {
+                    change: DataPackChangeKind::Changed,
+                    publisher_record_id: Some("A-1".into()),
+                    key_occurrence: Some(1),
+                    field: Some("amount".into()),
+                    before: Some("01".into()),
+                    after: Some("1".into()),
+                    note: None,
+                },
+                DataPackChangeRow {
+                    change: DataPackChangeKind::Removed,
+                    publisher_record_id: Some("A-2".into()),
+                    key_occurrence: Some(1),
+                    field: None,
+                    before: None,
+                    after: None,
+                    note: None,
+                },
+            ]
+        );
+
+        assert!(
+            find(FILE).await.is_err(),
+            "an original is not a change record"
+        );
+        assert!(
+            listed_change_record(
+                directory.path().to_path_buf(),
+                "0".repeat(64),
+                RECORD.into(),
+                pinned()
+            )
+            .await
+            .is_err(),
+            "a manifest other than the inspected one is refused"
+        );
+        std::fs::write(&path, [bytes.as_slice(), b"x"].concat()).unwrap();
+        assert!(
+            read_change_rows(path, file, 0, 10).await.is_err(),
+            "altered bytes are refused"
+        );
     }
 
     async fn repository() -> DuckDbRepository {
