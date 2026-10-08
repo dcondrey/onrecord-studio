@@ -3,8 +3,12 @@ import { isTauri } from '@tauri-apps/api/core';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useCaseScope } from '../../hooks/useCaseScope';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
-import { ShapeGlyph } from '../ui/shapeGlyph';
-import { severityGlyph } from './findingSeverity';
+import { cn } from '../../utils/cn';
+import Badge from '../ui/Badge';
+import Button from '../ui/Button';
+import InlineError from '../ui/InlineError';
+import Skeleton from '../ui/Skeleton';
+import SeverityGlyph from './SeverityGlyph';
 import { severityLabel } from '../objects/labels';
 import { useAppStore } from '../../store/useAppStore';
 import { useInspectFinding } from '../../hooks/useInspectFinding';
@@ -53,6 +57,7 @@ export default function FindingsInbox() {
   const [severityFilter, setSeverityFilter] = useState<FindingSeverity | null>(null);
   const [sort, setSort] = useState<FindingSort>('ranked');
   const [textFilter, setTextFilter] = useState('');
+  const [exportOpen, setExportOpen] = useState(false);
   // Which finding's row is expanded to show ArtifactDrafts. At most one at a time — the drafted
   // text can be long, and stacking several open drafts hides the ranked list.
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -225,59 +230,38 @@ export default function FindingsInbox() {
   const isNarrowed = severityFilter !== null || textFilter.trim() !== '';
 
   return (
-    <section id="findings-inbox" className="app-panel flex flex-col gap-3 p-4" aria-label="Findings inbox">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-[14rem] flex-1">
-          <div className="app-eyebrow">Findings inbox</div>
-          <h3 className="mt-1 text-label font-semibold text-fg">
-            What the detectors are surfacing
-          </h3>
-          {summary && (
-            <p className="mt-1 text-caption text-muted">
-              {summary} — ranked by severity, then confidence, then freshness.
-            </p>
-          )}
-        </div>
+    <section id="findings-inbox" className="app-panel flex flex-col gap-4 p-5" aria-label="Findings inbox">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="min-w-[14rem] flex-1 text-caption tabular-nums text-muted">
+          {summary ? `${summary}. Ranked by severity, then confidence, then freshness.` : 'Ranked by severity, then confidence, then freshness.'}
+        </p>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-        <button
-          type="button"
-          aria-pressed={lensEnabled}
-          onClick={() => setLensEnabled(!lensEnabled)}
-          title="Show only findings about your confirmed organization. Ranking and confidence are unchanged."
-          className="secondary-action focus-ring whitespace-nowrap rounded-lg border px-3 py-1.5 text-label font-semibold text-fg-secondary transition"
-        >
-          {lensEnabled ? 'Showing: my organization' : 'My organization'}
-        </button>
-        <button
-          type="button"
-          onClick={refresh}
-          disabled={isRefreshing}
-          className="secondary-action focus-ring shrink-0 whitespace-nowrap rounded-lg border px-3 py-1.5 text-label font-semibold text-fg-secondary transition disabled:opacity-60"
-        >
-          {isRefreshing ? 'Analyzing…' : 'Refresh findings'}
-        </button>
+          <Button
+            size="sm"
+            aria-pressed={lensEnabled}
+            onClick={() => setLensEnabled(!lensEnabled)}
+            title="Show only findings about your confirmed organization. Ranking and confidence are unchanged."
+            className={cn('whitespace-nowrap', lensEnabled && 'border-accent/30 bg-accent/10 text-accent hover:bg-accent/15')}
+          >
+            Only my organization
+          </Button>
+          {isTauri() && (
+            <Button size="sm" aria-expanded={exportOpen} aria-controls="findings-export" onClick={() => setExportOpen((open) => !open)} className="whitespace-nowrap">
+              Export…
+            </Button>
+          )}
+          <Button size="sm" onClick={refresh} disabled={isRefreshing} className="whitespace-nowrap">
+            {isRefreshing ? 'Analyzing…' : 'Refresh'}
+          </Button>
         </div>
       </div>
 
-      {isTauri() && (
-        <details className="text-label text-fg-secondary">
-          <summary className="focus-ring font-semibold">Export a verifiable report of these findings</summary>
-          <div className="mt-2">
-            <VerifiableReportExport />
-            <div className="mt-2">
-              <EvidencePacketExport />
-            </div>
-          </div>
-        </details>
-      )}
-
-      {isTauri() && (
-        <details className="text-label text-fg-secondary">
-          <summary className="focus-ring font-semibold">Share these findings as a read-only file</summary>
-          <div className="mt-2">
-            <ShareableBundleExport findings={lensedFindings} />
-          </div>
-        </details>
+      {isTauri() && exportOpen && (
+        <div id="findings-export" className="space-y-3 rounded-lg border border-line p-4 text-body text-fg-secondary">
+          <VerifiableReportExport />
+          <EvidencePacketExport />
+          <ShareableBundleExport findings={lensedFindings} />
+        </div>
       )}
 
       {findings.length > 0 && (
@@ -289,7 +273,7 @@ export default function FindingsInbox() {
                 type="button"
                 aria-pressed={severityFilter === level}
                 onClick={() => setSeverityFilter((current) => (current === level ? null : level))}
-                className={`focus-ring rounded-md border px-2 py-1 font-semibold ${severityFilter === level ? 'border-accent/60 text-accent' : 'border-control text-muted'}`}
+                className={cn('focus-ring h-7 rounded-md border px-2.5 text-control', severityFilter === level ? 'border-accent/30 bg-accent/10 text-accent' : 'border-line-strong text-fg-secondary hover:bg-raised')}
               >
                 {severityLabel(level)}
               </button>
@@ -302,14 +286,14 @@ export default function FindingsInbox() {
             value={textFilter}
             onChange={(event) => setTextFilter(event.target.value)}
             placeholder="Filter findings"
-            className="focus-ring min-w-[10rem] flex-1 rounded-md border border-control bg-canvas px-2 py-1 text-label text-fg"
+            className="analysis-input h-7 min-w-[10rem] flex-1 rounded-md"
           />
           <label htmlFor="findings-sort" className="sr-only">Sort findings</label>
           <select
             id="findings-sort"
             value={sort}
             onChange={(event) => setSort(event.target.value as FindingSort)}
-            className="focus-ring rounded-md border border-control bg-canvas px-2 py-1 text-label text-fg"
+            className="analysis-input h-7 w-auto rounded-md"
           >
             <option value="ranked">Ranked</option>
             <option value="newest">Newest first</option>
@@ -338,9 +322,7 @@ export default function FindingsInbox() {
       )}
 
       {loadError && (
-        <div role="alert" className="rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-caption text-danger">
-          Findings unavailable: {loadError}
-        </div>
+        <InlineError summary="Findings could not be read." detail={loadError} onRetry={refresh} />
       )}
       {lastDismissed && (
         <div role="status" className="motion-pop flex items-center justify-between gap-3 rounded-lg border border-line-strong bg-raised px-3 py-2 text-label text-fg-secondary">
@@ -362,16 +344,15 @@ export default function FindingsInbox() {
       )}
 
       {isLoading && findings.length === 0 ? (
-        <div role="status" className="text-label text-muted">
-          Loading findings…
+        <div className="flex flex-col gap-2">
+          <Skeleton variant="block" height={120} label="Loading findings" />
+          {[1, 2].map((slot) => <div key={slot} aria-hidden="true"><Skeleton variant="block" height={120} label="" /></div>)}
         </div>
       ) : lensEnabled && !hasConfirmedSubject ? null : findings.length === 0 && loadError ? null : findings.length === 0 ? (
         <div className="rounded-xl border border-dashed border-line bg-canvas/40 p-4 text-center">
-          <p className="text-label font-medium text-fg-secondary">
-            No findings surfaced yet.
-          </p>
-          <p className="mt-1 text-caption leading-relaxed text-muted">
-            Add a data source or press Refresh — analysis runs automatically after ingest.
+          <p className="text-heading text-fg-secondary">No findings surfaced yet</p>
+          <p className="mt-1 text-caption text-muted">
+            Add a data source or press Refresh. Analysis runs automatically after each collection.
           </p>
         </div>
       ) : (
@@ -431,62 +412,49 @@ function FindingRow({
   onAssemble: () => void;
   onOpenSource: (citation: FindingCitation) => void;
 }) {
-  const [shape, tone] = severityGlyph(finding.severity);
   return (
-    <li className="focus-within:ring-1 focus-within:ring-accent/50 group rounded-xl border border-line bg-canvas/40 p-3 transition hover:border-accent/30 hover:bg-accent/5" data-own-organization={own ? 'true' : undefined}>
-      {own && <p className="mb-1 text-caption uppercase tracking-wider text-accent">Your organization (self-declared)</p>}
-      <div className="flex flex-wrap items-start gap-3 sm:flex-nowrap">
-        <span
-          className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-surface/70 ${tone}`}
-          aria-hidden="true"
-        >
-          <svg viewBox="-6 -6 12 12" className="h-3 w-3">
-            <ShapeGlyph shape={shape} cx={0} cy={0} radius={4.5} fill="currentColor" />
-          </svg>
-        </span>
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-        <button
-          type="button"
-          onClick={onInspect}
-          className="min-w-0 text-left"
-          aria-label={finding.headline}
-          aria-describedby={`finding-${finding.id}-explanation`}
-        >
-          <p className="text-label font-semibold text-fg">{finding.headline}</p>
-          <p id={`finding-${finding.id}-explanation`} className="mt-1 whitespace-pre-line break-words text-label leading-relaxed text-muted">{finding.explanation}</p>
-          <p className="mt-1 text-caption uppercase tracking-wider text-muted">
-            {severityLabel(finding.severity)} · {formatRelativeTime(finding.lastSeenAt)}
-          </p>
-        </button>
-        <FindingEvidence finding={finding} onOpenSource={onOpenSource} />
+    <li className="flex flex-col gap-3 rounded-lg border border-line p-4 transition-colors hover:border-line-strong" data-own-organization={own ? 'true' : undefined}>
+      {own && <Badge tone="neutral">Your organization (self-declared)</Badge>}
+      <div className="flex items-start gap-3">
+        <SeverityGlyph severity={finding.severity} className="mt-1" />
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <button
+            type="button"
+            onClick={onInspect}
+            className="focus-ring min-w-0 rounded text-left"
+            aria-label={finding.headline}
+            aria-describedby={`finding-${finding.id}-explanation`}
+          >
+            <p className="text-heading text-fg">{finding.headline}</p>
+            <p id={`finding-${finding.id}-explanation`} className="mt-1 whitespace-pre-line break-words text-body text-muted">{finding.explanation}</p>
+            <p className="mt-1 text-caption tabular-nums text-muted">
+              {severityLabel(finding.severity)} · {formatRelativeTime(finding.lastSeenAt)}
+            </p>
+          </button>
+          <FindingEvidence finding={finding} onOpenSource={onOpenSource} />
         </div>
-        <div className="flex w-full shrink-0 flex-row items-end gap-1 sm:w-auto sm:flex-col">
-          <button
-            type="button"
-            onClick={onToggle}
-            aria-expanded={expanded}
-            aria-controls={`finding-drafts-${finding.id}`}
-            className="focus-ring rounded-md border border-control px-2 py-1 text-caption font-medium text-muted transition hover:border-accent/30 hover:text-fg"
-          >
-            {expanded ? 'Hide drafts' : 'Draft…'}
-          </button>
-          <button
-            type="button"
-            onClick={onAssemble}
-            className="focus-ring rounded-md border border-control px-2 py-1 text-caption font-medium text-muted transition hover:border-accent/30 hover:text-fg"
-            aria-label={`Assemble dossier: ${finding.headline}`}
-          >
-            Evidence chain
-          </button>
-          <button
-            type="button"
-            onClick={onDismiss}
-            className="focus-ring rounded-md border border-control px-2 py-1 text-caption font-medium text-muted transition hover:border-control hover:text-fg"
-            aria-label={`Dismiss finding: ${finding.headline}`}
-          >
-            Dismiss
-          </button>
-        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 pl-6">
+        <Button size="sm" onClick={onAssemble} aria-label={`Assemble dossier: ${finding.headline}`}>Open evidence chain</Button>
+        <Button
+          size="sm"
+          onClick={onToggle}
+          aria-expanded={expanded}
+          aria-controls={`finding-drafts-${finding.id}`}
+          aria-label={expanded ? `Hide drafts: ${finding.headline}` : `Draft a request or appeal: ${finding.headline}`}
+        >
+          {expanded ? 'Hide drafts' : 'Draft request'}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          iconOnly
+          icon="x"
+          onClick={onDismiss}
+          aria-label={`Dismiss finding: ${finding.headline}`}
+          title="Dismiss"
+          className="ml-auto"
+        />
       </div>
       <div id={`finding-drafts-${finding.id}`} hidden={!expanded}>
         {expanded && (
