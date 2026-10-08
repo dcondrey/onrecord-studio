@@ -118,7 +118,7 @@ describe("<ArtifactDrafts />", () => {
         /counted comparison with the agency's own stated commitment/i,
       ),
     ).toBeTruthy();
-    expect(screen.getByText("80.00% (measured)")).toBeTruthy();
+    expect(screen.getByText("80% measured confidence")).toBeTruthy();
   });
 
   test("unassessed confidence, unknown facts and missing ranges are shown, never a number", async () => {
@@ -128,29 +128,13 @@ describe("<ArtifactDrafts />", () => {
       await screen.findByRole("button", { name: /draft records request/i }),
     );
     await screen.findByLabelText(/drafted artifact text/i);
-    expect(screen.getByText("not assessed")).toBeTruthy();
+    expect(screen.getByText("Confidence not assessed")).toBeTruthy();
     expect(screen.getByText("Agency name")).toBeTruthy();
     expect(screen.getByText(/character range not recorded/i)).toBeTruthy();
     expect(screen.getByText(/not sent/i)).toBeTruthy();
   });
 
-  test("user edits are what Copy hands to the clipboard", async () => {
-    mockIpc({});
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.assign(navigator, { clipboard: { writeText } });
-    render(<ArtifactDrafts findingId="finding-xyz" />);
-    fireEvent.click(
-      await screen.findByRole("button", { name: /draft records request/i }),
-    );
-    const textarea = (await screen.findByLabelText(
-      /drafted artifact text/i,
-    )) as HTMLTextAreaElement;
-    fireEvent.change(textarea, { target: { value: "EDITED BODY" } });
-    fireEvent.click(screen.getByRole("button", { name: /^copy$/i }));
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith("EDITED BODY"));
-  });
-
-  test("editing the body cannot remove the disclosure from what is copied", async () => {
+  test("Copy hands over the edited body, and editing cannot remove the disclosure", async () => {
     const sentence =
       "Prepared by a user who has declared an affiliation with City Clerk (self-declared, not verified).";
     mockIpc({

@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import type {
-  DraftedArtifact,
-  DraftEvidenceBasis,
-  FindingConfidence,
-} from "../../types";
+import type { DraftedArtifact, DraftEvidenceBasis } from "../../types";
+import { confidenceLabel } from "../objects/labels";
 import { downloadFile } from "./downloadFile";
 
 const BASIS_LABEL: Record<DraftEvidenceBasis, string> = {
@@ -15,11 +12,6 @@ const BASIS_LABEL: Record<DraftEvidenceBasis, string> = {
   DEADLINE_PASSED_WITHOUT_RECORDED_RESPONSE:
     "Computed deadline passed with no recorded response (not a finding about the agency's conduct)",
 };
-
-export function confidenceLabel(confidence: FindingConfidence): string {
-  if (confidence.kind === "UNASSESSED") return "not assessed";
-  return `${(confidence.basisPoints / 100).toFixed(2)}% (measured)`;
-}
 
 /** The text that leaves the app: the edited body, then the disclosure the body cannot remove. */
 function outgoingText(body: string, disclosure: string | null): string {
@@ -39,17 +31,22 @@ export default function DraftedArtifactView({
 }) {
   const [editedText, setEditedText] = useState(draft.generatedText);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     setEditedText(draft.generatedText);
     setError(null);
+    setCopied(false);
   }, [draft]);
 
   const copyToClipboard = useCallback(async () => {
+    setCopied(false);
     try {
       await navigator.clipboard.writeText(
         outgoingText(editedText, draft.disclosure),
       );
+      setError(null);
+      setCopied(true);
     } catch (reason) {
       setError(`Copy to clipboard failed: ${String(reason)}`);
     }
@@ -78,7 +75,7 @@ export default function DraftedArtifactView({
             onClick={copyToClipboard}
             className="focus-ring rounded-md border border-control px-2 py-1 text-caption font-medium text-fg-secondary transition hover:border-accent/30"
           >
-            Copy
+            {copied ? "Copied" : "Copy"}
           </button>
           <button
             type="button"
@@ -117,7 +114,10 @@ export default function DraftedArtifactView({
       )}
       <textarea
         value={editedText}
-        onChange={(event) => setEditedText(event.target.value)}
+        onChange={(event) => {
+          setEditedText(event.target.value);
+          setCopied(false);
+        }}
         aria-label="Drafted artifact text (editable)"
         className="min-h-[220px] w-full resize-y rounded-md border border-control bg-canvas/70 p-3 font-mono text-label leading-relaxed text-fg focus:border-accent/30 focus:outline-none focus:ring-1 focus:ring-accent/30"
       />
@@ -134,7 +134,7 @@ export default function DraftedArtifactView({
       )}
       {draft.citations.length > 0 && (
         <details className="text-caption text-muted">
-          <summary className="">
+          <summary>
             Citations ({draft.citations.length})
           </summary>
           <ul className="ml-4 mt-1 list-disc space-y-1">
@@ -152,7 +152,7 @@ export default function DraftedArtifactView({
       )}
       {draft.citedAuthorities.length > 0 && (
         <details className="text-caption text-muted">
-          <summary className="">
+          <summary>
             Cited authorities ({draft.citedAuthorities.length})
           </summary>
           <ul className="ml-4 mt-1 list-disc space-y-0.5">
