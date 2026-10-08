@@ -121,13 +121,14 @@ const typeYear = (row: Record<string, unknown>): TypeYear => ({ year: count(row.
   blank: count(row.blank) ?? 0, conflicting: count(row.conflicting) ?? 0, arrest: count(row.arrest) ?? 0, report: count(row.report) ?? 0, noReport: count(row.no_report) ?? 0, unfounded: count(row.unfounded) ?? 0, other: count(row.other) ?? 0,
   crisis: count(row.crisis_team) ?? 0, otherCodes: typeof row.other_codes === 'string' && row.other_codes ? row.other_codes : null });
 /** The outcomes that partition the calls with a disposition. The Crisis Response Team is not one:
- * its calls are also counted under their first letter, so it is drawn as an overlay. */
+ * its calls are also counted under their first letter, so it is drawn as an overlay. Outcomes are
+ * not ordered, so neighbouring segments take ramp steps at least two apart to stay distinguishable. */
 const OUTCOME_SEGMENTS = [
   { key: 'arrest', label: 'Arrest', tone: 'lead' },
-  { key: 'report', label: 'Report', tone: 'ord-4' },
-  { key: 'noReport', label: 'No report required', tone: 'ord-3' },
-  { key: 'unfounded', label: 'Unfounded', tone: 'ord-2' },
-  { key: 'other', label: 'Other code', tone: 'ord-1' },
+  { key: 'report', label: 'Report', tone: 'ord-3' },
+  { key: 'noReport', label: 'No report required', tone: 'ord-1' },
+  { key: 'unfounded', label: 'Unfounded', tone: 'ord-4' },
+  { key: 'other', label: 'Other code', tone: 'ord-2' },
 ] as const satisfies readonly { key: keyof TypeYear; label: string; tone: LeadSegmentTone }[];
 /** Calls not cancelled or duplicated: the ones a unit was sent to or that were otherwise closed. */
 const sent = (item: TypeYear) => item.calls - item.cancelled;

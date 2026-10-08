@@ -12,7 +12,7 @@ import type {
 } from '../../../types';
 import { REFERENCE_PAINT, VIZ } from '../core/claim';
 import { formatValue, type ValueKind } from '../core/format';
-import { fitsInside, measureText } from '../core/layout';
+import { measureText } from '../core/layout';
 import { absent, isValue, measured, type Absence, type Measured } from '../core/nulls';
 import { scaleBand, scaleLinear, type ContinuousScale } from '../core/scale';
 import { Axis, TICK_CLASS } from '../frame/Axis';
@@ -94,8 +94,18 @@ interface RowSlot {
   under: number;
 }
 
+/**
+ * The label column every row shares: as wide as the longest label, or, when that would take more
+ * than two fifths of the plot, none, and every label sits on its own line above its bar. One rule
+ * for all rows, so the bars of a figure always start at the same x.
+ */
+function labelColumnOf(labels: readonly string[], width: number): number {
+  const widest = Math.max(0, ...labels.map((label) => measureText(label, ROW_FONT)));
+  return widest + 12 <= width * 0.42 ? Math.ceil(widest + 12) : 0;
+}
+
 function rowLayout(items: readonly { key: string; label: string; under?: number; above?: number; header?: string }[], width: number, band: number, top = 4) {
-  const labelColumn = width < 420 ? 0 : Math.min(200, Math.round(width * 0.3));
+  const labelColumn = labelColumnOf(items.map((item) => item.label), width);
   let y = top;
   const headers: { text: string; y: number }[] = [];
   const rows: RowSlot[] = items.map((item) => {
@@ -104,11 +114,11 @@ function rowLayout(items: readonly { key: string; label: string; under?: number;
       y += 18;
     }
     y += item.above ?? 0;
-    const inline = labelColumn > 0 && fitsInside(item.label, labelColumn - 4, ROW_FONT);
-    const slot = inline
+    const slot = labelColumn > 0
       ? { key: item.key, label: item.label, labelY: y + band / 2, barY: y, under: item.under ?? 0 }
       : { key: item.key, label: item.label, labelY: y + 7, barY: y + 16, under: item.under ?? 0 };
-    y = slot.barY + band + slot.under + 10;
+    // A label above its bar needs more air from the row before, or it reads as that row's.
+    y = slot.barY + band + slot.under + (labelColumn > 0 ? 10 : 16);
     return slot;
   });
   return { rows, headers, height: y + 4, plotX: labelColumn };
@@ -265,7 +275,7 @@ const rowTotal = (values: readonly number[]) => values.reduce((sum, value) => su
 function stackedLayout(figure: LeadStackedFigure, width: number, size: LeadFigureSize) {
   const band = size === 'card' ? 12 : 16;
   const combine = size === 'card';
-  const labelColumn = width < 420 ? 0 : Math.min(200, Math.round(width * 0.3));
+  const labelColumn = labelColumnOf(figure.rows.map((row) => row.label), width);
   const stubsOf = (row: LeadStackedFigure['rows'][number]) => (combine && row.excluded.length > 1
     ? [{ key: 'outside', label: 'outside the bar', count: row.excluded.reduce((sum, stub) => sum + stub.count, 0) }]
     : row.excluded);
@@ -281,7 +291,8 @@ function stackedLayout(figure: LeadStackedFigure, width: number, size: LeadFigur
       header: groups > 1 && (index === 0 || figure.rows[index - 1].group !== row.group) ? row.group : undefined,
     };
   }), width, band);
-  return { ...layout, band, stubs, stubsOf };
+  // Counts (not shares) get a value axis under the rows.
+  return { ...layout, band, stubs, stubsOf, axisY: layout.height, height: layout.height + (figure.normalise ? 0 : 22) };
 }
 
 function StackedPlot({ figure, width, size, interaction }: { figure: LeadStackedFigure; width: number; size: LeadFigureSize; interaction(i: number): MarkInteraction }) {
@@ -296,6 +307,13 @@ function StackedPlot({ figure, width, size, interaction }: { figure: LeadStacked
     : scaleLinear([Math.min(0, ...negatives), Math.max(0, ...totals)], [layout.plotX, right]);
   return (
     <g>
+      {!figure.normalise && (
+        <>
+          <Grid scale={x} extent={[0, layout.axisY]} vertical tickCount={size === 'card' ? 3 : undefined} />
+          <line x1={Math.round(x(0)) + 0.5} x2={Math.round(x(0)) + 0.5} y1={0} y2={layout.axisY} style={{ stroke: VIZ.baseline, strokeWidth: 1 }} />
+          <Axis orient="bottom" offset={layout.axisY} scale={x} kind={kindOf(figure.unit)} tickCount={size === 'card' ? 3 : undefined} line={false} />
+        </>
+      )}
       {layout.headers.map((header) => <text key={`${header.text}-${header.y}`} x={0} y={header.y} className="fill-fg text-[12px] font-medium">{header.text}</text>)}
       {layout.rows.map((slot, index) => {
         const row = figure.rows[index];
@@ -357,9 +375,11 @@ function SeriesPlot({ figure, width, size, interaction }: { figure: LeadSeriesFi
     return defined.length ? format(defined[defined.length - 1], panel.unit, true) : '';
   });
   const right = width - Math.max(16, ...endLabels.map((label) => measureText(label) + 14));
-  const step = n > 1 ? (right - left) / (n - 1) : right - left;
-  const xOf = (i: number) => (n > 1 ? left + i * step : (left + right) / 2);
-  const column = Math.max(12, Math.min(40, step * 0.6));
+  // Points sit inside the plot by half a column, so a gap's slot never covers the axis labels.
+  const inset = n > 1 ? Math.min(20, (right - left) / (2 * n)) : 0;
+  const step = n > 1 ? (right - left - 2 * inset) / (n - 1) : right - left;
+  const xOf = (i: number) => (n > 1 ? left + inset + i * step : (left + right) / 2);
+  const column = Math.max(12, Math.min(2 * inset, step * 0.6, 40));
   const axisY = height - 18;
   // Thin the x labels so none collides with its neighbour.
   const widest = Math.max(...figure.points.map((point) => measureText(point.label)));
@@ -415,7 +435,7 @@ function binLabel(bin: LeadBinsFigure['bins'][number]): string {
 
 function binsLayout(figure: LeadBinsFigure, size: LeadFigureSize) {
   const plot = size === 'card' ? 96 : 150;
-  return { plot, top: 16, height: 16 + plot + 34 + (figure.before ? STUB_LINE + 4 : 0) };
+  return { plot, top: 16, height: 16 + plot + 22 + (figure.median === null ? 0 : 18) + (figure.before ? STUB_LINE + 4 : 0) };
 }
 
 function BinsPlot({ figure, width, size, interaction }: { figure: LeadBinsFigure; width: number; size: LeadFigureSize; interaction(i: number): MarkInteraction }) {
@@ -453,13 +473,15 @@ function BinsPlot({ figure, width, size, interaction }: { figure: LeadBinsFigure
       ))}
       <line x1={left} x2={right} y1={bottom + 0.5} y2={bottom + 0.5} style={{ stroke: VIZ.baseline, strokeWidth: 1 }} />
       {median !== null && (
-        <g>
-          <line x1={median} x2={median} y1={bottom + 18} y2={bottom + 24} style={{ stroke: VIZ.ink, strokeWidth: 2 }} />
-          <text x={Math.min(Math.max(median, left + 40), right - 40)} y={bottom + 33} textAnchor="middle" className={LABEL_CLASS}>{`median ${formatValue(figure.median!, { kind: 'hours', digits: 1 })}`}</text>
+        // The median is placed linearly inside its bin, so it is a position within the bin's
+        // range, labelled with its value; the bins themselves are not on a linear hour scale.
+        <g data-median="">
+          <path d={`M${median},${bottom + 18}l-4,6h8Z`} style={{ fill: VIZ.ink }} />
+          <text x={Math.min(Math.max(median, left + 44), right - 44)} y={bottom + 34} textAnchor="middle" className={LABEL_CLASS}>{`median ${formatValue(figure.median!, { kind: 'hours', digits: 1 })}`}</text>
         </g>
       )}
       {figure.before && (
-        <ExcludedStub band={{ pos: bottom + 38, thickness: 10 }} at={left} count={figure.before.count.toLocaleString('en-US')} label={figure.before.label} />
+        <ExcludedStub band={{ pos: bottom + (median === null ? 22 : 40), thickness: 10 }} at={left} count={figure.before.count.toLocaleString('en-US')} label={figure.before.label} />
       )}
     </g>
   );
