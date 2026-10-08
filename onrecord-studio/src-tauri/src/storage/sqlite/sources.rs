@@ -117,34 +117,7 @@ impl DuckDbRepository {
         let reuse_for_publisher_pattern = guidance.reuse_for_publisher_pattern;
         self.query_connection("Save source connector recipe", move |conn| {
             execute_transaction(conn, "source connector recipe", |transaction| {
-                // `root_url` is UNIQUE and the upsert below targets `source_key`, so a row holding
-                // this URL under a *different* key fails the insert and takes the source start down
-                // with it. Two keys can reach one URL: the public-source key is a digest over the
-                // source kind and the final URL, so a reclassified source at an unchanged URL
-                // produces the pair, and `portals.base_url` is not UNIQUE, so a URL that later
-                // discovers as NextRequest registers a second key beside the first.
-                //
-                // The row being written is the one the operator is starting now, so the other is the
-                // one to lose. That does cost a still-registered source at the same URL its stored
-                // guidance, which is the lesser of the two: the alternative is that the start the
-                // operator asked for fails outright. It is lost only if the row replacing it is
-                // actually written, which is why the two statements share a transaction rather than
-                // running in order.
-                //
-                // `submitted_url` is deliberately not cleared the same way. It carries no UNIQUE, so
-                // no insert can collide on it, and dropping another source's row for sharing a pasted
-                // string would destroy that source's guidance to satisfy nothing.
-                transaction
-                    .execute(
-                        "DELETE FROM source_connector_recipes
-                     WHERE root_url = ?1 AND source_key <> ?2",
-                        params![root_url, source_key],
-                    )
-                    .map_err(|error| {
-                        AppError::Storage(format!(
-                            "Failed to clear a superseded source connector recipe: {error}"
-                        ))
-                    })?;
+                clear_superseded_recipe(transaction, &root_url, &source_key)?;
                 transaction
                     .execute(
                         "INSERT INTO source_connector_recipes (
@@ -221,19 +194,7 @@ impl DuckDbRepository {
         let publisher_pattern = publisher_pattern_for_url(&root_url);
         self.query_connection("Save source metadata page window", move |conn| {
             execute_transaction(conn, "source metadata page window", |transaction| {
-                // Same `root_url` collision the recipe writer clears, for the same reason, under the
-                // same transaction.
-                transaction
-                    .execute(
-                        "DELETE FROM source_connector_recipes
-                     WHERE root_url = ?1 AND source_key <> ?2",
-                        params![root_url, source_key],
-                    )
-                    .map_err(|error| {
-                        AppError::Storage(format!(
-                            "Failed to clear a superseded source connector recipe: {error}"
-                        ))
-                    })?;
+                clear_superseded_recipe(transaction, &root_url, &source_key)?;
                 transaction
                     .execute(
                         "INSERT INTO source_connector_recipes (
@@ -765,6 +726,36 @@ impl RecipeOwnRow {
             Self::RootUrl => Some("submitted_url"),
         }
     }
+}
+
+/// Removes a recipe row that holds `root_url` under a key other than `source_key`, inside the
+/// transaction that then writes the row for `source_key`.
+///
+/// `root_url` is UNIQUE while both recipe writers upsert on `source_key`, so such a row would fail
+/// the insert and take the source start down with it. Two keys reach one URL when a source is
+/// reclassified at an unchanged URL (the public-source key digests the kind and the final URL), or
+/// when a URL later discovers as NextRequest beside its first registration. The row being written
+/// is the source the operator is starting now, so the other one loses its stored guidance; sharing
+/// the transaction means it is lost only if the replacement is actually written.
+///
+/// `submitted_url` is not cleared this way: it carries no UNIQUE, and dropping another source's
+/// row for sharing a pasted string would destroy that source's guidance to satisfy nothing.
+fn clear_superseded_recipe(
+    transaction: &Transaction<'_>,
+    root_url: &str,
+    source_key: &str,
+) -> Result<(), AppError> {
+    transaction
+        .execute(
+            "DELETE FROM source_connector_recipes WHERE root_url = ?1 AND source_key <> ?2",
+            params![root_url, source_key],
+        )
+        .map_err(|error| {
+            AppError::Storage(format!(
+                "Failed to clear a superseded source connector recipe: {error}"
+            ))
+        })?;
+    Ok(())
 }
 
 /// The operator's submitted URL in the one form the writers and the URL reader agree on.
