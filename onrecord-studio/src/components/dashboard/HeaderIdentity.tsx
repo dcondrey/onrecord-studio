@@ -1,34 +1,12 @@
-import Icon from '../ui/icons';
 import type { PortalRegistration } from '../../types';
-import type { WorkspaceView } from '../../store/useAppStore';
 
-const viewLabels: Record<WorkspaceView, string> = {
-  overview: 'San Diego research desk',
-  story: 'Story desk',
-  patterns: 'Corpus connections',
-  analysis: 'Analysis workbench',
-  evidence: 'Evidence workspace',
-  activity: 'Ingestion activity',
-  briefing: 'Presentation briefing',
-  meetings: 'Public meetings',
-  compare: 'Agency comparison',
-};
-
-/** The title block at the left of the header: current view, active source, and its verified badge. */
-export function HeaderIdentity({ workspaceView, activePortal }: { workspaceView: WorkspaceView; activePortal: PortalRegistration | null }) {
+/** The active source's name. The sidebar already names the view, so the header does not repeat it. */
+export function HeaderIdentity({ activePortal }: { activePortal: PortalRegistration | null }) {
   return (
-    <div className="min-w-0 flex-1 lg:w-[210px] lg:flex-none xl:w-[270px]">
-      <div className="truncate text-caption font-medium text-muted">{viewLabels[workspaceView]}</div>
-      <div className="mt-1 flex min-w-0 items-center gap-2">
-        <h1 className="truncate text-[15px] font-semibold tracking-[-0.015em] text-fg">
-          {activePortal?.displayName ?? 'All saved sources'}
-        </h1>
-        {activePortal && (
-          <span className="hidden shrink-0 items-center gap-1 rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-caption font-semibold uppercase tracking-wider text-success sm:flex">
-            <Icon name="shield" className="h-2.5 w-2.5" /> Verified
-          </span>
-        )}
-      </div>
+    <div className="min-w-0 flex-1">
+      <h1 className="truncate text-heading text-fg" title={activePortal?.displayName}>
+        {activePortal?.displayName ?? 'All saved sources'}
+      </h1>
     </div>
   );
 }
