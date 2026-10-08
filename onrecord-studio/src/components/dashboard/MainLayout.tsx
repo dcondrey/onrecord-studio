@@ -304,7 +304,8 @@ export default function MainLayout() {
 
   const selectedKey = selected ? `${selected.portalKey}-${selected.requestId}` : null;
   // An empty library has no request to detail, so the column would only say so a second time.
-  const showDetails = results.length > 0 || selected !== null;
+  // While a search is pending the column holds its place, so arriving rows don't reflow the grid.
+  const showDetails = results.length > 0 || selected !== null || (searchPending && portals.length > 0);
   const showSideColumn = showDetails || syncLogCount > 0;
   const savedToBriefing = selected ? briefingEvidence.some((item) => item.id === `request:${selected.portalKey}:${selected.requestId}`) : false;
   const portalName = (portalKey: string) => portals.find(({ registration }) => registration.portalKey === portalKey)?.registration.displayName ?? portalKey;

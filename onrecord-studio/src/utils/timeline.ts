@@ -72,7 +72,7 @@ export function findingItems(findings: Finding[]): TimelineItem[] {
     detail: null,
     // Same source as ClaimBasisBadge, so the timeline and the inbox never disagree on the basis.
     provenance: `Found by the ${detectorName(finding.sourceDetector)} check; first discovered ${formatShortDate(finding.discoveredAt)}. ${
-      claimBasisLabel(finding.kind) === 'Counted violation' ? 'A counted statutory violation.' : 'A pattern signal, not a legal claim.'
+      claimBasisLabel(finding.kind) === 'Counted violation' ? 'A counted violation.' : 'A pattern signal, not a legal claim.'
     }`,
     evidence: finding.explanation,
     findingId: finding.id,

@@ -63,7 +63,7 @@ describe('caseItems', () => {
       headline: 'h', explanation: 'e', citations: [], discoveredAt: '2026-10-01T00:00:00Z', lastSeenAt: '2026-10-02T00:00:00Z', dismissedAt: null, sourceDetector: 'encampment_notice',
     });
     const [counted, signal] = findingItems([finding('ENCAMPMENT_NOTICE_SHORTFALL'), finding('BOILERPLATE_DENIAL')]);
-    expect(counted.provenance).toContain('A counted statutory violation.');
+    expect(counted.provenance).toContain('A counted violation.');
     expect(counted.provenance).not.toContain('not a legal claim');
     expect(counted.provenance).toContain('encampment notice check');
     expect(signal.provenance).toContain('A pattern signal, not a legal claim.');

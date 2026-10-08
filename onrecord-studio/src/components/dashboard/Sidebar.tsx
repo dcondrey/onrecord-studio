@@ -94,7 +94,7 @@ export default function Sidebar() {
           <button
             type="button"
             onClick={() => window.dispatchEvent(new Event(OPEN_COMMAND_PALETTE_EVENT))}
-            aria-label="Open command palette"
+            aria-label={isCollapsed ? 'Search and commands' : undefined}
             aria-keyshortcuts={isApplePlatform() ? 'Meta+K' : 'Control+K'}
             title={`Search and commands (${modifier}K)`}
             className={cn(

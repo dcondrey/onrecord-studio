@@ -325,7 +325,7 @@ export default function MeetingsView() {
             counts as upcoming. A posting time is the Last-Modified header the server sent with the file: the server’s statement about
             the file, not proof of when the public could first read it, and no notice requirement is evaluated here.
           </>}
-          actions={calendar?.meetings.length === 0 ? undefined : (
+          actions={calendar?.meetings.length === 0 || (error && !calendar) ? undefined : (
             <Button onClick={load} className="min-w-[7rem]">{loading && calendar ? 'Refreshing…' : 'Refresh'}</Button>
           )}
         />
