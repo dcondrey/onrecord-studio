@@ -364,7 +364,7 @@ fn count(name: &str, value: f64) -> Result<(), AppError> {
 }
 
 fn length(name: &str, actual: usize, minimum: usize, maximum: usize) -> Result<(), AppError> {
-    if actual < minimum || actual > maximum {
+    if !(minimum..=maximum).contains(&actual) {
         return Err(refused(format!(
             "it has {actual} {name}; between {minimum} and {maximum} are drawn."
         )));
