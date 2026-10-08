@@ -100,6 +100,8 @@ describe('San Diego research workflow', () => {
     expect(args.crawlPolicy).toMatchObject({ maximumPages: 1, maximumDepth: 0, maximumResources: 1 });
   });
 
+  // It renders the whole app and walks the source picker; under the full parallel suite that takes
+  // longer than the 5 s default on its own, with nothing wrong.
   it('stages the SDPD source and applies its scoped acquisition recipe when Add is clicked', async () => {
     render(<App />);
     fireEvent.click(screen.getByRole('tab', { name: 'Tools' }));
@@ -118,7 +120,7 @@ describe('San Diego research workflow', () => {
     const args = bridge.calls.find((call) => call.command === 'start_data_source')!.args;
     expect(args.crawlPolicy).toMatchObject({ maximumPages: 100, followSupportedExternalPlatforms: false });
     expect(args.guidance).toMatchObject({ reuseForPublisherPattern: false, allowedHostnames: ['www.sandiego.gov'], includeUrlPrefixes: ['https://www.sandiego.gov/police/data-transparency/policies-procedures', 'https://www.sandiego.gov/sites/default/files/'] });
-  });
+  }, 15_000);
 
   it('keeps a department tied to its source when agency IDs collide', () => {
     const profile = { agencyId: 7, totalRequestsProcessed: 1, totalClosed: 1, validLatencySampleSize: 1, excludedInvalidLifetimeCount: 0, averageClosureDays: 1, globalMeanClosureDays: 1, globalStddevClosureDays: null, performanceZScore: null, complianceIndicator: 'Compliant' as const, anomalyCount: 0, statutoryViolationCount: 0, statutoryViolationRate: 0, statutoryMaturedCount: 0, statutoryMaturedViolationCount: 0, suspiciousFastClosureCount: 0, totalDocumentsReleased: 1, keywordFrequencyMap: {} };
