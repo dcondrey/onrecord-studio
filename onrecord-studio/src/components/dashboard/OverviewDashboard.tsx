@@ -114,7 +114,7 @@ export default function OverviewDashboard() {
           <ResearchWorkspace onReview={(reportId) => setWorkbench({ reportId, review: true })} />
 
           {portals.length > 0 && (
-            <Panel aria-labelledby="response-analytics-title">
+            <Panel aria-labelledby="response-analytics-title" className={cn(!showAnalytics && '[&>div:first-child]:border-b-0')}>
               <PanelHeader
                 titleId="response-analytics-title"
                 title="Response analytics"

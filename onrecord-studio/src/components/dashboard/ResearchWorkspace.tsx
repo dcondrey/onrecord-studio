@@ -19,7 +19,7 @@ import { useLatestRequestGate } from "../../hooks/useLatestRequestGate";
 import { minimumResearchCalls, researchBudgetMessage } from "../../utils/researchReadiness";
 import Button from "../ui/Button";
 import Badge from "../ui/Badge";
-import { Select } from "../ui/Field";
+import { Field, Select } from "../ui/Field";
 import { formatShortDate } from "../objects/labels";
 
 export default function ResearchWorkspace({ onReview }: { onReview?: (reportId: string) => void } = {}) {
@@ -162,23 +162,22 @@ export default function ResearchWorkspace({ onReview }: { onReview?: (reportId: 
         Research controls and saved dossiers
       </summary>
       <div className="space-y-5 border-t border-line p-5">
-        <div className="grid grid-cols-1 items-center gap-x-3 gap-y-3 sm:grid-cols-[max-content_minmax(0,28rem)_auto]">
-          {status && status.reports.length > 0 && (
-            <>
-              <label htmlFor="research-dossier" className="text-control text-fg-secondary">Open a saved dossier</label>
-              <Select id="research-dossier" value={report?.id ?? ""} onChange={(event) => open(event.target.value, "findings")}>
-                <option value="">Choose an investigation</option>
-                {status.reports.map((item) => (
-                  <option key={item.id} value={item.id}>{item.synthesis.title} · {formatShortDate(item.createdAt)}</option>
-                ))}
-              </Select>
-              <span aria-hidden="true" className="hidden sm:block" />
-            </>
-          )}
-          <label htmlFor="research-topic" className="text-control text-fg-secondary">Investigate next</label>
-          <Select id="research-topic" value={topic} onChange={(event) => setTopic(event.target.value)}>
-            {INVESTIGATION_TOPICS.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
-          </Select>
+        {status && status.reports.length > 0 && (
+          <Field label="Open a saved dossier" className="max-w-md">
+            <Select id="research-dossier" value={report?.id ?? ""} onChange={(event) => open(event.target.value, "findings")}>
+              <option value="">Choose an investigation</option>
+              {status.reports.map((item) => (
+                <option key={item.id} value={item.id}>{item.synthesis.title} · {formatShortDate(item.createdAt)}</option>
+              ))}
+            </Select>
+          </Field>
+        )}
+        <div className="flex flex-wrap items-end gap-3">
+          <Field label="Investigate next" className="w-full max-w-md">
+            <Select id="research-topic" value={topic} onChange={(event) => setTopic(event.target.value)}>
+              {INVESTIGATION_TOPICS.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
+            </Select>
+          </Field>
           <Button
             variant="primary"
             disabled={pending || !status?.policy.enabled || !!missingCredential || !!budgetMessage || !isTauri()}
@@ -214,7 +213,7 @@ export default function ResearchWorkspace({ onReview }: { onReview?: (reportId: 
                     ? <a href={source.url} target="_blank" rel="noreferrer" className="focus-ring rounded font-medium text-accent underline-offset-2 hover:underline">{source.label}<span className="sr-only"> (opens in browser)</span></a>
                     : <span className="font-medium text-fg-secondary">{source.label}</span>}
                   <p className="mt-1 flex flex-wrap items-center gap-2 text-caption text-muted">
-                    <SourceStateBadge state={source.state} />
+                    <SourceStateBadge state={source.state} url={source.url} />
                     <span className="min-w-0">{source.detail}</span>
                   </p>
                 </li>
@@ -228,8 +227,18 @@ export default function ResearchWorkspace({ onReview }: { onReview?: (reportId: 
   </section>;
 }
 
-/** Backend states are upper-case words; OK reads as collected, a failure as its own word. */
-function SourceStateBadge({ state }: { state: string }) {
+/**
+ * Backend states are upper-case words; OK reads as collected, a failure as its own word. A source
+ * the sidebar also lists reads from the same live state, so the two never disagree.
+ */
+function SourceStateBadge({ state, url }: { state: string; url: string }) {
+  const portalKey = useAppStore((app) => app.portals.find(({ registration }) => registration.canonicalUrl === url)?.registration.portalKey ?? null);
+  const syncing = useAppStore((app) => portalKey !== null && app.syncingPortalKeys.includes(portalKey));
+  const failedTasks = useAppStore((app) => app.portalRuntimes.find((runtime) => runtime.portal.portalKey === portalKey)?.failedTasks ?? 0);
+  if (portalKey !== null && (syncing || failedTasks > 0)) {
+    const label = `${syncing ? "Syncing" : "Collected"}${failedTasks > 0 ? ` · ${failedTasks.toLocaleString()} failed` : ""}`;
+    return <Badge tone={failedTasks > 0 ? "warning" : "neutral"} className="tabular-nums">{label}</Badge>;
+  }
   const failed = /ERROR|FAILED|BLOCKED|UNAVAILABLE/i.test(state);
   const label = /^OK$/i.test(state) ? "Collected" : state.charAt(0) + state.slice(1).toLowerCase().split("_").join(" ");
   return <Badge tone={/^OK$/i.test(state) ? "success" : failed ? "danger" : "warning"}>{label}</Badge>;
