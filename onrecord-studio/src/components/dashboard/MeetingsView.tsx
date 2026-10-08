@@ -225,7 +225,7 @@ function MeetingCard({ meeting, selected, onSelect, drafts, onDraft }: {
         <p className="text-caption text-muted">{meeting.jurisdiction}</p>
         {meeting.dateNote && <p className="mt-1 text-caption text-warning">{meeting.dateNote}</p>}
       </div>
-      <ul className="flex flex-col gap-2 p-4 text-body">
+      {meeting.documents.length > 0 && <ul className="flex flex-col gap-2 p-4 text-body">
         {meeting.documents.map((document) => (
           <li key={`${document.portalKey}:${document.documentId}`} className="text-fg-secondary">
             {ROLE_TEXT[document.role]}:{' '}
@@ -233,7 +233,7 @@ function MeetingCard({ meeting, selected, onSelect, drafts, onDraft }: {
             <Posting document={document} />
           </li>
         ))}
-      </ul>
+      </ul>}
       {meeting.revisions.length > 0 && (
         <div className="p-4" aria-label="Agenda copies compared">
           <h5 className="text-body font-medium text-fg">Agenda copies compared</h5>
