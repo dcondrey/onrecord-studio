@@ -18,7 +18,7 @@ const STRETCHED =
  * One lead or item that needs a reader's attention: badges, a one-line headline, who and when.
  * The badge row says what kind of item it is; only a counted statutory violation is solid.
  */
-export default function InsightCard({ badges, severity, headline, open, body, subject, time, meta, chips, actions, nested = false, className }: {
+export default function InsightCard({ badges, severity, headline, open, body, subject, time, timeLabel, meta, chips, actions, nested = false, className }: {
   badges: ReactNode;
   severity?: FindingSeverity;
   headline: string;
@@ -29,7 +29,9 @@ export default function InsightCard({ badges, severity, headline, open, body, su
   subject?: ReactNode;
   /** ISO instant; rendered as a short date in a <time>. Omitted when there is no date. */
   time?: string | null;
-  /** A relative phrase shown instead of a date ("In 3 days"). */
+  /** The date as worded for this item ("Tue, Oct 13 · 6:00 PM"); defaults to the short date. */
+  timeLabel?: string;
+  /** A relative phrase after the date ("in 3 days"). */
   meta?: string;
   chips?: ReactNode;
   actions?: ReactNode;
@@ -46,15 +48,7 @@ export default function InsightCard({ badges, severity, headline, open, body, su
         className,
       )}
     >
-      <div className="flex flex-wrap items-center gap-2">
-        {badges}
-        {severity && (
-          <span className="flex items-center gap-1 text-caption text-fg-secondary">
-            <SeverityGlyph severity={severity} />
-            {severityLabel(severity)}
-          </span>
-        )}
-      </div>
+      <div className="flex flex-wrap items-center gap-2">{badges}</div>
       <h4 className="min-w-0 text-heading text-fg">
         {open && 'target' in open ? (
           <ObjectLink target={open.target} className={STRETCHED}>{headline}</ObjectLink>
@@ -65,12 +59,19 @@ export default function InsightCard({ badges, severity, headline, open, body, su
         )}
       </h4>
       {body && <div className="space-y-1 text-body text-fg-secondary">{body}</div>}
-      {(subject || time || meta) && (
+      {(severity || subject || time || meta) && (
         <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-caption text-muted">
-          {subject && <span className="min-w-0 truncate">{subject}</span>}
-          {subject && (time || meta) && <span aria-hidden="true">·</span>}
-          {time && <time dateTime={time} className="tabular-nums">{formatShortDate(time)}</time>}
-          {!time && meta && <span className="tabular-nums">{meta}</span>}
+          {[
+            severity && (
+              <span key="severity" className="flex items-center gap-1 text-fg-secondary">
+                <SeverityGlyph severity={severity} />
+                {severityLabel(severity)}
+              </span>
+            ),
+            subject && <span key="subject" className="min-w-0 truncate">{subject}</span>,
+            time && <time key="time" dateTime={time} className="tabular-nums">{timeLabel ?? formatShortDate(time)}</time>,
+            meta && <span key="meta" className="tabular-nums">{meta}</span>,
+          ].filter(Boolean).flatMap((part, index) => (index === 0 ? [part] : [<span key={`dot-${index}`} aria-hidden="true">·</span>, part]))}
         </p>
       )}
       {chips && <div className="flex flex-wrap gap-1.5">{chips}</div>}

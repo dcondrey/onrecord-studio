@@ -18,7 +18,8 @@ import AutomaticDiscovery from './AutomaticDiscovery';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { AgencyPerformanceProfile } from '../../types';
-import AttentionFeed from './AttentionFeed';
+import AttentionFeed, { AttentionFeedSkeleton } from './AttentionFeed';
+import InlineError from '../ui/InlineError';
 import SinceControl from './SinceControl';
 import WatchlistPanel from './WatchlistPanel';
 import StandingSearchPanel from './StandingSearchPanel';
@@ -91,7 +92,7 @@ export default function OverviewDashboard() {
 
         <FirstRunData />
         {workspaceInitializationStatus === 'loading' ? (
-          <WorkspaceSourcesLoading />
+          <section aria-label="Needs attention" className="app-panel overflow-hidden"><AttentionFeedSkeleton /></section>
         ) : workspaceInitializationStatus === 'error' ? (
           <WorkspaceSourcesUnavailable detail={workspaceInitializationError} />
         ) : portals.length === 0 || starterRunShown ? (
@@ -196,34 +197,14 @@ function ComparisonMetric({ label, current, prior, percent = false, inverse = fa
   return <div className="min-w-0 rounded-lg border border-line bg-canvas/40 px-3 py-2"><div className="truncate text-caption text-muted" title={label}>{label}</div><div className="mt-1 break-words font-mono text-sm leading-tight text-fg">{loading ? '—' : current === null ? 'Not measured' : format(current)}</div><div className={favorable === null ? 'text-caption leading-tight text-muted' : favorable ? 'text-caption leading-tight text-success' : 'text-caption leading-tight text-warning'}>{loading ? 'Loading…' : delta === null ? 'No comparable prior baseline' : `${delta >= 0 ? '+' : ''}${(delta * 100).toFixed(1)}% vs prior`}</div></div>;
 }
 
-function WorkspaceSourcesLoading() {
-  return (
-    <section className="onboarding-panel rounded-2xl border p-5 sm:p-6" role="status">
-      <div className="flex items-center gap-3">
-        <span className="h-4 w-4 animate-spin rounded-full border-2 border-line-strong border-t-cyan-300" aria-hidden="true" />
-        <div>
-          <h3 className="text-sm font-semibold text-fg-secondary">Loading saved sources</h3>
-          <p className="mt-1 text-label text-muted">Checking the local workspace before showing source-specific findings.</p>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function WorkspaceSourcesUnavailable({ detail }: { detail: string | null }) {
+  const retry = useAppStore((state) => state.retryWorkspaceInitialization);
   return (
-    <section className="rounded-2xl border border-danger/30 bg-danger/5 p-5 sm:p-6" role="alert">
-      <div className="flex items-start gap-3">
-        <Icon name="database" className="mt-0.5 h-4 w-4 text-danger" />
-        <div>
-          <h3 className="text-sm font-semibold text-danger">Saved sources unavailable</h3>
-          <p className="mt-1 text-label leading-relaxed text-muted">
-            OnRecord could not load the local source catalog, so this is not a first-run workspace. Existing sources may still be present; review the activity log and retry after the storage error is resolved.
-          </p>
-          {detail && <p className="mt-2 font-mono text-caption text-danger">{detail}</p>}
-        </div>
-      </div>
-    </section>
+    <InlineError
+      summary="Saved sources couldn't be loaded. Your sources may still be there; this is not a first-run workspace."
+      detail={detail ?? undefined}
+      onRetry={retry}
+    />
   );
 }
 

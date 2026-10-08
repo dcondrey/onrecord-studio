@@ -18,7 +18,7 @@ describe('nextUpcomingMeeting', () => {
       meeting('c', 'DATE_NOT_RECORDED', null),
       meeting('d', 'UPCOMING', '2026-10-04'),
     ]));
-    expect(next).toEqual({ days: 3, body: 'Body d' });
+    expect(next).toMatchObject({ days: 3, body: 'Body d', meeting: { id: 'd' } });
   });
 
   it('reports no meeting rather than a zero-day one when nothing upcoming has a date', () => {

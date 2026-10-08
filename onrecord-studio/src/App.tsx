@@ -61,6 +61,7 @@ function LicensedWorkspace() {
   const upsertPortal = useAppStore((state) => state.upsertPortal);
   const setPortalRuntimes = useAppStore((state) => state.setPortalRuntimes);
   const setPortalRuntimesError = useAppStore((state) => state.setPortalRuntimesError);
+  const workspaceInitializationAttempt = useAppStore((state) => state.workspaceInitializationAttempt);
   const runtimeRefreshRequests = useAppStore((state) => state.runtimeRefreshRequests);
   const setPortalSyncState = useAppStore((state) => state.setPortalSyncState);
   const setAnalyticsData = useAppStore((state) => state.setAnalyticsData);
@@ -203,7 +204,7 @@ function LicensedWorkspace() {
     return () => {
       active = false;
     };
-  }, [appendSyncLog, refreshAnalytics, refreshRuntimes, setOcrCapability, setPortals, setWorkspaceInitialization]);
+  }, [appendSyncLog, refreshAnalytics, refreshRuntimes, setOcrCapability, setPortals, setWorkspaceInitialization, workspaceInitializationAttempt]);
 
   // A surface that writes what the aggregates read asks for this rather than re-running the
   // queries itself, so the analytics refresh stays owned in one place.

@@ -30,6 +30,7 @@ export interface FeedItem {
   open?: InsightTarget;
   subject?: string;
   time?: string;
+  timeLabel?: string;
   meta?: string;
 }
 
@@ -85,10 +86,7 @@ export default function AttentionFeed() {
       </div>
       <div className="px-5 pt-4 empty:hidden"><CaseScopeBar state={caseScope} noun="findings" /></div>
       {pending ? (
-        <div className="grid gap-3 p-4 lg:grid-cols-2">
-          <Skeleton variant="card" label="Loading what needs attention" />
-          {[1, 2, 3].map((slot) => <div key={slot} aria-hidden="true"><Skeleton variant="card" label="" /></div>)}
-        </div>
+        <AttentionFeedSkeleton />
       ) : shown.length === 0 ? (
         <div className="motion-reveal px-5 py-8 text-center">
           <p className="text-heading text-fg-secondary">{since ? `Nothing new since ${formatShortDate(since)}` : 'Nothing found yet'}</p>
@@ -102,14 +100,20 @@ export default function AttentionFeed() {
         <ol className="motion-stagger grid gap-3 p-4 lg:grid-cols-2">
           {shown.map((item) => (
             <li key={item.key} className="min-w-0">
-              <InsightCard nested badges={item.badges} severity={item.severity} headline={item.headline} open={item.open} subject={item.subject} time={item.time} meta={item.meta} />
+              <InsightCard nested badges={item.badges} severity={item.severity} headline={item.headline} open={item.open} subject={item.subject} time={item.time} timeLabel={item.timeLabel} meta={item.meta} />
             </li>
           ))}
         </ol>
       )}
       {(items.length > FEED_LIMIT || unavailable.length > 0) && (
-        <div className="border-t border-line px-5 py-3 text-caption text-muted">
-          {items.length > FEED_LIMIT && <span className="tabular-nums">{(items.length - FEED_LIMIT).toLocaleString()} more in this window. </span>}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-5 py-3 text-caption text-muted">
+          {items.length > FEED_LIMIT && (
+            <span className="tabular-nums">
+              {(items.length - FEED_LIMIT).toLocaleString()} more {items.length - FEED_LIMIT === 1 ? 'item' : 'items'} in this window
+              {' — '}
+              <Button variant="link" size="sm" className="h-auto px-0 align-baseline text-caption" onClick={() => setWorkspaceView('story')}>View all</Button>
+            </span>
+          )}
           {unavailable.length > 0 && <span className="text-warning">Not included because they did not load: {unavailable.join(', ')}.</span>}
         </div>
       )}
@@ -146,13 +150,17 @@ export function rankFeed(sources: FeedSources, portals: SavedSource[], openView:
   }
   const meeting = sources.calendar ? nextUpcomingMeeting(sources.calendar) : null;
   if (meeting && meeting.days <= MEETING_HORIZON_DAYS) {
+    const { date, startTime, jurisdiction } = meeting.meeting;
     items.push({
       key: 'meeting:next',
       rank: meeting.days <= 3 ? 90 : 50,
       badges: <Badge tone="neutral"><Icon name="calendar" size="xs" />Meeting</Badge>,
       headline: meeting.body,
       open: { onOpen: () => openView('meetings') },
-      meta: meeting.days === 0 ? 'Today' : `In ${meeting.days} day${meeting.days === 1 ? '' : 's'}`,
+      subject: jurisdiction,
+      time: date ?? undefined,
+      timeLabel: date ? meetingWhen(date, startTime) : undefined,
+      meta: meeting.days === 0 ? 'today' : `in ${meeting.days} day${meeting.days === 1 ? '' : 's'}`,
     });
   }
   for (const change of sources.changes) {
@@ -166,6 +174,30 @@ export function rankFeed(sources: FeedSources, portals: SavedSource[], openView:
     });
   }
   return items.sort((left, right) => right.rank - left.rank);
+}
+
+const MEETING_DAY = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+
+/**
+ * "Tue, Oct 13 · 6:00 PM". The agenda's date and clock time are the publisher's local wall time, so
+ * both are formatted as written, never converted through the reader's zone.
+ */
+export function meetingWhen(date: string, startTime: string | null): string {
+  const day = MEETING_DAY.format(new Date(`${date.slice(0, 10)}T00:00:00Z`));
+  const match = startTime ? /^(\d{1,2}):(\d{2})/.exec(startTime) : null;
+  if (!match) return day;
+  const hour = Number(match[1]);
+  return `${day} · ${hour % 12 === 0 ? 12 : hour % 12}:${match[2]} ${hour < 12 ? 'AM' : 'PM'}`;
+}
+
+/** Four cards in the feed's two-column grid, at card height, while findings load. */
+export function AttentionFeedSkeleton() {
+  return (
+    <div className="grid gap-3 p-4 lg:grid-cols-2">
+      <Skeleton variant="card" label="Loading what needs attention" />
+      {[1, 2, 3].map((slot) => <div key={slot} aria-hidden="true"><Skeleton variant="card" label="" /></div>)}
+    </div>
+  );
 }
 
 function sentenceCase(enumValue: string): string {

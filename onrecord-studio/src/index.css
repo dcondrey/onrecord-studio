@@ -30,6 +30,10 @@
      so the one primary action is not the brightest block on a dark screen. White on it is 5.36. */
   --accent-fill: 14 116 144;
   --on-accent-fill: 255 255 255;
+  /* The counted-violation badge: crimson with white text in both themes (6.47:1), so its weight does
+     not change with the theme; dark mode's pastel danger text step would make it the loudest block. */
+  --violation: 185 28 28;
+  --on-violation: 255 255 255;
   --lead: 109 40 217;
   --lead-mark: 124 58 237;
   --on-lead: 255 255 255;

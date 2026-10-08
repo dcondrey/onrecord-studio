@@ -164,6 +164,8 @@ interface AppState {
   portals: SavedSource[];
   workspaceInitializationStatus: WorkspaceInitializationStatus;
   workspaceInitializationError: string | null;
+  /** Incremented by Try again; App re-runs the workspace load when it changes. */
+  workspaceInitializationAttempt: number;
   ocrCapability: OcrCapability | null;
   portalRuntimes: PortalRuntimeSnapshot[];
   /** Whether `portalRuntimes` holds a measured snapshot. An empty array while pending or failed is absence, not "nothing running". */
@@ -279,6 +281,7 @@ interface AppState {
   setPortalUrlDraft: (url: string) => void;
   upsertPortal: (portal: PortalRegistration) => void;
   setPortals: (portals: SavedSource[]) => void;
+  retryWorkspaceInitialization: () => void;
   setWorkspaceInitialization: (
     status: WorkspaceInitializationStatus,
     error?: string | null,
@@ -361,6 +364,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   portals: [],
   workspaceInitializationStatus: 'loading',
   workspaceInitializationError: null,
+  workspaceInitializationAttempt: 0,
   ocrCapability: null,
   portalRuntimes: [],
   portalRuntimesStatus: 'pending',
@@ -533,6 +537,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           ? state.activePortalKey
           : portals[0]?.registration.portalKey ?? null,
     })),
+  retryWorkspaceInitialization: () => set((state) => ({ workspaceInitializationAttempt: state.workspaceInitializationAttempt + 1 })),
   setWorkspaceInitialization: (
     workspaceInitializationStatus,
     workspaceInitializationError = null,

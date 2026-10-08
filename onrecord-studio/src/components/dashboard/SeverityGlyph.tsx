@@ -5,7 +5,7 @@ import { ShapeGlyph, type GlyphShape } from '../ui/shapeGlyph';
 const GLYPHS: Record<FindingSeverity, { shape: GlyphShape; tone: string }> = {
   CRITICAL: { shape: 'diamond', tone: 'text-danger' },
   SERIOUS: { shape: 'triangle', tone: 'text-warning' },
-  NOTABLE: { shape: 'circle', tone: 'text-accent' },
+  NOTABLE: { shape: 'circle', tone: 'text-fg-secondary' },
   INFO: { shape: 'ring', tone: 'text-muted' },
 };
 

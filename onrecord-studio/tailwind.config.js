@@ -19,6 +19,8 @@ export default {
         'accent': 'rgb(var(--accent) / <alpha-value>)',
         'on-accent': 'rgb(var(--on-accent) / <alpha-value>)',
         'accent-fill': 'rgb(var(--accent-fill) / <alpha-value>)',
+        'violation': 'rgb(var(--violation) / <alpha-value>)',
+        'on-violation': 'rgb(var(--on-violation) / <alpha-value>)',
         'on-accent-fill': 'rgb(var(--on-accent-fill) / <alpha-value>)',
         'highlight': 'rgb(var(--highlight) / <alpha-value>)',
         'success': 'rgb(var(--success) / <alpha-value>)',
