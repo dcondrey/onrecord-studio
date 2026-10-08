@@ -8,6 +8,9 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct DataPackSummary {
     pub pack: String,
+    /// The pack keeps dated snapshots of each table's file; choosing a table of it downloads
+    /// only the latest snapshot.
+    pub snapshots: bool,
     pub pack_version: String,
     pub schema_version: String,
     /// When the pack builder finished, RFC 3339; its rows are the builder's retrieval.

@@ -6,8 +6,8 @@
 use super::catalog::{pack_tables, SNAPSHOT_PACK};
 use super::conformed::{conformed_select, literal, ConformedOrigin};
 use super::{
-    decode_hex, PackFile, PackFileFormat, PackLicence, PackManifest, PACK_MANIFEST_FILE,
-    PACK_PUBLIC_KEYS,
+    decode_hex, pinned_pack_keys, pinned_signer, PackFile, PackFileFormat, PackKeyScope,
+    PackLicence, PackManifest, PACK_MANIFEST_FILE, PACK_PUBLIC_KEYS,
 };
 use crate::error::AppError;
 use crate::ingestion::client::{ApiClient, HttpClientConfig};
@@ -75,7 +75,7 @@ pub(super) struct PublisherKey {
 fn pinned_seed_key(
     seed_hex: &str,
     key_id: &str,
-    pinned: &[(&str, &str)],
+    pinned: &[(&str, &str, PackKeyScope)],
 ) -> Result<PublisherKey, AppError> {
     let seed: [u8; 32] = (seed_hex.len() == 64 && seed_hex.bytes().all(|b| b.is_ascii_hexdigit()))
         .then(|| decode_hex(seed_hex))
@@ -86,7 +86,7 @@ fn pinned_seed_key(
     let public = crate::integrity::digest_hex(signing_key.verifying_key().to_bytes());
     if !pinned
         .iter()
-        .any(|(kid, hex)| *kid == key_id && hex.eq_ignore_ascii_case(&public))
+        .any(|(kid, hex, _)| *kid == key_id && hex.eq_ignore_ascii_case(&public))
     {
         return Err(key_error(format!(
             "the key {SEED_VARIABLE} names is not pinned in PACK_PUBLIC_KEYS as '{key_id}'"
@@ -125,10 +125,18 @@ fn keychain_key() -> Result<PublisherKey, AppError> {
     Ok(PublisherKey {
         key_id: PACK_PUBLIC_KEYS
             .iter()
-            .find(|(_, hex)| hex.eq_ignore_ascii_case(&public))
-            .map(|(kid, _)| (*kid).to_owned()),
+            .find(|(_, hex, _)| hex.eq_ignore_ascii_case(&public))
+            .map(|(kid, _, _)| (*kid).to_owned()),
         signing_key,
     })
+}
+
+/// Refuses `key` for `pack`, before anything is retrieved, unless the app accepts that key's
+/// signature on that pack: the CI key never signs a curated release, nor the owner's key a
+/// snapshot run.
+pub(super) fn require_signs(key: &PublisherKey, pack: &str) -> Result<(), AppError> {
+    let public = crate::integrity::digest_hex(key.signing_key.verifying_key().to_bytes());
+    pinned_signer(&pinned_pack_keys(), &public, pack).map(|_| ())
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -169,7 +177,9 @@ pub async fn build(pack: &str, out: &Path) -> Result<PathBuf, AppError> {
         )));
     }
     let tables = pack_tables(pack)?;
-    let key = publisher_key()?.signing_key;
+    let key = publisher_key()?;
+    require_signs(&key, pack)?;
+    let key = key.signing_key;
     if out.exists() {
         return Err(AppError::Storage(format!(
             "{} already exists; a pack is built into a new directory",
@@ -383,7 +393,10 @@ mod tests {
     #[test]
     fn an_environment_seed_signs_only_as_the_key_it_is_pinned_under() {
         let (ours, other) = (public_hex(0x11), public_hex(0x22));
-        let pinned = [("pack-other", other.as_str()), ("pack-test", ours.as_str())];
+        let pinned = [
+            ("pack-other", other.as_str(), PackKeyScope::Curated),
+            ("pack-test", ours.as_str(), PackKeyScope::Curated),
+        ];
         let seed = "11".repeat(32);
         let key = pinned_seed_key(&seed, "pack-test", &pinned).unwrap();
         assert_eq!(key.key_id.as_deref(), Some("pack-test"));
@@ -391,7 +404,7 @@ mod tests {
             crate::integrity::digest_hex(key.signing_key.verifying_key().to_bytes())
         });
 
-        let refusal = |seed: &str, kid: &str, pinned: &[(&str, &str)]| {
+        let refusal = |seed: &str, kid: &str, pinned: &[(&str, &str, PackKeyScope)]| {
             pinned_seed_key(seed, kid, pinned)
                 .err()
                 .expect("refused")

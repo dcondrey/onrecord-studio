@@ -26,21 +26,59 @@ pub mod snapshot;
 /// The manifest's file name inside a pack directory.
 pub(crate) const PACK_MANIFEST_FILE: &str = "manifest.json";
 
-/// Pinned pack publisher keys as `(kid, hex of the 32-byte Ed25519 key)`. Separate from the
-/// per-installation export key and the entitlement keys; rotation adds an entry. There is no
-/// runtime route to add a key: tests pass their own keys to [`verify_pack`]. `pack-2026-1` signs
-/// the curated releases from the owner's Keychain; `pack-ci-2026-1` signs the daily snapshot pack
-/// on the CI runner.
-pub(crate) const PACK_PUBLIC_KEYS: &[(&str, &str)] = &[
+/// Which packs a pinned publisher key may sign. A key signs only its own kind of pack, so the CI
+/// key, held where the scheduled job runs, cannot stand in for the owner's curated releases.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PackKeyScope {
+    /// Every pack but the snapshot pack.
+    Curated,
+    /// Only [`catalog::SNAPSHOT_PACK`].
+    Snapshot,
+}
+
+impl PackKeyScope {
+    pub(crate) fn signs(self, pack: &str) -> bool {
+        (pack == catalog::SNAPSHOT_PACK) == (self == Self::Snapshot)
+    }
+}
+
+/// Pinned pack publisher keys as `(kid, hex of the 32-byte Ed25519 key, the packs it signs)`.
+/// Separate from the per-installation export key and the entitlement keys; rotation adds an entry.
+/// There is no runtime route to add a key: tests pass their own keys to [`verify_pack`].
+/// `pack-2026-1` signs the curated releases from the owner's Keychain; `pack-ci-2026-1` signs the
+/// daily snapshot pack on the CI runner.
+pub(crate) const PACK_PUBLIC_KEYS: &[(&str, &str, PackKeyScope)] = &[
     (
         "pack-2026-1",
         "b42202850cd9ecda4ab2b96548891d3a2a8275f74dde76bba2153826089ca8ff",
+        PackKeyScope::Curated,
     ),
     (
         "pack-ci-2026-1",
         "3049662bc87c61409d8b8a515d60adf1420a32504bd4f6215ac0c121550a318f",
+        PackKeyScope::Snapshot,
     ),
 ];
+
+/// A publisher key verification accepts, with its pinned name and the packs it signs.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct PinnedPackKey {
+    pub key_id: &'static str,
+    pub key: VerifyingKey,
+    pub scope: PackKeyScope,
+}
+
+#[cfg(test)]
+impl PinnedPackKey {
+    /// A test key pinned as `pack-test`.
+    pub(crate) fn test(key: VerifyingKey, scope: PackKeyScope) -> Self {
+        Self {
+            key_id: "pack-test",
+            key,
+            scope,
+        }
+    }
+}
 
 /// The licence a pack's files are published under, with the publisher's required disclaimer.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -159,14 +197,50 @@ pub(crate) struct SignedManifest {
 
 /// The app's pinned publisher keys. A malformed entry is skipped, which can only reduce what
 /// verifies.
-pub(crate) fn pinned_pack_keys() -> Vec<VerifyingKey> {
+pub(crate) fn pinned_pack_keys() -> Vec<PinnedPackKey> {
     PACK_PUBLIC_KEYS
         .iter()
-        .filter_map(|(_, hex)| {
+        .filter_map(|(key_id, hex, scope)| {
             let bytes: [u8; 32] = decode_hex(hex)?.try_into().ok()?;
-            VerifyingKey::from_bytes(&bytes).ok()
+            Some(PinnedPackKey {
+                key_id,
+                key: VerifyingKey::from_bytes(&bytes).ok()?,
+                scope: *scope,
+            })
         })
         .collect()
+}
+
+/// The pinned entry for the key whose hex is `public_key_hex`, refused unless it may sign `pack`.
+/// The one rule for who signs what: verification applies it to every manifest, and the builder to
+/// its key before a run.
+pub(crate) fn pinned_signer<'a>(
+    pinned: &'a [PinnedPackKey],
+    public_key_hex: &str,
+    pack: &str,
+) -> Result<&'a PinnedPackKey, AppError> {
+    let signer = pinned
+        .iter()
+        .find(|pin| {
+            crate::integrity::digest_hex(pin.key.to_bytes()).eq_ignore_ascii_case(public_key_hex)
+        })
+        .ok_or_else(|| refused("it is not signed by a pack publisher this app trusts"))?;
+    if !signer.scope.signs(pack) {
+        return Err(refused(format!(
+            "it is signed by {}, a key that does not sign {pack}",
+            signer.key_id
+        )));
+    }
+    Ok(signer)
+}
+
+/// Of several retrievals, the latest; one whose time does not parse counts as earliest.
+pub(crate) fn latest_retrieved<'a>(
+    files: impl IntoIterator<Item = &'a PackFile>,
+) -> Option<&'a PackFile> {
+    files
+        .into_iter()
+        .max_by_key(|file| chrono::DateTime::parse_from_rfc3339(&file.retrieved_at).ok())
 }
 
 fn decode_hex(hex: &str) -> Option<Vec<u8>> {
@@ -194,10 +268,12 @@ pub(crate) fn pack_relative(path: &str) -> Option<&Path> {
 }
 
 /// Checks a signed manifest: its signature over its own canonical bytes, that the signing key is
-/// one of `pinned`, and that every listed path stays inside the pack. Reads no listed file.
+/// one of `pinned` and may sign the manifest's pack ([`pinned_signer`]), that a key name the
+/// manifest states is that key's, and that every listed path stays inside the pack. Reads no
+/// listed file.
 pub(crate) fn verify_manifest_bytes(
     bytes: &[u8],
-    pinned: &[VerifyingKey],
+    pinned: &[PinnedPackKey],
 ) -> Result<SignedManifest, AppError> {
     let package: SignedPackage<PackManifest> = serde_json::from_slice(bytes)
         .map_err(|error| refused(format!("its manifest is not a pack manifest: {error}")))?;
@@ -207,14 +283,21 @@ pub(crate) fn verify_manifest_bytes(
             "its manifest does not match its signature".into()
         })));
     }
-    let signer = package.signature.public_key_hex.to_ascii_lowercase();
-    if !pinned
-        .iter()
-        .any(|key| crate::integrity::digest_hex(key.to_bytes()) == signer)
+    let signer = pinned_signer(
+        pinned,
+        &package.signature.public_key_hex,
+        &package.manifest.pack,
+    )?;
+    if let Some(named) = package
+        .manifest
+        .key_id
+        .as_deref()
+        .filter(|named| *named != signer.key_id)
     {
-        return Err(refused(
-            "it is not signed by a pack publisher this app trusts",
-        ));
+        return Err(refused(format!(
+            "it names {named} as its key but is signed by {}",
+            signer.key_id
+        )));
     }
     if let Some(file) = package
         .manifest
@@ -250,7 +333,7 @@ pub(crate) fn verify_manifest_bytes(
 /// [`verify_manifest_bytes`] over the manifest in `directory`.
 pub(crate) fn verify_manifest(
     directory: &Path,
-    pinned: &[VerifyingKey],
+    pinned: &[PinnedPackKey],
 ) -> Result<SignedManifest, AppError> {
     let bytes = std::fs::read(directory.join(PACK_MANIFEST_FILE))
         .map_err(|error| refused(format!("its manifest could not be read: {error}")))?;
@@ -286,7 +369,7 @@ pub(crate) fn check_pack_file(path: &Path, file: &PackFile) -> Result<(), AppErr
 /// listed file ([`check_pack_file`]).
 pub(crate) fn verify_pack(
     directory: &Path,
-    pinned: &[VerifyingKey],
+    pinned: &[PinnedPackKey],
 ) -> Result<SignedManifest, AppError> {
     let signed = verify_manifest(directory, pinned)?;
     for file in &signed.manifest.files {
@@ -368,17 +451,30 @@ mod tests {
     #[test]
     fn a_pack_verifies_only_whole_and_signed_by_a_pinned_key() {
         let (directory, key) = signed_pack();
-        let pinned = [key.verifying_key()];
+        let pinned = [PinnedPackKey::test(
+            key.verifying_key(),
+            PackKeyScope::Curated,
+        )];
         let pack = verify_pack(directory.path(), &pinned).unwrap();
         assert_eq!(pack.manifest.files.len(), 1);
 
-        let stranger = [SigningKey::from_bytes(&[6_u8; 32]).verifying_key()];
+        let stranger = [PinnedPackKey::test(
+            SigningKey::from_bytes(&[6_u8; 32]).verifying_key(),
+            PackKeyScope::Curated,
+        )];
         assert!(verify_pack(directory.path(), &stranger).is_err());
 
         // One byte of one file changed.
         let (directory, key) = signed_pack();
         flip_last_byte(&directory.path().join("originals/police_calls/2025.csv"));
-        let refused = verify_pack(directory.path(), &[key.verifying_key()]).unwrap_err();
+        let refused = verify_pack(
+            directory.path(),
+            &[PinnedPackKey::test(
+                key.verifying_key(),
+                PackKeyScope::Curated,
+            )],
+        )
+        .unwrap_err();
         assert!(refused.to_string().contains("SHA-256"), "{refused}");
 
         // One byte of the signed manifest changed: its listed row count.
@@ -390,7 +486,14 @@ mod tests {
             text.replacen("\"rows\": 1", "\"rows\": 2", 1),
         )
         .unwrap();
-        assert!(verify_pack(directory.path(), &[key.verifying_key()]).is_err());
+        assert!(verify_pack(
+            directory.path(),
+            &[PinnedPackKey::test(
+                key.verifying_key(),
+                PackKeyScope::Curated
+            )]
+        )
+        .is_err());
     }
 
     /// Checks a pack the builder produced (`ONRECORD_PACK_DIR`) against the key this app pins.
@@ -412,7 +515,10 @@ mod tests {
     #[test]
     fn a_manifest_alone_verifies_only_untampered_pinned_and_inside_the_pack() {
         let key = SigningKey::from_bytes(&[5_u8; 32]);
-        let pinned = [key.verifying_key()];
+        let pinned = [PinnedPackKey::test(
+            key.verifying_key(),
+            PackKeyScope::Curated,
+        )];
         let signed = |manifest: PackManifest| {
             serde_json::to_vec_pretty(&sign_package(manifest, &key).unwrap()).unwrap()
         };
@@ -420,7 +526,10 @@ mod tests {
         let verified = verify_manifest_bytes(&bytes, &pinned).unwrap();
         assert_eq!(verified.manifest.files.len(), 1);
 
-        let stranger = [SigningKey::from_bytes(&[6_u8; 32]).verifying_key()];
+        let stranger = [PinnedPackKey::test(
+            SigningKey::from_bytes(&[6_u8; 32]).verifying_key(),
+            PackKeyScope::Curated,
+        )];
         let refused = verify_manifest_bytes(&bytes, &stranger).unwrap_err();
         assert!(refused.to_string().contains("trusts"), "{refused}");
 
@@ -435,6 +544,51 @@ mod tests {
         let refused = verify_manifest_bytes(&signed(escaping), &pinned).unwrap_err();
         assert!(
             refused.to_string().contains("outside the pack"),
+            "{refused}"
+        );
+    }
+
+    /// A pinned key signs only its own kind of pack, and a key name the manifest states must be
+    /// the signing key's: a leaked CI key cannot pass as a curated release, nor name the owner's.
+    #[test]
+    fn a_key_verifies_only_the_packs_it_signs_under_its_own_name() {
+        let (curated, ci) = (
+            SigningKey::from_bytes(&[5_u8; 32]),
+            SigningKey::from_bytes(&[6_u8; 32]),
+        );
+        let pinned = [
+            PinnedPackKey {
+                key_id: "pack-owner",
+                key: curated.verifying_key(),
+                scope: PackKeyScope::Curated,
+            },
+            PinnedPackKey {
+                key_id: "pack-ci",
+                key: ci.verifying_key(),
+                scope: PackKeyScope::Snapshot,
+            },
+        ];
+        let verify = |manifest: PackManifest, key: &SigningKey| {
+            verify_manifest_bytes(
+                &serde_json::to_vec(&sign_package(manifest, key).unwrap()).unwrap(),
+                &pinned,
+            )
+        };
+        let reports = manifest("ab".repeat(32), 7);
+        let mut snapshots = reports.clone();
+        snapshots.pack = catalog::SNAPSHOT_PACK.into();
+        snapshots.key_id = Some("pack-ci".into());
+
+        assert!(verify(reports.clone(), &curated).is_ok());
+        assert!(verify(snapshots.clone(), &ci).is_ok());
+        for (manifest, key) in [(reports, &ci), (snapshots.clone(), &curated)] {
+            let refused = verify(manifest, key).unwrap_err();
+            assert!(refused.to_string().contains("does not sign"), "{refused}");
+        }
+        snapshots.key_id = Some("pack-owner".into());
+        let refused = verify(snapshots, &ci).unwrap_err();
+        assert!(
+            refused.to_string().contains("names pack-owner"),
             "{refused}"
         );
     }
@@ -473,7 +627,14 @@ mod tests {
         };
         let mut checked = manifest("ab".repeat(32), 7);
         checked.checks.push(check.clone());
-        assert!(verify_manifest_bytes(&signed(checked.clone()), &[key.verifying_key()]).is_ok());
+        assert!(verify_manifest_bytes(
+            &signed(checked.clone()),
+            &[PinnedPackKey::test(
+                key.verifying_key(),
+                PackKeyScope::Curated
+            )]
+        )
+        .is_ok());
         for tampered in [
             PackCheck {
                 sha256: "cd".repeat(32),
@@ -489,8 +650,14 @@ mod tests {
             },
         ] {
             checked.checks = vec![tampered];
-            let refused = verify_manifest_bytes(&signed(checked.clone()), &[key.verifying_key()])
-                .unwrap_err();
+            let refused = verify_manifest_bytes(
+                &signed(checked.clone()),
+                &[PinnedPackKey::test(
+                    key.verifying_key(),
+                    PackKeyScope::Curated,
+                )],
+            )
+            .unwrap_err();
             assert!(
                 refused.to_string().contains("matching no original"),
                 "{refused}"

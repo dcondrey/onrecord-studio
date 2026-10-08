@@ -7,6 +7,8 @@ import type { AnalyticalDatasetKind, AnalyticalImportResult } from './analysisWo
  */
 export interface DataPackSummary {
   pack: string;
+  /** The pack keeps dated snapshots of each table's file; choosing a table downloads only the latest. */
+  snapshots: boolean;
   packVersion: string;
   schemaVersion: string;
   /** When the pack builder finished; its rows are the builder's retrieval as of then. */

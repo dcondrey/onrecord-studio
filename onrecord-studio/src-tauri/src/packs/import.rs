@@ -1,10 +1,10 @@
 //! Imports a verified pack's original files through the analytical import, one file per import,
 //! and records the pack beside each snapshot (`docs/data-packs.md`, build order step 4).
 
-use super::catalog::original_kind;
+use super::catalog::{original_kind, SNAPSHOT_PACK};
 use super::{
     check_pack_file, verify_manifest, verify_pack, PackFile, PackFileFormat, PackManifest,
-    SignedManifest,
+    PinnedPackKey, SignedManifest,
 };
 use crate::error::AppError;
 use crate::integrity::sha256_hex;
@@ -14,7 +14,6 @@ use crate::types::{
     DataPackSummary, DataPackTable,
 };
 use chrono::{DateTime, Datelike, SecondsFormat, Utc};
-use ed25519_dalek::VerifyingKey;
 use std::path::PathBuf;
 
 /// The data pack a snapshot's bytes came from, recorded beside the snapshot.
@@ -32,7 +31,10 @@ pub(crate) struct PackOrigin {
     pub retrieved_at: String,
 }
 
-async fn verify(directory: PathBuf, pinned: Vec<VerifyingKey>) -> Result<SignedManifest, AppError> {
+async fn verify(
+    directory: PathBuf,
+    pinned: Vec<PinnedPackKey>,
+) -> Result<SignedManifest, AppError> {
     crate::blocking::spawn("Verify data pack", move || verify_pack(&directory, &pinned)).await?
 }
 
@@ -42,7 +44,7 @@ async fn verify_chosen(
     directory: PathBuf,
     inspected_manifest_sha256: String,
     selected: Vec<String>,
-    pinned: Vec<VerifyingKey>,
+    pinned: Vec<PinnedPackKey>,
 ) -> Result<(SignedManifest, Vec<PackFile>), AppError> {
     crate::blocking::spawn("Verify data pack", move || {
         let signed = verify_manifest(&directory, &pinned)?;
@@ -144,6 +146,7 @@ pub(crate) fn summarize(
             .map(|check| check.checked_at.clone());
     }
     Ok(DataPackSummary {
+        snapshots: manifest.pack == SNAPSHOT_PACK,
         pack: manifest.pack,
         pack_version: manifest.pack_version,
         schema_version: manifest.schema_version,
@@ -160,7 +163,7 @@ pub(crate) fn summarize(
 /// Verifies the pack in `directory` against `pinned` and describes what it holds.
 pub(crate) async fn inspect(
     directory: PathBuf,
-    pinned: Vec<VerifyingKey>,
+    pinned: Vec<PinnedPackKey>,
 ) -> Result<DataPackSummary, AppError> {
     let pack = verify(directory, pinned).await?;
     summarize(pack.manifest, &pack.signer_key_id)
@@ -202,7 +205,7 @@ pub(crate) async fn import_files(
     directory: PathBuf,
     inspected_manifest_sha256: &str,
     selected: Vec<String>,
-    pinned: Vec<VerifyingKey>,
+    pinned: Vec<PinnedPackKey>,
 ) -> Result<Vec<DataPackImportOutcome>, AppError> {
     // Verified again, not trusted from the inspection: the folder may have changed since.
     let (signed, files) = verify_chosen(
@@ -274,7 +277,7 @@ pub(crate) async fn import_files(
 mod tests {
     use super::*;
     use crate::integrity::sign_package;
-    use crate::packs::{PackLicence, PACK_MANIFEST_FILE};
+    use crate::packs::{PackKeyScope, PackLicence, PACK_MANIFEST_FILE};
     use ed25519_dalek::SigningKey;
     use std::path::Path;
 
@@ -366,7 +369,10 @@ mod tests {
             directory.to_path_buf(),
             manifest_sha256,
             vec![FILE.into()],
-            vec![key().verifying_key()],
+            vec![PinnedPackKey::test(
+                key().verifying_key(),
+                PackKeyScope::Curated,
+            )],
         )
         .await
     }
@@ -376,9 +382,15 @@ mod tests {
         repository: &DuckDbRepository,
         directory: &Path,
     ) -> Result<Vec<DataPackImportOutcome>, AppError> {
-        let inspected = inspect(directory.to_path_buf(), vec![key().verifying_key()])
-            .await?
-            .manifest_sha256;
+        let inspected = inspect(
+            directory.to_path_buf(),
+            vec![PinnedPackKey::test(
+                key().verifying_key(),
+                PackKeyScope::Curated,
+            )],
+        )
+        .await?
+        .manifest_sha256;
         import_as_inspected(repository, directory, &inspected).await
     }
 
@@ -459,10 +471,16 @@ mod tests {
     #[tokio::test]
     async fn a_manifest_signed_again_after_inspection_is_refused() {
         let directory = signed_pack();
-        let inspected = inspect(directory.path().to_path_buf(), vec![key().verifying_key()])
-            .await
-            .unwrap()
-            .manifest_sha256;
+        let inspected = inspect(
+            directory.path().to_path_buf(),
+            vec![PinnedPackKey::test(
+                key().verifying_key(),
+                PackKeyScope::Curated,
+            )],
+        )
+        .await
+        .unwrap()
+        .manifest_sha256;
         // A different manifest, validly signed by the same key, now sits in the folder.
         let mut changed = manifest();
         changed.pack_version = "2026.10.7".into();

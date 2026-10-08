@@ -5,14 +5,15 @@
 //! never rewritten: a run adds files and checks, and signs the whole manifest again.
 
 use super::builder::{
-    count_rows, licence, publisher_key, scratch_database, write_conformed_parquet, PublisherKey,
+    count_rows, licence, publisher_key, require_signs, scratch_database, write_conformed_parquet,
+    PublisherKey,
 };
 use super::catalog::{snapshot_tables, SNAPSHOT_PACK};
 use super::changes::write_change_record;
 use super::published::{fetch_listed_file, fetch_signed_manifest};
 use super::{
-    check_pack_file, pinned_pack_keys, verify_manifest, PackCheck, PackFile, PackFileFormat,
-    PackManifest, PACK_MANIFEST_FILE,
+    check_pack_file, latest_retrieved, pinned_pack_keys, verify_manifest, PackCheck, PackFile,
+    PackFileFormat, PackManifest, PinnedPackKey, PACK_MANIFEST_FILE,
 };
 use crate::error::AppError;
 use crate::ingestion::client::{ApiClient, HttpClientConfig};
@@ -20,7 +21,6 @@ use crate::ingestion::queue::dataset_source;
 use crate::storage::tabular::MAX_STREAMED_BYTES;
 use crate::types::AnalyticalDatasetKind;
 use chrono::{DateTime, Datelike, Utc};
-use ed25519_dalek::VerifyingKey;
 use reqwest::Url;
 use std::path::{Path, PathBuf};
 
@@ -29,6 +29,10 @@ const NEW_FILES: &str = "new-files.txt";
 /// The tables a run could not snapshot, one per line, so the scheduled job can fail visibly
 /// after publishing the others.
 const NOT_SNAPSHOTTED: &str = "not-snapshotted.txt";
+/// The tables kept as a new snapshot without their Parquet copy or change record, one
+/// `<table>: <reason>` per line. The snapshot's original is published regardless: it is the
+/// history, and the comparison can be made from it later.
+const INCOMPLETE: &str = "incomplete.txt";
 /// Under the work directory: downloads not yet placed, and published files fetched for a change
 /// record. Neither is ever listed or uploaded.
 const STAGING: &str = ".staging";
@@ -129,6 +133,7 @@ pub async fn snapshot(pack: &str, work: &Path) -> Result<PathBuf, AppError> {
         )));
     }
     let key = publisher_key()?;
+    require_signs(&key, pack)?;
     if work.exists() {
         return Err(AppError::Storage(format!(
             "{} already exists; a snapshot run starts in a new directory",
@@ -179,23 +184,11 @@ pub async fn snapshot(pack: &str, work: &Path) -> Result<PathBuf, AppError> {
     manifest
 }
 
-/// The latest snapshot original of `target` that `manifest` lists.
-fn latest<'a>(manifest: &'a PackManifest, target: &SnapshotTarget) -> Option<&'a PackFile> {
-    manifest
-        .files
-        .iter()
-        .filter(|file| {
-            file.format == PackFileFormat::Original
-                && file.table == target.table
-                && Url::parse(&file.source_url).is_ok_and(|url| url == target.url)
-        })
-        .max_by_key(|file| DateTime::parse_from_rfc3339(&file.retrieved_at).ok())
-}
-
 /// What one target added: a check, or new files.
 enum Outcome {
     Unchanged(PackCheck),
-    Snapshot(Vec<PackFile>),
+    /// New files, and why a Parquet copy or change record is missing from them, if one is.
+    Snapshot(Vec<PackFile>, Option<String>),
 }
 
 async fn snapshot_target<S: SnapshotSource>(
@@ -209,7 +202,11 @@ async fn snapshot_target<S: SnapshotSource>(
         .join(STAGING)
         .join(format!("{}.download", uuid::Uuid::new_v4()));
     let retrieved = source.retrieve(&target.url, &staged).await?;
-    let previous = latest(manifest, target);
+    let previous = latest_retrieved(manifest.files.iter().filter(|file| {
+        file.format == PackFileFormat::Original
+            && file.table == target.table
+            && Url::parse(&file.source_url).is_ok_and(|url| url == target.url)
+    }));
     if let Some(previous) = previous.filter(|previous| {
         previous.bytes == retrieved.bytes && previous.sha256.eq_ignore_ascii_case(&retrieved.sha256)
     }) {
@@ -257,13 +254,31 @@ async fn snapshot_target<S: SnapshotSource>(
         etag: retrieved.etag,
         changes: None,
     };
+    // From here the original is kept whatever else fails: its bytes are the history.
+    let mut files = vec![original.clone()];
     // One scratch database per file, removed as soon as its records are written.
-    let (_scratch, scratch) = scratch_database().await?;
-    let (parquet, current) =
-        write_conformed_parquet(&scratch, work, &original, target.kind.clone(), pack_version)
-            .await?;
-    let mut files = vec![original.clone(), parquet];
-    if let Some(previous) = previous {
+    let conformed = async {
+        let (guard, scratch) = scratch_database().await?;
+        let (parquet, current) =
+            write_conformed_parquet(&scratch, work, &original, target.kind.clone(), pack_version)
+                .await?;
+        Ok::<_, AppError>((guard, scratch, parquet, current))
+    }
+    .await;
+    let (_scratch, scratch, current) = match conformed {
+        Ok((guard, scratch, parquet, current)) => {
+            files.push(parquet);
+            (guard, scratch, current)
+        }
+        Err(error) => {
+            let missing = format!("no Parquet copy: {error}");
+            return Ok(Outcome::Snapshot(files, Some(missing)));
+        }
+    };
+    let Some(previous) = previous else {
+        return Ok(Outcome::Snapshot(files, None));
+    };
+    let compared = async {
         let previous_path = source.published(previous).await?;
         let change = write_change_record(
             &scratch,
@@ -276,9 +291,22 @@ async fn snapshot_target<S: SnapshotSource>(
         )
         .await;
         let _ = tokio::fs::remove_file(&previous_path).await;
-        files.push(change?);
+        change
     }
-    Ok(Outcome::Snapshot(files))
+    .await;
+    Ok(match compared {
+        Ok(change) => {
+            files.push(change);
+            Outcome::Snapshot(files, None)
+        }
+        Err(error) => Outcome::Snapshot(
+            files,
+            Some(format!(
+                "no change record against {}: {error}",
+                previous.path
+            )),
+        ),
+    })
 }
 
 /// One run over `targets` against the published manifest `previous` (`None` before the first),
@@ -292,7 +320,7 @@ pub(super) async fn run<S: SnapshotSource>(
     targets: &[SnapshotTarget],
     source: &S,
     key: &PublisherKey,
-    pinned: &[VerifyingKey],
+    pinned: &[PinnedPackKey],
     started: DateTime<Utc>,
 ) -> Result<PathBuf, AppError> {
     let pack_version = stamp(started);
@@ -311,15 +339,24 @@ pub(super) async fn run<S: SnapshotSource>(
         .map_err(io_error("Snapshot directory"))?;
     let mut new_files: Vec<String> = Vec::new();
     let mut failed: Vec<&str> = Vec::new();
+    let mut incomplete: Vec<String> = Vec::new();
     for target in targets {
         match snapshot_target(work, &manifest, target, source, &pack_version).await {
             Ok(Outcome::Unchanged(check)) => {
                 eprintln!("{}: unchanged since {}", target.table, check.matches);
                 manifest.checks.push(check);
             }
-            Ok(Outcome::Snapshot(files)) => {
+            Ok(Outcome::Snapshot(files, missing)) => {
                 for file in &files {
                     eprintln!("{}: {} rows, {} bytes", file.path, file.rows, file.bytes);
+                }
+                if let Some(missing) = missing {
+                    eprintln!("{}: snapshotted with {missing}", target.table);
+                    incomplete.push(format!(
+                        "{}: {}\n",
+                        target.table,
+                        missing.replace('\n', " ")
+                    ));
                 }
                 new_files.extend(files.iter().map(|file| file.path.clone()));
                 manifest.files.extend(files);
@@ -361,6 +398,9 @@ pub(super) async fn run<S: SnapshotSource>(
     tokio::fs::write(work.join(NOT_SNAPSHOTTED), failures)
         .await
         .map_err(io_error("Failure list"))?;
+    tokio::fs::write(work.join(INCOMPLETE), incomplete.concat())
+        .await
+        .map_err(io_error("Incomplete list"))?;
     // What is published must be what the app accepts.
     let checked = verify_manifest(work, pinned)?;
     for path in &new_files {
@@ -387,7 +427,8 @@ mod tests {
     /// Serves the next bytes queued for a publisher, and published files from a run's directory.
     struct LocalSource {
         served: RefCell<Vec<(Vec<u8>, DateTime<Utc>)>>,
-        published: PathBuf,
+        /// `None`: the published pack cannot be reached.
+        published: Option<PathBuf>,
     }
 
     impl SnapshotSource for LocalSource {
@@ -404,10 +445,12 @@ mod tests {
         }
 
         async fn published(&self, file: &PackFile) -> Result<PathBuf, AppError> {
-            let copy = self
+            let published = self
                 .published
-                .join(format!("{}.copy", uuid::Uuid::new_v4()));
-            std::fs::copy(self.published.join(&file.path), &copy).unwrap();
+                .as_ref()
+                .ok_or_else(|| AppError::Network("HTTP 503".into()))?;
+            let copy = published.join(format!("{}.copy", uuid::Uuid::new_v4()));
+            std::fs::copy(published.join(&file.path), &copy).unwrap();
             check_pack_file(&copy, file)?;
             Ok(copy)
         }
@@ -420,24 +463,32 @@ mod tests {
         }
     }
 
+    fn pinned() -> [PinnedPackKey; 1] {
+        [PinnedPackKey::test(
+            key().signing_key.verifying_key(),
+            crate::packs::PackKeyScope::Snapshot,
+        )]
+    }
+
     fn at(text: &str) -> DateTime<Utc> {
         DateTime::parse_from_rfc3339(text)
             .unwrap()
             .with_timezone(&Utc)
     }
 
-    /// One run of the call-type file, serving `bytes` retrieved at `retrieved_at`.
+    /// One run of the call-type file, serving `bytes` retrieved at `retrieved_at`, with the
+    /// published pack's files in `published` (`None`: unreachable).
     async fn run_once(
         root: &Path,
         name: &str,
-        previous: Option<(PackManifest, PathBuf)>,
+        previous: Option<(PackManifest, Option<PathBuf>)>,
         bytes: &[u8],
         retrieved_at: &str,
     ) -> (PathBuf, PackManifest, Vec<String>) {
         let work = root.join(name);
         let (previous, published) = match previous {
             Some((manifest, published)) => (Some(manifest), published),
-            None => (None, root.to_path_buf()),
+            None => (None, None),
         };
         let source = LocalSource {
             served: RefCell::new(vec![(bytes.to_vec(), at(retrieved_at))]),
@@ -448,7 +499,7 @@ mod tests {
             .into_iter()
             .filter(|target| target.table == "call_types")
             .collect::<Vec<_>>();
-        let pinned = [key().signing_key.verifying_key()];
+        let pinned = pinned();
         run(
             SNAPSHOT_PACK,
             &work,
@@ -495,7 +546,7 @@ mod tests {
         let (second, manifest, new_files) = run_once(
             root.path(),
             "second",
-            Some((manifest, first.clone())),
+            Some((manifest, Some(first.clone()))),
             FIRST,
             "2026-10-06T13:23:02Z",
         )
@@ -511,7 +562,7 @@ mod tests {
         let (third, manifest, new_files) = run_once(
             root.path(),
             "third",
-            Some((manifest, first.clone())),
+            Some((manifest, Some(first.clone()))),
             SECOND,
             "2026-10-07T13:23:03Z",
         )
@@ -565,7 +616,7 @@ mod tests {
             .await
             .unwrap();
         let digest = manifest_sha256(&manifest).unwrap();
-        let pinned = vec![key().signing_key.verifying_key()];
+        let pinned = pinned().to_vec();
         let refused = import_files(
             &repository,
             third.clone(),
@@ -606,5 +657,39 @@ mod tests {
             .unwrap()
             .rows;
         assert_eq!(rows, [[serde_json::json!(2), serde_json::json!(2)]]);
+    }
+
+    /// Changed bytes are kept even when the change record cannot be made: the snapshot is
+    /// published without one, and the run names the table and why.
+    #[tokio::test]
+    async fn a_snapshot_is_kept_when_its_change_record_fails() {
+        let root = tempfile::tempdir().unwrap();
+        let (_, manifest, _) =
+            run_once(root.path(), "first", None, FIRST, "2026-10-05T13:23:01Z").await;
+        let (second, manifest, new_files) = run_once(
+            root.path(),
+            "second",
+            Some((manifest, None)),
+            SECOND,
+            "2026-10-06T13:23:02Z",
+        )
+        .await;
+        assert_eq!(
+            new_files,
+            [
+                "originals/call_types/2026-10-06T132302Z/pd_cfs_calltypes_datasd.csv",
+                "parquet/call_types/2026-10-06T132302Z/pd_cfs_calltypes_datasd.parquet"
+            ]
+        );
+        assert_eq!(manifest.files.len(), 4);
+        assert!(std::fs::read_to_string(second.join(NOT_SNAPSHOTTED))
+            .unwrap()
+            .is_empty());
+        let incomplete = std::fs::read_to_string(second.join(INCOMPLETE)).unwrap();
+        assert!(
+            incomplete.starts_with("call_types: no change record against originals/call_types/")
+                && incomplete.contains("HTTP 503"),
+            "{incomplete}"
+        );
     }
 }

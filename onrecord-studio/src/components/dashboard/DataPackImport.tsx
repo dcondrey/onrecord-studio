@@ -93,13 +93,24 @@ function Status({ busy, error }: { busy: string | null; error: string | null }) 
   );
 }
 
-/** One table and year of a published pack: what a selection names, with every file it covers. */
+/** One table and year of a published pack: what a selection names, with every file it downloads. */
 interface Choice {
   key: string;
   table: string;
   year: number | null;
   files: DataPackFileSummary[];
+  /** In a snapshot pack, the earlier snapshots the choice does not download; `null` in any other pack. */
+  earlier: number | null;
 }
+
+const retrieved = (file: DataPackFileSummary) => {
+  const time = Date.parse(file.retrievedAt);
+  return Number.isNaN(time) ? -Infinity : time;
+};
+
+/** The latest retrieval, the last listed on a tie, as the native side plans it. */
+const latestOf = (files: DataPackFileSummary[]) =>
+  files.reduce((latest, file) => (retrieved(file) >= retrieved(latest) ? file : latest));
 
 function choicesOf(summary: DataPackSummary): Choice[] {
   const choices: Choice[] = [];
@@ -108,10 +119,11 @@ function choicesOf(summary: DataPackSummary): Choice[] {
       const key = `${table.table}\u0000${file.year ?? ''}`;
       const existing = choices.find((choice) => choice.key === key);
       if (existing) existing.files.push(file);
-      else choices.push({ key, table: table.table, year: file.year, files: [file] });
+      else choices.push({ key, table: table.table, year: file.year, files: [file], earlier: null });
     }
   }
-  return choices;
+  if (!summary.snapshots) return choices;
+  return choices.map((choice) => ({ ...choice, files: [latestOf(choice.files)], earlier: choice.files.length - 1 }));
 }
 
 function choiceLabel(choice: Choice): string {
@@ -119,6 +131,10 @@ function choiceLabel(choice: Choice): string {
   const bytes = choice.files.reduce((sum, file) => sum + file.bytes, 0);
   const count = choice.files.length > 1 ? ` · ${choice.files.length} files` : '';
   const partial = choice.files.some((file) => file.partial) ? PARTIAL_NOTE : '';
+  if (choice.earlier !== null) {
+    const earlier = choice.earlier > 0 ? ` · ${choice.earlier.toLocaleString()} earlier ${choice.earlier === 1 ? 'snapshot' : 'snapshots'} not downloaded` : '';
+    return `Latest snapshot, retrieved ${choice.files[0].retrievedAt.slice(0, 10)} · ${rows.toLocaleString()} rows · ${megabytes(bytes)}${earlier}${partial}`;
+  }
   return `${period(choice.year)} · ${rows.toLocaleString()} rows · ${megabytes(bytes)}${count}${partial}`;
 }
 

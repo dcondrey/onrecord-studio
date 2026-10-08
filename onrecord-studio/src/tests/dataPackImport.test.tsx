@@ -15,6 +15,7 @@ afterEach(() => {
 
 const summary = (pack: string): DataPackSummary => ({
   pack,
+  snapshots: false,
   packVersion: '2026.10.6',
   schemaVersion: '1.0',
   builtAt: '2026-10-06T22:59:25Z',
@@ -94,6 +95,23 @@ describe('DataPackImport', () => {
     expect(invokeCommand).toHaveBeenCalledWith('fetch_published_pack_files', {
       pack: 'san-diego-reports', packVersion: '2026.10.6', manifestSha256: 'cd'.repeat(32), selection: [{ table: 'police_calls', year: 2025 }],
     });
+  });
+
+  it('offers a snapshot table as its latest snapshot alone, whatever its earlier ones are', async () => {
+    const snapshot = (stamp: string, bytes: number, datasetKind: 'REGIONAL_DATA' | null) => ({
+      path: `originals/call_types/${stamp}/types.csv`, year: null, rows: 10, bytes, partial: false, sourceUrl: 'https://example.test/', retrievedAt: `${stamp}T13:23:00Z`, datasetKind,
+    });
+    const files = [snapshot('2026-10-05', 1_000_000, null), snapshot('2026-10-07', 2_000_000, 'REGIONAL_DATA'), snapshot('2026-10-06', 4_000_000, 'REGIONAL_DATA')];
+    const manifest = { ...summary('san-diego-snapshots'), snapshots: true, tables: [{ table: 'call_types', files, unchangedChecks: 0, lastCheckedAt: null, changeRecords: 2 }] };
+    vi.mocked(invokeCommand).mockImplementation(((command: string) => Promise.resolve(
+      command === 'list_published_packs' ? packs : command === 'fetch_published_pack_manifest' ? manifest : [],
+    )) as unknown as typeof invokeCommand);
+    await act(async () => { render(<DataPackImport />); });
+    await act(async () => { fireEvent.change(screen.getByRole('combobox', { name: 'Published pack' }), { target: { value: 'san-diego-reports' } }); });
+
+    const choice = screen.getByRole('checkbox', { name: /^Latest snapshot, retrieved 2026-10-07 · 10 rows · 2 MB · 2 earlier snapshots not downloaded$/ });
+    fireEvent.click(choice);
+    expect(screen.getByRole('button', { name: 'Download and import 2 MB' })).toBeTruthy();
   });
 
   it('never shows a published manifest that resolves after another pack was chosen', async () => {
