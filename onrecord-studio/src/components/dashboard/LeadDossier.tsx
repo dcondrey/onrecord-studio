@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
-import type { DossierGap, EvidenceLink, LeadDossier as LeadDossierData } from '../../types';
+import type { DossierGap, EvidenceLink, LeadDossier as LeadDossierData, LeadFigure as LeadFigureData } from '../../types';
+import LeadFigure from '../charts/figures/LeadFigure';
 import { tableLeadSources, type TableLeadSources } from '../../utils/tableLeadSources';
 import { findingToBriefingEvidence } from './BriefingWorkspace';
 import ArtifactDrafts from './ArtifactDrafts';
@@ -13,10 +14,15 @@ import Badge from '../ui/Badge';
 import Button from '../ui/Button';
 import InlineError from '../ui/InlineError';
 
+/** A stored lead's figure, none (not a lead, cut short, or stored before figures), or why it could not be read. */
+type FigureState = { figure: LeadFigureData | null } | { error: string };
+
 type DossierState =
   | { status: 'pending' }
-  | { status: 'ready'; dossier: LeadDossierData }
+  | { status: 'ready'; dossier: LeadDossierData; figure: FigureState }
   | { status: 'failed'; message: string };
+
+const TABLES_READ = '\n\nTables read:\n';
 
 /**
  * Assembles one finding into a dossier: the records it cites, the findings that touch the same
@@ -31,10 +37,13 @@ export default function LeadDossier({ findingId }: { findingId: string }) {
   useEffect(() => {
     const request = gate.begin();
     setState({ status: 'pending' });
-    invokeCommand('build_lead_dossier', { findingId })
-      .then((dossier) => {
+    // The figure is read under the same request as the dossier, so both describe the same finding.
+    const figure: Promise<FigureState> = invokeCommand('list_findings', { filter: { id: findingId, includeDismissed: true }, limit: 1 })
+      .then((found) => ({ figure: found[0]?.figure ?? null }), (reason: unknown) => ({ error: formatNativeError(reason) }));
+    Promise.all([invokeCommand('build_lead_dossier', { findingId }), figure])
+      .then(([dossier, read]) => {
         if (!gate.isCurrent(request)) return;
-        setState({ status: 'ready', dossier });
+        setState({ status: 'ready', dossier, figure: read });
       })
       .catch((reason) => {
         if (!gate.isCurrent(request)) return;
@@ -57,8 +66,7 @@ export default function LeadDossier({ findingId }: { findingId: string }) {
       {state.status === 'failed' && <InlineError className="mt-2" summary="The dossier couldn’t be assembled." detail={state.message} />}
       {state.status === 'ready' && (
         <div className="space-y-4">
-          <EvidenceChain dossier={state.dossier} />
-          <TablesRead sources={tableLeadSources(state.dossier.finding.explanation)} />
+          <LeadFigureSection dossier={state.dossier} figure={state.figure} />
           <Section title="Draft from this finding">
             <ArtifactDrafts findingId={state.dossier.finding.id} />
           </Section>
@@ -104,6 +112,44 @@ export default function LeadDossier({ findingId }: { findingId: string }) {
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * A lead with a stored figure leads with it; its prose moves into 'Figures as text' so the wording
+ * stays citable. A finding with no figure keeps its explanation in the evidence chain as before.
+ */
+function LeadFigureSection({ dossier, figure }: { dossier: LeadDossierData; figure: FigureState }) {
+  const sources = tableLeadSources(dossier.finding.explanation);
+  const drawn = 'figure' in figure ? figure.figure : null;
+  if (!drawn) {
+    return (
+      <>
+        {'error' in figure && <InlineError summary="The lead's figure couldn’t be read." detail={figure.error} />}
+        <EvidenceChain dossier={dossier} />
+        <TablesRead sources={sources} />
+      </>
+    );
+  }
+  const explanation = dossier.finding.explanation;
+  const tablesAt = explanation.lastIndexOf(TABLES_READ);
+  const prose = tablesAt < 0 ? explanation : explanation.slice(0, tablesAt);
+  const tables = sources?.tables.map((table) => table.parts?.name ?? table.line) ?? [];
+  return (
+    <>
+      <LeadFigure
+        figure={drawn}
+        headline={dossier.finding.headline}
+        size="full"
+        sources={{ tables: tables.length ? tables : ['tables not recorded with this finding'], retrievedAt: sources?.tables[0]?.parts?.retrievedOn }}
+      />
+      <details className="text-body">
+        <summary className="focus-ring w-fit cursor-pointer rounded text-caption text-muted hover:text-fg">Figures as text</summary>
+        <p className="mt-1 whitespace-pre-line">{prose}</p>
+      </details>
+      <EvidenceChain dossier={{ ...dossier, finding: { ...dossier.finding, explanation: '' } }} />
+      <TablesRead sources={sources} />
+    </>
   );
 }
 

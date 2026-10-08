@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { useFirstRunDataStore } from '../../store/useFirstRunDataStore';
-import type { CityDataset } from '../../types';
+import type { AnalyticalDatasetSummary as CityDatasetSummary, CityDataset } from '../../types';
+import { quoteIdentifier } from '../../utils/dataDiscovery';
+import LeadFigure from '../charts/figures/LeadFigure';
+import type { ChartSources } from '../charts/frame/SourceCaption';
 import { metadataObservations, profileObservations, rankObservations, recurringObservations, type DiscoveryObservation } from '../../utils/automaticDiscovery';
 import type { DataGap } from '../../utils/dataGaps';
 import { focusSourceComposer } from '../../utils/sanDiego';
@@ -85,6 +88,14 @@ export default function AutomaticDiscovery() {
   const stage = (url: string) => { store.getState().setPortalUrlDraft(url); focusSourceComposer(); };
   const openAnalysis = () => store.getState().setWorkspaceView('analysis');
   const getCoreData = () => { void useFirstRunDataStore.getState().run(controller); store.getState().setWorkspaceView('overview'); };
+  // A lead's figure names every table its query read: its own first, then each one the SQL quotes
+  // or the lead says it read beside it.
+  const leadSources = (item: DiscoveryObservation, dataset: CityDatasetSummary): ChartSources => ({
+    tables: [dataset, ...datasets.filter((other) => other.snapshotId !== dataset.snapshotId
+      && (item.reads?.includes(other.snapshotId) || Boolean(item.query?.sql.includes(quoteIdentifier(other.tableName)))))].map((table) => table.displayName),
+    snapshot: { name: dataset.displayName, id: dataset.snapshotId, sha256: dataset.sourceSha256 },
+    retrievedAt: dataset.retrievedAt,
+  });
   const card = (item: DiscoveryObservation) => {
     const dataset = datasets.find((candidate) => candidate.snapshotId === item.snapshotId)!;
     const spending = item.family === 'SPENDING_RECORDS' || dataset.datasetKind === 'OPERATING_BUDGET' || dataset.datasetKind === 'BUDGET_DIMENSION';
@@ -100,7 +111,15 @@ export default function AutomaticDiscovery() {
         }
         headline={item.title}
         body={<>
-          <p>{item.detail}</p>
+          {item.figure ? (
+            <>
+              <LeadFigure figure={item.figure} headline={null} size="card" sources={leadSources(item, dataset)} onActivate={item.query ? () => { controller.inspect(item.query!.sql); openAnalysis(); } : undefined} />
+              <details className="text-body">
+                <summary className="focus-ring w-fit cursor-pointer rounded text-caption text-muted hover:text-fg">Figures as text</summary>
+                <p className="mt-1">{item.detail}</p>
+              </details>
+            </>
+          ) : <p>{item.detail}</p>}
           <p className="text-caption text-lead">Investigate: {item.question}</p>
           <details className="text-caption text-muted">
             <summary className="focus-ring w-fit cursor-pointer rounded hover:text-fg">Evidence and method</summary>

@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import fixture from '../../src-tauri/tests/fixtures/automatic-discovery.json';
+import calls from '../../src-tauri/tests/fixtures/call-leads.json';
 
 const bridge = vi.hoisted(() => ({ invoke: vi.fn(), stage: vi.fn(), view: vi.fn(), pattern: vi.fn(), portal: vi.fn(), settle: vi.fn(), log: vi.fn() }));
 vi.mock('../ipc', () => ({ invokeCommand: bridge.invoke, formatNativeError: (reason: unknown) => String(reason) }));
@@ -37,6 +38,24 @@ describe('automatic discovery landing experience', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Explore this finding' })[0]);
     expect(bridge.view).toHaveBeenCalledWith('analysis');
     expect(screen.getAllByText(/SHA-256 aaaa/).length).toBeGreaterThan(0);
+  });
+  it('draws a lead with its figure and keeps its prose under Figures as text', async () => {
+    const columns = ['call_year', 'call_type', 'calls', 'cancelled_duplicate', 'blank', 'conflicting', 'arrest', 'report', 'no_report', 'unfounded', 'other', 'crisis_team', 'other_codes', 'last_call'];
+    const empty = { columns: [], rows: [], rowCount: 0, truncated: false, elapsedMs: 1, provenance: [] };
+    bridge.invoke.mockImplementation(async (name: string, args?: { sql?: string }) => {
+      if (name === 'get_analytical_schema') return calls.schema;
+      if (name === 'get_data_maintenance_status') return upkeep;
+      if (name === 'run_analytical_sql') return args?.sql?.includes('AS crisis_team')
+        ? { ...empty, columns, rowCount: 1, rows: [[2025, 'SLEEPER', 520, 20, 5, 0, 12, 8, 40, 3, 432, 5, null, '2025-12-31 23:00:00']] }
+        : empty;
+      return [];
+    });
+    mount();
+    await screen.findByText('How the calls ended, by call type and year', {}, { timeout: 8000 });
+    const prose = screen.getByText('Figures as text').closest('details')!;
+    expect(prose.textContent).toContain('SLEEPER in 2025: 520 calls');
+    expect(screen.getByRole('button', { name: 'View as table' })).toBeTruthy();
+    expect(screen.getByText(/Crisis Response Team \(also counted under its outcome\)/)).toBeTruthy();
   });
   it('offers honest starting questions for an empty library and can save compact retention', async () => {
     bridge.invoke.mockImplementation(async (name: string, args?: { policy: unknown }) => {

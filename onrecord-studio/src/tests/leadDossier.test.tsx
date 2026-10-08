@@ -59,14 +59,28 @@ function dossier(findingId: string, headline: string) {
   };
 }
 
+// A stored lead's figure, keyed by the finding it belongs to.
+const FIGURES = vi.hoisted(() => new Map<string, unknown>([
+  ['figure-lead', { kind: 'ranked', measure: 'Open reports by service', claim: 'descriptive', caption: null, notes: [], unit: 'count', excluded: [],
+    rows: [{ key: 'lights', label: 'Street lights', value: { state: 'value', value: 12 }, subject: true, detail: null }] }],
+  ['stale-a', { kind: 'ranked', measure: 'Figure for stale-a', claim: 'descriptive', caption: null, notes: [], unit: 'count', excluded: [],
+    rows: [{ key: 'a', label: 'Row of stale-a', value: { state: 'value', value: 3 }, subject: true, detail: null }] }],
+]));
+
 vi.mock('../ipc', () => ({
-  invokeCommand: (command: string, args?: { findingId?: string }) => {
+  invokeCommand: (command: string, args?: { findingId?: string; filter?: { id?: string } }) => {
     if (command === 'draft_availability_for_finding') return Promise.resolve({ followup: true, appeal: false });
     if (command === 'list_document_provenance_verifications') return Promise.resolve([]);
+    if (command === 'list_findings') {
+      const id = args?.filter?.id ?? '';
+      const answer = FIGURES.has(id) ? [{ id, figure: FIGURES.get(id) }] : [];
+      const gate = bridge.gates.get(`figure:${id}`);
+      return gate ? gate.then(() => answer) : Promise.resolve(answer);
+    }
     if (command !== 'build_lead_dossier') return Promise.reject(new Error(`unexpected ${command}`));
     const id = args?.findingId ?? '';
     const answer = dossier(id, `Headline for ${id}`);
-    if (id === 'table-lead') answer.finding.explanation = TABLE_LEAD_EXPLANATION;
+    if (id === 'table-lead' || id === 'figure-lead') answer.finding.explanation = TABLE_LEAD_EXPLANATION;
     const gate = bridge.gates.get(id);
     return gate ? gate.then(() => answer) : Promise.resolve(answer);
   },
@@ -140,6 +154,32 @@ describe('LeadDossier', () => {
     const pre = document.querySelector('pre');
     expect(pre?.textContent).toContain('document 9 held under sandiego');
     expect(pre?.textContent).toContain('could not be read: missing');
+  });
+
+  it('leads a table lead with its stored figure and keeps the prose citable under Figures as text', async () => {
+    render(<LeadDossier findingId="figure-lead" />);
+    await screen.findByText('Open reports by service');
+    expect(screen.getByRole('button', { name: 'View as table' })).toBeTruthy();
+    const prose = screen.getByText('Figures as text').closest('details')!;
+    expect(prose.textContent).toContain('Open reports exceed the budgeted crew capacity.');
+    expect(prose.textContent).not.toContain('SELECT category');
+    expect(screen.getByText('Tables read (2) and query')).toBeTruthy();
+  });
+
+  it('discards a figure that resolves after the reader opened another finding', async () => {
+    let releaseA = () => {};
+    bridge.gates.set('figure:stale-a', new Promise<void>((resolve) => { releaseA = () => resolve(); }));
+    const view = render(<LeadDossier findingId="stale-a" />);
+    view.rerender(<LeadDossier findingId="stale-b" />);
+    await screen.findByText('Headline for stale-b');
+    await act(async () => {
+      releaseA();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(screen.queryByText('Figure for stale-a')).toBeNull());
+    expect(screen.queryByText('Headline for stale-a')).toBeNull();
+    expect(screen.queryByText('Figures as text')).toBeNull();
   });
 
   it('discards a dossier that resolves after the reader opened another finding', async () => {
