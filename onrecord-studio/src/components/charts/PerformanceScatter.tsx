@@ -3,6 +3,7 @@ import { useAppStore } from '../../store/useAppStore';
 import type { AgencyPerformanceProfile } from '../../types';
 import { cn } from '../../utils/cn';
 import Icon from '../ui/icons';
+import { buttonClass } from '../ui/Button';
 import { ShapeGlyph } from '../ui/shapeGlyph';
 import AnalyticsUnavailable from './AnalyticsUnavailable';
 
@@ -24,6 +25,9 @@ export default function PerformanceScatter() {
   const [brush, setBrush] = useState<{ start: number; current: number } | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
+  const [tierPreview, setTierPreview] = useState<Severity | null>(null);
+  const [tierPinned, setTierPinned] = useState<Severity | null>(null);
+  const tierFocus = tierPreview ?? tierPinned;
   const data = useMemo(
     () => profiles
       .filter((profile) => !activePortalKey || profile.portalSubdomain === activePortalKey)
@@ -95,18 +99,31 @@ export default function PerformanceScatter() {
     <section className="app-panel flex min-h-[390px] flex-col overflow-hidden">
       <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
         <div>
-          <div className="app-eyebrow">Department performance map</div>
-          <h2 className="mt-1 text-label font-semibold text-fg">Response time vs. statistical deviation</h2>
-          <p className="mt-1 text-label text-muted">Bubble size represents audited request volume. Select a department to inspect its evidence.</p>
+          <div className="text-overline uppercase text-muted">Response time vs. statistical deviation</div>
+          <h2 className="mt-1 text-headline text-fg">{scatterHeadline(data)}</h2>
+          <p className="mt-1 text-caption text-muted">Bubble size is audited request volume. Select a department to inspect its evidence.</p>
         </div>
         <div className="hidden flex-wrap items-center justify-end gap-2 sm:flex">
-          {dayRange && <button type="button" onClick={() => setDayRange(null)} className="rounded-lg border border-control bg-canvas/40 px-2 py-1.5 text-caption text-muted">Reset zoom</button>}
-          <button type="button" onClick={exportSvg} className="rounded-lg border border-control bg-canvas/40 px-2 py-1.5 text-caption text-muted">Export SVG</button>
-          <div className="flex items-center gap-3 rounded-lg border border-line bg-canvas/40 px-3 py-2 text-caption text-muted">
-          <LegendDot severity="typical" label="Typical" />
-          <LegendDot severity="elevated" label="Elevated" />
-          <LegendDot severity="critical" label="Critical" />
+          {dayRange && <button type="button" onClick={() => setDayRange(null)} title="Drag across the plot to zoom" className={buttonClass({ size: 'sm', className: 'focus-ring' })}>Reset zoom</button>}
+          <button type="button" onClick={exportSvg} className={buttonClass({ size: 'sm', className: 'focus-ring' })}>Export SVG</button>
+          <div role="group" aria-label="Highlight tier" className="flex items-center gap-1" onKeyDown={(event) => { if (event.key === 'Escape') { setTierPinned(null); setTierPreview(null); } }}>
+            {(['typical', 'elevated', 'critical'] as const).map((tier) => (
+              <button
+                key={tier}
+                type="button"
+                aria-pressed={tierPinned === tier}
+                onMouseEnter={() => setTierPreview(tier)}
+                onMouseLeave={() => setTierPreview(null)}
+                onFocus={() => setTierPreview(tier)}
+                onBlur={() => setTierPreview(null)}
+                onClick={() => setTierPinned((current) => (current === tier ? null : tier))}
+                className={cn('focus-ring inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-md px-2 text-caption text-fg-secondary transition-colors hover:bg-raised', tierPinned === tier && 'bg-raised text-fg')}
+              >
+                <LegendDot severity={tier} label={TIER_LABEL[tier]} />
+              </button>
+            ))}
           </div>
+          <span aria-live="polite" className="sr-only">{tierFocus ? `${TIER_PLURAL[tierFocus]} highlighted; other tiers dimmed` : ''}</span>
         </div>
       </div>
 
@@ -152,7 +169,7 @@ export default function PerformanceScatter() {
               ))}
               <text x={WIDTH / 2} y={HEIGHT - 5} fill="var(--chart-axis)" fontSize="11" textAnchor="middle">Average closure time</text>
               <text transform={`translate(13 ${HEIGHT / 2}) rotate(-90)`} fill="var(--chart-axis)" fontSize="11" textAnchor="middle">Performance z-score</text>
-              <text x={WIDTH - MARGIN.right} y={y(2) - 8} fill="var(--chart-alert)" fontSize="11" textAnchor="end">critical threshold</text>
+              <text x={WIDTH - MARGIN.right} y={y(2) - 8} fill="var(--chart-alert)" fontSize="11" textAnchor="end">2σ above peers</text>
 
               <rect x={MARGIN.left} y={MARGIN.top} width={plotWidth} height={plotHeight} fill="transparent" className="cursor-crosshair" onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); const coordinate = brushCoordinate(event); setBrush({ start: coordinate, current: coordinate }); }} onPointerMove={(event) => { if (brush) setBrush((value) => value ? { ...value, current: brushCoordinate(event) } : null); }} onPointerUp={finishBrush} onPointerCancel={() => setBrush(null)} />
               {brush && <rect x={Math.min(brush.start, brush.current)} y={MARGIN.top} width={Math.abs(brush.current - brush.start)} height={plotHeight} fill="var(--viz-cyan)" fillOpacity="0.12" stroke="var(--viz-cyan)" strokeDasharray="4 3" pointerEvents="none" />}
@@ -166,8 +183,9 @@ export default function PerformanceScatter() {
                     key={`${profile.portalSubdomain}-${profile.agencyId}`}
                     role="button"
                     tabIndex={0}
-                    aria-label={`${profile.agencyName}, ${severity}, ${profile.averageClosureDays.toFixed(1)} average days, z-score ${profile.performanceZScore.toFixed(2)}`}
-                    className="outline-none"
+                    aria-label={`${profile.agencyName}, ${TIER_LABEL[severity].toLowerCase()}, ${deviationWords(profile.performanceZScore)}, ${profile.averageClosureDays.toFixed(1)} average days`}
+                    className="outline-none transition-opacity duration-fast [&:focus-visible>*:nth-child(2)]:stroke-[rgb(var(--focus))] [&:focus-visible>*:nth-child(2)]:[stroke-width:2.5]"
+                    style={{ opacity: tierFocus && severity !== tierFocus ? 0.15 : 1 }}
                     onMouseEnter={() => setFocused(profile)}
                     onMouseLeave={() => setFocused(null)}
                     onFocus={() => setFocused(profile)}
@@ -193,7 +211,7 @@ export default function PerformanceScatter() {
           <aside className="min-h-0 p-4">
             <div className="flex items-center justify-between">
               <div className="app-eyebrow">Priority review</div>
-              <span className="font-mono text-caption text-muted">Top {Math.min(5, data.length)}</span>
+              <span className="text-caption tabular-nums text-muted">Top {Math.min(5, data.length)}</span>
             </div>
             <div className="mt-3 space-y-1.5">
               {data.slice(0, 5).map((profile, index) => (
@@ -208,12 +226,12 @@ export default function PerformanceScatter() {
                     focused?.agencyId === profile.agencyId ? 'border-control bg-raised/70' : 'border-transparent hover:border-control hover:bg-surface/70',
                   )}
                 >
-                  <span className="font-mono text-caption text-muted">{String(index + 1).padStart(2, '0')}</span>
+                  <span className="text-caption tabular-nums text-muted">{index + 1}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-label font-medium text-fg-secondary">{profile.agencyName}</span>
                     <span className="mt-0.5 block text-caption text-muted">{profile.totalRequestsProcessed.toLocaleString()} requests · {profile.averageClosureDays === null ? 'no closures recorded' : `${profile.averageClosureDays.toFixed(1)}d avg.`}</span>
                   </span>
-                  <span className={cn('flex items-center gap-1.5 font-mono text-label font-semibold', severityFor(profile) === 'critical' ? 'text-danger' : severityFor(profile) === 'elevated' ? 'text-warning' : 'text-accent')}>
+                  <span className={cn('flex items-center gap-1.5 text-body font-semibold tabular-nums', severityFor(profile) === 'critical' ? 'text-danger' : severityFor(profile) === 'elevated' ? 'text-warning' : 'text-accent')}>
                     <svg viewBox="-6 -6 12 12" className="h-2 w-2 shrink-0" role="img" aria-label={`${severityFor(profile)} band`}>
                       <SeverityMark severity={severityFor(profile)} cx={0} cy={0} radius={4.5} fill="currentColor" fillOpacity={0.85} stroke="currentColor" strokeWidth={1} />
                     </svg>
@@ -295,6 +313,26 @@ function LegendDot({ severity, label }: { severity: Severity; label: string }) {
 function SeverityMark({ severity, cx, cy, radius, ...visual }: { severity: Severity; cx: number; cy: number; radius: number } & Omit<SVGProps<SVGGeometryElement>, 'ref'>) {
   const shape = severity === 'critical' ? 'diamond' : severity === 'elevated' ? 'triangle' : 'circle';
   return <ShapeGlyph shape={shape} cx={cx} cy={cy} radius={radius} {...visual} />;
+}
+
+// Statistical tiers, worded as deviation from peers: never the finding-severity words.
+const TIER_LABEL: Record<Severity, string> = { typical: 'Typical', elevated: 'Elevated (1–2σ)', critical: 'Outlier (≥2σ)' };
+const TIER_PLURAL: Record<Severity, string> = { typical: 'Typical departments', elevated: 'Elevated departments', critical: 'Outliers' };
+
+function deviationWords(z: number): string {
+  const size = Math.abs(z).toFixed(1);
+  return z >= 0 ? `${size}σ slower than peers` : `${size}σ faster than peers`;
+}
+
+/** What the plot shows, in one sentence, before the plot is read. */
+function scatterHeadline(profiles: AgencyPerformanceProfile[]): string {
+  const measured = profiles.filter((profile) => profile.averageClosureDays !== null && profile.performanceZScore !== null);
+  if (measured.length === 0) return 'No department has a recorded closure yet';
+  const outliers = measured.filter((profile) => (profile.performanceZScore ?? 0) >= 2).length;
+  const unmeasured = profiles.length - measured.length;
+  const noun = measured.length === 1 ? 'department closes' : 'departments close';
+  const sentence = `${outliers} of ${measured.length} ${noun} requests ≥2σ slower than their peers`;
+  return unmeasured > 0 ? `${sentence}; ${unmeasured} ${unmeasured === 1 ? 'has' : 'have'} no recorded closure` : sentence;
 }
 
 function severityColor(severity: Severity) {
