@@ -1,6 +1,6 @@
 import DialogBackdrop from '../ui/DialogBackdrop';
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
-import { formatNativeError, invokeCommand } from '../../ipc';
+import { invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import Button, { buttonClass } from '../ui/Button';
 import Skeleton from '../ui/Skeleton';
@@ -16,6 +16,7 @@ import type {
 } from '../../types';
 import { cn } from '../../utils/cn';
 import { enumLabel, formatShortDate } from '../objects/labels';
+import { displayError } from '../../utils/errorMessage';
 
 const MAXIMUM_SOURCE_BYTES = 8 * 1024 * 1024;
 
@@ -104,7 +105,7 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
         if (listGate.isCurrent(token)) setAuthorities(value);
       })
       .catch((reason) => {
-        if (listGate.isCurrent(token)) setListError(formatNativeError(reason));
+        if (listGate.isCurrent(token)) setListError(displayError(reason).message);
       })
       .finally(() => {
         if (listGate.isCurrent(token)) setIsLoading(false);
@@ -132,7 +133,7 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
       setRightVersionId(values[0]?.versionId ?? null);
       setLeftVersionId(values[1]?.versionId ?? values[0]?.versionId ?? null);
     }).catch((reason) => {
-      if (active) setVersionError(formatNativeError(reason));
+      if (active) setVersionError(displayError(reason).message);
     });
     return () => { active = false; };
   }, [isOpen, selectedStatuteId, versionRevision]);
@@ -149,7 +150,7 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
       setLeftVersion(left);
       setRightVersion(right);
     }).catch((reason) => {
-      if (active) setVersionError(formatNativeError(reason));
+      if (active) setVersionError(displayError(reason).message);
     });
     return () => { active = false; };
   }, [leftVersionId, rightVersionId, selectedStatuteId]);
@@ -185,7 +186,7 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
       setSourceFileName(file.name);
       if (!editor.title) updateEditor('title', file.name.split('_').join(' ').split('-').join(' '));
     } catch (reason) {
-      setError(`Could not read the selected source: ${formatNativeError(reason)}`);
+      setError(`Could not read the selected source: ${displayError(reason).message}`);
     }
   };
 
@@ -229,7 +230,7 @@ export default function LegalAuthorityManager({ isOpen, onClose }: LegalAuthorit
       setSourceFileName(null);
       if (fileInput.current) fileInput.current.value = '';
     } catch (reason) {
-      setError(formatNativeError(reason));
+      setError(displayError(reason).message);
     } finally {
       setIsImporting(false);
     }

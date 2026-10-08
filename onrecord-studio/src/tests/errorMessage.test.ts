@@ -3,12 +3,16 @@ import { NativeCommandError } from '../ipc';
 import { displayError } from '../utils/errorMessage';
 
 describe('displayError', () => {
-  it('drops the error class and the backend code from what a reader sees, keeping the code apart', () => {
-    const error = new NativeCommandError('list_saved_portals', { errorType: 'DATABASE_UNAVAILABLE', message: 'The evidence store is locked.' });
-    expect(displayError(error)).toEqual({ message: 'The evidence store is locked.', code: 'DATABASE_UNAVAILABLE' });
+  it('drops the backend code and the failing command name from what a reader sees, keeping both as detail', () => {
+    const error = new NativeCommandError('get_profile', { errorType: 'DATABASE_UNAVAILABLE', message: 'The store could not answer get_profile: locked while reading audit_log.pdf.' });
+    expect(displayError(error)).toEqual({
+      message: 'The store could not answer this request: locked while reading audit_log.pdf.',
+      code: 'DATABASE_UNAVAILABLE',
+      detail: 'DATABASE_UNAVAILABLE: The store could not answer get_profile: locked while reading audit_log.pdf.',
+    });
   });
 
   it('leaves an ordinary sentence with a colon intact', () => {
-    expect(displayError(new Error('Network: unreachable host'))).toEqual({ message: 'Network: unreachable host', code: null });
+    expect(displayError(new Error('Network: unreachable host'))).toMatchObject({ message: 'Network: unreachable host', code: null });
   });
 });

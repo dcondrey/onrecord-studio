@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import AgencySelector from './AgencySelector';
 import { useAppStore } from '../../store/useAppStore';
 import { searchQueryId, searchRecordText, type SearchRecordInput } from '../../utils/searchResults';
-import { formatNativeError, invokeCommand } from '../../ipc';
+import { invokeCommand } from '../../ipc';
 import { compileToLegacyQuery, interpretNaturalLanguage, parseQualifierQuery, serializeQualifierQuery } from '../../query';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { displayError } from '../../utils/errorMessage';
@@ -131,7 +131,7 @@ export default function SearchFilter() {
       });
       setWatchStatus({ ok: true, text: `Watching "${term}". It is checked after each ingest; changes appear in the watchlist.` });
     } catch (reason) {
-      setWatchStatus({ ok: false, text: `Could not watch "${term}": ${formatNativeError(reason)}` });
+      setWatchStatus({ ok: false, text: `Could not watch "${term}": ${displayError(reason).message}` });
     }
   };
 
@@ -156,7 +156,7 @@ export default function SearchFilter() {
       });
       setWatchStatus({ ok: true, text: `Standing query "${saved.label}" saved. It re-runs whenever the corpus changes; see Standing searches on the overview.` });
     } catch (reason) {
-      setWatchStatus({ ok: false, text: `Could not save the standing query: ${formatNativeError(reason)}` });
+      setWatchStatus({ ok: false, text: `Could not save the standing query: ${displayError(reason).message}` });
     }
   };
 

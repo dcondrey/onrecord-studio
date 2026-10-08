@@ -12,7 +12,7 @@ import UnredactorPanel from '../documents/UnredactorPanel';
 import LegalAuthorityManager from '../legal/LegalAuthorityManager';
 import LegalCompliancePanel from '../legal/LegalCompliancePanel';
 import { isTauri } from '@tauri-apps/api/core';
-import { formatNativeError, invokeCommand } from '../../ipc';
+import { invokeCommand } from '../../ipc';
 import StatutoryDeadlineAppeal from './StatutoryDeadlineAppeal';
 import type {
   DocumentTextChunk,
@@ -38,6 +38,7 @@ import CaseTimeline from './CaseTimeline';
 import { formatMatchCount, MATCH_BASIS_LABELS, matchBasis, SEARCH_PAGE_SIZE } from '../../utils/searchResults';
 import { formatShortDate } from '../objects/labels';
 import VirtualList from '../ui/VirtualList';
+import { displayError } from '../../utils/errorMessage';
 
 /** Fixed so the list can be windowed from the scroll offset; the row clamps its text to fit. */
 const RESULT_ROW_HEIGHT = 148;
@@ -107,7 +108,7 @@ export default function MainLayout() {
         if (count && stillCurrent()) store.setFilteredResultsTotal(generation, count.total);
       }
     } catch (reason) {
-      if (stillCurrent()) store.setSearchPageState(generation, { loadingMore: false, moreError: formatNativeError(reason) });
+      if (stillCurrent()) store.setSearchPageState(generation, { loadingMore: false, moreError: displayError(reason).message });
     }
   }, []);
   const documentListGate = useLatestRequestGate();
@@ -145,7 +146,7 @@ export default function MainLayout() {
     }).then((values) => {
       if (documentListGate.isCurrent(request)) { setDocuments(values); setDocumentError(null); }
     }).catch((reason) => {
-      if (documentListGate.isCurrent(request)) setDocumentError(formatNativeError(reason));
+      if (documentListGate.isCurrent(request)) setDocumentError(displayError(reason).message);
     });
     return documentListGate.invalidate;
   }, [documentListGate, documentOpenGate, evidenceRefreshRequests, selectedRequestPortalKey, selectedRequestId]);
@@ -176,7 +177,7 @@ export default function MainLayout() {
       setPendingDocumentPurge(null);
     } catch (reason) {
       if (!stillOwner()) return;
-      setDocumentError(formatNativeError(reason));
+      setDocumentError(displayError(reason).message);
     } finally {
       setPurgingDocument(false);
     }
@@ -199,7 +200,7 @@ export default function MainLayout() {
       setActiveDocument({ summary, chunk });
     } catch (reason) {
       if (!documentOpenGate.isCurrent(request)) return;
-      setDocumentError(formatNativeError(reason));
+      setDocumentError(displayError(reason).message);
     }
   };
 
@@ -238,7 +239,7 @@ export default function MainLayout() {
       }
     } catch (reason) {
       if (exportGate.isCurrent(request)) {
-        setExportState({ key, isExporting: false, result: null, error: formatNativeError(reason) });
+        setExportState({ key, isExporting: false, result: null, error: displayError(reason).message });
       }
     }
   };

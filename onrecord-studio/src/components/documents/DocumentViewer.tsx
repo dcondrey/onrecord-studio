@@ -13,6 +13,7 @@ import { formatInstant } from '../objects/labels';
 import { buttonClass } from '../ui/Button';
 import { SearchField } from '../ui/Field';
 import RedactionInferencePanel from './RedactionInferencePanel';
+import { displayError } from '../../utils/errorMessage';
 
 // pdf.js loads only when a reader opens the page view.
 const PdfPageView = lazy(() => import('./PdfPageView'));
@@ -148,7 +149,7 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
       setPackState('idle');
     } catch (reason) {
       if (!packGate.isCurrent(request)) return;
-      setPackError(String(reason));
+      setPackError(displayError(reason).message);
       setPackState('failed');
     }
   };
@@ -166,7 +167,7 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
       setClaimChecksState('idle');
     } catch (reason) {
       if (!claimGate.isCurrent(request)) return;
-      setClaimChecksError(String(reason));
+      setClaimChecksError(displayError(reason).message);
       setClaimChecksState('failed');
     }
   };
@@ -324,7 +325,7 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
     } catch (reason) {
       if (!historyGate.isCurrent(request)) return;
       setVerificationHistory(null);
-      setHistoryError(String(reason));
+      setHistoryError(displayError(reason).message);
     } finally {
       if (historyGate.isCurrent(request)) setIsLoadingHistory(false);
     }
@@ -349,7 +350,7 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
     } catch (reason) {
       if (!recoveryGate.isCurrent(request)) return;
       setRecoveryProfile(null);
-      setRecoveryError(String(reason));
+      setRecoveryError(displayError(reason).message);
     } finally {
       if (recoveryGate.isCurrent(request)) setIsRecovering(false);
     }
@@ -369,7 +370,7 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
     } catch (reason) {
       if (!residualAuditGate.isCurrent(request)) return;
       setResidualAudit(null);
-      setResidualAuditError(String(reason));
+      setResidualAuditError(displayError(reason).message);
     } finally {
       if (residualAuditGate.isCurrent(request)) setIsAuditingResiduals(false);
     }

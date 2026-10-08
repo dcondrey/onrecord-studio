@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { formatNativeError, invokeCommand } from '../../ipc';
+import { invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type { ProvenanceVerificationRecord } from '../../types';
 import { isSha256Hex } from '../../utils/crypto';
 import { enumLabel, formatInstant } from '../objects/labels';
+import { displayError } from '../../utils/errorMessage';
 
 interface MetadataCardProps {
   documentId: number;
@@ -33,7 +34,7 @@ export default function MetadataCard({ documentId, portalKey, sha256, contentTyp
     setCopyStatus(null);
     void invokeCommand('list_document_provenance_verifications', { documentId, portalKey, limit: 1 })
       .then((records) => { if (verificationGate.isCurrent(token)) setLatestVerification(records[0] ?? null); })
-      .catch((reason) => { if (verificationGate.isCurrent(token)) setVerificationError(formatNativeError(reason)); });
+      .catch((reason) => { if (verificationGate.isCurrent(token)) setVerificationError(displayError(reason).message); });
     return () => verificationGate.invalidate();
   }, [documentId, portalKey, verificationGate]);
 

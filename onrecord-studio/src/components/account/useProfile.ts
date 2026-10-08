@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { formatNativeError, invokeCommand } from "../../ipc";
+import { invokeCommand } from "../../ipc";
 import { useLatestRequestGate } from "../../hooks/useLatestRequestGate";
 import { useProfileLensStore } from "../../store/useProfileLensStore";
 import type {
@@ -10,6 +10,7 @@ import type {
   ProfileInput,
   ProfileState,
 } from "../../types";
+import { displayError } from "../../utils/errorMessage";
 
 /**
  * Whether a finding's subject is the user's own confirmed organization. A confirmed match
@@ -73,7 +74,7 @@ export function useAffiliationDisclosure() {
       })
       .catch((reason) => {
         if (!gate.isCurrent(token)) return;
-        setError(formatNativeError(reason));
+        setError(displayError(reason).message);
         setStatus("failed");
       });
   }, [gate, revision]);
@@ -105,7 +106,7 @@ export function useProfile() {
       })
       .catch((reason) => {
         if (!gate.isCurrent(token)) return;
-        setError(formatNativeError(reason));
+        setError(displayError(reason).message);
       });
   }, [gate]);
 
@@ -123,7 +124,7 @@ export function useProfile() {
         refresh();
         return true;
       } catch (reason) {
-        setError(formatNativeError(reason));
+        setError(displayError(reason).message);
         return false;
       } finally {
         setIsBusy(false);

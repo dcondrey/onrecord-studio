@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { formatNativeError, invokeCommand } from '../../ipc';
+import { invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useProfileLensStore } from '../../store/useProfileLensStore';
 import type { Finding, FindingKind } from '../../types';
@@ -7,6 +7,7 @@ import Button from '../ui/Button';
 import Dialog, { DialogBody, DialogHeader } from '../ui/Dialog';
 import Skeleton from '../ui/Skeleton';
 import { touchesOwnOrganization, useAffiliationDisclosure } from './useProfile';
+import { displayError } from '../../utils/errorMessage';
 
 export interface ReviewGroup {
   title: string;
@@ -61,7 +62,7 @@ export function SelfReviewPanel({ onClose }: { onClose: () => void }) {
         if (gate.isCurrent(token)) setFindings(rows);
       })
       .catch((reason) => {
-        if (gate.isCurrent(token)) setError(formatNativeError(reason));
+        if (gate.isCurrent(token)) setError(displayError(reason).message);
       });
   }, [gate, reload]);
 

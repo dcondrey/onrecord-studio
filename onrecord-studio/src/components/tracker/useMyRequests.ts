@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { formatNativeError, invokeCommand } from '../../ipc';
+import { invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import type {
   AddTimelineEventInput,
@@ -10,6 +10,7 @@ import type {
   RequestDeadline,
   UpdateClaimedRequestInput,
 } from '../../types';
+import { displayError } from '../../utils/errorMessage';
 
 export interface ImportOutcome {
   claimId: string;
@@ -49,7 +50,7 @@ export function useMyRequests(enabled: boolean) {
       setStatus('ready');
     } catch (reason) {
       if (!refreshGate.isCurrent(token)) return;
-      setError(formatNativeError(reason));
+      setError(displayError(reason).message);
       setStatus((current) => (current === 'ready' ? 'ready' : 'failed'));
     }
   }, [refreshGate]);

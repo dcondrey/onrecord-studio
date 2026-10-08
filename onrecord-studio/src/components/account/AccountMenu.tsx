@@ -10,9 +10,10 @@ import { isDirectChannel } from '../../utils/licenseState';
 import type { LicenseStatus } from '../../types';
 import DeleteAccountResult from './DeleteAccountResult';
 import SeatsPanel from './SeatsPanel';
-import { formatNativeError, invokeCommand } from '../../ipc';
+import { invokeCommand } from '../../ipc';
 import { openExternalUrl } from '../../utils/openExternal';
 import { formatShortDate } from '../objects/labels';
+import { displayError } from '../../utils/errorMessage';
 
 function planLine(status: LicenseStatus): string {
   if (status.state === 'TRIAL') {
@@ -51,7 +52,7 @@ export default function AccountMenu() {
       const opened = await openExternalUrl(session.url);
       if (!opened.ok) setBillingNotice(`${opened.reason} Address: ${session.url}`);
     } catch (failure) {
-      setBillingNotice(formatNativeError(failure));
+      setBillingNotice(displayError(failure).message);
     } finally {
       setBillingBusy(false);
     }

@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { open as chooseFiles } from '@tauri-apps/plugin-dialog';
-import { formatNativeError, invokeCommand } from '../../ipc';
+import { invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import Button, { buttonClass } from '../ui/Button';
 import Dialog, { DialogBody, DialogHeader } from '../ui/Dialog';
@@ -19,6 +19,7 @@ import type {
 import { DeadlineChip } from './DeadlineChip';
 import { localInputToRfc3339, rfc3339ToLocalInput } from './rfc3339';
 import { useMyRequests } from './useMyRequests';
+import { displayError } from '../../utils/errorMessage';
 
 export const KIND_LABELS: Record<TimelineEventKind, string> = {
   SUBMITTED: 'Submitted',
@@ -457,7 +458,7 @@ export default function MyRequestsPanel({ onClose }: { onClose: () => void }) {
       })
       .catch((reason) => {
         if (!portalGate.isCurrent(token)) return;
-        setPortalError(formatNativeError(reason));
+        setPortalError(displayError(reason).message);
       });
   }, [portalGate]);
 

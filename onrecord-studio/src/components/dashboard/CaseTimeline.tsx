@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { isTauri } from '@tauri-apps/api/core';
-import { formatNativeError, invokeCommand } from '../../ipc';
+import { invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useInspectFinding } from '../../hooks/useInspectFinding';
 import { useAppStore } from '../../store/useAppStore';
@@ -18,6 +18,7 @@ import {
   type TimelineItem,
   type TimelineSource,
 } from '../../utils/timeline';
+import { displayError } from '../../utils/errorMessage';
 
 const FINDING_LIMIT = 500;
 const WATCH_LIMIT = 200;
@@ -46,7 +47,7 @@ function useSource<D>(load: () => Promise<Loaded<D>>) {
         if (gate.isCurrent(request)) setState({ ...result, error: null, loaded: true });
       })
       .catch((reason) => {
-        if (gate.isCurrent(request)) setState({ items: [], capped: false, detail: null, loaded: true, error: formatNativeError(reason) });
+        if (gate.isCurrent(request)) setState({ items: [], capped: false, detail: null, loaded: true, error: displayError(reason).message });
       });
   }, [gate, load]);
   return state;
