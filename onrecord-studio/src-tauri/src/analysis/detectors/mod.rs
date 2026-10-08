@@ -50,9 +50,9 @@ pub mod rolling_production;
 pub mod spending_cases;
 pub(crate) mod text_shared;
 
-/// `FindingCitation::document_id` of a citation that names a request rather than a document. Real
-/// document ids are positive; a request id must never stand in, since it would open whichever
-/// unrelated document happens to share the number.
+/// `FindingCitation::document_id` of a citation that names a request rather than a document.
+/// Stored document ids are portal-assigned or masked SHA-256 prefixes, so 0 names no document. A
+/// request id must never stand in: it would open whichever unrelated document shares the number.
 pub(crate) const REQUEST_LEVEL_DOCUMENT_ID: i64 = 0;
 
 /// An RFC 3339 instant from a stored timestamp column, in UTC.
@@ -255,14 +255,11 @@ mod tests {
 
     #[tokio::test]
     async fn refresh_all_findings_runs_registered_detectors_against_empty_corpus() {
-        // Runs each detector against an empty corpus. Every detector must be safe to call with
-        // no data present; this test guards that invariant.
+        // Every detector must run cleanly with no data present.
         let repo = fresh_repo().await;
         let summary = refresh_all_findings(&repo).await.expect("refresh runs");
-        assert!(
-            summary.detectors_run >= 1,
-            "at least held_back_response is registered"
-        );
+        assert!(summary.detectors_run >= 1);
+        assert_eq!(summary.detectors_failed, 0);
         assert_eq!(
             summary.findings_recorded, 0,
             "empty corpus yields no findings"
