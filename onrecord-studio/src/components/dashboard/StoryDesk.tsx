@@ -356,7 +356,7 @@ function RankedLeads({ leads, allLeads, busy, renderDetail }: { leads: StoryLead
             <span id={`lead-${lead.findingId}`} className="line-clamp-2 text-body font-medium" title={lead.headline}>
               <ObjectLink target={{ kind: 'finding', id: lead.findingId, label: lead.headline }} className="text-fg no-underline hover:underline">{lead.headline}</ObjectLink>
             </span>
-            <LeadByline lead={lead} />
+            <LeadByline lead={lead} stacked />
           </div>
         </div>
       ),

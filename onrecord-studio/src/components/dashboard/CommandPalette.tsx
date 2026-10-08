@@ -2,7 +2,11 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboa
 import { invokeCommand, formatNativeError } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
-import type { IntentAnswer, IntentOption } from '../../types';
+import type { IntentAnswer, IntentOption, StoryLead } from '../../types';
+import { useGatedLoad } from '../../hooks/useGatedLoad';
+import ScoreSpark from '../charts/figures/ScoreSpark';
+import { scoreLabel } from './LeadLine';
+import { COUNTED_FACTOR, isUnassessed, orderedFactors, points } from './storyFactors';
 import IntentAnswerView from './IntentAnswerView';
 import { cn } from '../../utils/cn';
 import Icon, { type IconName } from '../ui/icons';
@@ -17,12 +21,14 @@ import { contrastCommandRegistry, motionCommandRegistry, scoreCommand, themeComm
 export const OPEN_COMMAND_PALETTE_EVENT = 'onrecord:open-command-palette';
 
 const INTENT_ROW_LIMIT = 10;
+/** Leads on the palette's first page, before anything is typed. */
+const PALETTE_LEADS = 3;
 
 interface CommandAction {
   id: string;
   label: string;
   detail: string;
-  group: 'Ask' | 'Navigate' | 'Create' | 'Help' | 'Appearance' | 'Accessibility' | ObjectGroup;
+  group: 'Ask' | 'Leads' | 'Navigate' | 'Create' | 'Help' | 'Appearance' | 'Accessibility' | ObjectGroup;
   icon: IconName;
   keywords: string;
   shortcut?: string;
@@ -30,6 +36,8 @@ interface CommandAction {
   keepOpen?: boolean;
   /** A setting row whose value is the one in force. */
   current?: boolean;
+  /** A ranked lead: the row shows its rank and its attention score at sparkline scale. */
+  lead?: { rank: number; lead: StoryLead; scaleMax: number };
   perform: () => void;
 }
 
@@ -262,10 +270,29 @@ export default function CommandPalette() {
     perform: () => inspect(result.target, 'view'),
   })), [inspect, objectResults]);
 
+  // Read each time the palette opens; a read still in flight when it closes is discarded.
+  const findingsRefreshRequests = useAppStore((state) => state.findingsRefreshRequests);
+  const openLeadDossier = useAppStore((state) => state.openLeadDossier);
+  const storyLeads = useGatedLoad(isOpen ? `leads:${findingsRefreshRequests}` : 'closed', () => (isOpen ? invokeCommand('list_story_leads', { limit: PALETTE_LEADS }) : Promise.resolve([])));
+  const leadActions = useMemo<CommandAction[]>(() => {
+    if (storyLeads.status !== 'ready') return [];
+    const scaleMax = storyLeads.data[0]?.publicInterest.totalBasisPoints ?? 1;
+    return storyLeads.data.slice(0, PALETTE_LEADS).map((lead, index) => ({
+      id: `lead-${lead.findingId}`,
+      label: lead.headline,
+      detail: '',
+      group: 'Leads' as const,
+      icon: 'flag' as const,
+      keywords: '',
+      lead: { rank: index + 1, lead, scaleMax },
+      perform: () => openLeadDossier(lead.findingId),
+    }));
+  }, [openLeadDossier, storyLeads]);
+
   const filteredActions = useMemo(() => {
     if (mode === 'dossier') return [];
     const normalized = query.trim().toLocaleLowerCase();
-    if (!normalized) return actions.filter((action) => !SETTING_GROUPS.has(action.group));
+    if (!normalized) return [...leadActions, ...actions.filter((action) => !SETTING_GROUPS.has(action.group))];
     const matches = groupContiguously(actions
       .map((action) => ({ action, score: scoreCommand(normalized, action.label, `${action.detail} ${action.group}`, action.keywords) }))
       .filter((entry): entry is { action: CommandAction; score: number } => entry.score !== null)
@@ -285,7 +312,7 @@ export default function CommandPalette() {
     // A sentence is a question first; a word or two that also names a view stays a view jump.
     return normalized.split(/\s+/).length >= 3 || normalized.endsWith('?') ? [ask, ...matches, ...objectActions] : [...matches, ...objectActions, ask];
     // runIntent closes over the gate and setters only, all stable.
-  }, [actions, mode, objectActions, query]);
+  }, [actions, leadActions, mode, objectActions, query]);
 
   useEffect(() => {
     const openFromEvent = () => openPalette();
@@ -411,7 +438,7 @@ export default function CommandPalette() {
         onKeyDown={trapTab}
       >
         <h2 id="command-palette-title" className="sr-only">Command palette</h2>
-        <div className="flex h-14 items-center gap-3 border-b border-line px-4">
+        <div className="flex h-16 items-center gap-3 border-b border-line px-5">
           {mode === 'dossier' ? (
             <span className="shrink-0 text-control text-fg-secondary">Dossier</span>
           ) : (
@@ -423,7 +450,7 @@ export default function CommandPalette() {
             onChange={(event) => setQuery(event.target.value)}
             placeholder={mode === 'dossier' ? 'Name, email, organization or entity ID' : 'Search findings, records, agencies and commands, or ask a question'}
             aria-label={mode === 'dossier' ? 'Subject for the dossier: name, email, organization or entity ID' : 'Search findings, records, agencies, entities, passages and commands, or ask a question'}
-            className="h-full min-w-0 flex-1 border-0 bg-transparent text-heading font-normal text-fg outline-none placeholder:text-muted"
+            className="h-full min-w-0 flex-1 border-0 bg-transparent text-headline font-normal tracking-[-0.012em] text-fg outline-none placeholder:text-muted"
             role="combobox"
             aria-expanded={mode === 'commands' && !answering}
             aria-controls="command-results"
@@ -474,7 +501,10 @@ export default function CommandPalette() {
               </div>
             ) : groups.map(({ group, start, items }) => (
               <div key={`${group}-${start}`} role="group" aria-label={group}>
-                <div role="presentation" className="px-3 pb-1 pt-2 text-overline uppercase text-muted">{group}</div>
+                <div role="presentation" className="flex items-center gap-3 px-3 pb-1.5 pt-3 text-overline uppercase text-muted">
+                  {group === 'Leads' ? 'Top leads' : group}
+                  <span aria-hidden="true" className="h-px flex-1 bg-line" />
+                </div>
                 {items.map((action, offset) => {
                   const index = start + offset;
                   const selected = selectedIndex === index;
@@ -492,15 +522,32 @@ export default function CommandPalette() {
                         action.perform();
                       }}
                       className={cn(
-                        'flex h-11 w-full items-center gap-3 rounded-lg px-3 text-left outline-none transition-colors',
+                        'flex w-full items-center gap-3 rounded-lg px-3 text-left outline-none transition-colors',
+                        action.lead ? 'h-12' : 'h-10',
                         selected ? 'command-row-selected text-fg' : 'text-fg-secondary',
                       )}
                     >
-                      <Icon name={action.icon} size="md" className="shrink-0 text-muted" />
-                      <span className="flex min-w-0 flex-1 items-baseline gap-2">
-                        <span className="shrink-0 text-control text-fg">{action.label}</span>
-                        <span className="min-w-0 truncate text-caption text-muted">{action.detail}</span>
-                      </span>
+                      {action.lead ? (
+                        <>
+                          <span aria-hidden="true" className="w-5 shrink-0 text-center text-headline tabular-nums text-muted">{action.lead.rank}</span>
+                          <span className="min-w-0 flex-1 truncate text-control text-fg">{action.label}</span>
+                          <ScoreSpark
+                            width={72}
+                            scaleMax={action.lead.scaleMax}
+                            label={scoreLabel(action.lead.lead)}
+                            factors={orderedFactors(action.lead.lead).map((factor) => ({ key: factor.name, basisPoints: factor.basisPoints, counted: factor.name === COUNTED_FACTOR, unassessed: isUnassessed(action.lead!.lead, factor.name) }))}
+                          />
+                          <span aria-hidden="true" className="w-5 shrink-0 text-right text-caption font-medium tabular-nums text-fg-secondary">{points(action.lead.lead.publicInterest.totalBasisPoints)}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Icon name={action.icon} size="md" className="shrink-0 text-muted" />
+                          <span className="flex min-w-0 flex-1 items-baseline gap-2">
+                            <span className="shrink-0 text-control text-fg">{action.label}</span>
+                            <span className="min-w-0 truncate text-caption text-muted">{action.detail}</span>
+                          </span>
+                        </>
+                      )}
                       {action.current && <span className="shrink-0 text-caption text-muted">Current</span>}
                       {action.shortcut && <Keycap>{action.shortcut}</Keycap>}
                     </button>

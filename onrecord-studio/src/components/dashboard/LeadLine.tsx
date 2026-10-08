@@ -34,27 +34,36 @@ export function LeadKicker({ lead, prefix, className }: { lead: StoryLead; prefi
 }
 
 /**
- * Severity, source, the agency the lead is about (when the analytics profile names it) and the
- * first-seen date, separated by interpuncts; nothing is printed for a part the lead lacks.
+ * Severity, source, first-seen date and the agency the lead is about (when the analytics profile
+ * names it), separated by interpuncts; nothing is printed for a part the lead lacks. `stacked` sets
+ * the agency on its own line, for a column too narrow to wrap it cleanly.
  */
-export function LeadByline({ lead, source, className }: { lead: StoryLead; source?: string; className?: string }) {
+export function LeadByline({ lead, source, stacked = false, className }: { lead: StoryLead; source?: string; stacked?: boolean; className?: string }) {
   const { agencyId, portalKey } = lead.subject;
-  const agency = useAppStore((state) => agencyId === null ? null : state.agencyProfiles.find((entry) => entry.agencyId === agencyId && entry.portalSubdomain === portalKey) ?? null);
+  const profile = useAppStore((state) => agencyId === null ? null : state.agencyProfiles.find((entry) => entry.agencyId === agencyId && entry.portalSubdomain === portalKey) ?? null);
+  const agency = profile && agencyId !== null && portalKey ? (
+    // Raised above a row's stretched headline link, so it stays separately clickable.
+    <span key="agency" className="relative z-10 min-w-0">
+      About <ObjectLink target={{ kind: 'agency', portalKey, agencyId, label: profile.agencyName }}>{profile.agencyName}</ObjectLink>
+    </span>
+  ) : null;
   const parts = [
     <span key="severity" className="flex items-center gap-1 text-fg-secondary"><SeverityGlyph severity={lead.severity} />{severityLabel(lead.severity)}</span>,
     source && <span key="source" className="min-w-0 truncate">{source}</span>,
-    agency && agencyId !== null && portalKey && (
-      // Raised above a row's stretched headline link, so it stays separately clickable.
-      <span key="agency" className="relative z-10 min-w-0">
-        About <ObjectLink target={{ kind: 'agency', portalKey, agencyId, label: agency.agencyName }}>{agency.agencyName}</ObjectLink>
-      </span>
-    ),
     <time key="time" dateTime={lead.firstSeenAt} className="tabular-nums">{formatShortDate(lead.firstSeenAt)}</time>,
+    !stacked && agency,
   ].filter(Boolean);
-  return (
-    <p className={cn('flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-caption text-muted', className)}>
+  const line = (
+    <p className={cn('flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-caption text-muted', !stacked && className)}>
       {parts.flatMap((part, index) => (index === 0 ? [part] : [<span key={`dot-${index}`} aria-hidden="true">·</span>, part]))}
     </p>
+  );
+  if (!stacked || !agency) return stacked ? <div className={className}>{line}</div> : line;
+  return (
+    <div className={cn('space-y-0.5', className)}>
+      {line}
+      <p className="text-caption text-muted">{agency}</p>
+    </div>
   );
 }
 

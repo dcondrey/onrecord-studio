@@ -187,7 +187,7 @@ function LeadStory({ lead, leads, total, source }: { lead: StoryLead; leads: rea
             <Button variant="ghost" onClick={inspect}>Inspect records</Button>
           </div>
         </div>
-        <div className="min-w-0 xl:border-l xl:border-line xl:pl-10">
+        <div className="min-w-0 [--viz-surface:rgb(var(--bg))] xl:border-l xl:border-line xl:pl-10">
           {read?.figure ? (
             <LeadFigure figure={read.figure} headline={null} size="card" sources={{ tables: ['findings'], note: 'the lead’s stored figure, drawn from the rows its builder read' }} onActivate={() => openLeadDossier(lead.findingId)} />
           ) : finding.status === 'pending' ? (
@@ -307,7 +307,7 @@ function HealthStrip() {
         title="Data health"
         aside={<span className={cn('text-caption', analyticsError ? 'text-warning' : 'text-muted')}>{analyticsError ? 'Response analytics: the last refresh failed' : analyticsUpdatedAt ? `Response analytics updated ${formatShortDate(analyticsUpdatedAt)}` : 'Response analytics not yet calculated'}</span>}
       />
-      <ul className="grid grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] gap-px overflow-hidden border-b border-line bg-line">
+      <ul className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-x-6">
         {portals.map((source) => {
           const key = source.registration.portalKey;
           const runtime = runtimeByPortal.get(key);
@@ -317,24 +317,24 @@ function HealthStrip() {
           const failed = runtime?.failedTasks ?? 0;
           const selected = activePortalKey === key;
           return (
-            <li key={key} className="bg-bg">
+            <li key={key} className="border-b border-line">
               <button
                 type="button"
                 aria-pressed={selected}
                 onClick={() => setActivePortal(selected ? null : key)}
-                className={cn('focus-ring flex h-full w-full flex-col gap-1.5 px-3 py-3 text-left transition-colors hover:bg-raised/60', selected && 'bg-raised/60')}
+                className={cn('focus-ring -mx-2 flex h-full w-[calc(100%+1rem)] flex-col gap-1.5 rounded-md px-2 py-3 text-left transition-colors hover:bg-raised/60', selected && 'bg-raised/60')}
               >
                 <span className="flex min-w-0 items-center gap-2">
                   <StatusDot state={health.state} label="" pulse={health.pulse} />
                   <span className="min-w-0 truncate text-body font-medium text-fg">{source.registration.displayName}</span>
                 </span>
-                <span className="flex flex-wrap gap-x-1.5 text-caption tabular-nums text-muted">
+                <span className="flex flex-wrap gap-x-1.5 pl-4 text-caption tabular-nums text-muted">
                   <span className={health.state === 'error' ? 'text-danger' : undefined}>{health.word}</span>
                   {total > 0 && <><span aria-hidden="true">·</span><span>{settled.toLocaleString()} of {total.toLocaleString()} settled</span></>}
                   {failed > 0 && <><span aria-hidden="true">·</span><span className="text-danger">{failed.toLocaleString()} failed</span></>}
                 </span>
                 {total > 0 && (
-                  <span aria-hidden="true" className="relative mt-0.5 flex h-1 w-full overflow-hidden rounded-full bg-line">
+                  <span aria-hidden="true" className="relative ml-4 mt-0.5 flex h-1 w-[calc(100%-1rem)] overflow-hidden rounded-full bg-line">
                     <span className="h-full bg-success-mark" style={{ width: `${((settled - failed) / total) * 100}%` }} />
                     {failed > 0 && <span className="ml-px h-full bg-danger-mark" style={{ width: `${(failed / total) * 100}%` }} />}
                   </span>
