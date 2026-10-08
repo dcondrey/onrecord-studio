@@ -19,6 +19,7 @@ import {
   sanDiegoSourceForUrl,
   type SanDiegoSource,
 } from "../../utils/sanDiego";
+import { downloadFile } from "./downloadFile";
 
 const emptyDraft: InvestigationDraft = {
   dateFrom: "",
@@ -70,7 +71,7 @@ export default function InvestigationDesk() {
     state.getState().setWorkspaceView("evidence");
   };
   const exportNotes = () =>
-    download(
+    downloadFile(
       `${topic.id}-investigation.md`,
       [
         `# ${topic.title}`,
@@ -287,7 +288,7 @@ export default function InvestigationDesk() {
                 type="button"
                 className="analysis-button mt-3"
                 onClick={() =>
-                  download(`${topic.id}-records-request.txt`, draft.requestText)
+                  downloadFile(`${topic.id}-records-request.txt`, draft.requestText)
                 }
               >
                 Download request draft
@@ -467,15 +468,4 @@ function InvestigationSource({
       )}
     </article>
   );
-}
-
-function download(name: string, content: string) {
-  const url = URL.createObjectURL(
-    new Blob([content], { type: "text/plain;charset=utf-8" }),
-  );
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = name;
-  anchor.click();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

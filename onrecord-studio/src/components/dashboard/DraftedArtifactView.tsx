@@ -4,6 +4,7 @@ import type {
   DraftEvidenceBasis,
   FindingConfidence,
 } from "../../types";
+import { downloadFile } from "./downloadFile";
 
 const BASIS_LABEL: Record<DraftEvidenceBasis, string> = {
   PATTERN_OBSERVATION: "Pattern observation (not a finding of violation)",
@@ -55,17 +56,10 @@ export default function DraftedArtifactView({
   }, [draft.disclosure, editedText]);
 
   const download = useCallback(() => {
-    const blob = new Blob([outgoingText(editedText, draft.disclosure)], {
-      type: "text/plain;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${draft.kind.toLowerCase()}-${draft.subjectFindingId.replace(/[^A-Za-z0-9_-]+/g, "-")}.txt`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    URL.revokeObjectURL(url);
+    downloadFile(
+      `${draft.kind.toLowerCase()}-${draft.subjectFindingId.replace(/[^A-Za-z0-9_-]+/g, "-")}.txt`,
+      outgoingText(editedText, draft.disclosure),
+    );
   }, [draft, editedText]);
 
   return (

@@ -11,6 +11,7 @@ import Icon from '../ui/icons';
 import { INVESTIGATION_TOPICS } from '../../utils/investigations';
 import { invokeCommand } from '../../ipc';
 import type { Finding } from '../../types';
+import { downloadFile } from './downloadFile';
 
 const AUTO_DRAFT_LABEL_PREFIX = '[Auto-drafted from finding]';
 const AUTO_DRAFT_ID_PREFIX = 'auto-draft:';
@@ -141,13 +142,7 @@ export default function BriefingWorkspace() {
   };
 
   const exportOutline = () => {
-    const markdown = buildBriefingMarkdown(project);
-    const url = URL.createObjectURL(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }));
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `${fileStem(project.title)}-${project.meetingDate || 'briefing'}.md`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    downloadFile(`${fileStem(project.title)}-${project.meetingDate || 'briefing'}.md`, buildBriefingMarkdown(project), 'text/markdown;charset=utf-8');
     setExported(true);
   };
 

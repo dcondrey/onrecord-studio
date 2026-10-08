@@ -3,8 +3,8 @@ import { useAppStore } from '../../store/useAppStore';
 import { cn } from '../../utils/cn';
 import Icon from '../ui/icons';
 import { useMetrics } from '../../hooks/useMetrics';
-import AuditTimeline from './AuditTimeline';
 import StatusDot from '../ui/statusDot';
+import { downloadFile } from './downloadFile';
 
 type LogFilter = 'all' | 'errors';
 
@@ -33,12 +33,7 @@ export default function ActivityDashboard() {
       eventCount: visibleLogs.length,
       events: visibleLogs.map((message) => ({ message })),
     };
-    const url = URL.createObjectURL(new Blob([JSON.stringify(artifact, null, 2)], { type: 'application/json' }));
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `onrecord-activity-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    downloadFile(`onrecord-activity-${new Date().toISOString().replace(/[:.]/g, '-')}.json`, JSON.stringify(artifact, null, 2), 'application/json');
   };
 
   return (
@@ -77,7 +72,7 @@ export default function ActivityDashboard() {
                 </div>
                 <div className="flex rounded-lg border border-line bg-canvas/70 p-0.5">
                   {(['all', 'errors'] as LogFilter[]).map((value) => (
-                    <button key={value} type="button" onClick={() => setFilter(value)} className={cn('focus-ring rounded-md px-2.5 py-1.5 text-caption font-semibold capitalize transition', filter === value ? 'bg-raised text-fg' : 'text-muted hover:text-muted')}>{value}</button>
+                    <button key={value} type="button" onClick={() => setFilter(value)} className={cn('focus-ring rounded-md px-2.5 py-1.5 text-caption font-semibold capitalize transition', filter === value ? 'bg-raised text-fg' : 'text-muted hover:text-fg-secondary')}>{value}</button>
                   ))}
                 </div>
                 <button type="button" disabled={visibleLogs.length === 0} onClick={exportActivity} className="focus-ring rounded-lg border border-control px-2.5 py-1.5 text-caption font-semibold text-muted transition hover:text-fg-secondary disabled:opacity-40">Export JSON</button>
@@ -93,10 +88,7 @@ export default function ActivityDashboard() {
                   </div>
                 </div>
               ) : renderedLogs.map((log, index) => (
-                <div key={`${index}-${log}`} className={cn('group grid grid-cols-[6px_minmax(0,1fr)] gap-3 rounded-lg px-2 py-2 transition hover:bg-surface/70', isErrorLog(log) ? 'text-danger' : 'text-muted')}>
-                  <StatusDot className="mt-1" state={isErrorLog(log) ? 'error' : log.includes('completed') || log.includes('passed') ? 'active' : 'note'} label={isErrorLog(log) ? 'Error' : log.includes('completed') || log.includes('passed') ? 'Completed' : 'Notice'} />
-                  <span className="break-words">{log}</span>
-                </div>
+                <LogLine key={`${index}-${log}`} log={log} />
               ))}
               {visibleLimit < visibleLogs.length && <button type="button" onClick={() => setVisibleLimit((value) => Math.min(visibleLogs.length, value + 75))} className="focus-ring mt-2 w-full rounded-lg border border-control py-2 text-caption font-semibold text-muted hover:text-fg-secondary">Show 75 older events</button>}
             </div>
@@ -108,7 +100,6 @@ export default function ActivityDashboard() {
             )}
           </section>
 
-          <div className="space-y-4">
           <section className="app-panel min-h-[420px] overflow-hidden">
             <div className="border-b border-line px-4 py-3.5">
               <div className="app-eyebrow">Source runtimes</div>
@@ -155,8 +146,6 @@ export default function ActivityDashboard() {
               })}
             </div>
           </section>
-          <AuditTimeline />
-          </div>
         </div>
       </div>
     </div>
@@ -176,6 +165,17 @@ function ActivityMetric({ label, value, detail, color, accent }: { label: string
 
 function RuntimeValue({ label, value }: { label: string; value: number }) {
   return <div className="rounded-lg bg-surface/70 px-2 py-2"><dt className="text-caption uppercase tracking-wider text-muted">{label}</dt><dd className="mt-1 font-mono text-label text-muted">{value.toLocaleString()}</dd></div>;
+}
+
+function LogLine({ log }: { log: string }) {
+  const error = isErrorLog(log);
+  const completed = !error && (log.includes('completed') || log.includes('passed'));
+  return (
+    <div className={cn('group grid grid-cols-[6px_minmax(0,1fr)] gap-3 rounded-lg px-2 py-2 transition hover:bg-surface/70', error ? 'text-danger' : 'text-muted')}>
+      <StatusDot className="mt-1" state={error ? 'error' : completed ? 'active' : 'note'} label={error ? 'Error' : completed ? 'Completed' : 'Notice'} />
+      <span className="break-words">{log}</span>
+    </div>
+  );
 }
 
 function isErrorLog(value: string) {
