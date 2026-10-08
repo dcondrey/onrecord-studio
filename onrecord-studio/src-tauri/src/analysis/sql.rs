@@ -96,16 +96,26 @@ impl Visitor for Checker<'_> {
     fn pre_visit_table_factor(&mut self, factor: &TableFactor) -> ControlFlow<Self::Break> {
         match factor {
             TableFactor::Table { name, args: None, .. } if name.0.len() == 1 => {
-                let name = name.to_string().trim_matches('"').replace("\"\"", "\"").to_lowercase();
-                if self.tables.contains(&name) && allowed(&name) { self.referenced.insert(name.clone()); }
-                if (self.tables.contains(&name) && allowed(&name)) || self.aliases.contains(&name) {
+                let name = name
+                    .to_string()
+                    .trim_matches('"')
+                    .replace("\"\"", "\"")
+                    .to_lowercase();
+                if self.tables.contains(&name) && allowed(&name) {
+                    self.referenced.insert(name);
+                    ControlFlow::Continue(())
+                } else if self.aliases.contains(&name) {
                     ControlFlow::Continue(())
                 } else {
-                    ControlFlow::Break(AppError::DataParsing(format!("Table '{name}' is not an approved analytical dataset")))
+                    ControlFlow::Break(AppError::DataParsing(format!(
+                        "Table '{name}' is not an approved analytical dataset"
+                    )))
                 }
             }
             TableFactor::Derived { .. } => ControlFlow::Continue(()),
-            _ => ControlFlow::Break(AppError::DataParsing("Only analytical tables, CTEs, and subqueries are allowed; external table functions are disabled".into())),
+            _ => ControlFlow::Break(AppError::DataParsing(
+                "Only analytical tables, CTEs, and subqueries are allowed; external table functions are disabled".into(),
+            )),
         }
     }
 }
