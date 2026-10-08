@@ -6,8 +6,9 @@ import Icon from '../ui/icons';
 import { buttonClass } from '../ui/Button';
 import { ShapeGlyph } from '../ui/shapeGlyph';
 import AnalyticsUnavailable from './AnalyticsUnavailable';
+import { deviationTier, deviationWords, TIER_LABEL, tierColor, type DeviationTier } from './deviationTier';
 
-type Severity = 'typical' | 'elevated' | 'critical';
+type Severity = DeviationTier;
 
 const WIDTH = 700;
 const HEIGHT = 320;
@@ -107,7 +108,7 @@ export default function PerformanceScatter() {
           {dayRange && <button type="button" onClick={() => setDayRange(null)} title="Drag across the plot to zoom" className={buttonClass({ size: 'sm', className: 'focus-ring' })}>Reset zoom</button>}
           <button type="button" onClick={exportSvg} className={buttonClass({ size: 'sm', className: 'focus-ring' })}>Export SVG</button>
           <div role="group" aria-label="Highlight tier" className="flex items-center gap-1" onKeyDown={(event) => { if (event.key === 'Escape') { setTierPinned(null); setTierPreview(null); } }}>
-            {(['typical', 'elevated', 'critical'] as const).map((tier) => (
+            {(['typical', 'elevated', 'outlier'] as const).map((tier) => (
               <button
                 key={tier}
                 type="button"
@@ -123,6 +124,10 @@ export default function PerformanceScatter() {
               </button>
             ))}
           </div>
+          <span className="inline-flex h-7 items-center gap-1.5 whitespace-nowrap px-2 text-caption text-fg-secondary">
+            <svg viewBox="-6 -6 12 12" className="h-2.5 w-2.5" aria-hidden="true"><circle r="4.5" fill="none" stroke="var(--viz-red)" strokeWidth="1.5" /></svg>
+            Statutory deadline passed
+          </span>
           <span aria-live="polite" className="sr-only">{tierFocus ? `${TIER_PLURAL[tierFocus]} highlighted; other tiers dimmed` : ''}</span>
         </div>
       </div>
@@ -174,8 +179,9 @@ export default function PerformanceScatter() {
               <rect x={MARGIN.left} y={MARGIN.top} width={plotWidth} height={plotHeight} fill="transparent" className="cursor-crosshair" onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); const coordinate = brushCoordinate(event); setBrush({ start: coordinate, current: coordinate }); }} onPointerMove={(event) => { if (brush) setBrush((value) => value ? { ...value, current: brushCoordinate(event) } : null); }} onPointerUp={finishBrush} onPointerCancel={() => setBrush(null)} />
               {brush && <rect x={Math.min(brush.start, brush.current)} y={MARGIN.top} width={Math.abs(brush.current - brush.start)} height={plotHeight} fill="var(--viz-cyan)" fillOpacity="0.12" stroke="var(--viz-cyan)" strokeDasharray="4 3" pointerEvents="none" />}
               {renderedPoints.map((profile) => {
-                const severity = severityFor(profile);
-                const color = severityColor(severity);
+                const severity = deviationTier(profile.performanceZScore);
+                const color = tierColor(severity);
+                const statutory = profile.statutoryViolationCount;
                 const radius = 5 + Math.sqrt(profile.totalRequestsProcessed / maxRequests) * 12;
                 const active = focused?.agencyId === profile.agencyId && focused.portalSubdomain === profile.portalSubdomain;
                 return (
@@ -183,7 +189,7 @@ export default function PerformanceScatter() {
                     key={`${profile.portalSubdomain}-${profile.agencyId}`}
                     role="button"
                     tabIndex={0}
-                    aria-label={`${profile.agencyName}, ${TIER_LABEL[severity].toLowerCase()}, ${deviationWords(profile.performanceZScore)}, ${profile.averageClosureDays.toFixed(1)} average days`}
+                    aria-label={`${profile.agencyName}, ${TIER_LABEL[severity].toLowerCase()}, ${deviationWords(profile.performanceZScore)}, ${profile.averageClosureDays.toFixed(1)} average days${statutory > 0 ? `, ${statutory.toLocaleString('en-US')} ${statutory === 1 ? 'request' : 'requests'} past the statutory deadline` : ''}`}
                     className="outline-none transition-opacity duration-fast [&:focus-visible>*:nth-child(2)]:stroke-[rgb(var(--focus))] [&:focus-visible>*:nth-child(2)]:[stroke-width:2.5]"
                     style={{ opacity: tierFocus && severity !== tierFocus ? 0.15 : 1 }}
                     onMouseEnter={() => setFocused(profile)}
@@ -197,6 +203,8 @@ export default function PerformanceScatter() {
                   >
                     <circle cx={x(profile.averageClosureDays)} cy={y(profile.performanceZScore)} r={radius + 5} fill={color} opacity={active ? 0.14 : 0.04} />
                     <SeverityMark severity={severity} cx={x(profile.averageClosureDays)} cy={y(profile.performanceZScore)} radius={radius} fill={color} fillOpacity={active ? 0.9 : 0.62} stroke={color} strokeWidth={active ? 2 : 1} filter={active ? 'url(#pointGlow)' : undefined} />
+                    {/* A counted statutory finding is its own mark, outside the deviation tier. */}
+                    {statutory > 0 && <circle cx={x(profile.averageClosureDays)} cy={y(profile.performanceZScore)} r={radius + 3} fill="none" stroke="var(--viz-red)" strokeWidth={1.5} />}
                     {active && (
                       <text x={x(profile.averageClosureDays)} y={y(profile.performanceZScore) - radius - 8} fill="var(--text-primary)" fontSize="11" fontWeight="600" textAnchor="middle">
                         {shorten(profile.agencyName, 28)}
@@ -231,12 +239,16 @@ export default function PerformanceScatter() {
                     <span className="block truncate text-label font-medium text-fg-secondary">{profile.agencyName}</span>
                     <span className="mt-0.5 block text-caption text-muted">{profile.totalRequestsProcessed.toLocaleString()} requests · {profile.averageClosureDays === null ? 'no closures recorded' : `${profile.averageClosureDays.toFixed(1)}d avg.`}</span>
                   </span>
-                  <span className={cn('flex items-center gap-1.5 text-body font-semibold tabular-nums', severityFor(profile) === 'critical' ? 'text-danger' : severityFor(profile) === 'elevated' ? 'text-warning' : 'text-accent')}>
-                    <svg viewBox="-6 -6 12 12" className="h-2 w-2 shrink-0" role="img" aria-label={`${severityFor(profile)} band`}>
-                      <SeverityMark severity={severityFor(profile)} cx={0} cy={0} radius={4.5} fill="currentColor" fillOpacity={0.85} stroke="currentColor" strokeWidth={1} />
-                    </svg>
-                    {profile.performanceZScore === null ? '—' : `${profile.performanceZScore >= 0 ? '+' : ''}${profile.performanceZScore.toFixed(1)}`}
-                  </span>
+                  {profile.performanceZScore === null ? (
+                    <span className="text-caption text-muted">Not measured<span className="sr-only">: no closure has been recorded</span></span>
+                  ) : (
+                    <span className={cn('flex items-center gap-1.5 text-body font-semibold tabular-nums', deviationTier(profile.performanceZScore) === 'outlier' ? 'text-danger' : deviationTier(profile.performanceZScore) === 'elevated' ? 'text-warning' : 'text-fg-secondary')}>
+                      <svg viewBox="-6 -6 12 12" className="h-2 w-2 shrink-0" role="img" aria-label={TIER_LABEL[deviationTier(profile.performanceZScore)]}>
+                        <SeverityMark severity={deviationTier(profile.performanceZScore)} cx={0} cy={0} radius={4.5} fill="currentColor" fillOpacity={0.85} stroke="currentColor" strokeWidth={1} />
+                      </svg>
+                      {`${profile.performanceZScore >= 0 ? '+' : '−'}${Math.abs(profile.performanceZScore).toFixed(1)}σ`}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -301,7 +313,7 @@ function LegendDot({ severity, label }: { severity: Severity; label: string }) {
   return (
     <span className="flex items-center gap-1.5">
       <svg viewBox="-6 -6 12 12" className="h-2.5 w-2.5" aria-hidden="true">
-        <SeverityMark severity={severity} cx={0} cy={0} radius={4.5} fill={severityColor(severity)} fillOpacity={0.85} stroke={severityColor(severity)} strokeWidth={1} />
+        <SeverityMark severity={severity} cx={0} cy={0} radius={4.5} fill={tierColor(severity)} fillOpacity={0.85} stroke={tierColor(severity)} strokeWidth={1} />
       </svg>
       {label}
     </span>
@@ -309,43 +321,23 @@ function LegendDot({ severity, label }: { severity: Severity; label: string }) {
 }
 
 // Each band carries its own outline, so the map stays readable when the three accent colors are
-// indistinguishable to the reader: circle for typical, triangle for elevated, diamond for critical.
+// indistinguishable to the reader: circle for typical, triangle for elevated, diamond for an outlier.
 function SeverityMark({ severity, cx, cy, radius, ...visual }: { severity: Severity; cx: number; cy: number; radius: number } & Omit<SVGProps<SVGGeometryElement>, 'ref'>) {
-  const shape = severity === 'critical' ? 'diamond' : severity === 'elevated' ? 'triangle' : 'circle';
+  const shape = severity === 'outlier' ? 'diamond' : severity === 'elevated' ? 'triangle' : 'circle';
   return <ShapeGlyph shape={shape} cx={cx} cy={cy} radius={radius} {...visual} />;
 }
 
-// Statistical tiers, worded as deviation from peers: never the finding-severity words.
-const TIER_LABEL: Record<Severity, string> = { typical: 'Typical', elevated: 'Elevated (1–2σ)', critical: 'Outlier (≥2σ)' };
-const TIER_PLURAL: Record<Severity, string> = { typical: 'Typical departments', elevated: 'Elevated departments', critical: 'Outliers' };
-
-function deviationWords(z: number): string {
-  const size = Math.abs(z).toFixed(1);
-  return z >= 0 ? `${size}σ slower than peers` : `${size}σ faster than peers`;
-}
+const TIER_PLURAL: Record<Severity, string> = { typical: 'Typical departments', elevated: 'Elevated departments', outlier: 'Outliers' };
 
 /** What the plot shows, in one sentence, before the plot is read. */
 function scatterHeadline(profiles: AgencyPerformanceProfile[]): string {
   const measured = profiles.filter((profile) => profile.averageClosureDays !== null && profile.performanceZScore !== null);
   if (measured.length === 0) return 'No department has a recorded closure yet';
-  const outliers = measured.filter((profile) => (profile.performanceZScore ?? 0) >= 2).length;
+  const outliers = measured.filter((profile) => profile.performanceZScore !== null && deviationTier(profile.performanceZScore) === 'outlier').length;
   const unmeasured = profiles.length - measured.length;
   const noun = measured.length === 1 ? 'department closes' : 'departments close';
   const sentence = `${outliers} of ${measured.length} ${noun} requests ≥2σ slower than their peers`;
   return unmeasured > 0 ? `${sentence}; ${unmeasured} ${unmeasured === 1 ? 'has' : 'have'} no recorded closure` : sentence;
-}
-
-function severityColor(severity: Severity) {
-  return severity === 'critical' ? 'var(--viz-red)' : severity === 'elevated' ? 'var(--viz-amber)' : 'var(--viz-cyan)';
-}
-
-function severityFor(profile: AgencyPerformanceProfile) {
-  // A null z-score is an absent measurement, so it raises nothing on its own. The statutory
-  // signals beside it are counts and stand by themselves.
-  const z = profile.performanceZScore;
-  if ((z !== null && z >= 2) || profile.statutoryViolationRate >= 0.25) return 'critical';
-  if ((z !== null && z >= 1) || profile.statutoryViolationCount > 0) return 'elevated';
-  return 'typical';
 }
 
 function deviationFor(profile: AgencyPerformanceProfile) {

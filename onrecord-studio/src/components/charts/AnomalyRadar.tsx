@@ -3,8 +3,7 @@ import { useAppStore } from '../../store/useAppStore';
 import type { AgencyPerformanceProfile } from '../../types';
 import { ShapeGlyph } from '../ui/shapeGlyph';
 import AnalyticsUnavailable from './AnalyticsUnavailable';
-
-type SeverityBand = 'typical' | 'elevated' | 'critical';
+import { deviationTier, TIER_LABEL, type DeviationTier } from './deviationTier';
 
 interface ArcDatum {
   key: string;
@@ -16,15 +15,14 @@ interface ArcDatum {
   innerRadius: number;
   outerRadius: number;
   color: string;
-  severity: SeverityBand;
+  /** Null when the department has no measured deviation. */
+  severity: DeviationTier | null;
   profile: AgencyPerformanceProfile | null;
 }
 
-// Mirrors PerformanceScatter's severity vocabulary: triangle for elevated, diamond for critical.
-// Typical arcs get no glyph, since the wedge shape itself already reads as the unmarked case.
-function severityBand(severity: number): SeverityBand {
-  return severity >= 0.5 ? 'critical' : severity > 0.2 ? 'elevated' : 'typical';
-}
+// Arcs carry PerformanceScatter's tiers and glyphs (triangle elevated, diamond outlier), from the
+// same z-score predicate the headline counts. Typical arcs get no glyph, since the wedge shape
+// itself already reads as the unmarked case.
 
 const palette = ['var(--viz-indigo)', 'var(--viz-cyan)', 'var(--viz-purple)', 'var(--viz-amber)', 'var(--viz-emerald)'];
 
@@ -100,7 +98,7 @@ export default function AnomalyRadar() {
         innerRadius: 35,
         outerRadius: 65,
         color: palette[portalIndex % palette.length],
-        severity: 'typical',
+        severity: null,
         profile: null,
       });
       let agencyCursor = portalStart;
@@ -108,13 +106,8 @@ export default function AnomalyRadar() {
         .sort((left, right) => left.agencyName.localeCompare(right.agencyName))
         .forEach((profile) => {
           const sweep = (weight(profile) / globalTotal) * Math.PI * 2;
-          const severity = Math.min(
-            1,
-            profile.statutoryViolationRate
-              + profile.suspiciousFastClosureCount / Math.max(1, profile.totalRequestsProcessed),
-          );
           const base = palette[portalIndex % palette.length];
-          const band = severityBand(severity);
+          const band = profile.performanceZScore === null ? null : deviationTier(profile.performanceZScore);
           result.push({
             key: `${portalKey}-${profile.agencyId}`,
             label: profile.agencyName,
@@ -127,7 +120,7 @@ export default function AnomalyRadar() {
             // Alarm colour follows the severity, not the agency's position in the list: parity
             // gave two agencies with identical deviation different colours, which reads as a
             // difference in the evidence.
-            color: band === 'critical' ? 'var(--viz-red)' : band === 'elevated' ? 'var(--viz-amber)' : base,
+            color: band === 'outlier' ? 'var(--viz-red)' : band === 'elevated' ? 'var(--viz-amber)' : base,
             severity: band,
             profile,
           });
@@ -202,7 +195,7 @@ export default function AnomalyRadar() {
                   className="outline-none transition-opacity hover:opacity-100 focus:opacity-100 focus-visible:stroke-[rgb(var(--focus))] focus-visible:[stroke-width:2.5]"
                   role="button"
                   tabIndex={0}
-                  aria-label={`Filter ${arc.label}${arc.severity === 'typical' ? '' : `, ${arc.severity}`}`}
+                  aria-label={`Filter ${arc.label}${arc.severity === null || arc.severity === 'typical' ? '' : `, ${TIER_LABEL[arc.severity].toLowerCase()}`}`}
                   onMouseEnter={() => setFocused(arc)}
                   onFocus={() => setFocused(arc)}
                   onClick={() => activate(arc)}
@@ -210,9 +203,9 @@ export default function AnomalyRadar() {
                     if (event.key === 'Enter' || event.key === ' ') activate(arc);
                   }}
                 />
-                {arc.severity !== 'typical' && (
+                {(arc.severity === 'elevated' || arc.severity === 'outlier') && (
                   <ShapeGlyph
-                    shape={arc.severity === 'critical' ? 'diamond' : 'triangle'}
+                    shape={arc.severity === 'outlier' ? 'diamond' : 'triangle'}
                     cx={mid.x}
                     cy={mid.y}
                     radius={5}
@@ -233,7 +226,7 @@ export default function AnomalyRadar() {
           {focused?.profile ? (
             <>
               <Metric label="Requests" value={focused.profile.totalRequestsProcessed} />
-              <Metric label="Z-score" value={focused.profile.performanceZScore === null ? 'Not computed' : focused.profile.performanceZScore.toFixed(2)} alert={focused.profile.performanceZScore !== null && focused.profile.performanceZScore >= 2} />
+              <Metric label="Z-score" value={focused.profile.performanceZScore === null ? 'Not measured' : focused.profile.performanceZScore.toFixed(2)} alert={focused.profile.performanceZScore !== null && deviationTier(focused.profile.performanceZScore) === 'outlier'} />
               <Metric label="Statutory" value={focused.profile.statutoryViolationCount} alert={focused.profile.statutoryViolationCount > 0} />
               <Metric label="Fast close" value={focused.profile.suspiciousFastClosureCount} alert={focused.profile.suspiciousFastClosureCount > 0} />
             </>
@@ -271,6 +264,6 @@ function FlagMark({ label }: { label: string }) {
 function radarHeadline(profiles: AgencyPerformanceProfile[]): string {
   const measured = profiles.filter((profile) => profile.performanceZScore !== null);
   if (measured.length === 0) return 'No department has a measured deviation yet';
-  const deviating = measured.filter((profile) => (profile.performanceZScore ?? 0) >= 2).length;
+  const deviating = measured.filter((profile) => profile.performanceZScore !== null && deviationTier(profile.performanceZScore) === 'outlier').length;
   return `${deviating} ${deviating === 1 ? 'department deviates' : 'departments deviate'} ≥2σ from their portal's norm`;
 }
