@@ -17,7 +17,7 @@ describe('leads from released abatement logs', () => {
   it('reads a notice log only beside a completion log, and never a service-report table', () => {
     expect(abatementQueries(schema, posted).map((item) => item.id)).toEqual(['abatement_notice_hours']);
     // A completion log alone is still read for places abated on many days.
-    expect(abatementQueries(schema, completed).map((item) => item.id)).toEqual(['abatement_repeat_places']);
+    expect(abatementQueries(schema, completed).map((item) => item.id)).toEqual(['abatement_repeat_places', 'abatement_daily']);
     expect(abatementQueries({ ...schema, datasets: [posted] }, posted)).toEqual([]);
     const reports = service.schema as AnalyticalSchema;
     expect(abatementQueries(reports, reports.datasets[0])).toEqual([]);
@@ -59,11 +59,11 @@ describe('Encampment reports around abatements', () => {
     near_before: 500, near_after: 480, near_same_day: 40, ring_before: 5000, ring_after: 5100, reports_since: '2023-01-01', reports_until: '2026-10-04', ...extra });
 
   it('reads a completion log only beside report tables that are complete and carry coordinates', () => {
-    expect(abatementQueries(around, log).map((item) => item.id)).toEqual(['abatement_repeat_places', 'abatement_reports_nearby']);
+    expect(abatementQueries(around, log).map((item) => item.id)).toEqual(['abatement_repeat_places', 'abatement_daily', 'abatement_reports_nearby']);
     expect(reportsAroundAbatements(around, log)).toMatchObject({ since: '2025-01-01', until: '2025-09-30', coordinates: ['lat', 'lng'] });
     // Without the closed-year file, reports closed before the open copy are in no table.
-    expect(abatementQueries({ ...around, datasets: [log, open] }, log).map((item) => item.id)).toEqual(['abatement_repeat_places']);
-    expect(abatementQueries({ ...around, columns: around.columns.filter((column) => !(column.tableName === closed.tableName && column.columnName === 'lng')) }, log).map((item) => item.id)).toEqual(['abatement_repeat_places']);
+    expect(abatementQueries({ ...around, datasets: [log, open] }, log).map((item) => item.id)).toEqual(['abatement_repeat_places', 'abatement_daily']);
+    expect(abatementQueries({ ...around, columns: around.columns.filter((column) => !(column.tableName === closed.tableName && column.columnName === 'lng')) }, log).map((item) => item.id)).toEqual(['abatement_repeat_places', 'abatement_daily']);
     expect(abatementQueries(around, closed)).toEqual([]);
   });
 

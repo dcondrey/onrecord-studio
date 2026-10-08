@@ -470,6 +470,24 @@ const SCHEMA = {
 /** @param {string} sql @returns {import('../src/types').SqlQueryResult} */
 const sqlResult = (sql) => {
   const lowered = sql.toLowerCase();
+  // serviceAccountability.ts dailyCountsSql (calls_daily): one row per year, days packed 'MM-DD:n'.
+  if (lowered.includes('span_days')) {
+    const first = Date.UTC(2024, 0, 1);
+    const last = Date.UTC(2026, 8, 30);
+    const years = new Map();
+    for (let ms = first, i = 0; ms <= last; ms += 86_400_000, i += 1) {
+      const date = new Date(ms);
+      const weekday = (date.getUTCDay() + 6) % 7;
+      // A weekday rhythm, a slow seasonal swell and deterministic noise; some days have none.
+      const n = Math.max(0, Math.round((weekday < 5 ? 17 : 9) + 5 * Math.sin(i / 58) + ((i * 7919) % 13) - 6));
+      if (n === 0) continue;
+      const year = date.getUTCFullYear();
+      years.set(year, [...(years.get(year) ?? []), `${date.toISOString().slice(5, 10)}:${n}`]);
+    }
+    const columns = ['year', 'days', 'first_day', 'last_day', 'span_years', 'undated'];
+    const rows = [...years].map(([year, days]) => [year, days.join(','), '2024-01-01', '2026-09-30', '2024,2025,2026', 14]);
+    return { columns, rows, rowCount: rows.length, truncated: false, elapsedMs: 188, provenance: ['snap-cfs-2025'] };
+  }
   // callLeads.ts calls_outcomes: one row per call type and year.
   if (lowered.includes('as crisis_team')) {
     const columns = ['call_year', 'call_type', 'calls', 'cancelled_duplicate', 'blank', 'conflicting', 'arrest', 'report', 'no_report', 'unfounded', 'other', 'crisis_team', 'other_codes', 'last_call'];

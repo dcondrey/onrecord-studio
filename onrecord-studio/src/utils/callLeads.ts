@@ -1,6 +1,6 @@
 import type { AnalyticalDatasetSummary, AnalyticalSchema, CityDataset, LeadSegmentTone } from '../types';
 import { quoteIdentifier, type DiscoveryQuery } from './dataDiscovery';
-import { figureValue, type ServiceLead } from './serviceAccountability';
+import { dailyCountsSql, figureValue, type ServiceLead } from './serviceAccountability';
 import { numberOrNull as count, wholeNumber as shown, percent, type QueryEntry as Entry, rowsOf } from './leadRows';
 
 /** SDPD calls for service: one table per calendar year, and code lookups published beside them.
@@ -94,6 +94,14 @@ SELECT call_year, call_type, COUNT(*) AS calls, COUNT(*) FILTER (WHERE outcome =
 FROM typed${dispositions ? ' LEFT JOIN codes ON codes.code = typed.dispo' : ''}
 GROUP BY call_year, call_type ORDER BY call_year DESC NULLS LAST, call_type`,
   }];
+  queries.push({
+    id: 'calls_daily', title: 'SLEEPER calls by day',
+    method: `SLEEPER calls in ${names}, one row per incident number as above, leaving out the cancelled and duplicate codes ${CANCELLED.join(', ')} unless the incident's latest entries disagree on the disposition, counted per calendar day of date_time. The days covered are those from the first to the last call of any type in the files, in the years the files hold; a day in them with no SLEEPER call is a count of zero, and a day outside them was not covered.`,
+    sql: `WITH ${deduplicated(years, false)}, ${dailyCountsSql(
+      `SELECT CAST(called_at AS DATE) AS day FROM incidents WHERE call_type = 'SLEEPER' AND (conflicted OR dispo IS NULL OR dispo NOT IN (${list(CANCELLED)}))`,
+      'SELECT CAST(called_at AS DATE) AS day FROM incidents',
+    )}`,
+  });
   if (years.every((table) => has(schema, table, ['beat']))) queries.push({
     id: 'calls_sleeper_beats', title: 'Where SLEEPER calls were sent, by police beat',
     method: `SLEEPER calls in ${names}, one row per incident number as above, leaving out the cancelled and duplicate codes ${CANCELLED.join(', ')} unless the incident's latest entries disagree on the disposition, counted by the beat of the call's address${beats ? ` with the neighborhood from ${beats.displayName}` : ''}. The ten beats with most calls are read, with the citywide total and the calls with no beat recorded.`,

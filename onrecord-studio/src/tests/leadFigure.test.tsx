@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import CalendarHeat from '../components/charts/figures/CalendarHeat';
 import LeadFigure from '../components/charts/figures/LeadFigure';
 import type { LeadFigure as LeadFigureData } from '../types';
 
@@ -24,6 +25,20 @@ const KINDS: LeadFigureData[] = [
   { ...base, kind: 'ranked', measure: 'Ranked', unit: 'count', excluded: [{ key: 'no_beat', label: 'no beat recorded', count: 5 }],
     rows: [{ key: '521', label: 'Beat 521', value: { state: 'value', value: 40 }, subject: true, detail: null }, { key: '522', label: 'Beat 522', value: { state: 'not-recorded', reason: 'no count' }, subject: false, detail: null }] },
 ];
+
+describe('CalendarHeat', () => {
+  it('fills a covered day with no record as the lightest step and leaves a day outside coverage unfilled', () => {
+    const daily = { counts: new Map([['2025-03-02', 3], ['2025-03-03', 9]]), first: '2025-03-01', last: '2025-03-04', years: new Set([2025]), undated: 2 };
+    const { container } = render(<CalendarHeat title="Abatements by day" noun="abatements" daily={daily} sources={sources} size="full" />);
+    const filled = [...container.querySelectorAll('svg[aria-roledescription="calendar"] rect')].filter((rect) => rect.getAttribute('style')?.includes('--viz-seq-'));
+    // Four covered days, the zeros on 1 and 4 March among them; every other day of 2025 is unfilled.
+    expect(filled).toHaveLength(4);
+    expect(filled.filter((rect) => rect.getAttribute('style')?.includes('--viz-seq-1'))).toHaveLength(2);
+    expect(container.querySelectorAll('[data-absence="not-covered"]')).toHaveLength(365 - 4);
+    expect(screen.getByText(/Busiest day: Mon Mar 3, 2025, 9/)).toBeTruthy();
+    expect(screen.getByText('2 abatements have no readable date and are on no day.')).toBeTruthy();
+  });
+});
 
 describe('LeadFigure', () => {
   it('never paints a lead in the counted crimson or tags it as a legal claim, in any kind', () => {

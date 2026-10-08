@@ -1,7 +1,7 @@
 import type { AnalyticalDatasetSummary, AnalyticalSchema, LeadFigure, SqlQueryResult } from '../types';
 import { quoteIdentifier, type DiscoveryQuery } from './dataDiscovery';
 import { encampmentReportCoverage } from './capacityLeads';
-import { figureValue, serviceRequestRoles, type ServiceLead } from './serviceAccountability';
+import { dailyCountsSql, figureValue, serviceRequestRoles, type ServiceLead } from './serviceAccountability';
 import { numberOrNull, wholeNumber as shown } from './leadRows';
 
 /** Encampment abatement logs as agencies release them: one table of notices posted and one of
@@ -98,6 +98,10 @@ SELECT address, days, CAST(first_day AS VARCHAR) AS first_day, CAST(last_day AS 
  COUNT(*) FILTER (WHERE days >= ${REPEAT_DAYS}) OVER () AS repeat_places, COALESCE(SUM(days) FILTER (WHERE days >= ${REPEAT_DAYS}) OVER (), 0) AS repeat_place_days,
  (SELECT COUNT(*) FROM logged WHERE latitude IS NULL OR longitude IS NULL OR day IS NULL) AS rows_not_placed
 FROM places ORDER BY days DESC, address LIMIT 5`,
+  }, {
+    id: 'abatement_daily', title: 'Abatements by day',
+    method: `Rows of ${dataset.displayName} counted per calendar day of the completion time. The days covered are those from the first to the last completion in the log; a day between them with no row is a count of zero. Rows with no readable time are counted apart.`,
+    sql: `WITH ${dailyCountsSql(`SELECT CAST(${instant(roles.time)} AS DATE) AS day FROM ${quoteIdentifier(dataset.tableName)}`, 'SELECT day FROM counted_days')}`,
   }];
 }
 

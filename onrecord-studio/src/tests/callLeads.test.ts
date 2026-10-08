@@ -20,7 +20,7 @@ const beats = (citywide: number, neighborhood: string | null = 'Core-Columbia') 
 
 describe('leads from police calls for service', () => {
   it('reads every year from the latest calls table only, the latest copy of each year, and needs a disposition', () => {
-    expect(callQueries(schema, table('cfs_2026')).map((item) => item.id)).toEqual(['calls_outcomes', 'calls_sleeper_beats']);
+    expect(callQueries(schema, table('cfs_2026')).map((item) => item.id)).toEqual(['calls_outcomes', 'calls_daily', 'calls_sleeper_beats']);
     expect(callQueries(schema, table('cfs_2025'))).toEqual([]);
     expect(callQueries(schema, table('cfs_prior_2026'))).toEqual([]);
     expect(callQueries(schema, table('cfs_types'))).toEqual([]);

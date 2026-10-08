@@ -22,7 +22,8 @@ const blocks = (top: number) => ({ query: query('parking_vehicle_blocks'), resul
 
 describe('leads from a parking citation file', () => {
   it('reads only a table with the citation file\'s columns, sector1 among them', () => {
-    expect(parkingQueries(schema, citations)).toEqual(fixture.queries);
+    // The Rust fixture predates the daily counts, so its DuckDB test does not run them.
+    expect(parkingQueries(schema, citations).filter((item) => item.id !== 'parking_daily')).toEqual(fixture.queries);
     const unsectored: AnalyticalSchema = { ...schema, columns: schema.columns.filter((column) => column.columnName !== 'sector1') };
     expect(parkingQueries(unsectored, citations)).toEqual([]);
     const reports = service.schema as AnalyticalSchema;

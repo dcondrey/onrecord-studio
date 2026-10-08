@@ -1,6 +1,6 @@
 import type { AnalyticalDatasetSummary, AnalyticalSchema } from '../types';
 import { quoteIdentifier, type DiscoveryQuery } from './dataDiscovery';
-import { figureValue, type ServiceLead } from './serviceAccountability';
+import { dailyCountsSql, figureValue, type ServiceLead } from './serviceAccountability';
 import { numberOrNull as count, type QueryEntry as Entry, rowsOf, wholeNumber } from './leadRows';
 
 /** The City's half-year parking citation files, recognized by the publisher's column names. */
@@ -99,6 +99,10 @@ GROUP BY sections.section, sections.ord, file.all_citations, file.first_issue, f
 )
 SELECT blocks.block, blocks.citations, blocks.oversized, blocks.unmoved, blocks.by_police, totals.section_citations, totals.no_block, totals.first_issue, totals.last_issue
 FROM blocks CROSS JOIN totals ORDER BY blocks.citations DESC, blocks.block LIMIT 10`,
+  }, {
+    id: 'parking_daily', title: 'Oversized-vehicle and 72-hour citations by day',
+    method: `Citations in ${dataset.displayName} under ${label('oversized')} or ${label('unmoved')}, warnings left out, counted per day of date_issue. ${CODE_METHOD} The days covered are those from the first to the last citation of any kind in the file; a day between them with none under these sections is a count of zero.`,
+    sql: `WITH ${citations(dataset, columns)}, ${dailyCountsSql("SELECT issued AS day FROM classed WHERE section IN ('oversized', 'unmoved') AND NOT warning", 'SELECT issued AS day FROM classed')}`,
   }];
 }
 

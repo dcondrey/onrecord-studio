@@ -34,6 +34,57 @@ export interface ServiceLead {
 export const figureValue = (value: number | null, reason: string): LeadFigureValue => value === null ? { state: 'not-recorded', reason } : { state: 'value', value };
 export const absentValue = (state: Exclude<LeadFigureValue['state'], 'value'>, reason: string): LeadFigureValue => ({ state, reason });
 
+/**
+ * The tail of a daily-count query, after the caller's own CTEs. `counted` selects one `day` (a
+ * DATE, NULL when unreadable) per record counted; `span` selects the `day` of every record in the
+ * source, whatever it is. Days are packed one row per calendar year as 'MM-DD:n,...', so years of
+ * days fit the query transport's row limit, with the source's first and last day, the years it
+ * has any record in, and the counted records with no readable date.
+ */
+export const dailyCountsSql = (counted: string, span: string) => `counted_days AS (
+ ${counted}
+), span_days AS (
+ ${span}
+), daily AS (SELECT day, COUNT(*) AS n FROM counted_days WHERE day IS NOT NULL GROUP BY day)
+SELECT YEAR(day) AS year, STRING_AGG(SUBSTR(CAST(day AS VARCHAR), 6) || ':' || CAST(n AS VARCHAR), ',' ORDER BY day) AS days,
+ (SELECT CAST(MIN(day) AS VARCHAR) FROM span_days) AS first_day, (SELECT CAST(MAX(day) AS VARCHAR) FROM span_days) AS last_day,
+ (SELECT STRING_AGG(DISTINCT CAST(YEAR(day) AS VARCHAR), ',') FROM span_days WHERE day IS NOT NULL) AS span_years,
+ (SELECT COUNT(*) FROM counted_days WHERE day IS NULL) AS undated
+FROM daily GROUP BY YEAR(day) ORDER BY year`;
+
+/** Daily counts read back from `dailyCountsSql`. A day in `years` between `first` and `last` with
+ * no count is a measured zero; any other day was not covered by the source. */
+export interface DailyCounts {
+  counts: Map<string, number>;
+  first: string;
+  last: string;
+  years: Set<number>;
+  undated: number;
+}
+
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** The daily counts of one query, or null when it returned none or was cut short. */
+export function dailyCountsOf(results: { query: DiscoveryQuery; result?: SqlQueryResult }[], id: string): DailyCounts | null {
+  const entry = results.find((item) => item.query.id === id);
+  if (!entry?.result?.rows.length || entry.result.truncated) return null;
+  const rows = records(entry.result);
+  const first = String(rows[0].first_day ?? ''); const last = String(rows[0].last_day ?? '');
+  if (!ISO_DAY.test(first) || !ISO_DAY.test(last)) return null;
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const year = count(row.year);
+    if (year === null || typeof row.days !== 'string') continue;
+    for (const pair of row.days.split(',')) {
+      const [monthDay, n] = pair.split(':');
+      const value = count(n);
+      if (/^\d{2}-\d{2}$/.test(monthDay) && value !== null) counts.set(`${year}-${monthDay}`, value);
+    }
+  }
+  const years = new Set(String(rows[0].span_years ?? '').split(',').map(Number).filter((year) => Number.isInteger(year) && year > 0));
+  return { counts, first, last, years, undated: count(rows[0].undated) ?? 0 };
+}
+
 const roleNames = {
   category: ['service_name', 'service_type', 'request_type', 'complaint_type', 'case_type', 'problem_type', 'issue_type', 'category'],
   closed: ['date_closed', 'closed_date', 'closed_datetime', 'date_resolved', 'resolved_date', 'date_completed', 'completed_date'],

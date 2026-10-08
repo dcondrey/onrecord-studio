@@ -3,6 +3,8 @@ import { useAppStore } from '../../store/useAppStore';
 import { useFirstRunDataStore } from '../../store/useFirstRunDataStore';
 import type { AnalyticalDatasetSummary as CityDatasetSummary, CityDataset } from '../../types';
 import { quoteIdentifier } from '../../utils/dataDiscovery';
+import { dailyCountsOf, type DailyCounts } from '../../utils/serviceAccountability';
+import CalendarHeat from '../charts/figures/CalendarHeat';
 import LeadFigure from '../charts/figures/LeadFigure';
 import type { ChartSources } from '../charts/frame/SourceCaption';
 import { metadataObservations, profileObservations, rankObservations, recurringObservations, type DiscoveryObservation } from '../../utils/automaticDiscovery';
@@ -37,6 +39,13 @@ const ERROR_LABEL: Record<string, string> = {
   maintenance: 'Storage upkeep',
   leads: 'Leads',
   discovery: 'Discovery',
+};
+
+/** The daily-count query each lead family's tables run, and how its calendar names what it counts. */
+const DAILY_QUERY: Partial<Record<NonNullable<DiscoveryObservation['family']>, { id: string; title: string; noun: string }>> = {
+  POLICE_CALLS: { id: 'calls_daily', title: 'SLEEPER calls by day', noun: 'SLEEPER calls' },
+  ABATEMENT_LOGS: { id: 'abatement_daily', title: 'Abatements by day', noun: 'abatements' },
+  PARKING_CITATIONS: { id: 'parking_daily', title: 'Oversized-vehicle and 72-hour citations by day', noun: 'citations' },
 };
 
 /** Two gaps for one table differ only in the companion they need, so the title names it. */
@@ -96,6 +105,18 @@ export default function AutomaticDiscovery() {
     snapshot: { name: dataset.displayName, id: dataset.snapshotId, sha256: dataset.sourceSha256 },
     retrievedAt: dataset.retrievedAt,
   });
+  // A family's daily counts are drawn once per table, under the first of its leads shown.
+  const calendarOwner = new Map<string, { title: string; noun: string; daily: DailyCounts }>();
+  const claimed = new Set<string>();
+  for (const item of ranked) {
+    const daily = item.family ? DAILY_QUERY[item.family] : undefined;
+    const results = state.profiles[item.snapshotId]?.results;
+    if (!daily || !results || claimed.has(`${item.snapshotId}:${daily.id}`)) continue;
+    const counts = dailyCountsOf(results, daily.id);
+    if (!counts) continue;
+    claimed.add(`${item.snapshotId}:${daily.id}`);
+    calendarOwner.set(item.id, { title: daily.title, noun: daily.noun, daily: counts });
+  }
   const card = (item: DiscoveryObservation) => {
     const dataset = datasets.find((candidate) => candidate.snapshotId === item.snapshotId)!;
     const spending = item.family === 'SPENDING_RECORDS' || dataset.datasetKind === 'OPERATING_BUDGET' || dataset.datasetKind === 'BUDGET_DIMENSION';
@@ -120,6 +141,14 @@ export default function AutomaticDiscovery() {
               </details>
             </>
           ) : <p>{item.detail}</p>}
+          {calendarOwner.get(item.id) && (
+            <details className="text-body">
+              <summary className="focus-ring w-fit cursor-pointer rounded text-caption text-muted hover:text-fg">By day</summary>
+              <div className="mt-2">
+                <CalendarHeat {...calendarOwner.get(item.id)!} sources={leadSources(item, dataset)} size="card" />
+              </div>
+            </details>
+          )}
           <p className="text-caption text-lead">Investigate: {item.question}</p>
           <details className="text-caption text-muted">
             <summary className="focus-ring w-fit cursor-pointer rounded hover:text-fg">Evidence and method</summary>
