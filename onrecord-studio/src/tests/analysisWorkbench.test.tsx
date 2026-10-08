@@ -471,5 +471,12 @@ describe('budget comparison difference chart', () => {
     expect(screen.getByRole('img', { name: /100000 \/ 1914 \/ 512000: actual \$1,236,200\.35 against budget \$1,000,000\.10, a difference of \+\$236,200\.25/ })).toBeTruthy();
     expect(screen.getByLabelText('Not compared').textContent).toMatch(/Missing actuals 1 · Missing budget baseline 1/);
     expect(screen.queryByRole('img', { name: /512002/ })).toBeNull();
+    cleanup();
+
+    // A result cut at the row limit is a subset: no line is called the largest, and the plot says so.
+    render(<DifferenceDots title="Actuals minus budget" sources={{ tables: ['analysis_budget', 'analysis_actuals'] }} compared={compared} uncompared={uncompared} fromLabel="budget" toLabel="actual" truncated />);
+    expect(screen.queryByText(/by the most/)).toBeNull();
+    expect(screen.getByText(/^Among the 2 compared lines returned, the largest excess over the budget amount is .*512000: \+\$236K.*cut at the row limit/)).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Actuals minus budget: largest among returned rows' })).toBeTruthy();
   });
 });

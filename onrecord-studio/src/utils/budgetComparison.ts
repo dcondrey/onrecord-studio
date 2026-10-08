@@ -59,7 +59,8 @@ SELECT ${keys.map((key) => `COALESCE(b.${key}, a.${key}) AS ${key}`).join(', ')}
        THEN ROUND(100 * (a.actuals_amount - b.budget_amount) / NULLIF(ABS(b.budget_amount), 0), 2) END AS variance_percent
 FROM budget b FULL OUTER JOIN actuals a
   ON ${keys.map((key) => `b.${key} = a.${key}`).join(' AND ')}
-ORDER BY comparison_status, fund_number, funds_center_number, account_number`;
+ORDER BY CASE WHEN comparison_status = 'Matched' THEN 0 ELSE 1 END,
+  ABS(actual_minus_budget) DESC NULLS LAST, comparison_status, fund_number, funds_center_number, account_number`;
 }
 
 /** The columns `buildBudgetComparison` returns that the difference chart reads. */

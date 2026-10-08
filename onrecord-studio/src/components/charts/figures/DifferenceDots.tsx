@@ -69,14 +69,23 @@ function countByStatus(lines: readonly UncomparedLine[]): [string, number][] {
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 }
 
-/** The headline: the largest difference above the 'from' side among compared lines, plus what was not compared. */
-export function differenceHeadline(compared: readonly ComparedLine[], uncompared: readonly UncomparedLine[], fromLabel: string, currency = 'USD'): string {
+/**
+ * The headline: the largest difference above the 'from' side among compared lines, plus what was not
+ * compared. A truncated result is a subset of the lines, so no superlative is claimed for it.
+ */
+export function differenceHeadline(compared: readonly ComparedLine[], uncompared: readonly UncomparedLine[], fromLabel: string, currency = 'USD', truncated = false): string {
   const over = compared.filter((line) => isPositive(line.difference)).sort((a, b) => Number(b.difference) - Number(a.difference))[0];
-  const lead = over
-    ? `Of ${compared.length.toLocaleString('en-US')} compared lines, ${over.label} exceeds its ${fromLabel} amount by the most: ${formatCurrencyString(over.difference, { currency, compact: true, signed: true })} (${signedPercent(over.percent)})`
-    : `Of ${compared.length.toLocaleString('en-US')} compared lines, none exceeds its ${fromLabel} amount`;
+  const amount = over ? `${formatCurrencyString(over.difference, { currency, compact: true, signed: true })} (${signedPercent(over.percent)})` : '';
+  const count = compared.length.toLocaleString('en-US');
+  const lead = truncated
+    ? over
+      ? `Among the ${count} compared lines returned, the largest excess over the ${fromLabel} amount is ${over.label}: ${amount}`
+      : `Among the ${count} compared lines returned, none exceeds its ${fromLabel} amount`
+    : over
+      ? `Of ${count} compared lines, ${over.label} exceeds its ${fromLabel} amount by the most: ${amount}`
+      : `Of ${count} compared lines, none exceeds its ${fromLabel} amount`;
   const missing = countByStatus(uncompared).map(([status, count]) => `${count.toLocaleString('en-US')} ${status.toLowerCase()}`);
-  return `${lead}${missing.length ? `; not compared: ${missing.join(', ')}` : ''}.`;
+  return `${lead}${missing.length ? `; not compared${truncated ? ' among them' : ''}: ${missing.join(', ')}` : ''}${truncated ? '; the result was cut at the row limit, so other lines may differ more' : ''}.`;
 }
 
 function Plot({ lines, width, props }: { lines: ComparedLine[]; width: number; props: DifferenceDotsProps }) {
@@ -162,7 +171,7 @@ export default function DifferenceDots(props: DifferenceDotsProps) {
   const currency = props.currency ?? 'USD';
   const plotted = [...compared].sort((a, b) => magnitude(b.difference) - magnitude(a.difference) || a.key.localeCompare(b.key)).slice(0, PLOTTED);
   const byStatus = countByStatus(uncompared);
-  const headline = compared.length === 0 && uncompared.length === 0 ? null : differenceHeadline(compared, uncompared, fromLabel, currency);
+  const headline = compared.length === 0 && uncompared.length === 0 ? null : differenceHeadline(compared, uncompared, fromLabel, currency, props.truncated);
   const table: TwinTable = {
     caption: `${toLabel} minus ${fromLabel} by line`,
     columns: [
@@ -183,11 +192,11 @@ export default function DifferenceDots(props: DifferenceDotsProps) {
       ...uncompared.map((line) => ({ line: line.label, from: null, to: null, difference: absent('excluded', line.status), percent: null })),
     ],
   };
-  const summary = `${compared.length} lines compared, ${plotted.length} plotted by largest difference; ${uncompared.length} not compared${byStatus.length ? ` (${byStatus.map(([status, count]) => `${status}: ${count}`).join('; ')})` : ''}.${props.truncated ? ' The query result was cut at its row limit, so these counts cover the returned rows only.' : ''}`;
+  const summary = `${compared.length} lines compared, ${plotted.length} plotted by largest difference${props.truncated ? ' among the rows returned' : ''}; ${uncompared.length} not compared${byStatus.length ? ` (${byStatus.map(([status, count]) => `${status}: ${count}`).join('; ')})` : ''}.${props.truncated ? ' The query result was cut at its row limit, so these counts cover the returned rows only.' : ''}`;
   return (
     <div className="grid gap-2">
       <ChartFrame
-        title={props.title}
+        title={props.truncated ? `${props.title}: largest among returned rows` : props.title}
         headline={headline}
         sources={props.sources}
         summary={summary}
@@ -204,7 +213,7 @@ export default function DifferenceDots(props: DifferenceDotsProps) {
       </ChartFrame>
       {(compared.length > plotted.length || byStatus.length > 0 || props.truncated) && (
         <div className="grid gap-1 text-caption text-muted">
-          {compared.length > plotted.length && <p>{`Plotted: the ${plotted.length} largest differences of ${compared.length.toLocaleString('en-US')} compared lines. Every line is in the table below.`}</p>}
+          {compared.length > plotted.length && <p>{`Plotted: the ${plotted.length} largest differences ${props.truncated ? 'among' : 'of'} ${compared.length.toLocaleString('en-US')} compared lines${props.truncated ? ' returned' : ''}. Every returned line is in the results table below.`}</p>}
           {byStatus.length > 0 && (
             <p aria-label="Not compared">
               <span className="font-medium text-fg-secondary">Not compared: </span>
@@ -212,7 +221,7 @@ export default function DifferenceDots(props: DifferenceDotsProps) {
               . These lines are not placed at zero.
             </p>
           )}
-          {props.truncated && <p className="text-warning">The query result was cut at its row limit; counts cover the returned rows only.</p>}
+          {props.truncated && <p className="text-warning">The query result was cut at its row limit; counts and the largest differences cover the returned rows only.</p>}
         </div>
       )}
     </div>
