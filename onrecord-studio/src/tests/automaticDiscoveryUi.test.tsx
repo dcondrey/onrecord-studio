@@ -81,7 +81,7 @@ describe('automatic discovery landing experience', () => {
     });
     mount();
     await screen.findByText(/These are starting questions/);
-    await screen.findByRole('alert');
+    await screen.findByText(/Table checks could not run/);
     expect(screen.queryByRole('button', { name: 'Get San Diego’s core public data' })).toBeNull();
   });
   it('surfaces document connections even when the analytical catalog fails', async () => {
@@ -93,7 +93,7 @@ describe('automatic discovery landing experience', () => {
     });
     mount();
     await screen.findByText('Recurring program');
-    expect(screen.getByRole('alert').textContent).toContain('Catalog failed');
+    expect(screen.getByText(/Table checks could not run/).closest('[role="status"]')?.textContent).toContain('Catalog failed');
     expect(screen.queryByRole('button', { name: 'Get San Diego’s core public data' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Inspect document evidence' }));
     await waitFor(() => expect(bridge.pattern).toHaveBeenCalledWith({ patternId: 'p1', portalKey: 'city', documentId: 2, characterStart: 15 }));

@@ -73,7 +73,9 @@ export default function AutomaticDiscovery() {
   // Byte-identical extracted text is a corpus/ingestion fact (the same document released more
   // than once), not an observation about the investigation's subject; it stays off this feed.
   const standoutPatterns = state.patterns.filter((pattern) => pattern.kind !== 'EXACT_DUPLICATE');
-  const shownPatterns = standoutPatterns.slice(0, showAll ? 8 : 2);
+  // Collapsed, leads and patterns together fill six cards: whole rows at two columns and at three.
+  const shownPatterns = standoutPatterns.slice(0, showAll ? 8 : Math.max(0, 6 - ranked.length));
+  const hiddenCount = (showAll ? 0 : leads.length - ranked.length + standoutPatterns.length - shownPatterns.length);
   const gaps = controller.gaps();
   const records = state.schema ? recordGaps(state.schema, leads, state.profiles) : [];
   const automatic = Boolean(state.maintenance?.policy.enabled && state.maintenance.policy.autoRefresh);
@@ -130,11 +132,19 @@ export default function AutomaticDiscovery() {
           </p>
         )}
         {Object.keys(state.errors).length > 0 && (
-          <ul role="alert" className="space-y-1 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-body text-warning">
-            {Object.entries(state.errors).map(([key, error]) => (
-              <li key={key}>{ERROR_LABEL[key] ?? 'Table check'} could not run: {readableError(error)}. Earlier results may be out of date.</li>
-            ))}
-          </ul>
+          // The cause is stated once, by the page's own error; here only its consequence, with the
+          // transport text folded away for a bug report.
+          <div role="status" className="text-caption text-muted">
+            <p>
+              {Object.keys(state.errors).map((key) => ERROR_LABEL[key] ?? 'Table checks').join(', ')} could not run. Earlier results may be out of date.
+            </p>
+            <details className="mt-1">
+              <summary className="focus-ring w-fit cursor-pointer rounded hover:text-fg">Technical details</summary>
+              {Object.entries(state.errors).map(([key, error]) => (
+                <p key={key} className="mt-1 break-words font-mono text-code">{readableError(error)}</p>
+              ))}
+            </details>
+          </div>
         )}
         {profileErrors.length > 0 && (
           <details className="text-body text-warning">
@@ -167,8 +177,10 @@ export default function AutomaticDiscovery() {
             {shownPatterns.length > 0 && <p className="text-caption text-muted">Shared language or entities across documents do not establish a causal connection.</p>}
           </div>
         )}
-        {(leads.length > 6 || standoutPatterns.length > 2) && (
-          <Button size="sm" variant="ghost" onClick={() => setShowAll((value) => !value)}>{showAll ? 'Show fewer' : 'Show more'}</Button>
+        {state.checkedAt && (showAll || hiddenCount > 0) && (
+          <Button size="sm" variant="link" className="px-0" onClick={() => setShowAll((value) => !value)}>
+            {showAll ? 'Show fewer' : `Show ${hiddenCount.toLocaleString()} more`}
+          </Button>
         )}
         {gaps.length > 0 && (
           <section aria-labelledby="data-gaps-heading" className="space-y-2">
@@ -183,13 +195,17 @@ export default function AutomaticDiscovery() {
                   <li key={gap.key} className="flex flex-wrap items-start gap-x-4 gap-y-2 p-3">
                     <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        {done ? <Badge tone="success">Fetched</Badge> : <FamilyBadge family="Data gap" />}
+                        <FamilyBadge family="Data gap" />
                         <span className="text-control text-fg">{gapTitle(gap)}</span>
                       </div>
                       <p className="text-body text-muted">{gap.detail}</p>
                       <p role="status" className="flex items-center gap-1.5 text-caption text-muted empty:hidden">
                         {working && <><StatusDot state="active" pulse label="In progress" />{gap.collect ? 'Starting the collection…' : 'Fetching…'}</>}
-                        {done && <><StatusDot state="idle" label="Done" />{gap.collect ? 'Collection started; the source is listed in the sidebar.' : 'Fetched; the checks are running again.'}</>}
+                        {done && (gap.collect
+                          ? <><StatusDot state="active" label="Started" />Collection started; the source is listed in the sidebar.</>
+                          : checking
+                            ? <><StatusDot state="active" pulse label="Checks running" />Fetched; the checks are running again.</>
+                            : <><StatusDot state="active" label="Done" />Fetched and checked.</>)}
                         {failed && <span className="text-danger">The last attempt failed: {readableError(status)}.</span>}
                         {!status && automatic && gap.fetch && 'It will be fetched automatically.'}
                       </p>
