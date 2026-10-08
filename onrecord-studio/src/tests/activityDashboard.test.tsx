@@ -45,4 +45,24 @@ describe('ActivityDashboard', () => {
     render(<ActivityDashboard />);
     expect(screen.getByText(/the figures below are from the last snapshot read/)).toBeTruthy();
   });
+
+  it('draws failed tasks as their own ink segment and states what was not collected', () => {
+    useAppStore.setState({
+      portalRuntimesStatus: 'ready',
+      portalRuntimesError: null,
+      portalRuntimes: [{
+        portal: { portalKey: 'sd', displayName: 'City of San Diego', canonicalUrl: 'https://sd.example', originUrl: 'https://sd.example', apiLayout: { requestsEndpoint: '', requestsPointer: '', metadataPointer: null, pageParameter: '', pageSizeParameter: '' }, verifiedAt: '2026-01-01T00:00:00Z', sourceKind: 'NEXT_REQUEST' },
+        syncRunId: 'run', queuedTasks: 41, activeTasks: 3, completedTasks: 1810, failedTasks: 4, pagesProcessed: 0, requestsProcessed: 0, documentsProcessed: 0, isRunning: true, rateLimitTokens: 0,
+        frontierExclusions: [{ rule: 'off-site link', excludedLinks: 37 }],
+        stoppedHosts: [],
+      }],
+    });
+    render(<ActivityDashboard />);
+    const bar = screen.getByRole('img', { name: /^City of San Diego:/ });
+    expect(bar.getAttribute('aria-label')).toContain('1,810 done · 4 failed · 3 active · 41 queued of 1,858 tasks');
+    expect(bar.textContent).toContain('Not collected: off-site link: 37 links refused');
+    expect([...bar.querySelectorAll('*')].some((node) => (node.getAttribute('style') ?? '').includes('--viz-counted'))).toBe(false);
+    expect(screen.getByText(/4 failed, all in City of San Diego|1,810 of 1,858 collection tasks done/)).toBeTruthy();
+  });
 });
+

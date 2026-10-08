@@ -10,8 +10,11 @@ import type {
   ResearchFinding,
   ResearchPolicy,
   ResearchReport,
+  ResearchSourceStatus,
   ResearchStatus,
+  SavedSource,
 } from "../../types";
+import RuntimeBars from "../charts/figures/RuntimeBars";
 import { documentBriefingEvidence, localDateInput } from "../../utils/briefing";
 import { INVESTIGATION_TOPICS } from "../../utils/investigations";
 import { useAppStore } from "../../store/useAppStore";
@@ -202,29 +205,70 @@ export default function ResearchWorkspace({ onReview }: { onReview?: (reportId: 
         <summary className="focus-ring flex h-14 cursor-pointer list-none items-center gap-2 rounded-xl px-5 text-heading text-fg [&::-webkit-details-marker]:hidden">
           Research run sources and issues
         </summary>
-        <div className="border-t border-line p-5 text-body">
+        <div className="space-y-5 border-t border-line p-5 text-body">
           {status.sources.length === 0 ? (
             <p className="text-muted">No collection results were returned in this status response.</p>
-          ) : (
-            <ul className="grid gap-3 md:grid-cols-2">
-              {status.sources.map((source) => (
-                <li key={source.url} className="min-w-0">
-                  {/^https?:\/\//.test(source.url)
-                    ? <a href={source.url} target="_blank" rel="noreferrer" className="focus-ring rounded font-medium text-accent underline-offset-2 hover:underline">{source.label}<span className="sr-only"> (opens in browser)</span></a>
-                    : <span className="font-medium text-fg-secondary">{source.label}</span>}
-                  <p className="mt-1 flex flex-wrap items-center gap-2 text-caption text-muted">
-                    <SourceStateBadge state={source.state} url={source.url} />
-                    <span className="min-w-0">{source.detail}</span>
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-          <Button variant="link" className="mt-4" onClick={() => useAppStore.getState().setWorkspaceView("activity")}>Open Activity</Button>
+          ) : <RunSources sources={status.sources} />}
+          <Button variant="link" onClick={() => useAppStore.getState().setWorkspaceView("activity")}>Open Activity</Button>
         </div>
       </details>
     )}
   </section>;
+}
+
+function portalKeyFor(portals: SavedSource[], url: string): string | null {
+  return portals.find(({ registration }) => registration.canonicalUrl === url)?.registration.portalKey ?? null;
+}
+
+/** Portal sources as task bars; any other source keeps its link and state line. */
+function RunSources({ sources }: { sources: ResearchSourceStatus[] }) {
+  const portals = useAppStore((app) => app.portals);
+  return (
+    <>
+      <CollectionRuntimes sources={sources} />
+      <ul className="grid gap-3 md:grid-cols-2">
+        {sources.filter((source) => !portalKeyFor(portals, source.url)).map((source) => (
+          <li key={source.url} className="min-w-0">
+            {/^https?:\/\//.test(source.url)
+              ? <a href={source.url} target="_blank" rel="noreferrer" className="focus-ring rounded font-medium text-accent underline-offset-2 hover:underline">{source.label}<span className="sr-only"> (opens in browser)</span></a>
+              : <span className="font-medium text-fg-secondary">{source.label}</span>}
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-caption text-muted">
+              <SourceStateBadge state={source.state} url={source.url} />
+              <span className="min-w-0">{source.detail}</span>
+            </p>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+/**
+ * The run's records-portal sources as task bars, matched to this session's queue by canonical URL.
+ * A portal with no queue snapshot reads 'not run this session', never an empty bar.
+ */
+function CollectionRuntimes({ sources }: { sources: ResearchSourceStatus[] }) {
+  const portals = useAppStore((app) => app.portals);
+  const runtimes = useAppStore((app) => app.portalRuntimes);
+  const runtimesStatus = useAppStore((app) => app.portalRuntimesStatus);
+  const runtimesError = useAppStore((app) => app.portalRuntimesError);
+  const rows = sources.flatMap((source) => {
+    const portalKey = portalKeyFor(portals, source.url);
+    if (!portalKey) return [];
+    const runtime = runtimes.find((candidate) => candidate.portal.portalKey === portalKey) ?? null;
+    return [{ key: source.url, label: source.label, state: runtime ? (runtime.isRunning ? "Running" : "Idle") : undefined, runtime }];
+  });
+  if (rows.length === 0) return null;
+  return (
+    <RuntimeBars
+      title="Collection tasks for this run's portals"
+      storageKey="research-runtimes"
+      rows={rows}
+      status={runtimesStatus === "pending" ? "loading" : runtimesStatus === "failed" ? "error" : "ready"}
+      error={runtimesError}
+      onShowFailures={() => useAppStore.getState().setWorkspaceView("activity")}
+    />
+  );
 }
 
 /**

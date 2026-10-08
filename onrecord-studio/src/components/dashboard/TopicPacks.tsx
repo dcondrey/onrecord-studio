@@ -3,7 +3,7 @@ import { isTauri } from '@tauri-apps/api/core';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
 import { useAppStore } from '../../store/useAppStore';
-import type { TopicFindingMatch, TopicPackView, TopicPacksReport, TopicTextCoverage } from '../../types';
+import type { TopicFindingBasis, TopicFindingMatch, TopicPackView, TopicPacksReport, TopicTextCoverage } from '../../types';
 import { buildBriefingMarkdown, TOPIC_BASIS_LABELS, topicBriefingProject } from '../../utils/briefing';
 import { ConfidenceMeter, EvidenceTrace } from '../ui/EvidenceBasis';
 import VerifiableReportExport from './VerifiableReportExport';
@@ -13,6 +13,16 @@ import { CountBadge } from '../ui/Badge';
 import InlineError from '../ui/InlineError';
 import Skeleton from '../ui/Skeleton';
 import { cn } from '../../utils/cn';
+import { Meter } from '../charts/marks/Meter';
+import { SourceCaption } from '../charts/frame/SourceCaption';
+import ChartFrame from '../charts/frame/ChartFrame';
+import { Bar } from '../charts/marks/Bar';
+import { MarkGroup, MUTED_LABEL_CLASS, LABEL_CLASS } from '../charts/marks/shared';
+import { measured } from '../charts/core/nulls';
+import { scaleLinear } from '../charts/core/scale';
+import { paintFor, VIZ } from '../charts/core/claim';
+import { fitsInside, measureText } from '../charts/core/layout';
+import { useRovingFocus } from '../charts/hooks/useRovingFocus';
 
 /** `export_verifiable_report` accepts at most this many selected findings. */
 const REPORT_SELECTION_LIMIT = 200;
@@ -69,12 +79,8 @@ export default function TopicPacks() {
   };
   return (
     <section aria-label="Topics" className="space-y-4 text-body text-fg-secondary">
-      <p className="text-caption text-muted">
-        Scanned {report.documentsScanned.toLocaleString()} documents{report.documentLimitReached ? ' (scan limit reached)' : ''} and {report.requestsScanned.toLocaleString()} requests{report.requestLimitReached ? ' (scan limit reached)' : ''}.
-        {report.documentsPrefixOnly > 0 && ` ${report.documentsPrefixOnly.toLocaleString()} documents were read to their first ${report.textPrefixCharacters.toLocaleString()} characters only.`}
-        {report.documentsFileNameOnly > 0 && ` ${report.documentsFileNameOnly.toLocaleString()} have no stored text and were matched on file name only.`}
-        {' '}An untagged record may still concern a topic in words these lists do not hold.
-      </p>
+      <ReadingDepth report={report} />
+      <PackBars report={report} selectedId={topic?.id ?? null} onSelect={setSelectedId} />
       <div role="tablist" aria-label="Topic" onKeyDown={onTabKeyDown} className="flex gap-6 overflow-x-auto border-b border-line">
         {report.topics.map((candidate, index) => {
           const selected = candidate.id === topic?.id;
@@ -199,5 +205,146 @@ function TopicFindingRow({ match }: { match: TopicFindingMatch }) {
         <EvidenceTrace label={finding.headline} explanation={finding.explanation} citations={finding.citations} />
       </div>
     </li>
+  );
+}
+
+const count = (n: number) => n.toLocaleString('en-US');
+
+/**
+ * F16, how deeply the scanned documents were read: a tag can only come from the text that was read,
+ * so a shallow read bounds what an absent tag means.
+ */
+function ReadingDepth({ report }: { report: TopicPacksReport }) {
+  const full = Math.max(0, report.documentsScanned - report.documentsPrefixOnly - report.documentsFileNameOnly);
+  const prefix = `the first ${count(report.textPrefixCharacters)} characters`;
+  const limits = [report.documentLimitReached && 'the document scan limit was reached', report.requestLimitReached && 'the request scan limit was reached'].filter(Boolean).join('; ');
+  const headline = `${count(full)} of ${count(report.documentsScanned)} scanned documents were read in full; ${count(report.documentsPrefixOnly)} to ${prefix} only; ${count(report.documentsFileNameOnly)} by file name only.`;
+  return (
+    <figure className="m-0 grid gap-2" aria-label="Reading depth">
+      <figcaption className="text-body text-fg">{headline}</figcaption>
+      <Meter
+        label="Reading depth of scanned documents"
+        max={Math.max(1, report.documentsScanned)}
+        valueText={headline}
+        segments={[
+          { key: 'full', value: full, step: 4, text: `${count(full)} read in full` },
+          { key: 'prefix', value: report.documentsPrefixOnly, step: 2, text: `${count(report.documentsPrefixOnly)} read to ${prefix}` },
+          { key: 'name', value: report.documentsFileNameOnly, step: 1, text: `${count(report.documentsFileNameOnly)} by file name only (no stored text)` },
+        ]}
+      />
+      <p className="text-caption text-muted">
+        Also scanned: {count(report.requestsScanned)} requests.{limits && ` Note: ${limits}.`} An untagged record may still concern a topic in words these lists do not hold.
+      </p>
+      <SourceCaption sources={{ tables: ['documents', 'requests'] }} />
+    </figure>
+  );
+}
+
+const BASIS_ORDER: TopicFindingBasis[] = ['COUNTED', 'STATED', 'PATTERN'];
+const BASIS_SHORT: Record<TopicFindingBasis, string> = { COUNTED: 'counted', STATED: 'stated', PATTERN: 'pattern' };
+
+/** Findings per basis, only when every finding is loaded: a truncated page is not a total. */
+function basisCounts(topic: TopicPackView): Record<TopicFindingBasis, number> | null {
+  if (topic.findings.length !== topic.findingTotal) return null;
+  const counts: Record<TopicFindingBasis, number> = { COUNTED: 0, STATED: 0, PATTERN: 0 };
+  for (const match of topic.findings) counts[match.basis] += 1;
+  return counts;
+}
+
+/**
+ * F16, packs ranked by tagged documents, with each pack's findings split by basis: counted is solid
+ * crimson with the legal-claim flag; stated and pattern are outlines, pattern dashed and tagged.
+ * Activating a row selects that pack.
+ */
+function PackBars({ report, selectedId, onSelect }: { report: TopicPacksReport; selectedId: string | null; onSelect(id: string): void }) {
+  const packs = [...report.topics].sort((a, b) => b.documentTotal - a.documentTotal || a.title.localeCompare(b.title));
+  const top = packs[0];
+  const withFindings = packs.filter((pack) => pack.findingTotal > 0).length;
+  const headline = top ? `${top.title} tags the most documents (${count(top.documentTotal)}); ${withFindings} of ${packs.length} packs have a finding about a tagged record.` : null;
+  return (
+    <ChartFrame
+      title="Topic packs by tagged documents"
+      storageKey="topic-pack-bars"
+      headline={headline}
+      claim={packs.some((pack) => pack.findings.some((match) => match.basis === 'COUNTED')) ? 'counted' : undefined}
+      sources={{ tables: ['documents', 'requests', 'findings'] }}
+      summary={`${packs.length} packs. Findings are split by basis only where every finding is loaded.`}
+      status={packs.length === 0 ? 'empty' : 'ready'}
+      emptyText="No topic pack is installed."
+      table={{
+        caption: 'Topic packs',
+        columns: [
+          { key: 'pack', label: 'Pack' },
+          { key: 'documents', label: 'Tagged documents', kind: 'count' },
+          { key: 'requests', label: 'Tagged requests', kind: 'count' },
+          { key: 'findings', label: 'Findings by basis' },
+        ],
+        rows: packs.map((pack) => {
+          const counts = basisCounts(pack);
+          return {
+            pack: pack.title,
+            documents: pack.documentTotal,
+            requests: pack.requestTotal,
+            findings: counts ? BASIS_ORDER.map((basis) => `${counts[basis]} ${TOPIC_BASIS_LABELS[basis].toLowerCase()}`).join('; ') : `first ${pack.findings.length} of ${pack.findingTotal} loaded; not totalled by basis`,
+          };
+        }),
+      }}
+      legend={[
+        { key: 'documents', label: 'Tagged documents', swatch: 'rect', tone: 'mark' },
+        { key: 'counted', label: 'Counted finding (legal claim)', swatch: 'flag', tone: 'counted' },
+      ]}
+      minHeight={packs.length * 30 + 8}
+      interactive={{ roledescription: 'ranked bars' }}
+    >
+      {({ width }) => <PackPlot width={width} packs={packs} selectedId={selectedId} onSelect={onSelect} />}
+    </ChartFrame>
+  );
+}
+
+function PackPlot({ width, packs, selectedId, onSelect }: { width: number; packs: TopicPackView[]; selectedId: string | null; onSelect(id: string): void }) {
+  const roving = useRovingFocus({ shape: { rows: packs.length }, onActivate: (i) => onSelect(packs[i].id) });
+  const nameWidth = width < 480 ? Math.round(width * 0.4) : Math.min(240, Math.round(width * 0.3));
+  const findingsWidth = Math.min(260, Math.round(width * 0.36));
+  const x = scaleLinear([0, Math.max(1, ...packs.map((pack) => pack.documentTotal))], [nameWidth, width - findingsWidth - 48], { nice: false });
+  const counted = paintFor('counted', 'fill');
+  const outline = paintFor('descriptive', 'outline', 'primary');
+  return (
+    <g>
+      {packs.map((pack, index) => {
+        const y = index * 30 + 4;
+        const counts = basisCounts(pack);
+        const name = `${pack.title}: ${count(pack.documentTotal)} tagged documents; ${counts ? BASIS_ORDER.map((basis) => `${counts[basis]} ${BASIS_SHORT[basis]}`).join(', ') : `first ${pack.findings.length} of ${pack.findingTotal} findings loaded`}.${pack.id === selectedId ? ' Selected.' : ''}`;
+        let fx = width - findingsWidth;
+        return (
+          <MarkGroup key={pack.id} box={{ x: 0, y, width, height: 22 }} interaction={{ name, item: roving.getItemProps(index), onClick: () => onSelect(pack.id) }}>
+            <text x={0} y={y + 11} dy="0.32em" className={pack.id === selectedId ? 'fill-fg text-[12px] font-semibold' : 'fill-fg-secondary text-[12px]'}>
+              {fitsInside(pack.title, nameWidth) ? pack.title : `${pack.title.slice(0, Math.max(6, Math.floor(nameWidth / 7) - 1))}…`}
+            </text>
+            <Bar band={{ pos: y + 4, thickness: 14 }} value={measured(pack.documentTotal)} scale={x} label={`${count(pack.documentTotal)} tagged`} />
+            {counts ? BASIS_ORDER.map((basis) => {
+              const at = fx;
+              const label = `${counts[basis]} ${BASIS_SHORT[basis]}`;
+              fx += 16 + measureText(label) + 12;
+              return (
+                <g key={basis}>
+                  <rect
+                    x={at + 0.75}
+                    y={y + 6.75}
+                    width={10.5}
+                    height={10.5}
+                    rx={2}
+                    style={basis === 'COUNTED' ? { fill: counted.fill } : { fill: 'none', stroke: outline.stroke, strokeWidth: 1.5, strokeDasharray: basis === 'PATTERN' ? '3 2' : undefined }}
+                  />
+                  <text x={at + 16} y={y + 12} dy="0.32em" className={LABEL_CLASS}>{label}</text>
+                </g>
+              );
+            }) : (
+              <text x={fx} y={y + 12} dy="0.32em" className={MUTED_LABEL_CLASS}>{`first ${pack.findings.length} of ${pack.findingTotal} findings`}</text>
+            )}
+          </MarkGroup>
+        );
+      })}
+      <line x1={x(0) + 0.5} x2={x(0) + 0.5} y1={0} y2={packs.length * 30} style={{ stroke: VIZ.baseline, strokeWidth: 1 }} />
+    </g>
   );
 }

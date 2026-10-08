@@ -5,7 +5,6 @@ import { useMetrics } from '../../hooks/useMetrics';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
 import InlineError from '../ui/InlineError';
-import Skeleton from '../ui/Skeleton';
 import { SearchField } from '../ui/Field';
 import PageHeader from '../ui/PageHeader';
 import { PanelHeader } from '../ui/Panel';
@@ -13,6 +12,7 @@ import SegmentedControl from '../ui/SegmentedControl';
 import Stat from '../ui/Stat';
 import StatusDot from '../ui/statusDot';
 import { downloadFile } from './downloadFile';
+import RuntimeBars from '../charts/figures/RuntimeBars';
 
 type LogFilter = 'all' | 'errors';
 
@@ -144,42 +144,14 @@ export default function ActivityDashboard() {
 
           <section aria-labelledby="runtimes-heading" className="app-panel min-h-[420px] overflow-hidden">
             <PanelHeader titleId="runtimes-heading" title="Source runtimes" description="Queue health for each source." />
-            <div className="space-y-3 p-4">
-              {runtimesStatus === 'pending' ? (
-                <Skeleton variant="block" height={128} label="Loading source runtimes" className="space-y-3" />
-              ) : runtimesStatus === 'failed' ? (
-                <p className="px-1 py-2 text-body text-muted">Not available until the runtimes can be read.</p>
-              ) : runtimes.length === 0 ? (
-                <div className="grid min-h-72 place-items-center rounded-lg border border-dashed border-line p-6 text-center">
-                  <div>
-                    <p className="text-heading text-fg-secondary">No source runtimes</p>
-                    <p className="mt-1 text-caption text-muted">Connect or resume a source to see its queue here.</p>
-                  </div>
-                </div>
-              ) : runtimes.map((runtime) => {
-                const total = runtime.completedTasks + runtime.failedTasks + runtime.queuedTasks + runtime.activeTasks;
-                const progress = total > 0 ? (runtime.completedTasks + runtime.failedTasks) / total : 0;
-                return (
-                  <article key={runtime.portal.portalKey} className="rounded-lg border border-line p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <h4 className="min-w-0 truncate text-control text-fg" title={runtime.portal.displayName}>{runtime.portal.displayName}</h4>
-                      <Badge tone={runtime.isRunning ? 'success' : 'neutral'}>
-                        <StatusDot state={runtime.isRunning ? 'active' : 'idle'} pulse={runtime.isRunning} label={runtime.isRunning ? 'Running' : 'Idle'} />
-                        {runtime.isRunning ? 'Running' : 'Idle'}
-                      </Badge>
-                    </div>
-                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-raised" role="progressbar" aria-label={`${runtime.portal.displayName} progress`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)}>
-                      <div className="h-full origin-left rounded-full bg-accent transition-transform" style={{ transform: `scaleX(${Math.max(progress, runtime.isRunning ? 0.03 : 0)})` }} />
-                    </div>
-                    <dl className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-caption text-muted">
-                      <RuntimeValue label="Done" value={runtime.completedTasks} />
-                      <RuntimeValue label="Active" value={runtime.activeTasks} />
-                      <RuntimeValue label="Queued" value={runtime.queuedTasks} />
-                      <RuntimeValue label="Documents" value={runtime.documentsProcessed} />
-                    </dl>
-                  </article>
-                );
-              })}
+            <div className="p-4">
+              <RuntimeBars
+                storageKey="activity-runtimes"
+                status={runtimesStatus === 'pending' ? 'loading' : runtimesStatus === 'failed' ? 'error' : 'ready'}
+                error={runtimesStatus === 'failed' ? `Not available until the runtimes can be read. ${runtimesError ?? ''}`.trim() : null}
+                rows={runtimes.map((runtime) => ({ key: runtime.portal.portalKey, label: runtime.portal.displayName, state: runtime.isRunning ? 'Running' : 'Idle', runtime }))}
+                onShowFailures={() => setFilter('errors')}
+              />
             </div>
           </section>
         </div>
@@ -200,15 +172,6 @@ function StatSkeleton({ label }: { label: string }) {
         <div className="skeleton mt-1 h-7 w-16 rounded" />
         <div className="skeleton mt-1 h-4 w-40 rounded" />
       </div>
-    </div>
-  );
-}
-
-function RuntimeValue({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="flex items-baseline gap-1">
-      <dt>{label}</dt>
-      <dd className="tabular-nums text-fg-secondary">{value.toLocaleString()}</dd>
     </div>
   );
 }
