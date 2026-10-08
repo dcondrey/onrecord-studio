@@ -51,13 +51,13 @@ describe('workspace initialization states', () => {
     useAppStore.setState({ workspaceInitializationStatus: 'ready' });
     render(<OverviewDashboard />);
 
-    expect(screen.queryByText('Start with the local record.')).toBeNull();
+    expect(screen.queryByRole('region', { name: 'San Diego research desk' })).toBeNull();
     expect(screen.queryByRole('region', { name: 'Investigation workbench' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Open casework and research tools' })).toBeTruthy();
     const drawer = screen.getByText('Browse sources and add records').closest('details')!;
     drawer.open = true;
     fireEvent(drawer, new Event('toggle'));
-    expect(await screen.findByText('Start with the local record.')).toBeTruthy();
+    expect(await screen.findByRole('region', { name: 'San Diego research desk' })).toBeTruthy();
     expect(screen.queryByText('Your saved sources didn’t load')).toBeNull();
   });
 

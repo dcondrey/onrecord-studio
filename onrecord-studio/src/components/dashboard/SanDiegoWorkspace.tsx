@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { focusSourceComposer, openFileImport, SAN_DIEGO_RECORDS_URL, SAN_DIEGO_SOURCES } from '../../utils/sanDiego';
-import Icon from '../ui/icons';
+import Button, { buttonClass } from '../ui/Button';
+import { Input, Select } from '../ui/Field';
 import StarterSets from './StarterSets';
 
 type Source = (typeof SAN_DIEGO_SOURCES)[number];
@@ -37,59 +38,54 @@ export default function SanDiegoWorkspace() {
 
   return (
     <section aria-label="San Diego research desk" className="space-y-4">
-      <div className="onboarding-panel rounded-2xl border p-5 sm:p-6">
-        <div className="app-eyebrow text-accent">San Diego region · Research desk</div>
-        <h3 className="mt-2 text-xl font-semibold tracking-tight text-fg">Start with the local record.</h3>
-        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted">Collect public records and regional data, inspect the evidence, and prepare a briefing. Choose a source below, then select Add in the toolbar. Import downloaded tables in Analysis to compare counts and trends.</p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {['homelessness', 'budget', 'use of force', 'public comment'].map((term) => (
-            <button key={term} type="button" onClick={() => search(term)} className="secondary-action focus-ring rounded-lg border px-3 py-2 text-label leading-4 text-fg-secondary">Search “{term}”</button>
-          ))}
-          <button type="button" onClick={() => setWorkspaceView('briefing')} className="primary-action focus-ring rounded-lg px-3 py-2 text-label leading-4 font-semibold text-white">Prepare a briefing</button>
-          <button type="button" onClick={() => setWorkspaceView('analysis')} className="secondary-action focus-ring rounded-lg border px-3 py-2 text-label leading-4 text-fg-secondary">Analyze a dataset</button>
-        </div>
-      </div>
-      <StarterSets />
-      <div className="flex flex-wrap items-center gap-3">
-        <input aria-label="Find a regional source" value={sourceSearch} onChange={(event) => setSourceSearch(event.target.value)} placeholder="Find a source, agency, or topic" className="analysis-input min-w-64 flex-1" />
-        <select aria-label="Source topic" value={category} onChange={(event) => setCategory(event.target.value)} className="analysis-input">
+      <p className="max-w-prose text-body text-muted">Choose a source below, then select Add to collect it. Import downloaded tables in Analysis to compare counts and trends.</p>
+      <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-body text-muted">
+        Try a search:
+        {['homelessness', 'budget', 'use of force', 'public comment'].map((term) => (
+          <Button key={term} variant="link" onClick={() => search(term)}>{term}</Button>
+        ))}
+      </p>
+      {portals.length > 0 && <StarterSets />}
+      <div className="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
+        <Input aria-label="Find a regional source" value={sourceSearch} onChange={(event) => setSourceSearch(event.target.value)} placeholder="Find a source, agency or topic" />
+        <Select aria-label="Source topic" value={category} onChange={(event) => setCategory(event.target.value)}>
           {categories.map((value) => <option key={value}>{value}</option>)}
-        </select>
-        <select aria-label="Evidence type" value={evidenceType} onChange={(event) => setEvidenceType(event.target.value)} className="analysis-input">
+        </Select>
+        <Select aria-label="Evidence type" value={evidenceType} onChange={(event) => setEvidenceType(event.target.value)}>
           {evidenceTypes.map((value) => <option key={value}>{value}</option>)}
-        </select>
-        <span className="text-label leading-4 text-muted">{visibleSources.length} sources</span>
+        </Select>
+        <span className="pb-2 text-caption tabular-nums text-muted">{visibleSources.length} source{visibleSources.length === 1 ? '' : 's'}</span>
       </div>
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         {visibleSources.map((source) => {
           const saved = portals.find(({ registration }) => registration.canonicalUrl.replace(/\/$/, '') === source.url.replace(/\/$/, ''));
           return (
-            <article key={source.id} className="app-panel flex flex-col p-5">
-              <div className="flex items-center gap-2 text-sm font-semibold text-fg"><Icon name="filePlus" className="h-4 w-4 text-accent" />{source.label}</div>
-              {source.publisher && <div className="mt-1 text-label leading-4 text-accent">{source.publisher} · {sourceCategory(source)}</div>}
-              <p className="mt-2 text-label leading-relaxed text-muted">{source.description}</p>
-              <p className="mt-2 text-label leading-relaxed text-muted">{source.coverage}</p>
-              {source.analysisNotes && <p className="mt-2 text-label leading-relaxed text-fg-secondary">{source.analysisNotes}</p>}
-              <div className="mt-4 flex flex-wrap items-center gap-2">
+            <article key={source.id} className="flex flex-col rounded-lg border border-line p-4">
+              <h4 className="text-body font-medium text-fg">{source.label}</h4>
+              {source.publisher && <p className="mt-0.5 text-caption text-muted">{source.publisher} · {sourceCategory(source)}</p>}
+              <p className="mt-2 text-body text-muted">{source.description}</p>
+              <p className="mt-2 text-caption text-muted">{source.coverage}</p>
+              {source.analysisNotes && <p className="mt-2 text-caption text-fg-secondary">{source.analysisNotes}</p>}
+              <div className="mt-auto flex flex-wrap items-center gap-2 pt-4">
                 {source.access === 'export'
-                  ? <><button type="button" onClick={openFileImport} className="secondary-action focus-ring rounded-lg border px-3 py-2 text-label leading-4 font-semibold text-fg">Import downloaded files</button><button type="button" onClick={() => setWorkspaceView('analysis')} className="focus-ring rounded-lg px-3 py-2 text-label leading-4 text-accent">Analyze a table</button></>
-                  : <button type="button" onClick={() => stage(source.url)} className="secondary-action focus-ring rounded-lg border px-3 py-2 text-label leading-4 font-semibold text-fg">{saved ? 'Update source' : 'Choose source'}</button>}
-                <a href={source.url} target="_blank" rel="noreferrer" className="focus-ring rounded-lg px-3 py-2 text-label leading-4 text-accent">{new URL(source.url).pathname.toLowerCase().endsWith('.pdf') ? 'Open document' : 'Open website'}</a>
+                  ? <><Button size="sm" onClick={openFileImport}>Import downloaded files</Button><Button size="sm" variant="ghost" onClick={() => setWorkspaceView('analysis')}>Analyze a table</Button></>
+                  : <Button size="sm" onClick={() => stage(source.url)}>{saved ? 'Update source' : 'Choose source'}</Button>}
+                <a href={source.url} target="_blank" rel="noreferrer" className={buttonClass({ variant: 'ghost', size: 'sm', className: 'focus-ring' })}>{new URL(source.url).pathname.toLowerCase().endsWith('.pdf') ? 'Open document' : 'Open website'}<span className="sr-only"> (opens in browser)</span></a>
                 {saved ? (
-                  <button type="button" onClick={() => { setActivePortal(saved.registration.portalKey); setWorkspaceView('evidence'); }} className="focus-ring rounded-lg px-3 py-2 text-label leading-4 text-accent">Review saved records</button>
-                ) : initialization === 'ready' ? <span className="text-label leading-4 text-muted">Not yet in your library</span> : null}
+                  <Button size="sm" variant="ghost" onClick={() => { setActivePortal(saved.registration.portalKey); setWorkspaceView('evidence'); }}>Review saved records</Button>
+                ) : initialization === 'ready' ? <span className="text-caption text-muted">Not yet in your library</span> : null}
               </div>
             </article>
           );
         })}
       </div>
-      {visibleSources.length === 0 && <p className="text-sm text-muted">No sources match. Try another topic or publisher.</p>}
-      <div className="app-panel flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+      {visibleSources.length === 0 && <p className="text-body text-muted">No sources match. Try another topic or publisher.</p>}
+      <div className="flex flex-col gap-3 rounded-lg border border-line p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-fg">City public-records requests</h3>
-          <p className="mt-1 max-w-2xl text-label leading-relaxed text-muted">Choose a public-records source to discover public requests and attachments. Import downloaded response files when a portal requires a browser session. City, Housing Commission, County, and Sheriff’s records are held separately.</p>
+          <h4 className="text-body font-medium text-fg">City public-records requests</h4>
+          <p className="mt-1 max-w-prose text-caption text-muted">Choose a public-records source to discover public requests and attachments. Import downloaded response files when a portal requires a browser session. City, Housing Commission, County, and Sheriff’s records are held separately.</p>
         </div>
-        <a href={SAN_DIEGO_RECORDS_URL} target="_blank" rel="noreferrer" className="secondary-action focus-ring shrink-0 rounded-lg border px-3 py-2 text-label leading-4 font-semibold text-fg">City public-records website</a>
+        <a href={SAN_DIEGO_RECORDS_URL} target="_blank" rel="noreferrer" className={buttonClass({ className: 'focus-ring' })}>City public-records website<span className="sr-only"> (opens in browser)</span></a>
       </div>
     </section>
   );
