@@ -364,9 +364,8 @@ fn contract_cases(
         if extensions_known {
             cited.extend(own_amendments.iter().map(|a| **a));
         }
-        let shown = capped(&offending);
-        cited.extend(shown);
         offending.sort_by_key(|r| get(r, "transaction_date").to_string());
+        cited.extend(capped(&offending));
         let term = if extensions_known && effective_end != end {
             format!("{start} through {effective_end} (contract end {end}, extended by executed amendments)")
         } else {
@@ -1032,6 +1031,9 @@ pub fn gap_role(title: &str) -> Option<&'static str> {
         | "Complete contract register"
         | "Approval on contract rows" => "contract",
         "Executed amendments stating term changes" => "amendment",
+        "Payments in the contract's currency" | "Restricted-fund spending in one currency" => {
+            "payment"
+        }
         "Complete restriction register and actual expenditures"
         | "Unambiguous restriction classification"
         | "Expressly eligible programs for restricted funds" => "restriction",
@@ -1818,7 +1820,21 @@ mod tests {
         };
         let mut gaps = rule_cases(&[], &none(), &rules).gaps;
         gaps.extend(ledger_cases(&[ledger("actual", "a", "1", &[])], &none()).gaps);
-        assert!(!gaps.is_empty());
+        let mut late = payment("p1", "2025-07-01", "10");
+        late.values.insert("currency".into(), Some("CAD".into()));
+        gaps.extend(ledger_cases(&[contract(), amendment("2025-06-30"), late], &none()).gaps);
+        let restricted = [
+            restriction("restricted", "Shelter"),
+            spent("a", "Stadium", "5", &[]),
+            spent("b", "Stadium", "5", &[("currency", "CAD")]),
+        ];
+        gaps.extend(ledger_cases(&restricted, &none()).gaps);
+        for title in [
+            "Payments in the contract's currency",
+            "Restricted-fund spending in one currency",
+        ] {
+            assert!(gaps.iter().any(|gap| gap.title == title), "{title}");
+        }
         for gap in gaps {
             assert!(gap_role(&gap.title).is_some(), "{}", gap.title);
         }
