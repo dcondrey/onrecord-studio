@@ -178,6 +178,8 @@ export default function OverviewDashboard() {
 }
 
 const DATELINE = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+/** The reader's calendar date as YYYY-MM-DD, matching the dateline's words (not the UTC date). */
+const localDate = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
 /** The overview's nameplate: the dateline and scope over the title, closed by the front page's heavy rule. */
 function Masthead({ actions }: { actions: ReactNode }) {
@@ -187,7 +189,7 @@ function Masthead({ actions }: { actions: ReactNode }) {
     <header className="flex flex-col gap-4 border-b-2 border-fg pb-4 xl:flex-row xl:items-end xl:justify-between">
       <div className="min-w-0">
         <p className="text-overline uppercase text-muted">
-          <time dateTime={new Date().toISOString().slice(0, 10)}>{DATELINE.format(new Date())}</time>
+          <time dateTime={localDate(new Date())}>{DATELINE.format(new Date())}</time>
           <span aria-hidden="true"> · </span>
           {activePortalKey ? portalName(activePortalKey) : 'All saved sources'}
         </p>

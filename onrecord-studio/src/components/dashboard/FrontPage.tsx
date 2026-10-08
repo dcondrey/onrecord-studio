@@ -19,6 +19,7 @@ import CaseScopeBar from './CaseScopeBar';
 import LeadLine, { LeadByline, LeadKicker } from './LeadLine';
 import { useSinceInstant } from './SinceControl';
 import { isUnassessed } from './storyFactors';
+import { tableLeadSources } from '../../utils/tableLeadSources';
 
 const FURTHER_LIMIT = 7;
 const TABLES_READ = '\n\nTables read:\n';
@@ -160,6 +161,10 @@ function LeadStory({ lead, leads, total, source }: { lead: StoryLead; leads: rea
   const explanation = read?.explanation ?? '';
   const tablesAt = explanation.lastIndexOf(TABLES_READ);
   const dek = (tablesAt < 0 ? explanation : explanation.slice(0, tablesAt)).trim();
+  // The stored figure cites the tables its builder read, as the dossier does; never the findings table.
+  const tables = tableLeadSources(explanation);
+  const tableNames = tables?.tables.map((table) => table.parts?.name ?? table.line) ?? [];
+  const figureSources = { tables: tableNames.length ? tableNames : ['tables not recorded with this finding'], retrievedAt: tables?.tables[0]?.parts?.retrievedOn };
   const inspect = () => {
     if (lead.portalKey) setActivePortal(lead.portalKey);
     setSearchFilters('', lead.subject.agencyId ?? null, null, null);
@@ -189,7 +194,7 @@ function LeadStory({ lead, leads, total, source }: { lead: StoryLead; leads: rea
         </div>
         <div className="min-w-0 [--viz-surface:rgb(var(--bg))] xl:border-l xl:border-line xl:pl-10">
           {read?.figure ? (
-            <LeadFigure figure={read.figure} headline={null} size="card" sources={{ tables: ['findings'], note: 'the lead’s stored figure, drawn from the rows its builder read' }} onActivate={() => openLeadDossier(lead.findingId)} />
+            <LeadFigure figure={read.figure} headline={null} size="card" sources={figureSources} onActivate={() => openLeadDossier(lead.findingId)} />
           ) : finding.status === 'pending' ? (
             <div aria-hidden="true" className="space-y-3"><div className="skeleton h-4 w-2/3 rounded" />{[0, 1, 2, 3, 4].map((row) => <div key={row} className="skeleton h-3 rounded" style={{ width: `${88 - row * 12}%` }} />)}</div>
           ) : (
@@ -298,6 +303,7 @@ function HealthStrip() {
   const setActivePortal = useAppStore((state) => state.setActivePortal);
   const analyticsUpdatedAt = useAppStore((state) => state.analyticsUpdatedAt);
   const analyticsError = useAppStore((state) => state.analyticsError);
+  const analyticsStatus = useAppStore((state) => state.analyticsStatus);
   const runtimeByPortal = new Map(runtimes.map((runtime) => [runtime.portal.portalKey, runtime]));
   if (portals.length === 0) return null;
   return (
@@ -305,7 +311,7 @@ function HealthStrip() {
       <Rubric
         id="health-title"
         title="Data health"
-        aside={<span className={cn('text-caption', analyticsError ? 'text-warning' : 'text-muted')}>{analyticsError ? 'Response analytics: the last refresh failed' : analyticsUpdatedAt ? `Response analytics updated ${formatShortDate(analyticsUpdatedAt)}` : 'Response analytics not yet calculated'}</span>}
+        aside={<span className={cn('text-caption', analyticsError ? 'text-warning' : 'text-muted')}>{analyticsError ? 'Response analytics: the last refresh failed' : analyticsUpdatedAt ? `Response analytics updated ${formatShortDate(analyticsUpdatedAt)}` : analyticsStatus === 'pending' ? 'Response analytics calculating' : 'Response analytics not yet calculated'}</span>}
       />
       <ul className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-x-6">
         {portals.map((source) => {

@@ -47,7 +47,7 @@ const SETTING_GROUPS = new Set<CommandAction['group']>(['Appearance', 'Accessibi
 export default function CommandPalette() {
   const [isOpen, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
   const modifier = isApplePlatform() ? '⌘' : 'Ctrl';
@@ -110,7 +110,7 @@ export default function CommandPalette() {
     clearAnswer();
     setMode('commands');
     setQuery('');
-    setSelectedIndex(0);
+    setSelectedId(null);
     setOpen(true);
   };
 
@@ -314,6 +314,13 @@ export default function CommandPalette() {
     // runIntent closes over the gate and setters only, all stable.
   }, [actions, leadActions, mode, objectActions, query]);
 
+  // Selection follows the row, not its position, so a group that loads after the palette opens
+  // never moves it. With nothing chosen, the first row that is not a lead is selected: opening the
+  // palette and pressing Return still goes to the overview.
+  const chosenIndex = selectedId === null ? -1 : filteredActions.findIndex((action) => action.id === selectedId);
+  const selectedIndex = chosenIndex >= 0 ? chosenIndex : Math.max(0, filteredActions.findIndex((action) => !action.lead));
+  const select = (index: number) => setSelectedId(filteredActions[index]?.id ?? null);
+
   useEffect(() => {
     const openFromEvent = () => openPalette();
     window.addEventListener(OPEN_COMMAND_PALETTE_EVENT, openFromEvent);
@@ -326,7 +333,7 @@ export default function CommandPalette() {
   }, [isOpen]);
 
   useEffect(() => {
-    setSelectedIndex(0);
+    setSelectedId(null);
     // Whatever was asked about the previous text says nothing about this text.
     clearAnswer();
     if (askOnQuery.current === query) {
@@ -389,10 +396,10 @@ export default function CommandPalette() {
         return;
       } else if (event.key === 'ArrowDown') {
         event.preventDefault();
-        setSelectedIndex((index) => filteredActions.length ? (index + 1) % filteredActions.length : 0);
+        select(filteredActions.length ? (selectedIndex + 1) % filteredActions.length : 0);
       } else if (event.key === 'ArrowUp') {
         event.preventDefault();
-        setSelectedIndex((index) => filteredActions.length ? (index - 1 + filteredActions.length) % filteredActions.length : 0);
+        select(filteredActions.length ? (selectedIndex - 1 + filteredActions.length) % filteredActions.length : 0);
       } else if (event.key === 'Enter' && filteredActions[selectedIndex]) {
         event.preventDefault();
         const chosen = filteredActions[selectedIndex];
@@ -516,7 +523,7 @@ export default function CommandPalette() {
                       role="option"
                       tabIndex={-1}
                       aria-selected={selected}
-                      onMouseEnter={() => setSelectedIndex(index)}
+                      onMouseEnter={() => setSelectedId(action.id)}
                       onClick={() => {
                         if (!action.keepOpen) closePalette();
                         action.perform();
