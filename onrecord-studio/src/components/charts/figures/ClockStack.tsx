@@ -379,7 +379,7 @@ export function MiniClocks({ found, onOpen }: { found: CaseworkCase; onOpen(): v
           due: request.filingPlan?.determinationDueOn ?? request.responseDue ?? { state: 'not-recorded' as const, reason: 'no due date' },
         })),
       }}
-      minHeight={Math.max(1, found.requests.length) * MINI_ROW + 30}
+      minHeight={Math.max(1, found.requests.length) * MINI_ROW + (found.requests.some((request) => request.filingPlan) ? 30 : 4)}
       interactive={{ roledescription: 'request clocks' }}
       storageKey="inspector-case-clocks"
     >

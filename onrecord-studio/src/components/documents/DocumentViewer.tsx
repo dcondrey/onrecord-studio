@@ -278,7 +278,8 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
     [chunkMarks, storedMarks],
   );
   const loadedEnd = characterOffset + Array.from(textContent).length;
-  const minimapTotal = Math.max(totalCharacterCount ?? 0, loadedEnd);
+  // The stored text's own count; the masked chunk can differ in length from what it masks.
+  const minimapTotal = totalCharacterCount ?? loadedEnd;
 
   const activateMark = (mark: MinimapMark) => {
     setActiveMark(mark.key);
@@ -588,7 +589,7 @@ export default function DocumentViewer({ documentId, requestId, portalKey, fileN
         <div ref={textPaneRef} className="min-h-0 flex-1 overflow-y-auto p-5 font-mono text-label leading-relaxed text-fg-secondary selection:bg-highlight/40">
           <HighlightedTextPage text={textContent} query={documentSearch} page={textPage} activeMatchIndex={selectedMatch} />
         </div>
-        <MinimapGutter marks={minimapMarks} total={minimapTotal} loaded={{ start: characterOffset, end: loadedEnd }} activeKey={activeMark} onActivate={activateMark} />
+        <MinimapGutter marks={minimapMarks} total={minimapTotal} loaded={{ start: characterOffset, end: Math.min(loadedEnd, minimapTotal) }} activeKey={activeMark} onActivate={activateMark} />
       </div>
       {pageCount > 1 && <div className="flex items-center justify-center gap-3 border-t border-line px-4 py-2 text-caption text-muted"><button type="button" disabled={textPage === 0} onClick={() => setTextPage((page) => Math.max(0, page - 1))} className="rounded border border-control px-2 py-1 disabled:opacity-40">Previous text page</button><span className="font-mono">{textPage + 1}/{pageCount}</span><button type="button" disabled={textPage + 1 >= pageCount} onClick={() => setTextPage((page) => Math.min(pageCount - 1, page + 1))} className="rounded border border-control px-2 py-1 disabled:opacity-40">Next text page</button></div>}
     </section>
