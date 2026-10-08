@@ -19,6 +19,13 @@ import {
   type PatternRecipe,
 } from '../../utils/patternRecipes';
 import Icon from '../ui/icons';
+import PageHeader from '../ui/PageHeader';
+import Panel from '../ui/Panel';
+import Button from '../ui/Button';
+import Badge from '../ui/Badge';
+import InlineError from '../ui/InlineError';
+import Skeleton from '../ui/Skeleton';
+import { Field, Input, Select } from '../ui/Field';
 import EntityGraph from './EntityGraph';
 import ResolutionReview from './ResolutionReview';
 
@@ -45,6 +52,7 @@ export default function PatternExplorer() {
   const [indexedTo, setIndexedTo] = useState('');
   const [requiredTerms, setRequiredTerms] = useState('');
   const [recipeName, setRecipeName] = useState('');
+  const [recipeFormOpen, setRecipeFormOpen] = useState(false);
   const [savedRecipes, setSavedRecipes] = useState<PatternRecipe[]>(() =>
     typeof window === 'undefined' ? [] : loadPatternRecipes(window.localStorage),
   );
@@ -86,7 +94,7 @@ export default function PatternExplorer() {
             minimumEvidenceCount,
             minimumConfidenceBasisPoints: minimumConfidence,
             indexedFrom: toRfc3339(indexedFrom),
-            indexedTo: toRfc3339(indexedTo),
+            indexedTo: toRfc3339(indexedTo, true),
             // Every kind, always: the per-kind counts come from this list and the kind filter is
             // applied client-side, so filtering here would zero every other kind's count.
             patternKinds: [],
@@ -165,6 +173,7 @@ export default function PatternExplorer() {
       persistPatternRecipes(window.localStorage, nextRecipes);
       setSavedRecipes(nextRecipes);
       setRecipeName('');
+      setRecipeFormOpen(false);
     } catch (reason) {
       setError(formatNativeError(reason));
     }
@@ -174,8 +183,8 @@ export default function PatternExplorer() {
     setKindFilter(recipe.kindFilter);
     setMinimumEvidenceCount(recipe.minimumEvidenceCount);
     setMinimumConfidence(recipe.minimumConfidence);
-    setIndexedFrom(recipe.indexedFrom);
-    setIndexedTo(recipe.indexedTo);
+    setIndexedFrom(recipe.indexedFrom.slice(0, 10));
+    setIndexedTo(recipe.indexedTo.slice(0, 10));
     setRequiredTerms(recipe.requiredTerms);
     setLastPreviewFingerprint(null);
   }, []);
@@ -232,166 +241,116 @@ export default function PatternExplorer() {
     void openEvidence(evidence);
   }, [openEvidence, patternEvidenceSelection, selectedPattern]);
 
+  const portals = useAppStore((state) => state.portals);
+  const portalName = (portalKey: string) => portals.find(({ registration }) => registration.portalKey === portalKey)?.registration.displayName ?? portalKey;
+  const visibleKinds = (Object.keys(patternLabels) as CorpusPatternKind[])
+    .map((kind) => ({ kind, count: patterns.filter((pattern) => pattern.kind === kind).length }))
+    .filter(({ kind, count }) => count > 0 || kindFilter === kind);
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto flex min-h-full w-full max-w-[1800px] flex-col gap-4 p-4 lg:p-6">
-        <header className="onboarding-panel flex flex-col gap-4 rounded-2xl border p-5 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="app-eyebrow flex items-center gap-2 text-accent">
-              <Icon name="sparkles" className="h-3.5 w-3.5" /> Corpus intelligence
-            </div>
-            <h2 className="mt-2 text-[26px] font-semibold tracking-[-0.035em] text-fg sm:text-[30px]">
-              Connections backed by source evidence.
-            </h2>
-            <p className="mt-1 max-w-3xl text-label leading-relaxed text-muted">
-              Deterministic fingerprints, normalized authorities, recurring language, and dates are
-              matched across extracted files. Every signal links back to a document and source offset.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-caption text-muted">
-              Minimum evidence
-              <select
-                value={minimumEvidenceCount}
-                onChange={(event) => setMinimumEvidenceCount(Number(event.target.value))}
-                className="bg-transparent font-mono text-fg outline-none"
-              >
-                {[2, 3, 5, 10].map((value) => <option key={value} value={value}>{value}</option>)}
-              </select>
-            </label>
-            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-caption text-muted">
-              Confidence
-              <select
-                value={minimumConfidence}
-                onChange={(event) => setMinimumConfidence(Number(event.target.value))}
-                className="bg-transparent font-mono text-fg outline-none"
-              >
-                <option value={0}>Any</option>
-                <option value={7000}>70%+</option>
-                <option value={8000}>80%+</option>
-                <option value={9000}>90%+</option>
-                <option value={9500}>95%+</option>
-              </select>
-            </label>
-            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-caption text-muted">
-              Indexed after
-              <input type="datetime-local" value={indexedFrom} max={indexedTo || undefined} onChange={(event) => setIndexedFrom(event.target.value)} className="bg-transparent font-mono text-fg outline-none" />
-            </label>
-            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-caption text-muted">
-              Indexed before
-              <input type="datetime-local" value={indexedTo} min={indexedFrom || undefined} onChange={(event) => setIndexedTo(event.target.value)} className="bg-transparent font-mono text-fg outline-none" />
-            </label>
-            <label className="secondary-action flex items-center gap-2 rounded-xl border px-3 py-2 text-caption text-muted">
-              Required terms
-              <input
-                value={requiredTerms}
-                onChange={(event) => setRequiredTerms(event.target.value)}
-                placeholder="deadline, response"
-                aria-label="Required pattern terms"
-                className="w-36 bg-transparent font-mono text-fg outline-none"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={() => void refresh(true)}
-              disabled={isLoading}
-              className="primary-action focus-ring flex items-center gap-2 rounded-xl border border-transparent px-3 py-2 text-caption font-semibold text-white transition hover:brightness-105 disabled:opacity-50"
-            >
-              <Icon name="sync" className={cn('h-3.5 w-3.5', isLoading && 'animate-spin')} />
-              Preview results
-            </button>
-          </div>
-        </header>
+      <div className="mx-auto flex w-full max-w-content flex-col gap-6 px-4 pb-10 pt-6 md:px-6">
+        <PageHeader
+          title="Connections across documents"
+          summary={status
+            ? <span className="tabular-nums">{status.indexedDocumentCount.toLocaleString()} documents · {status.indexedRelationshipCount.toLocaleString()} relationships indexed.</span>
+            : 'Signals matched across extracted files, each linked to its source.'}
+          method="Deterministic fingerprints, normalized authorities, recurring language and dates are matched across extracted files. Every signal links back to a document and a source offset."
+        />
 
-        <section className="app-panel rounded-2xl border border-line p-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="app-eyebrow">Reusable investigation recipe</div>
-              <p className="mt-1 text-caption text-muted">
-                Preview the exact controls above before saving. Recipes stay on this device and never alter source evidence.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                value={recipeName}
-                maxLength={80}
-                onChange={(event) => setRecipeName(event.target.value)}
-                placeholder="Recipe name"
-                aria-label="Recipe name"
-                className="focus-ring h-9 rounded-lg border border-control bg-canvas/70 px-3 text-caption text-fg"
-              />
-              <button
-                type="button"
-                onClick={saveRecipe}
-                disabled={!recipeName.trim() || !recipeIsPreviewed}
-                className="focus-ring h-9 rounded-lg border border-accent/30 bg-accent/10 px-3 text-caption font-semibold text-accent disabled:opacity-35"
-              >
-                Save previewed recipe
-              </button>
+        <Panel aria-label="Pattern filters" className="p-5">
+          <div className="grid items-end gap-3 [grid-template-columns:repeat(auto-fit,minmax(10rem,1fr))]">
+            <Field label="Minimum evidence">
+              <Select value={minimumEvidenceCount} onChange={(event) => setMinimumEvidenceCount(Number(event.target.value))} className="tabular-nums">
+                {[2, 3, 5, 10].map((value) => <option key={value} value={value}>{value} files</option>)}
+              </Select>
+            </Field>
+            <Field label="Confidence">
+              <Select value={minimumConfidence} onChange={(event) => setMinimumConfidence(Number(event.target.value))} className="tabular-nums">
+                <option value={0}>Any</option>
+                <option value={7000}>70% or more</option>
+                <option value={8000}>80% or more</option>
+                <option value={9000}>90% or more</option>
+                <option value={9500}>95% or more</option>
+              </Select>
+            </Field>
+            <Field label="Indexed from">
+              <Input type="date" value={indexedFrom} max={indexedTo || undefined} onChange={(event) => setIndexedFrom(event.target.value)} className="tabular-nums" />
+            </Field>
+            <Field label="Indexed to">
+              <Input type="date" value={indexedTo} min={indexedFrom || undefined} onChange={(event) => setIndexedTo(event.target.value)} className="tabular-nums" />
+            </Field>
+            <Field label="Required terms">
+              <Input value={requiredTerms} onChange={(event) => setRequiredTerms(event.target.value)} placeholder="deadline, response" />
+            </Field>
+            <div className="flex items-center gap-2">
+              <Button variant="primary" onClick={() => void refresh(true)} disabled={isLoading}>{isLoading ? 'Applying…' : 'Apply'}</Button>
+              <Button onClick={() => setRecipeFormOpen((open) => !open)} aria-expanded={recipeFormOpen} aria-controls="pattern-recipe-form">Save as recipe…</Button>
             </div>
           </div>
+          {recipeFormOpen && (
+            <form
+              id="pattern-recipe-form"
+              className="motion-reveal mt-4 flex flex-wrap items-end gap-3 border-t border-line pt-4"
+              onSubmit={(event) => { event.preventDefault(); saveRecipe(); }}
+            >
+              <Field label="Recipe name" help={recipeIsPreviewed ? 'Saved on this device. A recipe never alters source evidence.' : 'Apply these filters first, so the recipe saves what you have seen.'} className="w-72">
+                <Input value={recipeName} maxLength={80} onChange={(event) => setRecipeName(event.target.value)} autoFocus />
+              </Field>
+              <Button type="submit" disabled={!recipeName.trim() || !recipeIsPreviewed} className="mb-6">Save recipe</Button>
+            </form>
+          )}
           {savedRecipes.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2" aria-label="Saved pattern recipes">
+            <div className="mt-4 flex flex-wrap items-center gap-2" aria-label="Saved pattern recipes">
+              <span className="text-caption text-muted">Recipes</span>
               {savedRecipes.map((recipe) => (
-                <div key={recipe.id} className="flex items-center overflow-hidden rounded-lg border border-line bg-canvas/40">
-                  <button type="button" onClick={() => loadRecipe(recipe)} className="focus-ring px-3 py-2 text-caption text-fg-secondary hover:text-accent">
+                <span key={recipe.id} className="inline-flex h-7 items-center overflow-hidden rounded-md border border-line-strong">
+                  <button type="button" onClick={() => loadRecipe(recipe)} className="focus-ring h-full px-2.5 text-control text-fg-secondary hover:bg-raised hover:text-fg">
                     {recipe.name}
                   </button>
-                  <button type="button" onClick={() => deleteRecipe(recipe.id)} aria-label={`Delete ${recipe.name}`} className="focus-ring border-l border-control px-2 py-2 text-muted hover:text-danger">
-                    <Icon name="x" className="h-3 w-3" />
+                  <button type="button" onClick={() => deleteRecipe(recipe.id)} aria-label={`Delete ${recipe.name}`} className="focus-ring grid h-full w-7 place-items-center border-l border-line text-muted hover:bg-raised hover:text-danger">
+                    <Icon name="x" size="xs" />
                   </button>
-                </div>
+                </span>
               ))}
             </div>
           )}
-        </section>
-
-        <div className="instrument-strip app-panel grid grid-cols-2 overflow-hidden sm:grid-cols-5">
-          <IndexMetric label="Documents" value={status?.indexedDocumentCount} />
-          <IndexMetric label="Segments" value={status?.indexedSegmentCount} />
-          <IndexMetric label="Term postings" value={status?.indexedTermCount} />
-          <IndexMetric label="Relationships" value={status?.indexedRelationshipCount} />
-          <IndexMetric label="Writer queue" value={status?.availableWriteCapacity} suffix=" free" />
-        </div>
-
-        <EntityGraph />
-
-        <ResolutionReview />
+        </Panel>
 
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Pattern type">
-          <FilterButton selected={kindFilter === 'ALL'} onClick={() => setKindFilter('ALL')}>
-            All signals <span>{patterns.length}</span>
-          </FilterButton>
-          {(Object.keys(patternLabels) as CorpusPatternKind[]).map((kind) => (
-            <FilterButton key={kind} selected={kindFilter === kind} onClick={() => setKindFilter(kind)}>
-              {patternLabels[kind]}
-              <span>{patterns.filter((pattern) => pattern.kind === kind).length}</span>
-            </FilterButton>
+          <FilterButton selected={kindFilter === 'ALL'} onClick={() => setKindFilter('ALL')} count={patterns.length}>All signals</FilterButton>
+          {visibleKinds.map(({ kind, count }) => (
+            <FilterButton key={kind} selected={kindFilter === kind} onClick={() => setKindFilter(kind)} count={count}>{patternLabels[kind]}</FilterButton>
           ))}
         </div>
 
         {error && (
-          <div role="alert" className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-label text-danger">
-            {error}
-          </div>
+          <InlineError
+            summary={listFailed ? 'Signals couldn’t be read for these filters.' : 'The excerpt couldn’t be opened.'}
+            detail={error}
+            onRetry={listFailed ? () => void refresh() : undefined}
+          />
         )}
 
-        <div className="grid min-h-[500px] flex-1 grid-cols-1 gap-4 xl:grid-cols-[minmax(360px,0.8fr)_minmax(0,1.2fr)]">
-          <section className="app-panel min-h-0 overflow-hidden">
-            <div className="border-b border-line px-4 py-3 text-label font-semibold text-fg-secondary">
-              {filteredPatterns.length.toLocaleString()} explainable signals
-            </div>
+        <div className="grid min-h-[500px] grid-cols-1 gap-4 xl:grid-cols-[minmax(360px,0.8fr)_minmax(0,1.2fr)]">
+          <section aria-labelledby="pattern-list-title" className="app-panel min-h-0 min-w-0 overflow-hidden">
+            <h3 id="pattern-list-title" className="border-b border-line px-4 py-3 text-heading text-fg">
+              <span className="tabular-nums">{filteredPatterns.length.toLocaleString()}</span> signal{filteredPatterns.length === 1 ? '' : 's'}
+            </h3>
             <div className="max-h-[650px] overflow-y-auto">
               {isLoading && patterns.length === 0 ? (
-                <EmptyState title="Analyzing corpus index…" />
+                <div className="space-y-px">
+                  <Skeleton variant="lines" lines={4} label="Analyzing the corpus index" className="p-4" />
+                </div>
               ) : listFailed ? (
-                <EmptyState title="Signals could not be read for these controls. Preview again to retry." />
+                <EmptyMessage title="No signals to show until the query succeeds." />
               ) : filteredPatterns.length === 0 ? (
-                <EmptyState title="No matching pattern has enough evidence yet." />
+                <EmptyMessage title="No pattern has enough evidence for these filters yet." />
               ) : filteredPatterns.map((pattern) => (
                 <button
                   key={pattern.patternId}
                   type="button"
+                  aria-current={selectedPattern?.patternId === pattern.patternId ? 'true' : undefined}
                   onClick={() => {
                     setSelectedPatternId(pattern.patternId);
                     setPatternEvidenceSelection({ patternId: pattern.patternId, portalKey: null, documentId: null, characterStart: null });
@@ -402,93 +361,89 @@ export default function PatternExplorer() {
                     setExcerptLoadingKey(null);
                   }}
                   className={cn(
-                    'focus-ring block w-full border-b border-control px-4 py-3 text-left transition hover:bg-surface/70',
-                    selectedPattern?.patternId === pattern.patternId && 'bg-accent/5 ring-1 ring-inset ring-accent/30',
+                    'focus-ring block w-full border-b border-line px-4 py-3 text-left transition-colors duration-fast hover:bg-raised/60 focus-visible:ring-inset',
+                    selectedPattern?.patternId === pattern.patternId && 'bg-accent/5 shadow-[inset_2px_0_0_rgb(var(--accent))]',
                   )}
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="rounded-md border border-line-strong bg-canvas px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wider text-muted">
-                      {patternLabels[pattern.kind]}
+                  <span className="flex items-center justify-between gap-3">
+                    <Badge>{patternLabels[pattern.kind]}</Badge>
+                    <span className="text-caption tabular-nums text-muted">
+                      {(pattern.confidenceBasisPoints / 100).toFixed(0)}% match · {pattern.evidence.length} file{pattern.evidence.length === 1 ? '' : 's'}
                     </span>
-                    <span className="font-mono text-caption text-accent">
-                      {(pattern.confidenceBasisPoints / 100).toFixed(0)}% · {pattern.evidence.length} files
-                    </span>
-                  </div>
-                  <h3 className="mt-2 text-label font-semibold leading-snug text-fg">{pattern.title}</h3>
-                  <p className="mt-1 line-clamp-2 text-caption leading-relaxed text-muted">{pattern.explanation}</p>
+                  </span>
+                  <span className="mt-2 block text-body font-medium text-fg">{pattern.title}</span>
+                  <span className="mt-1 line-clamp-2 text-caption text-muted">{pattern.explanation}</span>
                 </button>
               ))}
             </div>
           </section>
 
-          <section className="app-panel min-h-0 overflow-hidden">
+          <section aria-label="Signal evidence" className="app-panel min-h-0 min-w-0 overflow-hidden">
             {selectedPattern ? (
               <div className="flex h-full min-h-0 flex-col">
-                <div className="border-b border-line p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="app-eyebrow text-highlight">{patternLabels[selectedPattern.kind]}</span>
-                    <span className="font-mono text-caption text-muted">{selectedPattern.algorithmVersion}</span>
-                  </div>
-                  <h2 className="mt-2 text-base font-semibold text-fg">{selectedPattern.title}</h2>
-                  <p className="mt-1 text-label leading-relaxed text-muted">{selectedPattern.explanation}</p>
+                <div className="border-b border-line p-5">
+                  <p className="text-overline uppercase text-muted" title={`Algorithm ${selectedPattern.algorithmVersion}`}>{patternLabels[selectedPattern.kind]}</p>
+                  <h3 className="mt-1 text-heading text-fg">{selectedPattern.title}</h3>
+                  <p className="mt-1 text-body text-muted">{selectedPattern.explanation}</p>
                 </div>
-                <div className="min-h-0 flex-1 overflow-y-auto p-4">
-                  <div className="mb-2 text-caption font-bold uppercase tracking-[0.16em] text-muted">Source evidence</div>
-                  <div className="space-y-2">
+                <div className="min-h-0 flex-1 overflow-y-auto p-5">
+                  <h4 className="mb-2 text-body font-medium text-fg">Source evidence</h4>
+                  <ul className="space-y-2">
                     {selectedPattern.evidence.map((evidence) => {
                       const key = evidenceKey(evidence);
                       return (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => void openEvidence(evidence)}
-                          className="focus-ring w-full rounded-xl border border-control bg-canvas/40 p-3 text-left transition hover:border-highlight/30 hover:bg-highlight/5"
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="font-mono text-caption text-fg-secondary">
-                              {evidence.portalKey} / request {evidence.requestId} / document {evidence.documentId}
+                        <li key={key}>
+                          <button
+                            type="button"
+                            onClick={() => void openEvidence(evidence)}
+                            className="focus-ring group w-full rounded-lg border border-line bg-canvas p-3 text-left transition-colors duration-fast hover:border-line-strong hover:bg-raised/60"
+                          >
+                            <span className="flex items-center justify-between gap-3">
+                              <span className="min-w-0 truncate text-body text-fg-secondary">
+                                {portalName(evidence.portalKey)} · Request <span className="tabular-nums">{evidence.requestId}</span>
+                              </span>
+                              <span className="shrink-0 text-caption text-accent group-hover:underline">
+                                {excerptLoadingKey === key ? 'Opening…' : 'Open excerpt'}
+                              </span>
                             </span>
-                            <span className="text-caption font-semibold text-highlight">
-                              {excerptLoadingKey === key ? 'Loading…' : 'Open excerpt'}
+                            <span className="mt-1 block text-caption text-muted">{evidence.evidenceLabel}</span>
+                            <span className="mt-1 block truncate font-mono text-code text-muted" title={`Document ${evidence.documentId}${evidence.characterStart !== null ? `, characters ${evidence.characterStart}–${evidence.characterEnd}` : ''}; SHA-256 ${evidence.contentSha256}`}>
+                              sha256 {evidence.contentSha256.slice(0, 16)}…
                             </span>
-                          </div>
-                          <p className="mt-1.5 text-caption text-muted">{evidence.evidenceLabel}</p>
-                          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-caption text-muted">
-                            {evidence.characterStart !== null && <span>chars {evidence.characterStart}–{evidence.characterEnd}</span>}
-                            <span title={evidence.contentSha256}>sha256 {evidence.contentSha256.slice(0, 16)}…</span>
-                          </div>
-                        </button>
+                          </button>
+                        </li>
                       );
                     })}
-                  </div>
+                  </ul>
                   {excerpt && (
-                    <div className="mt-4 rounded-xl border border-accent/30 bg-canvas/70 p-4">
+                    <div className="mt-4 rounded-lg border border-line bg-canvas p-4">
                       <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-caption font-semibold text-accent">Masked source excerpt</div>
-                          <div className="mt-0.5 font-mono text-caption text-muted">
-                            {excerpt.chunk.portalKey} / document {excerpt.chunk.documentId} · offset {excerpt.chunk.characterOffset}
-                          </div>
+                        <div className="min-w-0">
+                          <p className="text-body font-medium text-fg">Masked source excerpt</p>
+                          <p className="mt-0.5 text-caption text-muted">
+                            {portalName(excerpt.chunk.portalKey)} · document <span className="tabular-nums">{excerpt.chunk.documentId}</span>
+                          </p>
                         </div>
-                        <button type="button" onClick={() => setExcerpt(null)} aria-label="Close excerpt" className="focus-ring rounded text-muted hover:text-fg-secondary">
-                          <Icon name="x" className="h-3.5 w-3.5" />
-                        </button>
+                        <Button variant="ghost" size="sm" iconOnly icon="x" aria-label="Close excerpt" onClick={() => setExcerpt(null)} />
                       </div>
-                      <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono text-caption leading-relaxed text-muted">
+                      <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono text-code text-fg-secondary">
                         {excerpt.chunk.maskedText}
                       </pre>
-                      <div className="mt-2 text-caption text-muted">
+                      <p className="mt-2 text-caption text-muted">
                         {excerpt.chunk.maskedFindingCount} sensitive value{excerpt.chunk.maskedFindingCount === 1 ? '' : 's'} masked locally.
-                      </div>
+                      </p>
                     </div>
                   )}
                 </div>
               </div>
             ) : (
-              <EmptyState title="Select a signal to inspect its evidence chain." />
+              <EmptyMessage title="Select a signal to inspect its evidence." />
             )}
           </section>
         </div>
+
+        <CollapsibleSection title="Entity graph"><EntityGraph /></CollapsibleSection>
+        <CollapsibleSection title="Resolve entities"><ResolutionReview /></CollapsibleSection>
       </div>
     </div>
   );
@@ -498,48 +453,46 @@ function evidenceKey(evidence: CorpusEvidenceReference) {
   return `${evidence.portalKey}:${evidence.documentId}:${evidence.characterStart ?? 'document'}`;
 }
 
-function toRfc3339(value: string) {
+/** A date control yields `YYYY-MM-DD`; "to" covers that whole day. Older recipes hold a local date-time. */
+function toRfc3339(value: string, endOfDay = false) {
   if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  const date = new Date(value.includes('T') ? value : `${value}T00:00`);
+  if (Number.isNaN(date.getTime())) return null;
+  if (endOfDay && !value.includes('T')) date.setDate(date.getDate() + 1);
+  return date.toISOString();
 }
 
-function IndexMetric({ label, value, suffix = '' }: { label: string; value?: number; suffix?: string }) {
+/** Mounted on first open and kept, so its own filters survive closing it. */
+function CollapsibleSection({ title, children }: { title: string; children: ReactNode }) {
+  const [everOpened, setEverOpened] = useState(false);
   return (
-    <div className="instrument-cell px-4 py-3">
-      <div className="app-eyebrow">{label}</div>
-      <div className="numeric-value mt-1 text-sm font-semibold text-fg">
-        {value === undefined ? '—' : `${value.toLocaleString()}${suffix}`}
-      </div>
-    </div>
+    <details className="group app-panel" onToggle={(event) => { if (event.currentTarget.open) setEverOpened(true); }}>
+      <summary className="focus-ring flex h-14 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-5 text-heading text-fg [&::-webkit-details-marker]:hidden">
+        {title}
+        <Icon name="chevron" size="xs" className="text-muted transition-transform duration-base group-open:rotate-90" />
+      </summary>
+      {everOpened && <div className="border-t border-line p-5">{children}</div>}
+    </details>
   );
 }
 
-function FilterButton({ selected, onClick, children }: { selected: boolean; onClick: () => void; children: ReactNode }) {
+function FilterButton({ selected, onClick, count, children }: { selected: boolean; onClick: () => void; count: number; children: ReactNode }) {
   return (
     <button
       type="button"
       aria-pressed={selected}
       onClick={onClick}
       className={cn(
-        'focus-ring flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-caption font-medium transition',
-        selected
-          ? 'border-accent/30 bg-accent/10 text-accent'
-          : 'border-control bg-canvas/40 text-muted hover:text-fg-secondary',
+        'focus-ring inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-control transition-colors duration-fast',
+        selected ? 'border-accent/30 bg-accent/10 text-accent' : 'border-line-strong text-fg-secondary hover:bg-raised hover:text-fg',
       )}
     >
       {children}
+      <span className="tabular-nums text-muted">{count}</span>
     </button>
   );
 }
 
-function EmptyState({ title }: { title: string }) {
-  return (
-    <div className="data-grid grid min-h-48 place-items-center p-8 text-center">
-      <div className="chart-ready-card rounded-xl border px-5 py-4 backdrop-blur-xl">
-        <Icon name="sparkles" className="mx-auto h-5 w-5 text-accent" />
-        <p className="mt-3 text-label font-medium text-muted">{title}</p>
-      </div>
-    </div>
-  );
+function EmptyMessage({ title }: { title: string }) {
+  return <p className="grid min-h-48 place-items-center p-8 text-center text-body text-muted">{title}</p>;
 }
