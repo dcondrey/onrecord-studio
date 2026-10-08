@@ -1246,6 +1246,34 @@ impl ApiClient {
         .await
     }
 
+    /// [`Self::download_url_to_path_within`], but `None` when the source answers 404 or 410, the
+    /// only answers that say it serves nothing at that address; every other failure stays an
+    /// error.
+    pub async fn download_url_to_path_unless_gone(
+        &self,
+        url: Url,
+        destination: &Path,
+        maximum_bytes: usize,
+    ) -> Result<Option<DownloadedPayload>, AppError> {
+        validate_remote_url(&self.dns, &url).await?;
+        self.execute_with_retries(&url, "Download", || async {
+            let (response, _host_permit, redirect_chain) = self
+                .send_response_following_safe_redirects(url.clone(), &[], maximum_bytes, true)
+                .await?;
+            if !response.status().is_success() {
+                return Ok(None);
+            }
+            let acquisition = acquisition_record(&url, &response, redirect_chain);
+            let result =
+                write_response_to_path(response, acquisition, destination, maximum_bytes).await;
+            if result.is_err() {
+                let _ = tokio::fs::remove_file(destination).await;
+            }
+            result.map(Some)
+        })
+        .await
+    }
+
     /// A GET that carries the caller's headers and follows no redirect, so a `Range` or an API
     /// key is answered by the host it was addressed to or not at all. Header values never appear
     /// in an error.

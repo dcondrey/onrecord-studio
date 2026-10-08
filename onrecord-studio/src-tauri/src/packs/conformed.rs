@@ -227,6 +227,12 @@ fn spec(table: &str) -> Result<&'static ConformedSpec, AppError> {
         .ok_or_else(|| AppError::DataParsing(format!("'{table}' has no conformed definition")))
 }
 
+/// The publisher's record key header of `table`, if it has one.
+#[cfg_attr(not(feature = "pack-builder"), allow(dead_code))]
+pub(super) fn record_key(table: &str) -> Result<Option<&'static str>, AppError> {
+    spec(table).map(|spec| spec.key)
+}
+
 /// The SQL alias the import gave the publisher column `header` in `snapshot_id`.
 fn column_alias(conn: &Connection, snapshot_id: &str, header: &str) -> Result<String, AppError> {
     conn.query_row(

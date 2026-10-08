@@ -7,6 +7,8 @@ import type { AnalyticalDatasetKind, AnalyticalImportResult } from './analysisWo
  */
 export interface DataPackSummary {
   pack: string;
+  /** The pack keeps dated snapshots of each table's file; choosing a table downloads only the latest. */
+  snapshots: boolean;
   packVersion: string;
   schemaVersion: string;
   /** When the pack builder finished; its rows are the builder's retrieval as of then. */
@@ -23,6 +25,12 @@ export interface DataPackSummary {
 export interface DataPackTable {
   table: string;
   files: DataPackFileSummary[];
+  /** Retrievals a snapshot pack recorded as unchanged from the table's latest snapshot. */
+  unchangedChecks: number;
+  /** The latest of those checks; `null` when there is none. */
+  lastCheckedAt: string | null;
+  /** Change records between the table's snapshots; listed, never imported. */
+  changeRecords: number;
 }
 
 export interface DataPackFileSummary {

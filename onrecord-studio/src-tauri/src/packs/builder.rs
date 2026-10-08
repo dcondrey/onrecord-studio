@@ -1,10 +1,14 @@
 //! The data-pack builder: retrieves a pack's City files through the app's own source list and
-//! downloader, records what the publisher served, and signs the manifest with the publisher key
-//! kept in the macOS Keychain. Built only with the `pack-builder` feature.
+//! downloader, records what the publisher served, and signs the manifest with the publisher key,
+//! kept in the macOS Keychain or, on the CI runner, given as an environment seed. Built only with
+//! the `pack-builder` feature.
 
-use super::catalog::pack_tables;
+use super::catalog::{pack_tables, SNAPSHOT_PACK};
 use super::conformed::{conformed_select, literal, ConformedOrigin};
-use super::{PackFile, PackFileFormat, PackLicence, PackManifest, PACK_MANIFEST_FILE};
+use super::{
+    decode_hex, pinned_pack_keys, pinned_signer, PackFile, PackFileFormat, PackKeyScope,
+    PackLicence, PackManifest, PACK_MANIFEST_FILE, PACK_PUBLIC_KEYS,
+};
 use crate::error::AppError;
 use crate::ingestion::client::{ApiClient, HttpClientConfig};
 use crate::ingestion::queue::dataset_source;
@@ -15,13 +19,19 @@ use chrono::{Datelike, Utc};
 use ed25519_dalek::SigningKey;
 use std::path::{Path, PathBuf};
 
+#[cfg(target_os = "macos")]
 const KEYCHAIN_SERVICE: &str = "com.onrecord.pack-publisher";
+#[cfg(target_os = "macos")]
 const KEYCHAIN_ACCOUNT: &str = "publisher-seed-v1";
+/// A publisher seed as 64 hex characters, which takes the place of the Keychain key.
+const SEED_VARIABLE: &str = "ONRECORD_PACK_SEED";
+/// The `PACK_PUBLIC_KEYS` name the seed's key must be pinned under.
+const KEY_ID_VARIABLE: &str = "ONRECORD_PACK_KEY_ID";
 /// The earliest year asked of a table split by year; the source list refuses years before its
 /// publisher's series, and those are skipped.
 const EARLIEST_YEAR: u16 = 2000;
 
-fn licence() -> PackLicence {
+pub(super) fn licence() -> PackLicence {
     PackLicence {
         id: "ODC-PDDL-1.0".into(),
         url: "https://opendefinition.org/licenses/odc-pddl/".into(),
@@ -33,12 +43,13 @@ fn licence() -> PackLicence {
     }
 }
 
-fn keychain_error(error: impl std::fmt::Display) -> AppError {
+fn key_error(error: impl std::fmt::Display) -> AppError {
     AppError::Internal(format!("Pack publisher key: {error}"))
 }
 
 /// Creates the publisher key and stores its seed in the Keychain; refuses if one exists. Returns
 /// the public key as hex, for `PACK_PUBLIC_KEYS`.
+#[cfg(target_os = "macos")]
 pub fn init_key() -> Result<String, AppError> {
     use security_framework::passwords::{get_generic_password, set_generic_password};
     if get_generic_password(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT).is_ok() {
@@ -47,21 +58,103 @@ pub fn init_key() -> Result<String, AppError> {
         ));
     }
     let seed = crate::integrity::generate_signing_key_seed();
-    set_generic_password(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT, &seed).map_err(keychain_error)?;
+    set_generic_password(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT, &seed).map_err(key_error)?;
     Ok(crate::integrity::digest_hex(
         SigningKey::from_bytes(&seed).verifying_key().to_bytes(),
     ))
 }
 
-fn publisher_key() -> Result<SigningKey, AppError> {
+/// A publisher signing key and the `PACK_PUBLIC_KEYS` name it is pinned under, if it is pinned.
+pub(super) struct PublisherKey {
+    pub key_id: Option<String>,
+    pub signing_key: SigningKey,
+}
+
+/// The key `seed_hex` names, accepted only when `pinned` lists exactly `(key_id, its public
+/// key)`. No error repeats the seed.
+fn pinned_seed_key(
+    seed_hex: &str,
+    key_id: &str,
+    pinned: &[(&str, &str, PackKeyScope)],
+) -> Result<PublisherKey, AppError> {
+    let seed: [u8; 32] = (seed_hex.len() == 64 && seed_hex.bytes().all(|b| b.is_ascii_hexdigit()))
+        .then(|| decode_hex(seed_hex))
+        .flatten()
+        .and_then(|bytes| bytes.try_into().ok())
+        .ok_or_else(|| key_error(format!("{SEED_VARIABLE} is not 64 hex characters")))?;
+    let signing_key = SigningKey::from_bytes(&seed);
+    let public = crate::integrity::digest_hex(signing_key.verifying_key().to_bytes());
+    if !pinned
+        .iter()
+        .any(|(kid, hex, _)| *kid == key_id && hex.eq_ignore_ascii_case(&public))
+    {
+        return Err(key_error(format!(
+            "the key {SEED_VARIABLE} names is not pinned in PACK_PUBLIC_KEYS as '{key_id}'"
+        )));
+    }
+    Ok(PublisherKey {
+        key_id: Some(key_id.to_owned()),
+        signing_key,
+    })
+}
+
+/// The publisher key: from [`SEED_VARIABLE`] when it is set, else from the Keychain (macOS only).
+pub(super) fn publisher_key() -> Result<PublisherKey, AppError> {
+    if let Some(seed) = std::env::var_os(SEED_VARIABLE) {
+        let seed = seed
+            .into_string()
+            .map_err(|_| key_error(format!("{SEED_VARIABLE} is not 64 hex characters")))?;
+        let key_id = std::env::var(KEY_ID_VARIABLE)
+            .map_err(|_| key_error(format!("{SEED_VARIABLE} is set without {KEY_ID_VARIABLE}")))?;
+        return pinned_seed_key(&seed, &key_id, PACK_PUBLIC_KEYS);
+    }
+    keychain_key()
+}
+
+#[cfg(target_os = "macos")]
+fn keychain_key() -> Result<PublisherKey, AppError> {
     let seed =
         security_framework::passwords::get_generic_password(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
-            .map_err(keychain_error)?;
+            .map_err(key_error)?;
     let seed: [u8; 32] = seed
         .as_slice()
         .try_into()
-        .map_err(|_| keychain_error("the stored seed is not 32 bytes"))?;
-    Ok(SigningKey::from_bytes(&seed))
+        .map_err(|_| key_error("the stored seed is not 32 bytes"))?;
+    let signing_key = SigningKey::from_bytes(&seed);
+    let public = crate::integrity::digest_hex(signing_key.verifying_key().to_bytes());
+    Ok(PublisherKey {
+        key_id: PACK_PUBLIC_KEYS
+            .iter()
+            .find(|(_, hex, _)| hex.eq_ignore_ascii_case(&public))
+            .map(|(kid, _, _)| (*kid).to_owned()),
+        signing_key,
+    })
+}
+
+/// Refuses `key` for `pack`, before anything is retrieved, unless the app accepts that key's
+/// signature on that pack: the CI key never signs a curated release, nor the owner's key a
+/// snapshot run.
+pub(super) fn require_signs(key: &PublisherKey, pack: &str) -> Result<(), AppError> {
+    let public = crate::integrity::digest_hex(key.signing_key.verifying_key().to_bytes());
+    pinned_signer(&pinned_pack_keys(), &public, pack).map(|_| ())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn keychain_key() -> Result<PublisherKey, AppError> {
+    Err(key_error(format!(
+        "set {SEED_VARIABLE} and {KEY_ID_VARIABLE}; the Keychain key source is macOS only"
+    )))
+}
+
+/// Rows in the original at `path` as the analytical import's reader counts them.
+pub(super) async fn count_rows(path: &Path, file_name: &str) -> Result<u64, AppError> {
+    let (source, name) = (path.to_path_buf(), file_name.to_owned());
+    Ok(tauri::async_runtime::spawn_blocking(move || {
+        TableSource::open(&source, &name, None)?.read(|_| Ok(()))
+    })
+    .await
+    .map_err(|error| AppError::Internal(format!("Pack row count: {error}")))??
+    .rows as u64)
 }
 
 /// The years a table is published for, or `[None]` for a table published as one file.
@@ -78,8 +171,15 @@ fn published_years(dataset: CityDataset, current_year: i32) -> Vec<Option<u16>> 
 /// Retrieves every file of `pack` into `out` and writes its signed manifest there. `out` must not
 /// exist yet, so a pack directory only ever holds one build.
 pub async fn build(pack: &str, out: &Path) -> Result<PathBuf, AppError> {
+    if pack == SNAPSHOT_PACK {
+        return Err(AppError::DataParsing(format!(
+            "{SNAPSHOT_PACK} is extended by `snapshot`, never built anew"
+        )));
+    }
     let tables = pack_tables(pack)?;
     let key = publisher_key()?;
+    require_signs(&key, pack)?;
+    let key = key.signing_key;
     if out.exists() {
         return Err(AppError::Storage(format!(
             "{} already exists; a pack is built into a new directory",
@@ -92,13 +192,7 @@ pub async fn build(pack: &str, out: &Path) -> Result<PathBuf, AppError> {
     })?;
     let now = Utc::now();
     let pack_version = format!("{}.{}.{}", now.year(), now.month(), now.day());
-    let scratch = ScratchDatabase(
-        std::env::temp_dir().join(format!("onrecord-pack-{}.duckdb", uuid::Uuid::new_v4())),
-    );
-    let repository = DuckDbRepository::new(&scratch.0)?;
-    repository
-        .run_migrations(include_str!("../../migrations/0001_initial_schema.sql"))
-        .await?;
+    let (_scratch, repository) = scratch_database().await?;
     let mut files = Vec::new();
     for table in tables {
         for year in published_years(table.dataset, now.year()) {
@@ -117,13 +211,7 @@ pub async fn build(pack: &str, out: &Path) -> Result<PathBuf, AppError> {
             let url = reqwest::Url::parse(&url)
                 .map_err(|error| AppError::Internal(format!("Pack source URL: {error}")))?;
             let downloaded = client.download_url_to_path(url.clone(), &path).await?;
-            let (source, name) = (path.clone(), file_name.clone());
-            let rows = tauri::async_runtime::spawn_blocking(move || {
-                TableSource::open(&source, &name, None)?.read(|_| Ok(()))
-            })
-            .await
-            .map_err(|error| AppError::Internal(format!("Pack row count: {error}")))??
-            .rows as u64;
+            let rows = count_rows(&path, &file_name).await?;
             eprintln!("{relative}: {rows} rows, {} bytes", downloaded.byte_count);
             let original = PackFile {
                 path: relative,
@@ -139,8 +227,9 @@ pub async fn build(pack: &str, out: &Path) -> Result<PathBuf, AppError> {
                 partial,
                 last_modified: downloaded.acquisition.last_modified,
                 etag: downloaded.acquisition.etag,
+                changes: None,
             };
-            let parquet =
+            let (parquet, _) =
                 write_conformed_parquet(&repository, out, &original, kind.clone(), &pack_version)
                     .await?;
             eprintln!(
@@ -157,6 +246,8 @@ pub async fn build(pack: &str, out: &Path) -> Result<PathBuf, AppError> {
         built_at: Utc::now().to_rfc3339(),
         licence: licence(),
         files,
+        key_id: None,
+        checks: Vec::new(),
     };
     let signed = crate::integrity::sign_package(manifest, &key).map_err(AppError::Internal)?;
     let manifest_path = out.join(PACK_MANIFEST_FILE);
@@ -168,8 +259,20 @@ pub async fn build(pack: &str, out: &Path) -> Result<PathBuf, AppError> {
     Ok(manifest_path)
 }
 
-/// The DuckDB file the Parquet copies are made in, removed with its WAL when the build ends.
-struct ScratchDatabase(PathBuf);
+/// The DuckDB file the Parquet copies are made in, removed with its WAL when dropped.
+pub(super) struct ScratchDatabase(PathBuf);
+
+/// A new scratch DuckDB file with the app's schema, removed when the guard is dropped.
+pub(super) async fn scratch_database() -> Result<(ScratchDatabase, DuckDbRepository), AppError> {
+    let scratch = ScratchDatabase(
+        std::env::temp_dir().join(format!("onrecord-pack-{}.duckdb", uuid::Uuid::new_v4())),
+    );
+    let repository = DuckDbRepository::new(&scratch.0)?;
+    repository
+        .run_migrations(include_str!("../../migrations/0001_initial_schema.sql"))
+        .await?;
+    Ok((scratch, repository))
+}
 
 impl Drop for ScratchDatabase {
     fn drop(&mut self) {
@@ -181,23 +284,29 @@ impl Drop for ScratchDatabase {
 }
 
 /// Imports `original` from `out` through the app's analytical import into `scratch`, writes its
-/// conformed rows in file order to `parquet/<table>/<file stem>.parquet`, and returns that file's
-/// manifest entry. Its rows are the rows the import kept; the rows it rejected as unreadable are
-/// not in the copy, and the entry counts them.
-async fn write_conformed_parquet(
+/// conformed rows in file order to the Parquet path mirroring the original's
+/// (`originals/<dir>/<name>` to `parquet/<dir>/<stem>.parquet`), and returns that file's manifest
+/// entry and the scratch snapshot. Its rows are the rows the import kept; the rows it rejected as
+/// unreadable are not in the copy, and the entry counts them.
+pub(super) async fn write_conformed_parquet(
     scratch: &DuckDbRepository,
     out: &Path,
     original: &PackFile,
     kind: AnalyticalDatasetKind,
     pack_version: &str,
-) -> Result<PackFile, AppError> {
+) -> Result<(PackFile, String), AppError> {
     let source = Path::new(&original.path);
-    let (Some(file_name), Some(stem)) = (
+    let (Some(file_name), Some(stem), Some(directory)) = (
         source.file_name().and_then(|name| name.to_str()),
         source.file_stem().and_then(|stem| stem.to_str()),
+        source
+            .parent()
+            .and_then(|parent| parent.strip_prefix("originals").ok())
+            .and_then(|directory| directory.to_str())
+            .filter(|directory| !directory.is_empty()),
     ) else {
         return Err(AppError::Internal(format!(
-            "Pack original {} has no file name",
+            "Pack original {} is not originals/<table>/.../<file name>",
             original.path
         )));
     };
@@ -216,7 +325,7 @@ async fn write_conformed_parquet(
             derived_subset: None,
         })
         .await?;
-    let relative = format!("parquet/{}/{stem}.parquet", original.table);
+    let relative = format!("parquet/{directory}/{stem}.parquet");
     let path = out.join(&relative);
     tokio::fs::create_dir_all(path.parent().expect("a file under parquet"))
         .await
@@ -225,7 +334,7 @@ async fn write_conformed_parquet(
         .to_str()
         .ok_or_else(|| AppError::Storage(format!("{} is not UTF-8", path.display())))?
         .to_owned();
-    let (table, snapshot_id) = (original.table.clone(), imported.snapshot_id);
+    let (table, snapshot_id) = (original.table.clone(), imported.snapshot_id.clone());
     let origin = ConformedOrigin {
         retrieved_at: Some(original.retrieved_at.clone()),
         pack_version: Some(pack_version.into()),
@@ -253,20 +362,68 @@ async fn write_conformed_parquet(
         .len();
     let sha256 = crate::integrity::sha256_file(&path)
         .map_err(|error| AppError::Storage(format!("Parquet copy: {error}")))?;
-    Ok(PackFile {
-        path: relative,
-        format: PackFileFormat::Parquet,
-        sha256,
-        bytes,
-        rows,
-        excluded_rows: Some(imported.rejected_rows as u64),
-        ..original.clone()
-    })
+    Ok((
+        PackFile {
+            path: relative,
+            format: PackFileFormat::Parquet,
+            sha256,
+            bytes,
+            rows,
+            excluded_rows: Some(imported.rejected_rows as u64),
+            ..original.clone()
+        },
+        imported.snapshot_id,
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn public_hex(seed: u8) -> String {
+        crate::integrity::digest_hex(
+            SigningKey::from_bytes(&[seed; 32])
+                .verifying_key()
+                .to_bytes(),
+        )
+    }
+
+    /// An environment seed signs only as the exact `(kid, public key)` pair the app pins, and no
+    /// refusal repeats the seed.
+    #[test]
+    fn an_environment_seed_signs_only_as_the_key_it_is_pinned_under() {
+        let (ours, other) = (public_hex(0x11), public_hex(0x22));
+        let pinned = [
+            ("pack-other", other.as_str(), PackKeyScope::Curated),
+            ("pack-test", ours.as_str(), PackKeyScope::Curated),
+        ];
+        let seed = "11".repeat(32);
+        let key = pinned_seed_key(&seed, "pack-test", &pinned).unwrap();
+        assert_eq!(key.key_id.as_deref(), Some("pack-test"));
+        assert_eq!(public_hex(0x11), {
+            crate::integrity::digest_hex(key.signing_key.verifying_key().to_bytes())
+        });
+
+        let refusal = |seed: &str, kid: &str, pinned: &[(&str, &str, PackKeyScope)]| {
+            pinned_seed_key(seed, kid, pinned)
+                .err()
+                .expect("refused")
+                .to_string()
+        };
+        // Pinned, but under another name.
+        assert!(refusal(&seed, "pack-other", &pinned).contains("not pinned"));
+        // Not pinned at all, including by the app's own table.
+        assert!(refusal(&"33".repeat(32), "pack-test", &pinned).contains("not pinned"));
+        assert!(refusal(&seed, "pack-ci-2026-1", PACK_PUBLIC_KEYS).contains("not pinned"));
+        for malformed in [String::new(), "11".into(), "zz".repeat(32), "1".repeat(65)] {
+            let error = refusal(&malformed, "pack-test", &pinned);
+            assert!(error.contains("not 64 hex characters"), "{error}");
+            assert!(
+                malformed.len() < 2 || !error.contains(&malformed),
+                "{error}"
+            );
+        }
+    }
 
     #[tokio::test]
     async fn a_parquet_copy_is_listed_as_the_file_written_and_holds_the_conformed_rows() {
@@ -291,13 +448,14 @@ mod tests {
             partial: false,
             last_modified: None,
             etag: None,
+            changes: None,
         };
         let scratch = DuckDbRepository::new(":memory:").unwrap();
         scratch
             .run_migrations(include_str!("../../migrations/0001_initial_schema.sql"))
             .await
             .unwrap();
-        let copy = write_conformed_parquet(
+        let (copy, _) = write_conformed_parquet(
             &scratch,
             out.path(),
             &original,

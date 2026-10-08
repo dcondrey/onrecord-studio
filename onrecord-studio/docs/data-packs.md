@@ -226,9 +226,96 @@ column or table here before anything is published.
    `publisher_record_id` keeps the key as published. Not packed: SANDAG schools and transit stops (no stated licence), the
    short-term rental registry (its original carries host names and phones, and a pack ships
    originals byte for byte), and Commission on Police Practices cases (file names differ by year).
-7. **Later.** Fetch only what was published after a pack's build date, using the recorded
-   freshness markers (still later: the app fetches a published pack's files, not newer publisher
-   rows); the remaining PD packs; ASK tables once permission is in writing.
+7. **Snapshots (built 2026-10-07; first published run pending the CI secrets).** Rule 7 for the
+   City files overwritten in place: `san-diego-snapshots`, extended daily by a scheduled job (see
+   Snapshots below). **Later:** fetch only what was published after a pack's build date, using the
+   recorded freshness markers (still later: the app fetches a published pack's files, not newer
+   publisher rows); the remaining PD packs; ASK tables once permission is in writing; choosing an
+   earlier snapshot of a table from a published pack (a choice downloads the latest; any snapshot
+   can be imported from a local copy of the pack).
+
+## Snapshots
+
+**What.** The City overwrites many files in place, so their history exists nowhere else: open Get
+It Done reports, City properties, parcels and leases, budget and actuals files, the budget and
+calls lookups, the RIPA stop files, collisions and hate crimes. The pack `san-diego-snapshots`
+follows every catalog table published as one file rather than by year
+(`packs::catalog::snapshot_tables`, derived, not listed by hand: 21 tables on 2026-10-07; Get It
+Done contributes only its open file, since its closed reports are by year).
+
+**Schedule.** `.github/workflows/pack-snapshots.yml` runs daily at 13:23 UTC (and on demand):
+`onrecord-pack-builder snapshot san-diego-snapshots <work-dir>` in one job, then
+`scripts/publish_pack.py --incremental <work-dir>` in a second job on another runner, which
+receives the work directory as an artifact. The seed reaches only the first job's snapshot step,
+and no Python runs on that runner; the token reaches only the second job, whose dependencies are
+installed hash-checked from `scripts/publish_pack.py.lock` (`uv run --locked --script`). Each run:
+
+1. fetches the published manifest through `packs::published` and verifies it against the pinned
+   keys. HTTP 404 on the manifest is the first run and starts an empty manifest; any other
+   failure, including the 401 Hugging Face answers for a repository that does not exist, aborts.
+   The owner creates the empty public repository once, by hand
+   (`uv run --locked --script scripts/publish_pack.py --ensure-repo san-diego-snapshots`).
+2. retrieves each file. Bytes equal (size and SHA-256) to the file's latest snapshot add a
+   **check**; other bytes become a new **snapshot** (original, conformed Parquet) and, when an
+   earlier snapshot exists, a **change record** against it, computed from that earlier original
+   fetched back from Hugging Face and hash-checked. A file that fails before its bytes are kept
+   is left out and listed in `not-snapshotted.txt`. Once its original is kept, a snapshot is
+   published even if its Parquet copy or change record fails, and the table and reason go to
+   `incomplete.txt`: a later snapshot without a change record means the comparison failed, not
+   that nothing changed (the new snapshot itself shows the bytes differed). Either list makes the
+   job fail visibly after the others are published.
+3. writes the cumulative manifest (every earlier file and check plus the new ones,
+   `packVersion` = the run's UTC stamp), signs it, writes `new-files.txt`, and verifies the
+   manifest and every new file as the app would before exiting.
+4. uploads `manifest.json`, `README.md` and the new files in one commit on top of the commit the
+   manifest was read from. The script refuses a manifest that drops a published file or check,
+   changes any field of a published file's entry, or lists a new file at a published path:
+   published files are immutable.
+
+**Layout.** `originals/<table>/<stamp>/<publisher file name>`,
+`parquet/<table>/<stamp>/<stem>.parquet`, `changes/<table>/<stamp>.parquet`, where `<stamp>` is
+the UTC retrieval time as `YYYY-MM-DDTHHMMSSZ`. Table names and conformed definitions are the
+curated packs'. A change record is `PackFileFormat::Changes`; the app lists and counts it but never
+imports it. Its rows: `change` (`added`, `removed`, `changed`, `column_added`, `column_removed`),
+`publisher_record_id`, `key_occurrence`, `field`, `before`, `after`, `note`, all from the original
+cell text, never typed values. A keyed table compares records by key and the key's repeat in file
+order (so a repeated key is never multiplied); rows without a key compare by their cells in the
+columns both snapshots have, with multiplicity. Past half the records changed, changed records are
+listed whole as removed and added, and `note` says so. The manifest entry counts each kind
+(`changes`).
+
+**The CI key.** `pack-ci-2026-1`, public key
+`3049662bc87c61409d8b8a515d60adf1420a32504bd4f6215ac0c121550a318f`, pinned in `PACK_PUBLIC_KEYS`
+beside `pack-2026-1` and separate from it. Each pinned key carries the packs it signs
+(`PackKeyScope`), and verification refuses any other: the CI key verifies only
+`san-diego-snapshots`, the owner's Keychain key only the curated packs, so a leaked CI seed cannot
+sign a curated release. A manifest's signed `keyId`, when present, must be the pinned name of the
+key that verified it. The builder applies the same rule to its key before it retrieves anything,
+so `build` refuses the CI seed and `snapshot` the Keychain key. The `HF_TOKEN` the job holds
+should be a fine-grained token with write access to `onrecord-san-diego-snapshots` only. Its seed is the GitHub secret `ONRECORD_PACK_SEED` (and the Keychain item
+`com.onrecord.pack-publisher` / `ci-seed-v1`); the builder takes it only with
+`ONRECORD_PACK_KEY_ID`, and only when that exact (name, public key) pair is pinned. The signature's
+`signerKeyId` is the key's SHA-256 (verification binds it to the key), so the manifest names the
+key in its own signed `keyId` field.
+
+**What a check proves, and what it does not.** That the publisher served exactly the latest
+snapshot's bytes at the check time, as retrieved by the job. It does not show the file unchanged
+between checks: a change made and reverted between two runs is invisible, and a snapshot's time is
+when it was retrieved, not when the City changed the file (`Last-Modified` and `ETag` are recorded
+as served, not trusted). A missing day means the file was not checked that day, not that it was
+unchanged.
+
+**In the app.** Choosing a table of the published snapshot pack downloads and imports its latest
+snapshot only; earlier snapshots are listed and counted, never downloaded by that choice, and one
+whose source the app no longer lists cannot block it. A local copy of the pack can import any
+snapshot. Each imported snapshot is its own `source_id`, so `analysis_conformed_<table>` holds
+every snapshot imported so far (the latest imported on two days is two sources), and a table also
+imported from a curated pack (`service_reports` from `san-diego-reports`) holds those rows too: a
+count over the view counts each source. The summary shows each table's unchanged checks (count and latest) and change records.
+
+**Growth.** A check adds about 1.1 KB to `manifest.json` (pretty JSON plus its base64 canonical
+copy); 21 a day is about 24 KB a day, 9 MB a year. The app's manifest download bound is 32 MiB,
+about three years; before then, checks move to per-period files listed by the manifest.
 
 ## From the research blueprint (owner's file, 2026-10-06)
 

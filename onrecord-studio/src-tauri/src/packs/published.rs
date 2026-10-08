@@ -6,25 +6,27 @@
 //! Every address is built here from the catalog's pack names and a path the verified manifest
 //! lists; the frontend names a pack, a version and tables, never a URL or a path.
 
-use super::catalog::pack_names;
+use super::catalog::{pack_names, SNAPSHOT_PACK};
 use super::import::{file_kind, import_files, manifest_sha256, summarize};
 use super::{
-    check_pack_file, pack_relative, refused, verify_manifest, verify_manifest_bytes, PackFile,
-    PackFileFormat, PackManifest, PACK_MANIFEST_FILE,
+    check_pack_file, latest_retrieved, pack_relative, refused, verify_manifest,
+    verify_manifest_bytes, PackFile, PackFileFormat, PackManifest, PinnedPackKey, SignedManifest,
+    PACK_MANIFEST_FILE,
 };
 use crate::error::AppError;
 use crate::ingestion::client::{ApiClient, HttpClientConfig};
 use crate::storage::sqlite::DuckDbRepository;
 use crate::storage::tabular::MAX_STREAMED_BYTES;
 use crate::types::{DataPackImportOutcome, DataPackSummary, PublishedPack, PublishedPackSelection};
-use ed25519_dalek::VerifyingKey;
 use reqwest::Url;
 use std::path::{Component, Path, PathBuf};
 
 const PUBLISHER: &str = "Writerslogic";
 const HUB: &str = "https://huggingface.co/";
-/// A manifest lists a pack's files; `san-diego-reports` 2026.10.7 (94 files) is 123,432 bytes.
-const MAX_MANIFEST_BYTES: usize = 4 * 1024 * 1024;
+/// A manifest lists a pack's files; `san-diego-reports` 2026.10.7 (94 files) is 123,432 bytes. The
+/// snapshot pack's grows by roughly 25 KB a day (`docs/data-packs.md`, Snapshots), which this
+/// bound holds for about three years.
+const MAX_MANIFEST_BYTES: usize = 32 * 1024 * 1024;
 /// Beside a kept manifest: the repository commit it was served from, so its files are fetched
 /// from that commit rather than from whatever `main` holds later.
 const REVISION_FILE: &str = "revision";
@@ -174,8 +176,8 @@ fn keep_manifest(
     pack: &'static str,
     staged: &Path,
     revision: Option<String>,
-    pinned: &[VerifyingKey],
-) -> Result<DataPackSummary, AppError> {
+    pinned: &[PinnedPackKey],
+) -> Result<SignedManifest, AppError> {
     let bytes = std::fs::read(staged)
         .map_err(|error| AppError::Storage(format!("Downloaded pack manifest: {error}")))?;
     let signed = verify_manifest_bytes(&bytes, pinned)?;
@@ -204,42 +206,79 @@ fn keep_manifest(
         },
     }
     std::fs::rename(staged, directory.join(PACK_MANIFEST_FILE)).map_err(pack_error)?;
-    summarize(signed.manifest, &signed.signer_key_id)
+    Ok(signed)
 }
 
 /// Downloads `pack`'s signed manifest and describes what it lists. No listed file is fetched.
 pub(crate) async fn fetch_manifest(
     root: PathBuf,
     pack: &str,
-    pinned: Vec<VerifyingKey>,
+    pinned: Vec<PinnedPackKey>,
 ) -> Result<DataPackSummary, AppError> {
+    let signed = fetch_signed_manifest(root, pack, pinned)
+        .await?
+        .ok_or_else(|| AppError::DataParsing(format!("{pack} has not been published yet")))?;
+    summarize(signed.manifest, &signed.signer_key_id)
+}
+
+/// Downloads `pack`'s signed manifest and keeps it once verified, as [`fetch_manifest`] does;
+/// `None` when the repository serves no manifest (HTTP 404 or 410).
+pub(crate) async fn fetch_signed_manifest(
+    root: PathBuf,
+    pack: &str,
+    pinned: Vec<PinnedPackKey>,
+) -> Result<Option<SignedManifest>, AppError> {
     let pack = published_pack(pack)?;
     let pack_root = root.join(pack);
     tokio::fs::create_dir_all(&pack_root)
         .await
         .map_err(|error| AppError::Storage(format!("Pack directory: {error}")))?;
     let staged = staged_name(&pack_root);
-    let downloaded = client()?
-        .download_url_to_path_within(
+    let Some(downloaded) = client()?
+        .download_url_to_path_unless_gone(
             file_url(pack, BRANCH, Path::new(PACK_MANIFEST_FILE))?,
             &staged,
             MAX_MANIFEST_BYTES,
         )
-        .await?;
+        .await?
+    else {
+        return Ok(None);
+    };
     let revision = served_revision(pack, &downloaded.acquisition.resolved_url);
     let kept = staged.clone();
-    let summary = blocking("Verify data pack manifest", move || {
+    let signed = blocking("Verify data pack manifest", move || {
         keep_manifest(&root, pack, &kept, revision, &pinned)
     })
     .await;
-    if summary.is_err() {
+    if signed.is_err() {
         let _ = tokio::fs::remove_file(&staged).await;
     }
-    summary
+    signed.map(Some)
+}
+
+/// Fetches `file`, listed by the manifest of `pack` `pack_version` that [`fetch_signed_manifest`]
+/// kept under `root`, from the commit that manifest came from, and returns where it was kept once
+/// its size and SHA-256 matched.
+#[cfg_attr(not(feature = "pack-builder"), allow(dead_code))]
+pub(crate) async fn fetch_listed_file(
+    root: &Path,
+    pack: &str,
+    pack_version: &str,
+    file: &PackFile,
+) -> Result<PathBuf, AppError> {
+    let pack = published_pack(pack)?;
+    let directory = version_directory(root, pack, pack_version)?;
+    let revision = kept_revision(&directory);
+    fetch_file(&client()?, root, pack, &revision, &directory, file).await?;
+    let relative = pack_relative(&file.path)
+        .ok_or_else(|| refused(format!("it lists a path outside the pack: {}", file.path)))?;
+    Ok(directory.join(relative))
 }
 
 /// The original files `selection` names, each once, refused as a whole before anything is
-/// downloaded if any choice matches no file or a file this app cannot import.
+/// downloaded if any choice matches no file or a file this app cannot import. In the snapshot
+/// pack a choice is the table's latest snapshot, not its history: earlier snapshots, including
+/// any whose source the app no longer lists, are neither downloaded nor checked.
 fn plan(
     manifest: &PackManifest,
     selection: &[PublishedPackSelection],
@@ -247,11 +286,19 @@ fn plan(
     let mut planned: Vec<PackFile> = Vec::new();
     for chosen in selection {
         let mut matched = false;
-        for file in manifest.files.iter().filter(|file| {
-            file.format == PackFileFormat::Original
-                && file.table == chosen.table
-                && file.year == chosen.year
-        }) {
+        let mut files: Vec<&PackFile> = manifest
+            .files
+            .iter()
+            .filter(|file| {
+                file.format == PackFileFormat::Original
+                    && file.table == chosen.table
+                    && file.year == chosen.year
+            })
+            .collect();
+        if manifest.pack == SNAPSHOT_PACK {
+            files = latest_retrieved(files).into_iter().collect();
+        }
+        for file in files {
             matched = true;
             if file.bytes > MAX_STREAMED_BYTES {
                 return Err(AppError::DataParsing(format!(
@@ -369,7 +416,7 @@ pub(crate) async fn fetch_files(
     pack_version: &str,
     inspected_manifest_sha256: &str,
     selection: Vec<PublishedPackSelection>,
-    pinned: Vec<VerifyingKey>,
+    pinned: Vec<PinnedPackKey>,
 ) -> Result<Vec<DataPackImportOutcome>, AppError> {
     let pack = published_pack(pack)?;
     let directory = version_directory(&root, pack, pack_version)?;
@@ -466,6 +513,7 @@ mod tests {
             partial: false,
             last_modified: None,
             etag: None,
+            changes: None,
         }
     }
 
@@ -481,6 +529,8 @@ mod tests {
                 disclaimer: "Informational only.".into(),
             },
             files,
+            key_id: None,
+            checks: Vec::new(),
         }
     }
 
@@ -611,6 +661,108 @@ mod tests {
         );
         assert!(plan(&manifest, &[choose(Some(2025)), choose(Some(2019))]).is_err());
         assert!(plan(&manifest, &[]).is_err());
+    }
+
+    /// In the snapshot pack a choice downloads the table's latest snapshot only, so an earlier
+    /// one, even one whose source the app no longer lists, neither multiplies the import nor
+    /// refuses it.
+    #[test]
+    fn a_snapshot_table_choice_plans_only_its_latest_snapshot() {
+        let table = super::super::catalog::snapshot_tables(2026)
+            .into_iter()
+            .find(|table| table.table == "call_types")
+            .unwrap();
+        let source = crate::ingestion::queue::dataset_source(table.dataset, None, 2026).unwrap();
+        let snapshot = |stamp: &str, source_url: &str| PackFile {
+            path: format!("originals/call_types/{stamp}/{}", source.file_name),
+            table: "call_types".into(),
+            source_url: source_url.into(),
+            retrieved_at: format!(
+                "{}-{}-{}:{}:{}Z",
+                &stamp[..4],
+                &stamp[5..7],
+                &stamp[8..13],
+                &stamp[13..15],
+                &stamp[15..17]
+            ),
+            year: None,
+            ..listed("unused", "call_types", None)
+        };
+        let mut snapshots = manifest(vec![
+            snapshot("2026-10-05T132301Z", "https://example.test/moved.csv"),
+            snapshot("2026-10-07T132303Z", &source.url),
+            snapshot("2026-10-06T132302Z", &source.url),
+        ]);
+        snapshots.pack = SNAPSHOT_PACK.into();
+        let choose = [PublishedPackSelection {
+            table: "call_types".into(),
+            year: None,
+        }];
+        let planned = plan(&snapshots, &choose).unwrap();
+        assert_eq!(
+            planned
+                .iter()
+                .map(|file| file.path.as_str())
+                .collect::<Vec<_>>(),
+            [snapshots.files[1].path.as_str()]
+        );
+    }
+
+    /// What a snapshot run's first steps rely on: only a 404 reads as an absent manifest (Hugging
+    /// Face answers 401 for a repository that does not exist, which must abort a run rather than
+    /// start an empty pack), and a listed file comes back checked from the manifest's commit.
+    #[tokio::test]
+    #[ignore = "downloads from Hugging Face"]
+    async fn only_a_404_is_absence_and_a_listed_file_comes_back_checked() {
+        let root = tempfile::tempdir().unwrap();
+        let client = client().unwrap();
+        let mut answers = Vec::new();
+        for (repository, file) in [
+            ("onrecord-san-diego-money", "manifest.json"),
+            ("onrecord-san-diego-money", "nope.json"),
+            ("onrecord-does-not-exist", "manifest.json"),
+        ] {
+            let url = Url::parse(&format!(
+                "{HUB}datasets/{PUBLISHER}/{repository}/resolve/{BRANCH}/{file}"
+            ))
+            .unwrap();
+            let destination = staged_name(root.path());
+            answers.push(
+                client
+                    .download_url_to_path_unless_gone(url, &destination, MAX_MANIFEST_BYTES)
+                    .await
+                    .map(|downloaded| downloaded.is_some()),
+            );
+        }
+        assert!(matches!(answers[0], Ok(true)), "{:?}", answers[0]);
+        assert!(matches!(answers[1], Ok(false)), "{:?}", answers[1]);
+        assert!(answers[2].is_err(), "{:?}", answers[2]);
+
+        let packs = root.path().join("packs");
+        let signed = fetch_signed_manifest(
+            packs.clone(),
+            "san-diego-money",
+            crate::packs::pinned_pack_keys(),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        let smallest = signed
+            .manifest
+            .files
+            .iter()
+            .filter(|file| file.format == PackFileFormat::Original)
+            .min_by_key(|file| file.bytes)
+            .unwrap();
+        let path = fetch_listed_file(
+            &packs,
+            "san-diego-money",
+            &signed.manifest.pack_version,
+            smallest,
+        )
+        .await
+        .unwrap();
+        check_pack_file(&path, smallest).unwrap();
     }
 
     /// Fetches the published money pack's manifest and its smallest table from Hugging Face,

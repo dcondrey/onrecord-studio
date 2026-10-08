@@ -8,6 +8,9 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct DataPackSummary {
     pub pack: String,
+    /// The pack keeps dated snapshots of each table's file; choosing a table of it downloads
+    /// only the latest snapshot.
+    pub snapshots: bool,
     pub pack_version: String,
     pub schema_version: String,
     /// When the pack builder finished, RFC 3339; its rows are the builder's retrieval.
@@ -27,6 +30,12 @@ pub struct DataPackSummary {
 pub struct DataPackTable {
     pub table: String,
     pub files: Vec<DataPackFileSummary>,
+    /// Retrievals a snapshot pack recorded as unchanged from the table's latest snapshot.
+    pub unchanged_checks: u64,
+    /// The latest of those checks, RFC 3339; `None` when there is none.
+    pub last_checked_at: Option<String>,
+    /// Change records between the table's snapshots, which are listed but never imported.
+    pub change_records: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

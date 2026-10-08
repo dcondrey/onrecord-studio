@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { open as chooseFolder } from '@tauri-apps/plugin-dialog';
 import { formatNativeError, invokeCommand } from '../../ipc';
 import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
-import type { DataPackFileSummary, DataPackImportOutcome, DataPackSummary, PublishedPack, PublishedPackSelection } from '../../types';
+import type { DataPackFileSummary, DataPackImportOutcome, DataPackSummary, DataPackTable, PublishedPack, PublishedPackSelection } from '../../types';
 import Icon from '../ui/icons';
 
 const IMPORTING = 'Importing files';
@@ -93,13 +93,24 @@ function Status({ busy, error }: { busy: string | null; error: string | null }) 
   );
 }
 
-/** One table and year of a published pack: what a selection names, with every file it covers. */
+/** One table and year of a published pack: what a selection names, with every file it downloads. */
 interface Choice {
   key: string;
   table: string;
   year: number | null;
   files: DataPackFileSummary[];
+  /** In a snapshot pack, the earlier snapshots the choice does not download; `null` in any other pack. */
+  earlier: number | null;
 }
+
+const retrieved = (file: DataPackFileSummary) => {
+  const time = Date.parse(file.retrievedAt);
+  return Number.isNaN(time) ? -Infinity : time;
+};
+
+/** The latest retrieval, the last listed on a tie, as the native side plans it. */
+const latestOf = (files: DataPackFileSummary[]) =>
+  files.reduce((latest, file) => (retrieved(file) >= retrieved(latest) ? file : latest));
 
 function choicesOf(summary: DataPackSummary): Choice[] {
   const choices: Choice[] = [];
@@ -108,10 +119,11 @@ function choicesOf(summary: DataPackSummary): Choice[] {
       const key = `${table.table}\u0000${file.year ?? ''}`;
       const existing = choices.find((choice) => choice.key === key);
       if (existing) existing.files.push(file);
-      else choices.push({ key, table: table.table, year: file.year, files: [file] });
+      else choices.push({ key, table: table.table, year: file.year, files: [file], earlier: null });
     }
   }
-  return choices;
+  if (!summary.snapshots) return choices;
+  return choices.map((choice) => ({ ...choice, files: [latestOf(choice.files)], earlier: choice.files.length - 1 }));
 }
 
 function choiceLabel(choice: Choice): string {
@@ -119,10 +131,32 @@ function choiceLabel(choice: Choice): string {
   const bytes = choice.files.reduce((sum, file) => sum + file.bytes, 0);
   const count = choice.files.length > 1 ? ` · ${choice.files.length} files` : '';
   const partial = choice.files.some((file) => file.partial) ? PARTIAL_NOTE : '';
+  if (choice.earlier !== null) {
+    const earlier = choice.earlier > 0 ? ` · ${choice.earlier.toLocaleString()} earlier ${choice.earlier === 1 ? 'snapshot' : 'snapshots'} not downloaded` : '';
+    return `Latest snapshot, retrieved ${choice.files[0].retrievedAt.slice(0, 10)} · ${rows.toLocaleString()} rows · ${megabytes(bytes)}${earlier}${partial}`;
+  }
   return `${period(choice.year)} · ${rows.toLocaleString()} rows · ${megabytes(bytes)}${count}${partial}`;
 }
 
 const importable = (choice: Choice) => choice.files.every((file) => file.datasetKind !== null);
+
+/** A snapshot pack's record of a table between snapshots, or `null` when it records none. */
+function snapshotHistory(table: DataPackTable): string | null {
+  const parts: string[] = [];
+  if (table.unchangedChecks > 0) {
+    const times = table.unchangedChecks === 1 ? 'once' : `${table.unchangedChecks.toLocaleString()} times`;
+    parts.push(`checked unchanged ${times}, last ${table.lastCheckedAt?.slice(0, 10) ?? 'at an unrecorded time'}`);
+  }
+  if (table.changeRecords > 0) {
+    parts.push(`${table.changeRecords.toLocaleString()} change ${table.changeRecords === 1 ? 'record' : 'records'} between snapshots (listed, not imported)`);
+  }
+  return parts.length > 0 ? `Snapshots: ${parts.join(' · ')}.` : null;
+}
+
+function SnapshotHistory({ table }: { table: DataPackTable }) {
+  const history = snapshotHistory(table);
+  return history ? <p className="text-muted">{history}</p> : null;
+}
 
 function PublishedPacks({ onImported }: { onImported?: () => void }) {
   const listGate = useLatestRequestGate();
@@ -203,6 +237,7 @@ function PublishedPacks({ onImported }: { onImported?: () => void }) {
           {summary.tables.map((table) => (
             <fieldset key={table.table} className="space-y-1">
               <legend className="font-semibold text-fg">{table.table}</legend>
+              <SnapshotHistory table={table} />
               {choices.filter((choice) => choice.table === table.table).map((choice) => (
                 <label key={choice.key} className="flex items-center gap-2 text-fg-secondary">
                   <input type="checkbox" disabled={!importable(choice)} checked={selected.has(choice.key)} onChange={() => toggle(choice.key)} />
@@ -280,6 +315,7 @@ export default function DataPackImport({ onImported }: { onImported?: () => void
           {summary.tables.map((table) => (
             <fieldset key={table.table} className="space-y-1">
               <legend className="font-semibold text-fg">{table.table}</legend>
+              <SnapshotHistory table={table} />
               {table.files.map((file) => (
                 <label key={file.path} className="flex items-center gap-2 text-fg-secondary">
                   <input type="checkbox" disabled={file.datasetKind === null} checked={selected.has(file.path)} onChange={() => toggle(file.path)} />

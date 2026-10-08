@@ -26,8 +26,9 @@ app-store = []
 # The signed updater and its restart plugin are linked only here, so the App Store build cannot
 # self-update. An update replaces the binary and never touches the license.
 direct-license = ["dep:tauri-plugin-updater", "dep:tauri-plugin-process"]
-# The data-pack builder (`onrecord-pack-builder`): Keychain access for the publisher key and
-# Parquet writing. Never enabled for the app.
+# The data-pack builder (`onrecord-pack-builder`): Keychain access for the publisher key (a
+# macOS-only dependency, so the feature also builds on the Linux snapshot runner) and Parquet
+# writing. Never enabled for the app.
 pack-builder = ["dep:security-framework", "duckdb/parquet"]
 
 [dependencies]
@@ -67,7 +68,6 @@ xz2 = { version = "0.1.7", features = ["static"] }
 zstd = "0.13"
 sha2 = "0.11.0"
 ed25519-dalek = "2.2.0"
-security-framework = { version = "3.7", optional = true }
 rand = "0.8"
 regex = "1"
 aho-corasick = "1"
@@ -94,6 +94,9 @@ deflate64 = "0.1.12"
 # tree; named directly so the check stays safe code.
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "1", features = ["fs"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = { version = "3.7", optional = true }
 
 [build-dependencies]
 tauri-build = { version = "2.6.3", features = [] }
