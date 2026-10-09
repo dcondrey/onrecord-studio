@@ -36,6 +36,8 @@ pub(crate) fn read_regular_file(
     maximum_bytes: u64,
 ) -> Result<Vec<u8>, AppError> {
     let inspected = inspect_regular_file(path, format, maximum_bytes)?;
+    #[cfg(windows)]
+    let inspected_identity = windows_identity::of_path(path, format)?;
     let expected_size = usize::try_from(inspected.len()).map_err(|_| {
         AppError::DataParsing(format!(
             "{format}_SIZE_UNSUPPORTED: '{}' cannot be represented on this platform",
@@ -55,6 +57,10 @@ pub(crate) fn read_regular_file(
         ))
     })?;
     if !opened.is_file() || !same_file_snapshot(&inspected, &opened) {
+        return Err(changed_while_reading(path, format));
+    }
+    #[cfg(windows)]
+    if windows_identity::of_file(&file, path, format)? != inspected_identity {
         return Err(changed_while_reading(path, format));
     }
 
@@ -91,6 +97,8 @@ pub(crate) fn open_regular_file(
     maximum_bytes: u64,
 ) -> Result<(File, Metadata), AppError> {
     let inspected = inspect_regular_file(path, format, maximum_bytes)?;
+    #[cfg(windows)]
+    let inspected_identity = windows_identity::of_path(path, format)?;
     let file = File::open(path).map_err(|error| {
         AppError::Storage(format!(
             "{format}_READ_FAILED: failed to open '{}': {error}",
@@ -104,6 +112,10 @@ pub(crate) fn open_regular_file(
         ))
     })?;
     if !opened.is_file() || !same_file_snapshot(&inspected, &opened) {
+        return Err(changed_while_reading(path, format));
+    }
+    #[cfg(windows)]
+    if windows_identity::of_file(&file, path, format)? != inspected_identity {
         return Err(changed_while_reading(path, format));
     }
     Ok((file, opened))
@@ -140,11 +152,56 @@ fn same_file_snapshot(left: &Metadata, right: &Metadata) -> bool {
         && left.ctime_nsec() == right.ctime_nsec()
 }
 
+/// Without the file's identity, which stable `std` does not expose on Windows: there
+/// [`windows_identity`] checks that the opened handle is the file that was inspected.
 #[cfg(not(unix))]
 fn same_file_snapshot(left: &Metadata, right: &Metadata) -> bool {
     left.len() == right.len()
         && left.modified().ok() == right.modified().ok()
         && left.created().ok() == right.created().ok()
+}
+
+/// Volume serial and file index, the Windows counterpart of the `dev`/`ino` pair above.
+#[cfg(windows)]
+mod windows_identity {
+    use std::fs::{File, OpenOptions};
+    use std::os::windows::fs::OpenOptionsExt;
+    use std::path::Path;
+
+    use same_file::Handle;
+    use windows_sys::Win32::Storage::FileSystem::{
+        FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
+    };
+
+    use crate::error::AppError;
+
+    /// The file `path` names itself, not a link target: opened without following reparse points
+    /// and without read access, so it neither follows nor blocks anything.
+    pub(super) fn of_path(path: &Path, format: &'static str) -> Result<Handle, AppError> {
+        OpenOptions::new()
+            .access_mode(0)
+            .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS)
+            .open(path)
+            .and_then(Handle::from_file)
+            .map_err(|error| failed(path, format, error))
+    }
+
+    pub(super) fn of_file(
+        file: &File,
+        path: &Path,
+        format: &'static str,
+    ) -> Result<Handle, AppError> {
+        file.try_clone()
+            .and_then(Handle::from_file)
+            .map_err(|error| failed(path, format, error))
+    }
+
+    fn failed(path: &Path, format: &'static str, error: std::io::Error) -> AppError {
+        AppError::Storage(format!(
+            "{format}_INSPECTION_FAILED: failed to identify '{}': {error}",
+            path.display()
+        ))
+    }
 }
 
 fn changed_while_reading(path: &Path, format: &'static str) -> AppError {
@@ -191,9 +248,20 @@ mod tests {
         second.write_all(b"size").unwrap();
         let first_metadata = fs::metadata(first.path()).unwrap();
         let second_metadata = fs::metadata(second.path()).unwrap();
+        // On Windows the snapshot carries no identity (two files created in one clock tick match);
+        // the identity check made beside it is what tells them apart there.
+        #[cfg(unix)]
         assert!(!super::same_file_snapshot(
             &first_metadata,
             &second_metadata
         ));
+        #[cfg(windows)]
+        {
+            let _ = (first_metadata, second_metadata);
+            assert!(
+                super::windows_identity::of_path(first.path(), "TEST").unwrap()
+                    != super::windows_identity::of_path(second.path(), "TEST").unwrap()
+            );
+        }
     }
 }

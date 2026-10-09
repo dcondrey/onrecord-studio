@@ -97,8 +97,8 @@ deflate64 = "0.1.12"
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "1", features = ["fs"] }
 
-# The same two checks on Windows: free space (`GetDiskFreeSpaceExW`) and whether the backup name is
-# a hard link to the live file (volume serial + file index). Both already in the dependency tree.
+# On Windows: free space (`GetDiskFreeSpaceExW`) for the storage rewrite, and file identity (volume
+# serial + file index), which stable `std` does not expose there. Both already in the dependency tree.
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"] }
 same-file = "1"
