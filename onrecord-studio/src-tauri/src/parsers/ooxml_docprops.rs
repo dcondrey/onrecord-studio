@@ -116,7 +116,9 @@ pub fn read_ooxml_docprops(path: &Path) -> Result<OoxmlDocProps, AppError> {
             Ok(e) => e,
             Err(_) => continue,
         };
-        let name = entry.name().to_ascii_lowercase();
+        let Ok(name) = entry.name().map(|name| name.to_ascii_lowercase()) else {
+            continue;
+        };
         if name.contains("../") || entry.size() > MAX_PART_BYTES {
             continue;
         }

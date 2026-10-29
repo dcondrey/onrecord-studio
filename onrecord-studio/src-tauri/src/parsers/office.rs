@@ -59,7 +59,14 @@ pub fn extract_office_package<P: AsRef<Path>>(
                 "OFFICE_PART_READ_FAILED: failed to inspect part {index}: {error}"
             ))
         })?;
-        let name = entry.name().replace('\\', "/");
+        let name = entry
+            .name()
+            .map_err(|error| {
+                AppError::DataParsing(format!(
+                    "OFFICE_PART_NAME_INVALID: part {index} has an undecodable name: {error}"
+                ))
+            })?
+            .replace('\\', "/");
         if !is_content_part(&name, format) {
             continue;
         }

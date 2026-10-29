@@ -146,10 +146,17 @@ fn extract_into(archive_path: &Path, staging: &Path) -> Result<Vec<std::path::Pa
                 ))
             }
         })?;
+        let entry_name = entry
+            .name()
+            .map_err(|error| {
+                AppError::DataParsing(format!(
+                    "ZIP_ENTRY_NAME_INVALID: entry {index} has an undecodable name: {error}"
+                ))
+            })?
+            .into_owned();
         let relative_path = entry.enclosed_name().ok_or_else(|| {
             AppError::DataParsing(format!(
-                "ZIP_ENTRY_PATH_INVALID: entry '{}' escapes the destination",
-                entry.name()
+                "ZIP_ENTRY_PATH_INVALID: entry '{entry_name}' escapes the destination"
             ))
         })?;
         validate_entry_type(&entry, &relative_path)?;
@@ -229,8 +236,8 @@ fn extract_into(archive_path: &Path, staging: &Path) -> Result<Vec<std::path::Pa
     Ok(files)
 }
 
-fn validate_entry_type(
-    entry: &zip::read::ZipFile<'_>,
+fn validate_entry_type<R: Read + ?Sized>(
+    entry: &zip::read::ZipFile<'_, R>,
     relative_path: &Path,
 ) -> Result<(), AppError> {
     if let Some(mode) = entry.unix_mode() {

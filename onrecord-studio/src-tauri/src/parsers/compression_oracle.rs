@@ -134,11 +134,14 @@ pub fn assess_package_compression_risk(
         if entry.is_dir() {
             continue;
         }
+        let entry_name = entry
+            .name()
+            .map(|name| name.into_owned())
+            .unwrap_or_else(|_| format!("#{index}"));
         if entry.size() > MAXIMUM_TEXT_SCAN_ENTRY_BYTES {
             coverage_complete = false;
             warnings.push(format!(
-                "ZIP_PLAINTEXT_SCAN_ENTRY_SIZE_LIMIT:{}:{}",
-                entry.name(),
+                "ZIP_PLAINTEXT_SCAN_ENTRY_SIZE_LIMIT:{entry_name}:{}",
                 entry.size()
             ));
             continue;
@@ -157,17 +160,13 @@ pub fn assess_package_compression_risk(
             .take(MAXIMUM_TEXT_SCAN_ENTRY_BYTES + 1)
             .read_to_end(&mut bytes)
             .map_err(|error| {
-                AppError::DataParsing(format!(
-                    "ZIP_PLAINTEXT_SCAN_FAILED:{}:{error}",
-                    entry.name()
-                ))
+                AppError::DataParsing(format!("ZIP_PLAINTEXT_SCAN_FAILED:{entry_name}:{error}"))
             })?;
         scanned_bytes += bytes.len() as u64;
         if bytes.len() as u64 > MAXIMUM_TEXT_SCAN_ENTRY_BYTES {
             coverage_complete = false;
             warnings.push(format!(
-                "ZIP_PLAINTEXT_SCAN_ENTRY_TRUNCATED:{}:{}",
-                entry.name(),
+                "ZIP_PLAINTEXT_SCAN_ENTRY_TRUNCATED:{entry_name}:{}",
                 bytes.len()
             ));
             continue;
@@ -187,7 +186,7 @@ pub fn assess_package_compression_risk(
                 EvidenceConfidence::Strong,
                 "ZIP_SENSITIVE_PLAINTEXT_PRESENT",
                 EvidenceLocator {
-                    container_part: Some(entry.name().to_string()),
+                    container_part: Some(entry_name.clone()),
                     byte_offset: Some(pii_finding.byte_start as u64),
                     ..EvidenceLocator::default()
                 },

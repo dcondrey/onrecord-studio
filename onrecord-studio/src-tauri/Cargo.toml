@@ -49,7 +49,7 @@ reqwest = { version = "0.13.4", default-features = false, features = ["json", "q
 # `fetch_remote_manifests` is deliberately NOT enabled. It makes verification follow a URL embedded
 # in the asset being examined, which for an evidence tool means the act of checking a document
 # reaches out to a server the document's author chose. Verification here reads only local bytes.
-c2pa = { version = "0.90.16", default-features = false, features = ["rust_native_crypto", "file_io", "pdf"] }
+c2pa = { version = "0.91.7", default-features = false, features = ["rust_native_crypto", "file_io", "pdf"] }
 futures-util = "0.3"
 scraper = "0.27"
 base64 = "0.22"
@@ -62,7 +62,7 @@ lopdf = "0.44"
 png = "0.18"
 calamine = { version = "0.36", features = ["dates"] }
 msg_parser = "0.3"
-zip = { version = "1.1.4", default-features = false, features = ["deflate", "bzip2", "zstd", "lzma"] }
+zip = { version = "9.0.5", default-features = false, features = ["deflate", "bzip2", "zstd", "lzma"] }
 tar = "0.4"
 flate2 = "1.1"
 bzip2 = "0.6.1"

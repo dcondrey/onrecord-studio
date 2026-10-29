@@ -71,7 +71,14 @@ pub fn audit_office_package<P: AsRef<Path>>(
         let mut entry = archive.by_index(index).map_err(|error| {
             AppError::DataParsing(format!("OFFICE_AUDIT_PART_INVALID at {index}: {error}"))
         })?;
-        let name = entry.name().replace('\\', "/");
+        let name = entry
+            .name()
+            .map_err(|error| {
+                AppError::DataParsing(format!(
+                    "OFFICE_AUDIT_PART_NAME_INVALID at {index}: {error}"
+                ))
+            })?
+            .replace('\\', "/");
         *names.entry(name.clone()).or_default() += 1;
         if is_attributed_part(&name) {
             bundle.findings.push(finding_for_text(
