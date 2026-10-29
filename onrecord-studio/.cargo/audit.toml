@@ -12,6 +12,12 @@ ignore = [
     # and evidence-package signing uses Ed25519. No fixed stable rsa release exists as of this
     # review, so this exact advisory is non-reachable rather than deferred.
     "RUSTSEC-2023-0071",
+    # zip 6 is a build-dependency of libduckdb-sys only: its build script unpacks the vendored,
+    # checksummed DuckDB source tarball. Application code uses zip 9, where these are fixed.
+    # Drop these entries once libduckdb-sys builds with zip >= 9.
+    "RUSTSEC-2026-0367",
+    "RUSTSEC-2026-0368",
+    "RUSTSEC-2026-0369",
     # gtk-rs GTK3 bindings are no longer maintained (tauri -> wry -> gtk).
     "RUSTSEC-2024-0411", # atk
     "RUSTSEC-2024-0412", # atk-sys
