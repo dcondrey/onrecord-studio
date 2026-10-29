@@ -436,7 +436,7 @@
   {
     "source_id": "CDMA08",
     "title": "Executed City Net Caltrans outreach agreement, July 2023",
-    "public_url": "/Users/davidcondrey/Downloads/Executed_CityNet Coordinated Street Outreach Svcs Agreement.pdf",
+    "public_url": "",
     "request_url": "",
     "retrieved_at": "2026-10-13T19:31:43.598271+00:00",
     "sha256": "8e00bdd5c0afb7dd6a733a73ab3d8dd4a15f2d9c3799d96296fc1b4057d4355f",
@@ -444,7 +444,7 @@
     "physical_pdf_pages": 43,
     "original_preserved": true,
     "included_file": "originals/CDMA08.pdf",
-    "access_note": "Included public PDF original",
+    "access_note": "Included public PDF original; public URL not recorded at retrieval",
     "report_cited": true
   },
   {
