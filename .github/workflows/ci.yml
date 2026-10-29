@@ -19,6 +19,9 @@ defaults:
   run:
     working-directory: onrecord-studio
 
+permissions:
+  contents: read
+
 jobs:
   # Fast feedback: everything that does not need the Tauri system libraries.
   checks:

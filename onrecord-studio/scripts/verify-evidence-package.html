@@ -142,22 +142,29 @@ async function verifyPackage(text) {
   };
 }
 
+// Everything interpolated below comes from the chosen file (its name, its manifest fields), so
+// it is text, never markup.
+function esc(value) {
+  return String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+
 function render(result, fileName) {
   const target = document.getElementById('result');
+  const name = esc(fileName);
   if (result.problem) {
-    target.innerHTML = `<p class="fail"><strong>Cannot verify ${fileName}:</strong> ${result.problem}</p>`;
+    target.innerHTML = `<p class="fail"><strong>Cannot verify ${name}:</strong> ${esc(result.problem)}</p>`;
     return;
   }
   const rows = result.checks
-    .map((check) => `<li class="${check.passed ? 'pass' : 'fail'}">${check.passed ? 'PASS' : 'FAIL'} &mdash; ${check.label}</li>`)
+    .map((check) => `<li class="${check.passed ? 'pass' : 'fail'}">${check.passed ? 'PASS' : 'FAIL'} &mdash; ${esc(check.label)}</li>`)
     .join('');
   const schema = result.schemaVersion
-    ? `<p>Signed record type: <code>${result.schemaVersion}</code>${result.schemaLabel ? ` (${result.schemaLabel})` : ' &mdash; a type this page does not recognize; the checks above still hold, but read the manifest itself with care'}.</p>`
+    ? `<p>Signed record type: <code>${esc(result.schemaVersion)}</code>${result.schemaLabel ? ` (${esc(result.schemaLabel)})` : ' &mdash; a type this page does not recognize; the checks above still hold, but read the manifest itself with care'}.</p>`
     : '';
   const signer = result.signerKeyId
-    ? `<p>Signed by local key <code>${result.signerKeyId}</code>. That key is not attested by anyone: it identifies the installation&rsquo;s key, not a person or organization.</p>`
+    ? `<p>Signed by local key <code>${esc(result.signerKeyId)}</code>. That key is not attested by anyone: it identifies the installation&rsquo;s key, not a person or organization.</p>`
     : '';
-  target.innerHTML = `<h2>${fileName}</h2><ul>${rows}</ul>${schema}${signer}<p class="overall ${result.passed ? 'pass' : 'fail'}">${result.passed ? 'PASS \u2014 internally consistent and unaltered since signing. This is not a statement about who signed it or about the truth of its contents.' : 'FAIL \u2014 treat this package as unverified.'}</p>`;
+  target.innerHTML = `<h2>${name}</h2><ul>${rows}</ul>${schema}${signer}<p class="overall ${result.passed ? 'pass' : 'fail'}">${result.passed ? 'PASS \u2014 internally consistent and unaltered since signing. This is not a statement about who signed it or about the truth of its contents.' : 'FAIL \u2014 treat this package as unverified.'}</p>`;
 }
 
 if (typeof document !== 'undefined' && document.getElementById('package-file')) {
