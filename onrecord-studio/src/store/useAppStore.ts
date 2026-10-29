@@ -858,7 +858,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   }),
   openSubjectDossier: (target) => set({ subjectDossierTarget: target }),
   clearSubjectDossier: () => set({ subjectDossierTarget: null }),
-  openLeadDossier: (findingId) => set({ inspectorStack: [{ kind: 'finding', id: findingId }] }),
+  openLeadDossier: (findingId) => set((state) => ({ inspectorStack: [{ kind: 'finding', id: findingId, label: state.workbenchQueue?.leads.find((lead) => lead.id === findingId)?.headline ?? 'Evidence chain' }] })),
   setPostIngestBriefOpen: (postIngestBriefOpen) => set({ postIngestBriefOpen }),
   markFindingsSeen: () => set({ lastFindingsSeenAt: new Date().toISOString() }),
 }));

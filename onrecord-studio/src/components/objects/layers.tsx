@@ -40,7 +40,11 @@ function FindingLayer({ target }: { target: Target<'finding'> }) {
     <div className="space-y-4">
       <LeadDossier findingId={target.id} />
       <Actions>
-        <ActionButton icon="flag" onClick={() => setWorkspaceView('story')}>Open in Story desk</ActionButton>
+        <ActionButton icon="flag" onClick={() => {
+          useAppStore.getState().selectWorkbenchLead('story', target.id);
+          setWorkspaceView('story');
+          useAppStore.getState().closeInspector();
+        }}>Open in Story desk</ActionButton>
       </Actions>
     </div>
   );

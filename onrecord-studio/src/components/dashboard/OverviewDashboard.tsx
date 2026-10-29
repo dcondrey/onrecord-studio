@@ -38,16 +38,19 @@ import TopicPacks from './TopicPacks';
 import StarterSets from './StarterSets';
 import FirstRunData from './FirstRunData';
 import { useStarterRunStore } from '../../store/useStarterRunStore';
+import { INVESTIGATION_TOPICS } from '../../utils/investigations';
 
 const PERSPECTIVES: { value: OverviewPerspective; label: string }[] = [
   { value: 'leads', label: 'Leads' },
   { value: 'following', label: 'Following' },
   { value: 'analytics', label: 'Analytics' },
   { value: 'casework', label: 'Casework' },
-  { value: 'tools', label: 'Tools' },
+  { value: 'tools', label: 'Investigations' },
 ];
 
 export default function OverviewDashboard() {
+  const [topicId, setTopicId] = useState(INVESTIGATION_TOPICS[0].id);
+  const topic = INVESTIGATION_TOPICS.find((item) => item.id === topicId)!;
   const portals = useAppStore((state) => state.portals);
   const perspective = useAppStore((state) => state.overviewPerspective);
   const setPerspective = useAppStore((state) => state.setOverviewPerspective);
@@ -135,6 +138,24 @@ export default function OverviewDashboard() {
 
         <FirstRunData />
         <PostIngestBrief />
+        {perspective === 'leads' && !loading && !failed && (
+          <section aria-label="Start an investigation" className="rounded-xl border border-line bg-panel p-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <label htmlFor="starting-issue" className="text-body font-medium text-fg">Start with an issue</label>
+              <Select id="starting-issue" value={topicId} onChange={(event) => setTopicId(event.target.value)}>
+                {INVESTIGATION_TOPICS.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
+              </Select>
+              <Button variant="primary" onClick={() => setPerspective('tools')}>Investigate this issue</Button>
+              <Button variant="ghost" onClick={() => {
+                useAppStore.getState().setActivePortal(null);
+                useAppStore.getState().setSearchFilters(topic.searches[0], null, null, null);
+                setWorkspaceView('evidence');
+              }}>Find relevant records</Button>
+            </div>
+            <p className="mt-1 text-body text-fg-secondary">{topic.question}</p>
+            <p className="text-caption text-muted">1. Choose an issue. 2. Check a lead against its cited records. 3. Draft a records request or add verified evidence to a briefing.</p>
+          </section>
+        )}
         <div id="overview-perspective" role="tabpanel" aria-label={PERSPECTIVES.find((option) => option.value === perspective)?.label} className={cn('flex flex-col gap-3', fillsView ? 'min-h-0 flex-1' : perspective !== 'leads' && 'motion-fade')}>
           {failed ? (
             <div className="mx-auto w-full max-w-[46rem]"><WorkspaceSourcesUnavailable detail={workspaceInitializationError} /></div>
@@ -178,7 +199,7 @@ export default function OverviewDashboard() {
               <ProfessionalWorkbench key={casework.opened} initialReportId={casework.reportId} initialTab={casework.tab} />
             )}
             {perspective === 'tools' && <>
-              <ResearchWorkspace onReview={(reportId) => openCasework(reportId, 'Evidence review')} />
+              <ResearchWorkspace initialTopic={topicId} onReview={(reportId) => openCasework(reportId, 'Evidence review')} />
               <Panel aria-labelledby="more-tools-title">
                 <PanelHeader titleId="more-tools-title" title="More tools" />
                 <div className="divide-y divide-line px-5">

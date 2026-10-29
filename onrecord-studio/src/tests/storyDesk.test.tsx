@@ -28,7 +28,7 @@ const bridge = vi.hoisted(() => ({
   pending: [] as ((leads: unknown) => void)[],
   availabilityRequests: [] as string[],
   findings: null as ((rows: unknown) => void) | null,
-  discovery: { controller: null, state: null } as { controller: null; state: unknown },
+  discovery: { controller: null, state: null } as { controller: { inspect(sql: string): void } | null; state: unknown },
 }));
 
 vi.mock('../components/dashboard/AutomaticDiscoveryProvider', async (importOriginal) => ({
@@ -101,6 +101,42 @@ async function renderWithNoLeads(schema: { datasets: unknown[] } | null) {
 }
 
 describe('StoryDesk', () => {
+  it('opens a table lead’s supporting query from the factor table', async () => {
+    const inspect = vi.fn();
+    bridge.discovery = { controller: { inspect }, state: null };
+    useAppStore.setState({ sincePreset: 'all', workspaceView: 'story' });
+    render(<StoryDesk />);
+    showFactorTable();
+    await waitFor(() => expect(bridge.pending).toHaveLength(1));
+    const tableLead = lead('table', 'Unresolved service reports');
+    tableLead.subject = { portalKey: null, agencyId: null, requestId: null, documentId: null, entityId: null };
+    tableLead.portalKey = null;
+    act(() => bridge.pending[0]([tableLead]));
+    fireEvent.click(await screen.findByRole('button', { name: 'Details: Unresolved service reports' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect records' }));
+    expect(screen.getByText('Loading supporting records…')).toBeTruthy();
+    act(() => bridge.findings?.([{ id: 'table', explanation: 'Unresolved reports.\n\nTables read:\n1. Service reports\n\nSQL:\nSELECT * FROM service_reports' }]));
+    await waitFor(() => expect(inspect).toHaveBeenCalledWith('SELECT * FROM service_reports'));
+    expect(useAppStore.getState().workspaceView).toBe('analysis');
+  });
+
+  it('restores loaded leads immediately after leaving and returning, then refreshes explicitly', async () => {
+    useAppStore.setState({ sincePreset: 'all' });
+    const first = render(<StoryDesk />);
+    await waitFor(() => expect(bridge.pending).toHaveLength(1));
+    act(() => bridge.pending[0]([lead('returning', 'Return to this lead')]));
+    await screen.findByRole('button', { name: /Return to this lead/ });
+    first.unmount();
+    render(<StoryDesk />);
+    expect(screen.getByRole('button', { name: /Return to this lead/ })).toBeTruthy();
+    expect(bridge.pending).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await waitFor(() => expect(bridge.pending).toHaveLength(2));
+    act(() => bridge.pending[1]([lead('new-result', 'Updated lead')]));
+    await screen.findByRole('button', { name: /Updated lead/ });
+    expect(screen.queryByRole('button', { name: /Return to this lead/ })).toBeNull();
+  });
+
   it('renders leads with their score and every factor and its evidence', async () => {
     render(<StoryDesk />);
     showFactorTable();
@@ -168,7 +204,7 @@ describe('StoryDesk', () => {
     act(() => {
       screen.getByRole('button', { name: 'Open evidence chain: Second lead' }).click();
     });
-    expect(useAppStore.getState().inspectorStack).toEqual([{ kind: 'finding', id: 'b' }]);
+    expect(useAppStore.getState().inspectorStack).toEqual([{ kind: 'finding', id: 'b', label: 'Evidence chain' }]);
     act(() => useAppStore.getState().closeInspector());
   });
 

@@ -2,6 +2,41 @@
 
 This increment implements the twenty-item [product roadmap](../investigative-product-roadmap.md) on top of the validated autonomous research, Council packet acquisition, cross-record reconstruction and compact evidence-retention work. It adds functioning local workflows, not simulated hosted collaboration or fabricated customer pilot outcomes.
 
+## Advocate workflow update — October 12, 2026
+
+The navigation, lead eligibility and read-cache decisions are recorded in [the architecture](../investigative-workbench-architecture.md#advocate-workflow--october-12-2026). Validation uses Node 24.21.0, matching the repository's Node 24 requirement.
+
+- All 905 frontend tests across 168 suites pass. Regression coverage includes returning to cached leads, sharing a dossier with the inspector, rendering evidence before a slow chart, selecting the correct request, opening a table lead's SQL from Factor table, closing the inspector on navigation, setup-aware research controls, and bounded cache expiry/retry behavior.
+- Production frontend build, IPC/help contracts, ESLint, Rust formatting and `cargo clippy --workspace --all-targets -- -D warnings` pass. The build retains its existing large-chunk warning.
+- Browser review reached 60 views in light and dark themes at 1280px: 120 captures, no unreachable views, runtime errors or unsettled captures. After correcting the overview queue height, a focused 10-capture review passed all layout and accessibility checks. Reports: `/Volumes/A/onrecord-ui-review/advocate-workflow-2026-10-12-final/index.json` and `/Volumes/A/onrecord-ui-review/advocate-layout-2026-10-12/index.json`.
+- Browser fixtures use saved San Diego tables and synthetic responses for other surfaces. Five SQL queries in the broad review were absent from the fixture map; the narrower review encountered four. These captures do not validate live database latency or establish real-world findings. Cache tests establish fewer duplicate reads, not a measured latency improvement.
+- Full native workspace validation passes: 1,394 tests passed, none failed, and 41 existing tests remained ignored. This includes the ranking regressions and the storage test proving contextual findings cannot crowd out a lead. The Apple Vision OCR fixtures also passed; no additional tests were skipped.
+
+Logs are under `docs/validation/advocate-*.log`. The installed desktop application and its records have not been replaced.
+
+### Saved-record usefulness check — October 12 follow-up
+
+The installed collection was inspected through copies of its core and corpus databases. Direct read-only access was locked by the running app; the original files were not changed. The first cross-volume copy changed during copying and was rejected. A same-volume clone had unchanged source file sizes and modification times across the copy. This is a file-copy check, not an application-coordinated transactional backup.
+
+The copy contained four undismissed findings: two generic monetary contradictions (`award is` and `grant totaling`), one redaction candidate, and one correlated bundle. It contained **zero saved research dossiers**, and research was **disabled**. The preceding filtering change would therefore leave the stored Story desk queue empty. The snapshot alone does not establish why the installed app never stored substantive table leads.
+
+The current discovery code was replayed read-only against **28 saved tables containing 2,888,270 imported rows**. All **99 generated queries** succeeded and produced **52 candidate leads**. This count measures candidates, not 52 publishable stories. [Full replay evidence](advocate-saved-discovery-2026-10-12.json) retains the SQL, aggregate results, source addresses, retrieval dates and source hashes. Reproduce with `npm exec --yes --package=node@24 -- node scripts/audit-saved-discovery.mjs <copied-core.db> <report.json>` after recovering any copied WAL on the copy. The utility compiler now resolves relative imports outside `utils`, which the chart-format dependency requires.
+
+Two concrete investigations supported by these records:
+
+| Question | What the saved records establish | What would make it consequential and what to obtain next |
+| --- | --- | --- |
+| Are years-old street and sidewalk reports still unresolved, or is the public tracking system misleading residents? | In the open-report export retrieved September 14, 2026, **42,322 of 83,032** counted open reports were older than 365 days. This includes **11,929 of 14,690 sidewalk reports** and **8,046 of 14,358 street-light reports**. | Reconcile report IDs with work orders, completion/inspection dates, duplicate links, referrals and closure rules. Work records could establish persistent service failures or explain stale public statuses. Open reports alone establish neither continuing hazards nor withheld services. |
+| What happens when police are dispatched to calls labeled SLEEPER, and what accounts for the arrests? | In the 2026 calls export retrieved October 3, **340 noncancelled calls** carried that dispatch label: **5 arrest codes**, **16 Crisis Response Team codes**, and **303 no-report-required codes**. Crisis-team codes can overlap the other categories. | Obtain CAD narratives, dispatch/referral criteria and arrest reports for the five incidents. Check whether the recorded conduct explains the arrest and what alternatives were available. The label does not establish housing status, and no report required does not mean no service or contact occurred. |
+
+Every imported snapshot in this copy is marked **partial**. These counts describe the saved records; they are not certified citywide totals or current October 12 conditions. The collection has no imported operating budget/actuals tables, and its RIPA companion tables lack the base stop table needed for the intended joined comparisons. Spending and demographic conclusions cannot be supplied from those gaps. Older 2016–2018 service comparisons are historical leads, not evidence of present performance.
+
+The controller previously waited for every table before saving any table lead. It now publishes after each finished table, retains prior findings during incomplete checks, and permits stale cleanup only after all checks succeed. A regression holds an unrelated table query open and verifies that an existing supported lead is published with `complete=false`, then verifies `complete=true` only after the remaining queries finish. Overview now sends the chosen issue directly into the **Investigations** tab, preserving the topic; it does not launch a model call or override the saved pause. Existing-library search remains separately available.
+
+This replay exercises the current query builders on actual saved rows. It does not exercise native SQL validation, finding persistence, the installed application's runtime, or a new model investigation. The running app, research policy, credentials and source records remain unchanged.
+
+Follow-up validation passes: **907 frontend tests in 168 suites**, production build (including TypeScript and IPC/help contracts), ESLint and `git diff --check`. The four targeted workflow suites pass 39 tests. Browser review produced four light/dark captures of Overview and Investigations at 1280px with no layout failures, inaccessible views, runtime errors or accessibility violations; four unrecorded SQL fixture queries remain. This browser run uses mixed real-table/synthetic-workflow fixtures, not the copied database. Its report is `/Volumes/A/onrecord-ui-review/advocate-followup-2026-10-12/index.json`; logs are `advocate-followup-*.log`. Native source was unchanged in this follow-up, so the preceding native gates were not repeated.
+
 ## What an investigator can do
 
 The dashboard's Investigation workbench contains five connected views:

@@ -33,6 +33,7 @@ import ArtifactDrafts from './ArtifactDrafts';
 import StoredLeadFigure from './StoredLeadFigure';
 import BarTable, { type BarTableColumn, type BarTableRow } from '../charts/figures/BarTable';
 import { absent, measured } from '../charts/core/nulls';
+import { tableLeadSources } from '../../utils/tableLeadSources';
 
 /**
  * Findings ordered by observable public-interest factors. The score is a ranking heuristic over
@@ -44,6 +45,7 @@ export default function StoryDesk() {
   // Keyed by lead, so the outcome shows beside the button that caused it.
   const [notices, setNotices] = useState<Record<string, { text: string; failed: boolean }>>({});
   const briefingGate = useLatestRequestGate();
+  const inspectionGate = useLatestRequestGate();
   const setActivePortal = useAppStore((s) => s.setActivePortal);
   const setSearchFilters = useAppStore((s) => s.setSearchFilters);
   const setWorkspaceView = useAppStore((s) => s.setWorkspaceView);
@@ -64,12 +66,32 @@ export default function StoryDesk() {
   const refreshing = ranked.refreshing;
 
   const inspect = useCallback(
-    (lead: StoryLead) => {
+    async (lead: StoryLead) => {
+      const token = inspectionGate.begin();
+      if (lead.subject.requestId === null && lead.subject.agencyId === null) {
+        setNotices((current) => ({ ...current, [lead.findingId]: { text: 'Loading supporting records…', failed: false } }));
+        try {
+          const rows = await invokeCommand('list_findings', { filter: { id: lead.findingId }, limit: 1 });
+          if (!inspectionGate.isCurrent(token)) return;
+          const finding = rows.find((row) => row.id === lead.findingId);
+          const sql = finding && tableLeadSources(finding.explanation)?.sql;
+          if (sql && controller) {
+            controller.inspect(sql);
+            setWorkspaceView('analysis');
+            return;
+          }
+          setNotices((current) => ({ ...current, [lead.findingId]: { text: sql ? 'Analysis is not ready yet. Try again in a moment.' : 'Open the evidence chain to inspect this lead’s citations; it has no linked request or stored query.', failed: true } }));
+        } catch (reason) {
+          if (inspectionGate.isCurrent(token)) setNotices((current) => ({ ...current, [lead.findingId]: { text: `Couldn’t open supporting records: ${formatNativeError(reason)}`, failed: true } }));
+        }
+        return;
+      }
       if (lead.portalKey) setActivePortal(lead.portalKey);
+      if (lead.subject.requestId !== null && lead.portalKey) useAppStore.getState().setSelectedRequest(lead.subject.requestId, lead.portalKey);
       setSearchFilters('', lead.subject.agencyId ?? null, null, null);
       setWorkspaceView('evidence');
     },
-    [setActivePortal, setSearchFilters, setWorkspaceView],
+    [controller, inspectionGate, setActivePortal, setSearchFilters, setWorkspaceView],
   );
 
   const addToBriefing = useCallback(
@@ -141,6 +163,8 @@ export default function StoryDesk() {
           title="What the records point to"
           aside={(
             <MethodNote label="How to read this">
+              Leads concern public spending, services, enforcement or agency accountability.
+              Numbering gaps, redaction candidates and grouped findings remain available in All findings.
               The ranking weighs money at stake, how many documents, requests and agencies repeat the
               pattern, a record contradicting a statement, a counted violation, evidence strength and
               freshness. The score ranks attention; it is not a measure of newsworthiness and not a claim
@@ -238,7 +262,7 @@ export default function StoryDesk() {
             <EmptyState
               icon="flag"
               title="No leads yet"
-              body="Findings appear when the detectors finish a sweep of what has been ingested. Run the sweep again, or check whether a sync is still running."
+              body="No supported accountability lead is available in the collected records yet. Record-level clues remain in All findings. Add records about the issue you want to investigate, or check collection progress."
               actions={<>
                 <Button variant="primary" onClick={requestFindingsRefresh}>Refresh findings</Button>
                 <Button onClick={() => setWorkspaceView('activity')}>See sync activity</Button>

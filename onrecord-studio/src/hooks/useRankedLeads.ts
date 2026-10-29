@@ -5,6 +5,9 @@ import { useAppStore } from '../store/useAppStore';
 import type { StoryLead } from '../types';
 import { useCaseScope } from './useCaseScope';
 import { useGatedLoad } from './useGatedLoad';
+import { createReadCache } from '../utils/readCache';
+
+const rankedLeadCache = createReadCache<StoryLead[]>(2);
 
 export interface RankedLeads {
   status: 'pending' | 'ready' | 'failed';
@@ -32,11 +35,15 @@ const NO_LEADS: StoryLead[] = [];
  */
 export function useRankedLeads(enabled = true): RankedLeads {
   const findingsRefreshRequests = useAppStore((state) => state.findingsRefreshRequests);
+  const sourceScope = useAppStore((state) => state.portals.map((source) => `${source.registration.portalKey}:${source.lifecycleState}`).sort().join('|'));
   const since = useSinceInstant();
   const caseScope = useCaseScope();
-  const load = useGatedLoad(enabled ? `story:${findingsRefreshRequests}` : 'off', () => (enabled ? invokeCommand('list_story_leads', { limit: 100 }) : Promise.resolve(NO_LEADS)));
+  const key = `story:${findingsRefreshRequests}:${sourceScope}`;
+  const load = useGatedLoad(enabled ? key : 'off', () => (enabled ? rankedLeadCache.read(key, () => invokeCommand('list_story_leads', { limit: 100 })) : Promise.resolve(NO_LEADS)), enabled ? rankedLeadCache.peek(key) : undefined);
   // The last ranking read while enabled; a disabled read's empty list never stands for one.
   const held = useRef<StoryLead[] | null>(null);
+  const heldScope = useRef(sourceScope);
+  if (heldScope.current !== sourceScope) { held.current = null; heldScope.current = sourceScope; }
   if (!enabled || load.status === 'failed') held.current = null;
   else if (load.status === 'ready') held.current = load.data;
   const all = enabled ? held.current : null;

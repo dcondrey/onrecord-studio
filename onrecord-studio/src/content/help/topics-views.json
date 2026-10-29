@@ -1,9 +1,9 @@
 [
   {
     "id": "view-overview",
-    "title": "San Diego view",
+    "title": "Overview",
     "group": "Views",
-    "summary": "The workbench: ranked leads, the lead on the stage, what you watch, analytics, casework and tools.",
+    "summary": "Start with an issue, check a lead against its records, then draft a request or briefing.",
     "keywords": [
       "overview",
       "san diego",
@@ -23,7 +23,7 @@
     "sections": [
       {
         "paragraphs": [
-          "The default view. Under the dateline and the title, five tabs: Leads, Following, Analytics, Casework and Tools. Leads is a workbench: the ranked leads on the left, the selected lead on the stage in the centre, and the records around it on the right. The queue is the Story desk ranking, so #3 is the same lead in both places. J and K step to the next and previous lead."
+          "Choose an issue and use Investigate this issue to open its research controls and saved findings. Find relevant records searches the existing library. The main navigation follows Overview, Story desk, Evidence and Briefing; More tools opens the specialist workspaces. The Leads tab puts ranked leads beside the selected lead and its cited records. J and K step through the queue. Following, Analytics, Casework and Investigations hold saved searches, response statistics, cases and research controls."
         ]
       },
       {
@@ -32,7 +32,7 @@
           "Post-ingest brief (headed Just landed): a non-modal panel that opens after a sync stops and lists findings discovered in the last 15 minutes. It appears only on this view.",
           "Leads: each card shows the lead's rank, family, headline and attention score as a bar split into its factors. The window control beside the title sets how far back \"new\" reaches: since you last opened the app, the last day, week or month, or any time.",
           "The stage: the lead's headline and account, why it ranks where it does (compared with the lead above it), its evidence chain or the tables it was computed from, and what would disconfirm it. Draft records request opens the drafts beside it.",
-          "Watching: collection across every source, the counted deadline ledger, the next meeting within two weeks, and watch changes. Fold it to a one-line summary; the app remembers your choice.",
+          "Deadlines and saved searches: open this disclosure beneath the lead queue to inspect collection status, the counted deadline ledger, upcoming meetings and watch changes.",
           "Casework: cases and follow-through, spending, coverage, evidence review and organization filings, on their own tab. The command palette opens it, and its Spending and Organization filings tabs, directly.",
           "All findings are in the Story desk view, under All findings. See Findings inbox.",
           "Cross-corpus explorer (in a drawer): shared language, temporal shifts, orphan topics and reused grounds across agencies, with a jurisdiction by detector heat map.",
@@ -143,7 +143,7 @@
     "sections": [
       {
         "paragraphs": [
-          "Analysis works on the text and tables already on your Mac. Panels appear in this order."
+          "Analysis starts with two supported leads from the text and tables on your Mac. Show more leads expands the list. Document connections and storage controls are folded away. Open Inspect tables, search documents, or run a query for the tools below; inspecting a lead opens its query automatically."
         ]
       },
       {
@@ -358,7 +358,7 @@
     "id": "view-story",
     "title": "Story desk view",
     "group": "Views",
-    "summary": "Findings ranked by observable factors, and the full findings inbox, with the fact behind each factor shown.",
+    "summary": "Supported accountability leads, with their evidence; record-level clues remain in All findings.",
     "keywords": [
       "story desk",
       "leads",
@@ -371,7 +371,7 @@
     "sections": [
       {
         "paragraphs": [
-          "Story desk orders undismissed findings by what the records show: money at stake, how many documents, requests and agencies repeat the pattern, a record contradicting a statement, a counted violation, evidence strength and freshness."
+          "Story desk ranks supported accountability leads by money at stake, scale, contradiction, counted violations, evidence strength and freshness. Numbering gaps, redaction candidates and bundles of related findings remain in All findings for record inspection. Returning from a record restores the loaded leads; Refresh checks for changes."
         ]
       },
       {

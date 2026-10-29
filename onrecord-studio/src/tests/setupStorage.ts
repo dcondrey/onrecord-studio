@@ -1,4 +1,7 @@
 import { afterEach } from 'vitest';
+import { clearReadCaches } from '../utils/readCache';
+
+afterEach(clearReadCaches);
 
 // Node 26 defines a flag-gated `localStorage` global whose getter returns undefined, and it
 // shadows the Storage jsdom installs; Node 24 (CI) leaves jsdom's in place. Give every jsdom suite

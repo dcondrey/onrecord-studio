@@ -172,7 +172,22 @@ impl DuckDbRepository {
         filter: FindingsFilter,
         limit: usize,
     ) -> Result<Vec<Finding>, AppError> {
-        let capped_limit = limit.clamp(1, 500) as i64;
+        self.list_findings_for_surface(filter, limit.clamp(1, 500), false)
+            .await
+    }
+
+    pub async fn list_story_candidates(&self, limit: usize) -> Result<Vec<Finding>, AppError> {
+        self.list_findings_for_surface(FindingsFilter::default(), limit.clamp(1, 2_000), true)
+            .await
+    }
+
+    async fn list_findings_for_surface(
+        &self,
+        filter: FindingsFilter,
+        limit: usize,
+        story: bool,
+    ) -> Result<Vec<Finding>, AppError> {
+        let capped_limit = limit as i64;
         self.query_connection("List findings", move |conn| {
             let mut sql = String::from(
                 "SELECT id, kind, severity, confidence_basis_points,
@@ -183,6 +198,12 @@ impl DuckDbRepository {
                  WHERE 1 = 1",
             );
             let mut binds = filter.append_where(&mut sql);
+            if story {
+                for kind in crate::analysis::story_desk::CONTEXT_ONLY_KINDS {
+                    sql.push_str(&format!(" AND kind != ?{}", binds.len() + 1));
+                    binds.push(Box::new(kind.as_str().to_string()));
+                }
+            }
             sql.push_str(
                 " ORDER BY CASE severity
                     WHEN 'CRITICAL' THEN 4
@@ -462,6 +483,26 @@ mod tests {
             dismissed_at: None,
             source_detector: "held_back_response".into(),
         }
+    }
+
+    #[tokio::test]
+    async fn story_candidates_exclude_context_before_limiting_without_deleting_it() {
+        let repo = fresh_repo().await;
+        let mut context = sample_finding(1, "Redaction candidates", FindingSeverity::Critical);
+        context.kind = FindingKind::RedactionCandidateInferred;
+        let lead = sample_finding(2, "Accountability lead", FindingSeverity::Notable);
+        repo.record_findings(vec![context.clone(), lead.clone()])
+            .await
+            .unwrap();
+        let ranked = repo.list_story_candidates(1).await.unwrap();
+        assert_eq!(ranked.len(), 1);
+        assert_eq!(ranked[0].id, lead.id);
+        let records = repo
+            .list_findings(FindingsFilter::default(), 2)
+            .await
+            .unwrap();
+        assert_eq!(records.len(), 2);
+        assert!(records.iter().any(|row| row.id == context.id));
     }
 
     #[tokio::test]

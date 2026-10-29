@@ -113,6 +113,9 @@ describe('automatic discovery landing experience', () => {
     });
     mount();
     await screen.findByText('Recurring program');
+    const connections = screen.getByText('Document connections (1)').closest('details');
+    expect(connections?.open).toBe(false);
+    fireEvent.click(screen.getByText('Document connections (1)'));
     expect(screen.getByText(/Table checks could not run/).closest('[role="status"]')?.textContent).toContain('Catalog failed');
     expect(screen.queryByRole('button', { name: 'Get San Diego’s core public data' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Inspect document evidence' }));

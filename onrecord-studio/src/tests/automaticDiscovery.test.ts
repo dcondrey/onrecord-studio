@@ -10,7 +10,7 @@ const quality = fixture.profile as SqlQueryResult;
 const upkeep: DataMaintenanceStatus = { policy: { enabled: true, autoImport: true, autoRefresh: true, refreshHours: 24, retentionMode: 'ORIGINALS', retainedFileBudgetBytes: 10 * 1024 ** 3 }, effectiveAt: '2026-09-14T00:00:00Z', retainedFileBytes: 0, referencedDocuments: 0, reclaimedFileBytes: 0, events: [] };
 const response = (columns: string[], rows: SqlQueryResult['rows']): SqlQueryResult => ({ columns, rows, rowCount: rows.length, elapsedMs: 1, truncated: false, provenance: [] });
 function transport(catalog: AnalyticalSchema = schema) {
-  return { schema: vi.fn(async () => catalog), candidates: vi.fn(async () => []), patterns: vi.fn(async () => []), query: vi.fn(async () => quality) } satisfies DiscoveryTransport;
+  return { schema: vi.fn(async () => catalog), candidates: vi.fn(async () => []), patterns: vi.fn(async () => []), query: vi.fn<DiscoveryTransport['query']>(async () => quality) } satisfies DiscoveryTransport;
 }
 const controllers: DiscoveryController[] = [];
 function start(bridge: DiscoveryTransport, visible?: () => boolean) { const controller = new DiscoveryController(bridge, visible); controllers.push(controller); controller.start(); return controller; }
@@ -18,6 +18,35 @@ beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-14T00:
 afterEach(() => { controllers.splice(0).forEach((c) => c.stop()); vi.useRealTimers(); });
 
 describe('automatic discovery evidence', () => {
+  it('publishes a supported lead before an unrelated table finishes and only clears stale leads after all checks finish', async () => {
+    const base = accountability.schema as AnalyticalSchema;
+    const first = base.datasets[0];
+    const second = { ...first, snapshotId: 'slow', tableName: 'analysis_slow' };
+    const catalog = { ...base, datasets: [first, second], columns: [
+      ...base.columns.filter((column) => column.tableName === first.tableName),
+      ...base.columns.filter((column) => column.tableName === first.tableName).map((column) => ({ ...column, tableName: second.tableName })),
+    ] };
+    const backlogSql = automaticFollowups(catalog, first, response([], [])).find((query) => query.id === 'service_backlog')!.sql;
+    let release!: (result: SqlQueryResult) => void;
+    const slow = new Promise<SqlQueryResult>((resolve) => { release = resolve; });
+    const record = vi.fn<NonNullable<DiscoveryTransport['record']>>(async () => {});
+    const bridge = { ...transport(catalog), record };
+    bridge.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('"analysis_slow"')) return slow;
+      if (sql === backlogSql) return response(
+        ['category', 'open_reports', 'median_age_days', 'open_over_one_year', 'oldest_age_days', 'earliest_opened', 'all_open_reports', 'all_open_over_one_year'],
+        [['Sidewalk Repair Issue', 14690, 1091, 11929, 3767, '2016-05-22', 83032, 11929]],
+      );
+      return response([], []);
+    });
+    start(bridge);
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(record).toHaveBeenCalledOnce();
+    expect(record.mock.calls[0]).toEqual([expect.arrayContaining([expect.objectContaining({ title: '11,929 of 83,032 open reports have been open more than a year' })]), false]);
+    release(response([], []));
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(record).toHaveBeenLastCalledWith(expect.any(Array), true);
+  });
   it('shares native integration queries and never guesses a sum or a rate', () => {
     const queries = [automaticProfileQuery(schema, schema.datasets[0]), ...automaticFollowups(schema, schema.datasets[0], quality)];
     expect(queries).toEqual(fixture.queries);

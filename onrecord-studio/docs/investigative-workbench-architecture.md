@@ -797,3 +797,15 @@ more tagged items than that reports `NOT_MEASURED` for them rather than a partia
 or query watch scans stored text with a substring match, so a document without stored text is not
 in scope. Figures are the `MONEY` and `OUTCOME` statements that version monitoring already
 extracts, at most 40 per source.
+
+## Advocate workflow — October 12, 2026
+
+The primary navigation follows Overview, Story desk, Evidence and Briefing. Other workspaces remain under More tools and in the command palette. Overview starts with an issue and a concrete reporting question; Evidence offers the same issue searches. Analysis initially shows two substantive leads, with additional leads, document connections, collection gaps and storage controls disclosed separately. Selecting a lead's source query opens the analysis controls automatically.
+
+Story desk eligibility precedes its attention score. Redaction candidates, numbering gaps, bundles of correlated findings, metadata age, deadline clustering, redaction-residual absence, round-number clustering, release timing and orphan topics remain record-level context. They do not gain a lead slot merely through confidence, repetition or large dollar figures. Legacy monetary contradictions need a digit-bearing identifier and materially different amounts. The storage query excludes context-only kinds before its 2,000-candidate bound; the ordinary findings inbox retains those findings.
+
+Rankings and dossiers share bounded, session-only read caches across navigation. Keys include the findings revision and source lifecycle scope; entries expire after five minutes, failures are retriable, and document deletion advances the findings revision. Dossier evidence renders independently of its optional chart. Inspect records selects a resolved cited document, the finding's request, or the stored analytical query. The evidence inspector can retry failed reads and closes when returning to Story desk.
+
+Research readiness remains enforced natively. Investigate now opens settings when research is paused, credentials are missing or the daily budget is insufficient; it starts a run only after those requirements are met. This does not override a paused research policy or authorize background model calls.
+
+The issue chooser's primary action opens the Investigations perspective with that issue selected; finding existing records is a separate action. Research is no longer named only as a generic Tools tab. Deterministic discovery publishes findings at each completed table boundary instead of waiting for the entire library. An incomplete pass never clears older findings. The saved-record replay and its limits are recorded in the validation document's October 12 follow-up.

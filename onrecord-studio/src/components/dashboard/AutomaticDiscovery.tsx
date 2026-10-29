@@ -151,14 +151,13 @@ export default function AutomaticDiscovery() {
   // Facts about a table (its coverage, gaps, record shares) are not findings about its subject;
   // they stay available but folded away beneath the leads.
   const leads = observations.filter((item) => item.kind === 'lead');
-  const ranked = rankObservations(leads, showAll ? 30 : 6);
+  const ranked = rankObservations(leads, showAll ? 30 : 2);
   const notes = rankObservations(observations.filter((item) => item.kind !== 'lead'), 30);
   // Byte-identical extracted text is a corpus/ingestion fact (the same document released more
   // than once), not an observation about the investigation's subject; it stays off this feed.
   const standoutPatterns = state.patterns.filter((pattern) => pattern.kind !== 'EXACT_DUPLICATE');
-  // Collapsed, leads and patterns together fill six cards: whole rows at two columns and at three.
-  const shownPatterns = standoutPatterns.slice(0, showAll ? 8 : Math.max(0, 6 - ranked.length));
-  const hiddenCount = (showAll ? 0 : leads.length - ranked.length + standoutPatterns.length - shownPatterns.length);
+  const shownPatterns = standoutPatterns.slice(0, 8);
+  const hiddenCount = showAll ? 0 : leads.length - ranked.length;
   const gaps = controller.gaps();
   const records = state.schema ? recordGaps(state.schema, leads, state.profiles) : [];
   const automatic = Boolean(state.maintenance?.policy.enabled && state.maintenance.policy.autoRefresh);
@@ -304,10 +303,22 @@ export default function AutomaticDiscovery() {
             <Skeleton variant="card" label="Reading your library" />
             {[1, 2].map((slot) => <div key={slot} aria-hidden="true"><Skeleton variant="card" label="" /></div>)}
           </div>
-        ) : (ranked.length > 0 || shownPatterns.length > 0) && (
+        ) : ranked.length > 0 && (
           <div className="space-y-2">
             <div className="grid items-stretch gap-3 md:grid-cols-2 2xl:grid-cols-3">
               {ranked.map(card)}
+            </div>
+          </div>
+        )}
+        {state.checkedAt && (showAll || hiddenCount > 0) && (
+          <Button size="sm" variant="link" className="px-0" onClick={() => setShowAll((value) => !value)}>
+            {showAll ? 'Show fewer' : `Show ${hiddenCount.toLocaleString()} more leads`}
+          </Button>
+        )}
+        {shownPatterns.length > 0 && (
+          <details className="text-body">
+            <summary className="focus-ring cursor-pointer text-muted">Document connections ({standoutPatterns.length})</summary>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
               {shownPatterns.map((pattern) => (
                 <InsightCard
                   key={pattern.patternId}
@@ -320,17 +331,12 @@ export default function AutomaticDiscovery() {
                 />
               ))}
             </div>
-            {shownPatterns.length > 0 && <p className="text-caption text-muted">Shared language or entities across documents do not establish a causal connection.</p>}
-          </div>
-        )}
-        {state.checkedAt && (showAll || hiddenCount > 0) && (
-          <Button size="sm" variant="link" className="px-0" onClick={() => setShowAll((value) => !value)}>
-            {showAll ? 'Show fewer' : `Show ${hiddenCount.toLocaleString()} more`}
-          </Button>
+            <p className="mt-2 text-caption text-muted">Shared language or entities across documents do not establish a causal connection.</p>
+          </details>
         )}
         {gaps.length > 0 && (
-          <section aria-labelledby="data-gaps-heading" className="space-y-2">
-            <h4 id="data-gaps-heading" className="text-heading text-fg">Data gaps</h4>
+          <details className="space-y-2" open={ranked.length === 0}>
+            <summary className="focus-ring cursor-pointer text-heading text-fg">Records needed to test more questions ({gaps.length})</summary>
             <ul className="divide-y divide-line rounded-lg border border-line">
               {gaps.map((gap) => {
                 const status = state.gapStatus[gap.key];
@@ -363,7 +369,7 @@ export default function AutomaticDiscovery() {
                 );
               })}
             </ul>
-          </section>
+          </details>
         )}
         <RecordGaps gaps={records} />
         {state.candidates.length > 0 && (
@@ -396,7 +402,10 @@ export default function AutomaticDiscovery() {
             <div className="mt-3 grid items-stretch gap-3 md:grid-cols-2 2xl:grid-cols-3">{notes.map(card)}</div>
           </details>
         )}
-        <DataMaintenance />
+        <details>
+          <summary className="focus-ring cursor-pointer text-body text-muted">Data upkeep and storage</summary>
+          <DataMaintenance />
+        </details>
       </PanelBody>
     </Panel>
   );

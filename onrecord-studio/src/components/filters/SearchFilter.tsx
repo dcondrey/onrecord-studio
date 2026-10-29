@@ -12,6 +12,7 @@ import { SearchField, Select } from '../ui/Field';
 import Button, { buttonClass } from '../ui/Button';
 import Badge from '../ui/Badge';
 import Switch from '../ui/Switch';
+import { INVESTIGATION_TOPICS } from '../../utils/investigations';
 
 /** `onPendingChange` reports whether the latest search is still running, so the results pane can
  * tell "not answered yet" from "answered with nothing". */
@@ -193,6 +194,18 @@ export default function SearchFilter({ onPendingChange }: { onPendingChange?: (p
 
   return (
     <section aria-label="Evidence search" className="shrink-0 px-5 py-3 lg:px-6">
+      {!searchTerm && (
+        <div className="mb-2 flex flex-wrap items-center gap-2 text-caption text-muted">
+          <label htmlFor="evidence-issue">Narrow the record library to an issue</label>
+          <Select id="evidence-issue" value="" onChange={(event) => {
+            const topic = INVESTIGATION_TOPICS.find((item) => item.id === event.target.value);
+            if (topic) { useAppStore.getState().setActivePortal(null); updateTerm(topic.searches[0]); }
+          }}>
+            <option value="">Choose an issue…</option>
+            {INVESTIGATION_TOPICS.map((topic) => <option key={topic.id} value={topic.id}>{topic.title}</option>)}
+          </Select>
+        </div>
+      )}
       <div className="app-panel flex items-center gap-2 p-2">
         <SearchField
           id="evidence-search"

@@ -177,8 +177,8 @@ export default function StandingSearchPanel() {
         </ul>
       )}
 
-      <div className="border-t border-line pt-4">
-        <h4 className="text-body font-medium text-fg">Missing series numbers</h4>
+      <details className="border-t border-line pt-4">
+        <summary className="focus-ring cursor-pointer text-body text-muted">Inspect numbering gaps</summary>
         <div className="mt-1 text-caption text-muted">
           Gaps in numbered series of resolutions, ordinances, contracts and permits.{' '}
           <MethodNote>
@@ -193,7 +193,7 @@ export default function StandingSearchPanel() {
         ) : (
           <div className="mt-3"><SeriesGapLines report={gaps} /></div>
         )}
-      </div>
+      </details>
       </div>
     </Panel>
   );

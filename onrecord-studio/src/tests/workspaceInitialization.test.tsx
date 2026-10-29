@@ -44,13 +44,22 @@ describe('workspace initialization states', () => {
 
   afterEach(cleanup);
 
+  it('carries the chosen issue into research without launching a model call', () => {
+    useAppStore.setState({ workspaceInitializationStatus: 'ready', overviewPerspective: 'leads' });
+    render(<OverviewDashboard />);
+    fireEvent.change(screen.getByLabelText('Start with an issue'), { target: { value: 'police' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Investigate this issue' }));
+    expect(screen.getByRole('tab', { name: 'Investigations' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByLabelText('Investigate next')).toHaveProperty('value', 'police');
+  });
+
   it('shows source onboarding on request after the source catalog reports a genuine empty list', async () => {
     useAppStore.setState({ workspaceInitializationStatus: 'ready' });
     render(<OverviewDashboard />);
 
     expect(screen.queryByRole('region', { name: 'San Diego research desk' })).toBeNull();
     expect(screen.queryByRole('region', { name: 'Investigation workbench' })).toBeNull();
-    fireEvent.click(screen.getByRole('tab', { name: 'Tools' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Investigations' }));
     expect(screen.getByRole('tab', { name: 'Casework' })).toBeTruthy();
     const drawer = screen.getByText('Browse sources and add records').closest('details')!;
     drawer.open = true;

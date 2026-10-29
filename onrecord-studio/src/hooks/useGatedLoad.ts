@@ -10,7 +10,7 @@ const PENDING = { status: 'pending' } as const;
  * Runs `load` whenever `key` changes and publishes only the result of the latest run. A result
  * for an earlier key is dropped, so a slow answer about one record never lands on another.
  */
-export function useGatedLoad<T>(key: string, load: () => Promise<T>): LoadState<T> {
+export function useGatedLoad<T>(key: string, load: () => Promise<T>, cached?: T): LoadState<T> {
   const [held, setHeld] = useState<{ key: string; state: LoadState<T> } | null>(null);
   const gate = useLatestRequestGate();
 
@@ -25,5 +25,5 @@ export function useGatedLoad<T>(key: string, load: () => Promise<T>): LoadState<
   }, [key, gate]);
 
   // The render that first sees a new key runs before the effect above clears the old answer.
-  return held !== null && held.key === key ? held.state : PENDING;
+  return held !== null && held.key === key ? held.state : cached !== undefined ? { status: 'ready', data: cached } : PENDING;
 }

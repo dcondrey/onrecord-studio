@@ -25,10 +25,10 @@ import Badge from "../ui/Badge";
 import { Field, Select } from "../ui/Field";
 import { formatShortDate } from "../objects/labels";
 
-export default function ResearchWorkspace({ onReview }: { onReview?: (reportId: string) => void } = {}) {
+export default function ResearchWorkspace({ onReview, initialTopic = 'homelessness' }: { onReview?: (reportId: string) => void; initialTopic?: string } = {}) {
   const [status, setStatus] = useState<ResearchStatus | null>(null);
   const [error, setError] = useState("");
-  const [topic, setTopic] = useState("homelessness");
+  const [topic, setTopic] = useState(initialTopic);
   const [selectedReport, setSelectedReport] = useState<ResearchReport | null>(null);
   const [selectedSection, setSelectedSection] = useState<"findings" | "requests" | "meetings">("findings");
   const [selectedItemIndex, setSelectedItemIndex] = useState<number | undefined>();
@@ -183,12 +183,16 @@ export default function ResearchWorkspace({ onReview }: { onReview?: (reportId: 
           </Field>
           <Button
             variant="primary"
-            disabled={pending || !status?.policy.enabled || !!missingCredential || !!budgetMessage || !isTauri()}
-            onClick={() => void run()}
+            disabled={pending || !status || !isTauri()}
+            onClick={() => {
+              if (!status?.policy.enabled || missingCredential || budgetMessage) openSettings();
+              else void run();
+            }}
           >
             {pending ? "Starting…" : "Investigate now"}
           </Button>
         </div>
+        {status && !status.policy.enabled && <p className="text-caption text-muted">Research is paused. Investigate now opens settings so you can enable it before starting a run.</p>}
         {status && (
           <ResearchSettings
             settingsRef={settingsRef}

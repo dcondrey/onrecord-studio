@@ -240,6 +240,7 @@ export default function MainLayout() {
         sourceKey: summary.portalKey,
         documentId: summary.documentId,
       });
+      useAppStore.getState().requestFindingsRefresh();
       if (!stillOwner()) return;
       setDocuments((current) => current.filter((document) =>
         document.documentId !== purge.documentId || document.portalKey !== purge.sourceKey));

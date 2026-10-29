@@ -85,7 +85,7 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 describe('San Diego research workflow', () => {
   it('selects a corrected budget PDF with its proposed status and single-document acquisition scope', async () => {
     render(<App />);
-    fireEvent.click(screen.getByRole('tab', { name: 'Tools' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Investigations' }));
     fireEvent.click(screen.getByText('Browse sources and add records'));
     const desk = within(await screen.findByRole('region', { name: 'San Diego research desk' }));
     fireEvent.change(desk.getByLabelText('Evidence type'), { target: { value: 'Budget proposal' } });
@@ -104,7 +104,7 @@ describe('San Diego research workflow', () => {
   // longer than the 5 s default on its own, with nothing wrong.
   it('stages the SDPD source and applies its scoped acquisition recipe when Add is clicked', async () => {
     render(<App />);
-    fireEvent.click(screen.getByRole('tab', { name: 'Tools' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Investigations' }));
     fireEvent.click(screen.getByText('Browse sources and add records'));
     const description = await screen.findByText('Find the written policies, procedures, department orders, and training documents behind a police practice.');
     const card = description.closest('article')!;

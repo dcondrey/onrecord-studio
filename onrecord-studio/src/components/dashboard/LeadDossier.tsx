@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
-import { formatNativeError, invokeCommand } from '../../ipc';
-import { useLatestRequestGate } from '../../hooks/useLatestRequestGate';
+import { useState } from 'react';
+import { invokeCommand } from '../../ipc';
+import { useGatedLoad } from '../../hooks/useGatedLoad';
+import { createReadCache } from '../../utils/readCache';
 import { useAppStore } from '../../store/useAppStore';
 import type { DossierGap, EvidenceLink, LeadDossier as LeadDossierData, LeadFigure as LeadFigureData } from '../../types';
 import LeadFigure from '../charts/figures/LeadFigure';
@@ -16,7 +17,7 @@ import Button from '../ui/Button';
 import InlineError from '../ui/InlineError';
 
 /** A stored lead's figure, none (not a lead, cut short, or stored before figures), or why it could not be read. */
-export type FigureState = { figure: LeadFigureData | null } | { error: string };
+export type FigureState = { figure: LeadFigureData | null } | { error: string } | { pending: true };
 
 export type DossierState =
   | { status: 'pending' }
@@ -25,36 +26,26 @@ export type DossierState =
 
 
 const PENDING: DossierState = { status: 'pending' };
+const dossierCache = createReadCache<LeadDossierData>(24);
+const figureCache = createReadCache<LeadFigureData | null>(24);
 
 /**
- * The dossier and stored figure of one finding, read together under one request gate: a read for
- * a finding the caller has since left is discarded, never shown as this one's. The answer is held
- * with the id it answers, so the render that first sees a new id shows pending, not the last one.
+ * Both reads are keyed to the finding and corpus revision. The evidence chain can be read while
+ * its optional figure is still loading, and the inspector reuses the workbench's reads.
  */
 export function useLeadDossier(findingId: string): DossierState {
-  const [held, setHeld] = useState<{ findingId: string; state: DossierState } | null>(null);
-  const gate = useLatestRequestGate();
-
-  useEffect(() => {
-    const request = gate.begin();
-    const setState = (state: DossierState) => setHeld({ findingId, state });
-    setHeld(null);
-    // The figure is read under the same request as the dossier, so both describe the same finding.
-    const figure: Promise<FigureState> = invokeCommand('list_findings', { filter: { id: findingId, includeDismissed: true }, limit: 1 })
-      .then((found) => ({ figure: found[0]?.figure ?? null }), (reason: unknown) => ({ error: formatNativeError(reason) }));
-    Promise.all([invokeCommand('build_lead_dossier', { findingId }), figure])
-      .then(([dossier, read]) => {
-        if (!gate.isCurrent(request)) return;
-        setState({ status: 'ready', dossier, figure: read });
-      })
-      .catch((reason) => {
-        if (!gate.isCurrent(request)) return;
-        setState({ status: 'failed', message: formatNativeError(reason) });
-      });
-    return gate.invalidate;
-  }, [findingId, gate]);
-
-  return held !== null && held.findingId === findingId ? held.state : PENDING;
+  const revision = useAppStore((state) => state.findingsRefreshRequests);
+  const sourceScope = useAppStore((state) => state.portals.map((source) => `${source.registration.portalKey}:${source.lifecycleState}`).sort().join('|'));
+  const key = `${revision}:${sourceScope}:${findingId}`;
+  const state = useGatedLoad(key, () => dossierCache.read(key, () => invokeCommand('build_lead_dossier', { findingId })), dossierCache.peek(key));
+  const figure = useGatedLoad(key, () => figureCache.read(key, async () => {
+    const found = await invokeCommand('list_findings', { filter: { id: findingId, includeDismissed: true }, limit: 1 });
+    return found[0]?.figure ?? null;
+  }), figureCache.peek(key));
+  return state.status === 'ready' ? {
+    status: 'ready', dossier: state.data,
+    figure: figure.status === 'ready' ? { figure: figure.data } : figure.status === 'failed' ? { error: figure.message } : { pending: true },
+  } : state.status === 'failed' ? state : PENDING;
 }
 
 /**
@@ -77,7 +68,7 @@ export default function LeadDossier({ findingId }: { findingId: string }) {
   return (
     <section aria-label="Lead dossier" className="text-body text-fg-secondary">
       {state.status === 'pending' && <DossierSkeleton />}
-      {state.status === 'failed' && <InlineError className="mt-2" summary="The dossier couldn’t be assembled." detail={state.message} />}
+      {state.status === 'failed' && <InlineError className="mt-2" summary="The dossier couldn’t be assembled." detail={state.message} onRetry={() => useAppStore.getState().requestFindingsRefresh()} />}
       {state.status === 'ready' && (
         <div className="space-y-4">
           <LeadFigureSection dossier={state.dossier} figure={state.figure} />
@@ -140,6 +131,7 @@ export function LeadFigureSection({ dossier, figure }: { dossier: LeadDossierDat
   const controller = useDiscoveryController();
   const sources = tableLeadSources(dossier.finding.explanation);
   const drawn = 'figure' in figure ? figure.figure : null;
+  if ('pending' in figure) return <p role="status" className="text-caption text-muted">Loading the figure…</p>;
   if (!drawn) {
     if ('error' in figure) return <InlineError summary="The lead's figure couldn’t be read." detail={figure.error} />;
     return sources ? <p className="text-caption text-muted">No stored figure for this lead.</p> : null;
@@ -237,6 +229,7 @@ function evidenceLine(link: EvidenceLink): string {
 function DossierSkeleton() {
   return (
     <div role="status" aria-label="Assembling the dossier" className="space-y-2">
+      <p className="text-body text-muted">Loading the cited records and evidence chain…</p>
       <div className="skeleton h-4 w-3/4 rounded" />
       <div className="skeleton h-3 w-full rounded" />
       <div className="skeleton h-3 w-5/6 rounded" />

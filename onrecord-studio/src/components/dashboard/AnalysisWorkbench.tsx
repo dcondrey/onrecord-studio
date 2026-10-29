@@ -97,6 +97,7 @@ const cityDatasets: { value: CityDataset; label: string; yearly?: true }[] = [
 ];
 
 export default function AnalysisWorkbench() {
+  const toolsPanel = useRef<HTMLDetailsElement>(null);
   const { controller: discovery, state: automatic } = useAutomaticDiscovery();
   const reviewSearchResult = (result: HybridSearchResult) => {
     const state = useAppStore.getState();
@@ -186,6 +187,7 @@ export default function AnalysisWorkbench() {
   const inspection = automatic?.inspection;
   useEffect(() => {
     if (!inspection) return;
+    if (toolsPanel.current) toolsPanel.current.open = true;
     // `active` tracks only whether *this effect instance* is still mounted, so it governs the
     // loading indicator: that must clear when this specific fetch settles, even after `sqlGate`
     // has stopped trusting this fetch's *data*, or the indicator and the Import button stay stuck.
@@ -294,6 +296,7 @@ export default function AnalysisWorkbench() {
     if (!requestedPanel) return;
     const heading = document.getElementById(PANEL_HEADINGS[requestedPanel]);
     if (!heading) return;
+    if (toolsPanel.current) toolsPanel.current.open = true;
     requestAnalysisPanel(null);
     if (scroller.current) scrollWithin(scroller.current, heading, 'start');
     heading.tabIndex = -1;
@@ -320,6 +323,8 @@ export default function AnalysisWorkbench() {
         {error && <InlineError summary={workspaceErrorSummary(error.split('\n'))} detail={error} onRetry={retryRefresh} />}
         {status && !error && <p role="status" className="text-caption text-muted">{status}</p>}
         <AutomaticDiscovery />
+        <details ref={toolsPanel} className="app-panel p-4">
+        <summary className="focus-ring cursor-pointer text-heading text-fg">Inspect tables, search documents, or run a query</summary>
         <div className="grid gap-4 lg:grid-cols-[minmax(360px,0.9fr)_minmax(0,1.3fr)]">
         <section className="min-w-0 space-y-4">
           <UiPanel aria-labelledby="semantic-search-heading">
@@ -607,6 +612,7 @@ export default function AnalysisWorkbench() {
           )}
         </section>
         </div>
+        </details>
       </div>
     </main>
   );

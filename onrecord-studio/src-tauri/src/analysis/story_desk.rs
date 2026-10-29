@@ -33,10 +33,50 @@ const STRENGTH_MAX_BP: u16 = 2_000;
 const FRESH_7D_BP: u16 = 400;
 const FRESH_30D_BP: u16 = 200;
 
+pub const CONTEXT_ONLY_KINDS: &[FindingKind] = &[
+    FindingKind::AbsenceOfRecords,
+    FindingKind::RedactionCandidateInferred,
+    FindingKind::CorrelatedFindings,
+    FindingKind::RegeneratedResponse,
+    FindingKind::JustInTimeCompliance,
+    FindingKind::EvasionRedactionAtLimit,
+    FindingKind::EvasionRoundNumberThresholds,
+    FindingKind::ReleaseTimingConcentration,
+    FindingKind::CrossCorpusOrphanTopic,
+];
+
+fn actionable(finding: &Finding) -> bool {
+    if CONTEXT_ONLY_KINDS.contains(&finding.kind) {
+        return false;
+    }
+    // Older sweeps stored generic words such as "award is" as monetary identifiers.
+    // Preserve them for record inspection, but do not rank them as discrepancies.
+    if finding.kind == FindingKind::ContradictoryStatement {
+        if let Some((subject, amounts)) = finding.headline.split_once("' stated amount:") {
+            let identified = subject
+                .rsplit('\'')
+                .next()
+                .is_some_and(|id| id.bytes().any(|b| b.is_ascii_digit()));
+            let disagreement =
+                amounts
+                    .split_once(" in one document, ")
+                    .is_some_and(|(a, b)| {
+                        match (scan_money(a, Hedge::Exact), scan_money(b, Hedge::Exact)) {
+                            (Some(a), Some(b)) => AssertionValue::Cents(a.cents)
+                                .materially_differs(&AssertionValue::Cents(b.cents)),
+                            _ => false,
+                        }
+                    });
+            return identified && disagreement;
+        }
+    }
+    true
+}
+
 pub fn rank_leads(findings: &[Finding], now: DateTime<Utc>, limit: usize) -> Vec<StoryLead> {
     let live: Vec<&Finding> = findings
         .iter()
-        .filter(|finding| finding.dismissed_at.is_none())
+        .filter(|finding| finding.dismissed_at.is_none() && actionable(finding))
         .collect();
     let mut leads: Vec<StoryLead> = live
         .iter()
@@ -324,6 +364,55 @@ mod tests {
 
     fn factor<'a>(lead: &'a StoryLead, name: &str) -> Option<&'a InterestFactor> {
         lead.public_interest.factors.iter().find(|f| f.name == name)
+    }
+
+    #[test]
+    fn contextual_clues_and_stale_generic_amounts_do_not_become_leads() {
+        let now = Utc::now();
+        let mut findings: Vec<Finding> = CONTEXT_ONLY_KINDS
+            .iter()
+            .enumerate()
+            .map(|(index, kind)| {
+                finding(
+                    &format!("context-{index}"),
+                    *kind,
+                    "$900 million in 50 documents",
+                    FindingConfidence::measured(10_000),
+                )
+            })
+            .collect();
+        for (id, headline) in [
+            (
+                "generic",
+                "'award is' stated amount: $100000 in one document, $200000 in another",
+            ),
+            (
+                "identical",
+                "'contract 123' stated amount: $100000 in one document, $100000 in another",
+            ),
+            (
+                "real",
+                "'contract 123' stated amount: $100000 in one document, $200000 in another",
+            ),
+        ] {
+            findings.push(finding(
+                id,
+                FindingKind::ContradictoryStatement,
+                headline,
+                FindingConfidence::measured(9_000),
+            ));
+        }
+        findings.push(finding(
+            "services",
+            FindingKind::ServiceReportLead,
+            "Open sanitation reports remain unresolved after a year",
+            FindingConfidence::measured(9_000),
+        ));
+        let leads = rank_leads(&findings, now, 100);
+        assert_eq!(leads.len(), 2);
+        assert!(leads.iter().any(|lead| lead.finding_id == "real"));
+        assert!(leads.iter().any(|lead| lead.finding_id == "services"));
+        assert!(leads.iter().all(|lead| lead.related_finding_ids.len() == 1));
     }
 
     #[test]

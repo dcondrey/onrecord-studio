@@ -101,7 +101,7 @@
         ]
       },
       {
-        "heading": "Missing series numbers",
+        "heading": "Inspect numbering gaps",
         "paragraphs": [
           "The index reads labelled series numbers (Resolution No. 2024-012, Ordinance No. 1234, Contract No. C-45) from document text. For any series with three or more numbers, a short run of numbers absent between two that the corpus holds is listed with both neighbours. It is absence from this corpus: the number may have been skipped, voided, filed elsewhere, or simply not requested yet. It is a lead for a request, not a finding that anything was withheld."
         ]

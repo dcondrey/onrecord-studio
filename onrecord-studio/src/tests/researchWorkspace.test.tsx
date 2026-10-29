@@ -168,7 +168,10 @@ describe("research dossier workflow", () => {
     render(<ResearchWorkspace />);
     await screen.findByRole("heading", { name: "No saved dossier yet; research is paused" });
     expect(screen.queryByText("Building the first investigation")).toBeNull();
-    expect(screen.getByRole("button", { name: "Investigate now" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Investigate now" })).toHaveProperty("disabled", false);
+    fireEvent.click(screen.getByRole("button", { name: "Investigate now" }));
+    expect(screen.getByText("Research settings").closest("details")?.open).toBe(true);
+    expect(bridge.invoke).not.toHaveBeenCalledWith("run_research_now", expect.anything());
   });
   it("explains the selected provider credential and opens the relevant settings directly", async () => {
     bridge.invoke.mockResolvedValue({ ...status, reports: [], credentialAvailable: false, policy: { ...status.policy, provider: "openrouter" } });
@@ -193,7 +196,7 @@ describe("research dossier workflow", () => {
     render(<ResearchWorkspace />);
     await screen.findByText(/The daily limit of 7 model calls cannot cover one investigation \(8 calls\)/);
     expect(screen.queryByText(/Latest saved dossier/)).toBeNull();
-    expect(screen.getByRole("button", { name: "Investigate now" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Investigate now" })).toHaveProperty("disabled", false);
     fireEvent.click(screen.getByRole("button", { name: "Open Research settings" }));
     const limit = screen.getByRole("spinbutton", { name: "Daily model-call limit" });
     expect(limit.getAttribute("min")).toBe("8");
@@ -204,7 +207,7 @@ describe("research dossier workflow", () => {
     bridge.invoke.mockResolvedValue({ ...status, reports: [], callsToday: 20 });
     render(<ResearchWorkspace />);
     await screen.findByText(/4 model calls remain today; starting a complete investigation requires 8/);
-    expect(screen.getByRole("button", { name: "Investigate now" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Investigate now" })).toHaveProperty("disabled", false);
   });
   it("does not present a failed catalog load as empty records or active research", async () => {
     bridge.invoke.mockRejectedValue(new Error("Database unavailable"));
@@ -448,7 +451,8 @@ describe("research dossier workflow", () => {
     });
     expect(
       screen.getByRole("button", { name: "Investigate now" }),
-    ).toHaveProperty("disabled", true);
+    ).toHaveProperty("disabled", false);
+    expect(screen.getByLabelText("Autonomous research enabled")).toHaveProperty("checked", false);
   });
   it("persists follow-through without presenting a failed update as completed", async () => {
     bridge.invoke.mockImplementation(async (name: string) => {

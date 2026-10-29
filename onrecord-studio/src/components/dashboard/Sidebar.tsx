@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { cn } from '../../utils/cn';
 import { PRODUCT_BYLINE, PRODUCT_NAME } from '../../config/brand';
@@ -22,6 +22,7 @@ function sourceIcon(kind: SourceKind): IconName {
 }
 
 export default function Sidebar() {
+  const [showTools, setShowTools] = useState(false);
   const badges = useWorkspaceBadges();
   const portals = useAppStore((state) => state.portals);
   const workspaceInitializationStatus = useAppStore((state) => state.workspaceInitializationStatus);
@@ -110,9 +111,12 @@ export default function Sidebar() {
               </>
             )}
           </button>
-          {!isCollapsed && <div className="mb-1 px-2 text-overline uppercase text-muted">Workspace</div>}
+          {!isCollapsed && <div className="mb-1 px-2 text-overline uppercase text-muted">Investigate</div>}
           <div className="space-y-px">
-            {workspaceCommandRegistry.map((item) => {
+            {[...workspaceCommandRegistry].sort((a, b) => {
+              const order = ['overview', 'story', 'evidence', 'briefing'];
+              return (order.indexOf(a.view) < 0 ? 99 : order.indexOf(a.view)) - (order.indexOf(b.view) < 0 ? 99 : order.indexOf(b.view));
+            }).filter((item) => showTools || ['overview', 'story', 'evidence', 'briefing', workspaceView].includes(item.view)).map((item) => {
               const selected = workspaceView === item.view;
               const badge = badges[item.view];
               return (
@@ -155,6 +159,11 @@ export default function Sidebar() {
                 </button>
               );
             })}
+            <button type="button" className={cn(ROW, 'gap-2 px-2 text-muted')} aria-expanded={showTools} onClick={() => setShowTools((shown) => !shown)} title="Analysis, patterns, meetings, comparisons and activity">
+              <Icon name="sliders" size="md" />
+              {!isCollapsed && <span>{showTools ? 'Fewer tools' : 'More tools'}</span>}
+              {isCollapsed && <span className="sr-only">More tools</span>}
+            </button>
           </div>
         </nav>
 

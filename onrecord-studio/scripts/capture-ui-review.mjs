@@ -6,6 +6,7 @@
 //
 //   node scripts/capture-ui-review.mjs [outputDirectory] [--data=real] [--only=view,view] [--concurrency=3]
 //     [--widths=1024,1280,1680] [--states=populated,empty,loading,error] [--browser=chrome|bundled]
+//     [--exact=true] limits --only to exact view names, including discovered views.
 //   node scripts/capture-ui-review.mjs <dir> --only=chart-gallery   (every chart primitive, harness-only)
 //
 // --states limits every view to those states; --states=top keeps the full state set for the
@@ -43,6 +44,7 @@ const gitHead = (() => {
 const label = flag('label') ?? `${gitHead}-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')}`;
 const outputDirectory = path.resolve(positional[0] ?? path.join('/Volumes/A/onrecord-ui-review', label));
 const only = flag('only')?.split(',').filter(Boolean) ?? null;
+const matchesView = (view) => !only || only.some((filter) => flag('exact') === 'true' ? view === filter : view.startsWith(filter));
 const concurrency = Math.max(1, Number(flag('concurrency') ?? 3));
 const data = flag('data') ?? 'invented';
 if (!['invented', 'real'].includes(data)) throw new Error(`--data must be "invented" or "real", not "${data}"`);
@@ -180,12 +182,16 @@ function initScript(fixtureNow) {
 
 // ---- View catalogue -------------------------------------------------------------------------
 
-const NAV_LABELS = { overview: 'San Diego', patterns: 'Patterns', analysis: 'Analysis', evidence: 'Evidence', activity: 'Activity', briefing: 'Briefing', story: 'Story desk', meetings: 'Meetings', compare: 'Compare' };
+const NAV_LABELS = { overview: 'Overview', patterns: 'Patterns', analysis: 'Analysis', evidence: 'Evidence', activity: 'Activity', briefing: 'Briefing', story: 'Story desk', meetings: 'Meetings', compare: 'Compare' };
 
 /** Steps run against a page; each records what it did in `log`. */
 const nav = (view) => async (page, log) => {
   const button = page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('button', { name: new RegExp(`^\\s*${NAV_LABELS[view]}\\b`) });
   try {
+    if (!await button.isVisible()) {
+      const tools = page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('button', { name: 'More tools', exact: true });
+      if (await tools.isVisible()) await tools.click();
+    }
     await button.click({ timeout: 2_000 });
     log.push(`click sidebar "${NAV_LABELS[view]}"`);
   } catch (error) {
@@ -213,11 +219,13 @@ const select = (description, locate, value) => async (page, log) => {
 const event = (name, detail) => store(`dispatch window event '${name}'`, ([eventName, eventDetail]) => window.dispatchEvent(new CustomEvent(eventName, { detail: eventDetail })), [name, detail]);
 const inspect = (target) => store(`store.inspect(${JSON.stringify(target)})`, (t) => window.__uiReview.store.getState().inspect(t), target);
 
-// The overview's perspectives (Leads, Following, Analytics, Casework, Tools) are tabs in the main pane.
+// The overview's perspectives (Leads, Following, Analytics, Casework, Investigations) are tabs in the main pane.
 const overviewTab = (name) => click(`tab "${name}"`, (page) => page.getByRole('main').getByRole('tab', { name, exact: true }));
 const casework = [nav('overview'), overviewTab('Casework')];
 /** Opens the Watching pane when it is folded (its toggle's name starts with "Watching"). */
 const openWatching = async (page, log) => {
+  const context = page.locator('summary', { hasText: 'Deadlines and saved searches' });
+  if (await context.isVisible()) await context.evaluate((element) => { element.parentElement.open = true; });
   const toggle = page.getByRole('button', { name: /^Watching/ }).filter({ visible: true }).first();
   if ((await toggle.getAttribute('aria-expanded', { timeout: 8_000 })) === 'false') {
     await toggle.click({ timeout: 8_000 });
@@ -236,6 +244,7 @@ const spendingTab = [
 const spendingChains = click('"Spending chains"', (page) => page.getByRole('button', { name: 'Spending chains', exact: true }));
 const budgetComparison = [
   nav('analysis'),
+  click('analysis tools', (page) => page.locator('summary', { hasText: 'Inspect tables, search documents, or run a query' })),
   type('the SQL editor', (page) => page.getByRole('textbox', { name: 'Analytical SQL' }), 'SELECT * FROM budget_comparison -- fund 100000, FY25: actual_minus_budget'),
   click('"Run"', (page) => page.getByRole('button', { name: 'Run', exact: true })),
 ];
@@ -406,8 +415,9 @@ const VIEWS = [
   { view: 'license-device-limit', scenario: { license: 'deviceLimit' }, steps: [], gate: true, primary: [], states: [] },
   // Row-level results only appear after a reader runs SQL; these two show the real tables' rows.
   ...(real ? [
-    { view: 'analysis-sql-preview', steps: [nav('analysis'), type('SQL editor', (page) => page.getByLabel('Analytical SQL'), real.PREVIEW_SQL), click('"Run"', (page) => page.getByRole('button', { name: 'Run', exact: true }))], anchor: sqlEditor, primary: ['run_analytical_sql'], states: ['error'] },
+    { view: 'analysis-sql-preview', steps: [nav('analysis'), click('analysis tools', (page) => page.locator('summary', { hasText: 'Inspect tables, search documents, or run a query' })), type('SQL editor', (page) => page.getByLabel('Analytical SQL'), real.PREVIEW_SQL), click('"Run"', (page) => page.getByRole('button', { name: 'Run', exact: true }))], anchor: sqlEditor, primary: ['run_analytical_sql'], states: ['error'] },
     { view: 'analysis-budget-comparison', steps: [nav('analysis'),
+      click('analysis tools', (page) => page.locator('summary', { hasText: 'Inspect tables, search documents, or run a query' })),
       select('"Budget snapshot"', (page) => page.getByLabel('Budget snapshot'), real.BUDGET_COMPARISON.budgetSnapshotId),
       select('"Actuals snapshot"', (page) => page.getByLabel('Actuals snapshot'), real.BUDGET_COMPARISON.actualsSnapshotId),
       type('"Comparison fiscal year"', (page) => page.getByLabel('Comparison fiscal year'), real.BUDGET_COMPARISON.fiscalYear),
@@ -419,8 +429,8 @@ const VIEWS = [
   // Figures below the fold: each also gets an element capture at full height (`sections`).
   { view: 'compare-dispositions', steps: [nav('compare')], sections: ['section[aria-label="Dispositions by department"]'], primary: [], states: [] },
   { view: 'overview-following', steps: [nav('overview'), overviewTab('Following')], sections: ['section[aria-label="Following"]'], primary: [], states: [] },
-  // The More tools drawers live on the Tools tab; discovery opens each from there.
-  { view: 'overview-tools', steps: [nav('overview'), overviewTab('Tools')], primary: [], states: [], discover: true },
+  // The More tools drawers live on the Investigations tab; discovery opens each from there.
+  { view: 'overview-tools', steps: [nav('overview'), overviewTab('Investigations')], primary: [], states: [], discover: true },
   { view: 'story-ranked-leads', steps: [nav('story'), click('tab "Factor table"', (page) => page.getByRole('main').getByRole('tab', { name: 'Factor table', exact: true }))], sections: ['figure:has(h3:text-is("Factor table"))'], primary: [], states: [] },
   {
     view: 'organization-record',
@@ -828,7 +838,7 @@ try {
             if (subview.kind === 'drawer' && discovered.has(key)) continue;
             discovered.add(key);
             const name = `${definition.view}-${subview.kind}-${slug(subview.name)}`;
-            if (only && !only.some((filter) => name.startsWith(filter))) continue;
+            if (!matchesView(name)) continue;
             const locator = subview.kind === 'tab'
               ? (p) => p.getByRole('main').getByRole('tab', { name: subview.name, exact: true })
               : (p) => p.getByRole('main').locator('details.app-panel > summary, details[data-ui-drawer] > summary', { hasText: subview.name });
@@ -840,7 +850,7 @@ try {
     }
   }
 
-  const selected = VIEWS.filter((definition) => !only || only.some((filter) => definition.view === filter || definition.view.startsWith(`${filter}-`) || definition.view.startsWith(filter)));
+  const selected = VIEWS.filter((definition) => matchesView(definition.view));
   for (const definition of selected) {
     if (sizesFor(definition).length === 0) index.outOfScope.push({ view: definition.view, reason: `captured only at ${definition.widths.join(', ')} px, outside --widths` });
   }

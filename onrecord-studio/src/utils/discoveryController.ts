@@ -188,22 +188,22 @@ export class DiscoveryController {
           this.failures.delete(key);
           this.publish({ profiles: Object.fromEntries(Object.entries(this.state.profiles).filter(([, profile]) => profile.fingerprint !== key)) });
         }
+        const stored = storedLeads(schema, this.state.profiles);
+        const leadsKey = JSON.stringify(stored);
+        if (this.transport.record && leadsKey !== this.recordedLeads && (stored.complete || stored.leads.length) && this.now() >= this.recordRetryAt) {
+          // Keyed by what was sent, so it is noted even if the controller stopped meanwhile.
+          const outcome = await this.transport.record(stored.leads, stored.complete).then(() => null, (reason) => String(reason));
+          if (outcome === null) this.recordedLeads = leadsKey;
+          else this.recordRetryAt = this.now() + 300_000;
+          if (this.valid(generation)) {
+            const errors = { ...this.state.errors }; delete errors.leads;
+            this.publish({ errors: outcome === null ? errors : { ...errors, leads: outcome } });
+          }
+          return;
+        }
         const dataset = schema.datasets.find((item) => !this.state.profiles[item.snapshotId] && this.now() >= (this.failures.get(snapshotFingerprint(schema, item)) ?? 0));
         if (!dataset) {
           this.publish({ activeSnapshot: null });
-          const stored = storedLeads(schema, this.state.profiles);
-          const leadsKey = JSON.stringify(stored);
-          if (this.transport.record && leadsKey !== this.recordedLeads && (stored.complete || stored.leads.length) && this.now() >= this.recordRetryAt) {
-            // Keyed by what was sent, so it is noted even if the controller stopped meanwhile.
-            const outcome = await this.transport.record(stored.leads, stored.complete).then(() => null, (reason) => String(reason));
-            if (outcome === null) this.recordedLeads = leadsKey;
-            else this.recordRetryAt = this.now() + 300_000;
-            if (this.valid(generation)) {
-              const errors = { ...this.state.errors }; delete errors.leads;
-              this.publish({ errors: outcome === null ? errors : { ...errors, leads: outcome } });
-            }
-            return;
-          }
           const gap = this.nextGap();
           if (!gap) { nextDelay = 5000; return; }
           this.requestedGaps.delete(gap.key);

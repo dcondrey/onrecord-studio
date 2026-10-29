@@ -104,7 +104,7 @@ export default function OverviewWorkbench({ ledgerFigure, onOpenLedger, onOpenFo
               ) : (
                 <>
                   <p className="text-heading text-fg-secondary">No leads yet</p>
-                  <p className="mt-1 text-caption text-muted">Leads appear here once the detectors finish a sweep of what has been collected.</p>
+                  <p className="mt-1 text-caption text-muted">No supported accountability lead is available yet. Choose an issue and collect its records; record-level clues remain in Story desk’s All findings.</p>
                 </>
               )}
             </div>
@@ -113,7 +113,10 @@ export default function OverviewWorkbench({ ledgerFigure, onOpenLedger, onOpenFo
           )}
         </div>
       </Pane>
-      <WatchStatus ledger={ledger} ledgerSelected={current === LEDGER_ID} onSelectLedger={() => select(LEDGER_ID)} onOpenFollowing={onOpenFollowing} />
+      <details className="order-3 rounded-lg border border-line p-3">
+        <summary className="focus-ring cursor-pointer text-caption text-muted">Deadlines and saved searches</summary>
+        <WatchStatus ledger={ledger} ledgerSelected={current === LEDGER_ID} onSelectLedger={() => select(LEDGER_ID)} onOpenFollowing={onOpenFollowing} />
+      </details>
     </div>
   );
 

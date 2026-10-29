@@ -24,6 +24,7 @@ vi.hoisted(() => {
 
 const bridge = vi.hoisted(() => ({
   gates: new Map<string, Promise<void>>(),
+  builds: [] as string[],
 }));
 
 // The tail `analysis/service_leads.rs` appends to a table-derived lead, in its stored form.
@@ -79,6 +80,7 @@ vi.mock('../ipc', () => ({
     }
     if (command !== 'build_lead_dossier') return Promise.reject(new Error(`unexpected ${command}`));
     const id = args?.findingId ?? '';
+    bridge.builds.push(id);
     const answer = dossier(id, `Headline for ${id}`);
     if (id === 'table-lead' || id === 'figure-lead') answer.finding.explanation = TABLE_LEAD_EXPLANATION;
     const gate = bridge.gates.get(id);
@@ -88,14 +90,43 @@ vi.mock('../ipc', () => ({
 }));
 
 import LeadDossier from '../components/dashboard/LeadDossier';
+import { useAppStore } from '../store/useAppStore';
+import Inspector from '../components/objects/Inspector';
 
 afterEach(() => {
   cleanup();
   bridge.gates.clear();
+  bridge.builds = [];
   Object.assign(navigator, { clipboard: undefined });
 });
 
 describe('LeadDossier', () => {
+  it('returns from the evidence inspector to the selected story lead and closes the layer', async () => {
+    useAppStore.setState({ workspaceView: 'evidence', inspectorStack: [{ kind: 'finding', id: 'return-to-story' }] });
+    render(<Inspector />);
+    await screen.findByText('Headline for return-to-story');
+    fireEvent.click(screen.getByRole('button', { name: 'Open in Story desk' }));
+    expect(useAppStore.getState().workspaceView).toBe('story');
+    expect(useAppStore.getState().workbenchSelection.story).toBe('return-to-story');
+    expect(useAppStore.getState().inspectorStack).toEqual([]);
+  });
+
+  it('shares the selected lead’s dossier with its evidence sidebar and invalidates on refresh', async () => {
+    let resolve!: () => void;
+    bridge.gates.set('shared', new Promise<void>((done) => { resolve = done; }));
+    const first = render(<LeadDossier findingId="shared" />);
+    expect(screen.getByText('Loading the cited records and evidence chain…')).toBeTruthy();
+    await waitFor(() => expect(bridge.builds).toEqual(['shared']));
+    await act(async () => { resolve(); });
+    await screen.findByText('Headline for shared');
+    first.unmount();
+    render(<LeadDossier findingId="shared" />);
+    expect(screen.getByText('Headline for shared')).toBeTruthy();
+    expect(bridge.builds).toEqual(['shared']);
+    act(() => useAppStore.getState().requestFindingsRefresh());
+    await waitFor(() => expect(bridge.builds).toEqual(['shared', 'shared']));
+  });
+
   it('renders the evidence chain, falsification test and an uncomputed gap as such', async () => {
     render(<LeadDossier findingId="finding-a" />);
     await screen.findByText('Headline for finding-a');
@@ -180,6 +211,15 @@ describe('LeadDossier', () => {
     await waitFor(() => expect(screen.queryByText('Figure for stale-a')).toBeNull());
     expect(screen.queryByText('Headline for stale-a')).toBeNull();
     expect(screen.queryByText('Figures as text')).toBeNull();
+  });
+
+  it('shows the evidence chain without waiting for its optional figure', async () => {
+    bridge.gates.set('figure:figure-lead', new Promise<void>(() => {}));
+    render(<LeadDossier findingId="figure-lead" />);
+    await screen.findByText('Headline for figure-lead');
+    expect(screen.getByRole('button', { name: 'budget-memo.pdf' })).toBeTruthy();
+    expect(screen.getByText('Loading the figure…')).toBeTruthy();
+    expect(screen.queryByText('No stored figure for this lead.')).toBeNull();
   });
 
   it('discards a dossier that resolves after the reader opened another finding', async () => {

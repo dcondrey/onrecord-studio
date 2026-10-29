@@ -81,6 +81,19 @@ afterEach(() => {
 });
 
 describe('lead workbench', () => {
+  it('opens the lead’s request instead of leaving the previous record selected', async () => {
+    useAppStore.setState({ sincePreset: 'all', selectedRequestId: 999, selectedRequestPortalKey: 'unrelated' });
+    render(<StoryDesk />);
+    await waitFor(() => expect(bridge.leads).toHaveLength(1));
+    act(() => bridge.leads[0]([lead('inspect', 'Inspect this lead')]));
+    await waitFor(() => expect(bridge.dossiers.has('inspect')).toBe(true));
+    act(() => bridge.dossiers.get('inspect')!(dossier('inspect', 'Inspect this lead')));
+    fireEvent.click(await screen.findByRole('button', { name: 'Inspect records' }));
+    expect(useAppStore.getState().workspaceView).toBe('evidence');
+    expect(useAppStore.getState().selectedRequestId).toBe(7);
+    expect(useAppStore.getState().selectedRequestPortalKey).toBe('sd-city');
+  });
+
   it('keeps the selected lead on the stage when the previous lead’s dossier resolves late', async () => {
     render(<StoryDesk />);
     await waitFor(() => expect(bridge.leads).toHaveLength(1));

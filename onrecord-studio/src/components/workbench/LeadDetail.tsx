@@ -102,7 +102,7 @@ export default function LeadDetail({ findingId, storyLead, position, compare, so
         elevated
       >
         {state.status === 'failed' ? (
-          <div className="p-6"><InlineError summary="This lead’s dossier couldn’t be assembled." detail={state.message} /></div>
+          <div className="p-6"><InlineError summary="This lead’s dossier couldn’t be assembled." detail={state.message} onRetry={() => useAppStore.getState().requestFindingsRefresh()} /></div>
         ) : !ready ? (
           <StageSkeleton />
         ) : (
@@ -164,8 +164,19 @@ function Stage({ dossier, figure, storyLead, rank, compare, source, onDraft, act
   const briefing = findingToBriefingEvidence(finding);
 
   const inspectRecords = () => {
+    if (controller && sources?.sql) {
+      controller.inspect(sources.sql);
+      setWorkspaceView('analysis');
+      return;
+    }
     if (finding.subject.portalKey) setActivePortal(finding.subject.portalKey);
     setSearchFilters('', finding.subject.agencyId ?? null, null, null);
+    const citation = dossier.evidence.find((entry) => entry.requestId !== null && entry.fileName !== null);
+    if (citation && citation.requestId !== null) {
+      useAppStore.getState().openEvidenceLink({ portalKey: citation.portalKey, requestId: citation.requestId, documentId: citation.documentId, characterOffset: citation.characterStart ?? 0 });
+    } else if (finding.subject.requestId !== null && finding.subject.portalKey) {
+      useAppStore.getState().setSelectedRequest(finding.subject.requestId, finding.subject.portalKey);
+    }
     setWorkspaceView('evidence');
   };
   const sql = sources?.sql;
@@ -194,6 +205,7 @@ function Stage({ dossier, figure, storyLead, rank, compare, source, onDraft, act
       </header>
 
       <div className="space-y-7 px-6 py-6">
+        {'pending' in figure && <p role="status" className="text-caption text-muted">Loading the figure…</p>}
         {'error' in figure && <InlineError summary="The lead’s figure couldn’t be read." detail={figure.error} />}
         {drawn ? (
           <>
@@ -204,16 +216,14 @@ function Stage({ dossier, figure, storyLead, rank, compare, source, onDraft, act
               sources={{ tables: sources?.tables.map((table) => table.parts?.name ?? table.line) ?? ['tables not recorded with this finding'], retrievedAt: sources?.tables[0]?.parts?.retrievedOn }}
               onActivate={openQuery}
             />
-            {factors && (
-              <details className="group">
-                <summary className="focus-ring inline-flex w-fit cursor-pointer list-none items-center gap-1.5 rounded text-overline uppercase text-muted hover:text-fg [&::-webkit-details-marker]:hidden">
-                  Why it ranks here
-                </summary>
-                <div className="mt-3">{factors}</div>
-              </details>
-            )}
           </>
-        ) : factors}
+        ) : null}
+        {factors && (
+          <details className="group">
+            <summary className="focus-ring w-fit cursor-pointer rounded text-caption text-muted">Why it ranks here</summary>
+            <div className="mt-3">{factors}</div>
+          </details>
+        )}
 
         {dossier.evidence.length > 0 || !sources ? (
           <section aria-labelledby="stage-chain">
@@ -418,6 +428,8 @@ function Context({ dossier, onSelectFinding, draftOpen, onOpenDraft, onDraftsSet
         )}
       </PaneSection>
 
+      <details className="border-t border-line">
+      <summary className="focus-ring cursor-pointer px-4 py-3 text-caption text-muted">Related findings ({dossier.related.length}{dossier.relatedTruncated ? '+' : ''})</summary>
       <PaneSection title="Related findings" count={dossier.related.length ? `${dossier.related.length}${dossier.relatedTruncated ? '+' : ''}` : undefined} area="related">
         {dossier.related.length === 0 ? (
           <p className="text-body text-muted">No other open finding touches this request or these documents.</p>
@@ -445,6 +457,9 @@ function Context({ dossier, onSelectFinding, draftOpen, onOpenDraft, onDraftsSet
       {/* With no passage the tables are the evidence, and the stage lists them. */}
       {sources && documents.length > 0 && <TablesSection sources={sources} />}
 
+      </details>
+      <details className="border-t border-line">
+      <summary className="focus-ring cursor-pointer px-4 py-3 text-caption text-muted">Evidence gaps ({dossier.gaps.length}{dossier.gapsTruncated ? '+' : ''})</summary>
       <PaneSection title="Gaps" count={dossier.gaps.length ? `${dossier.gaps.length}${dossier.gapsTruncated ? '+' : ''}` : undefined} area="gaps">
         {dossier.gaps.length === 0 ? (
           <p className="text-body text-muted">Every figure found in the cited documents could be checked, or none was found.</p>
@@ -460,6 +475,7 @@ function Context({ dossier, onSelectFinding, draftOpen, onOpenDraft, onDraftsSet
         )}
       </PaneSection>
 
+      </details>
       <PaneSection title="Draft from this lead" area="draft" id={DRAFT_SECTION_ID}>
         {draftOpen ? <ArtifactDrafts key={finding.id} findingId={finding.id} onSettled={onDraftsSettled} /> : (
           <Button size="sm" icon="filePlus" className="w-full justify-center" onClick={onOpenDraft}>Draft a request or appeal</Button>
