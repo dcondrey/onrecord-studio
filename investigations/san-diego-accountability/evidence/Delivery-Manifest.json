@@ -1,0 +1,628 @@
+{
+  "report_id": "SDHA-2026-01",
+  "version": "1.3",
+  "status": "Verified local v1.3 decision-focused revision; ready for author manual upload; not deposited.",
+  "completed_at": "2026-10-19T10:33:26.833856+00:00",
+  "pages": 92,
+  "sources": 278,
+  "included_sources": 261,
+  "prior_edition": {
+    "version": "1.2",
+    "record": "https://zenodo.org/records/23405739",
+    "doi": "10.5281/zenodo.23405739"
+  },
+  "validation": {
+    "status": "passed",
+    "checks": 2999,
+    "current_gate": "Validation.json"
+  },
+  "files": [
+    {
+      "name": "Additional-Research-Validation.json",
+      "bytes": 32057,
+      "sha256": "4169a2a648ac56b26f099b6244a3b4b8214231393ce14b289efb076ed86fee89"
+    },
+    {
+      "name": "Browser-Accessibility-Audit.json",
+      "bytes": 31745,
+      "sha256": "5bbd282d6821d0d82c3805aaee537a69ba1a8a28a3536063bc33b1fb44dece12"
+    },
+    {
+      "name": "Citation-Links.json",
+      "bytes": 196967,
+      "sha256": "2a337237a51d51fd6bf41d404c126aa4d247d8da610b69c5faac889bb54a3142"
+    },
+    {
+      "name": "Citation.txt",
+      "bytes": 445,
+      "sha256": "1299ef2dea7cb1ba49c29749b1e5aac6ea562d7f65133d264e85fb2d0d3be3fd"
+    },
+    {
+      "name": "Content-Credentials/C2PA-current-index.html",
+      "bytes": 528,
+      "sha256": "e1a617f1573146dd8bde43dde8b4067d98826fc95f790b04a1ff526b147b8bdd"
+    },
+    {
+      "name": "Content-Credentials/Council-Decision-Brief/Signing-Verification.json",
+      "bytes": 3003,
+      "sha256": "6bdea0af8df5bf92119fecede3d1988284b2c21d9dc3ce191b42a65d5cb17721"
+    },
+    {
+      "name": "Content-Credentials/Council-Decision-Brief/Tamper-Detection.json",
+      "bytes": 184,
+      "sha256": "c2e2d5bc642cb86ebfe21c8327e3c30d8b2a2ce97685985f06eb6fe4a8fd9657"
+    },
+    {
+      "name": "Content-Credentials/Council-Decision-Brief/credential.c2pa",
+      "bytes": 56641,
+      "sha256": "90a4245f961533acce69a61d55ab3106cda76986639e097ac467335eab813440"
+    },
+    {
+      "name": "Content-Credentials/Council-Decision-Brief/default-trust.json",
+      "bytes": 55306,
+      "sha256": "03f67644b7f6ab66586159f853a6fbe068adcd03a1ccca102303a5141b6eda7b"
+    },
+    {
+      "name": "Content-Credentials/Council-Decision-Brief/manifest-definition.json",
+      "bytes": 18812,
+      "sha256": "da0a96e36d6d9e51d90ac136350189053a242d54821214b2035193f3d246428b"
+    },
+    {
+      "name": "Content-Credentials/Council-Decision-Brief/publisher-trust.json",
+      "bytes": 55333,
+      "sha256": "7c7177291af9056b4668326351930b8db8adcbb23b10587691a3ac4578f9d154"
+    },
+    {
+      "name": "Content-Credentials/Council-Decision-Brief/trust-settings.json",
+      "bytes": 4304,
+      "sha256": "f40aec9cac6f61f7beb73e3f2d654fcdf9b7e80a1e27d9ff2fffd0ae2e6e7399"
+    },
+    {
+      "name": "Content-Credentials/Credential-Verification.json",
+      "bytes": 1340,
+      "sha256": "db0fa291a57887d5da47045a7423cbe9b32ce499668c52d08112485034f6d794"
+    },
+    {
+      "name": "Content-Credentials/Follow-the-Charge/Signing-Verification.json",
+      "bytes": 4509,
+      "sha256": "bd9504c58ece7ab2947277c3d0dc99e4f6feaf3c3f4f9f144bcaa9dda35ccc8f"
+    },
+    {
+      "name": "Content-Credentials/Follow-the-Charge/Tamper-Detection.json",
+      "bytes": 184,
+      "sha256": "c2e2d5bc642cb86ebfe21c8327e3c30d8b2a2ce97685985f06eb6fe4a8fd9657"
+    },
+    {
+      "name": "Content-Credentials/Follow-the-Charge/credential.c2pa",
+      "bytes": 75927,
+      "sha256": "ca77e0164f405f8219250ff49f941d86ade72a9d94ac932714cb2f4530e1d0c8"
+    },
+    {
+      "name": "Content-Credentials/Follow-the-Charge/default-trust.json",
+      "bytes": 109703,
+      "sha256": "265dd6459f08171901e52c0f24e4f4986c8c521a86deca7620ef1b284d71f6c7"
+    },
+    {
+      "name": "Content-Credentials/Follow-the-Charge/manifest-definition.json",
+      "bytes": 70247,
+      "sha256": "c992d792ace3af851ee7a7227f9fc0415e9b21e8c015a1777b1ffdb14643237b"
+    },
+    {
+      "name": "Content-Credentials/Follow-the-Charge/publisher-trust.json",
+      "bytes": 109730,
+      "sha256": "c185d3d621449ab2a1fcc8d9877955183816b49ac79926285946782d4913f699"
+    },
+    {
+      "name": "Content-Credentials/Follow-the-Charge/trust-settings.json",
+      "bytes": 4304,
+      "sha256": "f40aec9cac6f61f7beb73e3f2d654fcdf9b7e80a1e27d9ff2fffd0ae2e6e7399"
+    },
+    {
+      "name": "Content-Credentials/Funded-Handoff/Signing-Verification.json",
+      "bytes": 4079,
+      "sha256": "6b409f303b1f71919f7ba64f76c8c8b0f3b18b125b0e322a362cdfbad1b12896"
+    },
+    {
+      "name": "Content-Credentials/Funded-Handoff/Tamper-Detection.json",
+      "bytes": 184,
+      "sha256": "c2e2d5bc642cb86ebfe21c8327e3c30d8b2a2ce97685985f06eb6fe4a8fd9657"
+    },
+    {
+      "name": "Content-Credentials/Funded-Handoff/credential.c2pa",
+      "bytes": 56272,
+      "sha256": "5cd69691b20679d4ecdc107a825e649ef82f80ce976f2151d21ec1432aa6fbc5"
+    },
+    {
+      "name": "Content-Credentials/Funded-Handoff/default-trust.json",
+      "bytes": 54808,
+      "sha256": "6d91e2551fbf70b339c6802d08f84af43359808ba67f47f1286826f3812ee6b1"
+    },
+    {
+      "name": "Content-Credentials/Funded-Handoff/manifest-definition.json",
+      "bytes": 18335,
+      "sha256": "4f4730d080d7db5046f7eb895a87504c84f5b2281922bbe17a6c7a79a29a5665"
+    },
+    {
+      "name": "Content-Credentials/Funded-Handoff/publisher-trust.json",
+      "bytes": 54835,
+      "sha256": "aa4870faa9f63db898f1feeff9d2fd657b1967b3edb95d881df81362ba1fe5a6"
+    },
+    {
+      "name": "Content-Credentials/Funded-Handoff/trust-settings.json",
+      "bytes": 4304,
+      "sha256": "f40aec9cac6f61f7beb73e3f2d654fcdf9b7e80a1e27d9ff2fffd0ae2e6e7399"
+    },
+    {
+      "name": "Content-Credentials/Outcome-Numbers/Signing-Verification.json",
+      "bytes": 4293,
+      "sha256": "d14ed2fea34b75887c8ac648720098f8b9a0c375e0a1e02e9bf4e83e3efec1a1"
+    },
+    {
+      "name": "Content-Credentials/Outcome-Numbers/Tamper-Detection.json",
+      "bytes": 184,
+      "sha256": "c2e2d5bc642cb86ebfe21c8327e3c30d8b2a2ce97685985f06eb6fe4a8fd9657"
+    },
+    {
+      "name": "Content-Credentials/Outcome-Numbers/credential.c2pa",
+      "bytes": 63294,
+      "sha256": "d25b86bfbb2a584c7296f7edc3579fc1b5eddac9407f770b2e69c9efd1293d01"
+    },
+    {
+      "name": "Content-Credentials/Outcome-Numbers/default-trust.json",
+      "bytes": 66689,
+      "sha256": "db85bf88e63512089a5198d70a704b37411036c2e914dcc28c01e753d83f68e9"
+    },
+    {
+      "name": "Content-Credentials/Outcome-Numbers/manifest-definition.json",
+      "bytes": 29722,
+      "sha256": "599260549cea3e07e0ed2ee9a37d0c8f59a947f32d69d0a09a18876bae0299b8"
+    },
+    {
+      "name": "Content-Credentials/Outcome-Numbers/publisher-trust.json",
+      "bytes": 66716,
+      "sha256": "1fbf27f63ae05fc2dc9df289e914dcf850bcba046a0711da9b9877d9d3608637"
+    },
+    {
+      "name": "Content-Credentials/Outcome-Numbers/trust-settings.json",
+      "bytes": 4304,
+      "sha256": "f40aec9cac6f61f7beb73e3f2d654fcdf9b7e80a1e27d9ff2fffd0ae2e6e7399"
+    },
+    {
+      "name": "Content-Credentials/Public-Source-Acquisition.json",
+      "bytes": 2010,
+      "sha256": "32af0fde0bcd07a05611662761b606af6a223ae8abe1910aebc3fc84c73547e8"
+    },
+    {
+      "name": "Content-Credentials/Read-Me.txt",
+      "bytes": 2884,
+      "sha256": "777ec74f3cb912583fbd1326f68c778bfecc426f65d4550b3e4efa07027a18e9"
+    },
+    {
+      "name": "Content-Credentials/San-Diego-Homelessness-Accountability/Signing-Verification.json",
+      "bytes": 22196,
+      "sha256": "c473ebb4dc6e4cafa7ccb40702c4a6e50123e1d64b7f2a365fc3f966009e1030"
+    },
+    {
+      "name": "Content-Credentials/San-Diego-Homelessness-Accountability/Tamper-Detection.json",
+      "bytes": 184,
+      "sha256": "c2e2d5bc642cb86ebfe21c8327e3c30d8b2a2ce97685985f06eb6fe4a8fd9657"
+    },
+    {
+      "name": "Content-Credentials/San-Diego-Homelessness-Accountability/credential.c2pa",
+      "bytes": 195990,
+      "sha256": "b585ea00668dcb287cc062941f6df2ea0c4786697d8bf6f0d1a996ac252490e9"
+    },
+    {
+      "name": "Content-Credentials/San-Diego-Homelessness-Accountability/default-trust.json",
+      "bytes": 343584,
+      "sha256": "c12a9100f03b7d6c30c9ff44fc2abea72df32e629df106296738da9374a8cd32"
+    },
+    {
+      "name": "Content-Credentials/San-Diego-Homelessness-Accountability/manifest-definition.json",
+      "bytes": 293343,
+      "sha256": "d2cf75d8c2795ff6cb8cdc116f70c57850d4be90c6caf7f3b923dd40cb51b5d5"
+    },
+    {
+      "name": "Content-Credentials/San-Diego-Homelessness-Accountability/publisher-trust.json",
+      "bytes": 343611,
+      "sha256": "2b2809247ab03740913b871144c5ba1624543328bd23fba1cbb9510ca3dcbdd7"
+    },
+    {
+      "name": "Content-Credentials/San-Diego-Homelessness-Accountability/trust-settings.json",
+      "bytes": 4304,
+      "sha256": "f40aec9cac6f61f7beb73e3f2d654fcdf9b7e80a1e27d9ff2fffd0ae2e6e7399"
+    },
+    {
+      "name": "Content-Credentials/San-Diego-Structural-Budget-Recovery-Plan/Signing-Verification.json",
+      "bytes": 8200,
+      "sha256": "9b019f574c01adb31c9abfcef3b2bee20f9d611bf3a708354db8b5999b191798"
+    },
+    {
+      "name": "Content-Credentials/San-Diego-Structural-Budget-Recovery-Plan/Tamper-Detection.json",
+      "bytes": 184,
+      "sha256": "c2e2d5bc642cb86ebfe21c8327e3c30d8b2a2ce97685985f06eb6fe4a8fd9657"
+    },
+    {
+      "name": "Content-Credentials/San-Diego-Structural-Budget-Recovery-Plan/credential.c2pa",
+      "bytes": 71344,
+      "sha256": "6ef3f5288e28f3e4ee8441749757494172d396babc7417b0819a1632d94b485a"
+    },
+    {
+      "name": "Content-Credentials/San-Diego-Structural-Budget-Recovery-Plan/default-trust.json",
+      "bytes": 76771,
+      "sha256": "0b2d565fa6c27a4bd941afba6aafadcf4964068b5301fb3f00f044e270db53a9"
+    },
+    {
+      "name": "Content-Credentials/San-Diego-Structural-Budget-Recovery-Plan/manifest-definition.json",
+      "bytes": 39586,
+      "sha256": "53d1ffb88e0d9c5a35c3483f36696b62eb7ab27ac132af52d45be758bb8852a9"
+    },
+    {
+      "name": "Content-Credentials/San-Diego-Structural-Budget-Recovery-Plan/publisher-trust.json",
+      "bytes": 76798,
+      "sha256": "eb9d754d6ebd952806105e849e715f54ea3afd84a7b7738f32d57d871118d025"
+    },
+    {
+      "name": "Content-Credentials/San-Diego-Structural-Budget-Recovery-Plan/trust-settings.json",
+      "bytes": 4304,
+      "sha256": "f40aec9cac6f61f7beb73e3f2d654fcdf9b7e80a1e27d9ff2fffd0ae2e6e7399"
+    },
+    {
+      "name": "Content-Credentials/Service-Quality/Signing-Verification.json",
+      "bytes": 4293,
+      "sha256": "4777124c0253b149e91115955f3eb2baebf460ad3916d8339862134956993ea4"
+    },
+    {
+      "name": "Content-Credentials/Service-Quality/Tamper-Detection.json",
+      "bytes": 184,
+      "sha256": "c2e2d5bc642cb86ebfe21c8327e3c30d8b2a2ce97685985f06eb6fe4a8fd9657"
+    },
+    {
+      "name": "Content-Credentials/Service-Quality/credential.c2pa",
+      "bytes": 62095,
+      "sha256": "b9dd9bd7cd279b657ed6e67bfe69a69b5ccc059bfb97b1a30d6684c5ba67924a"
+    },
+    {
+      "name": "Content-Credentials/Service-Quality/default-trust.json",
+      "bytes": 65615,
+      "sha256": "b57b86d5b6d0e6796eb68b3f4f72b40a0ad8727556473880452044cf54b855f7"
+    },
+    {
+      "name": "Content-Credentials/Service-Quality/manifest-definition.json",
+      "bytes": 28654,
+      "sha256": "5c14c949447b806faab18c3a4c66ddc2fbf7ca4dfc30ede81e6593c39952d280"
+    },
+    {
+      "name": "Content-Credentials/Service-Quality/publisher-trust.json",
+      "bytes": 65642,
+      "sha256": "75d5a7315ade705b9d239f36af5a9bd27ef7356292238455f260e43132bddb65"
+    },
+    {
+      "name": "Content-Credentials/Service-Quality/trust-settings.json",
+      "bytes": 4304,
+      "sha256": "f40aec9cac6f61f7beb73e3f2d654fcdf9b7e80a1e27d9ff2fffd0ae2e6e7399"
+    },
+    {
+      "name": "Content-Credentials/Shelter-Access/Signing-Verification.json",
+      "bytes": 4291,
+      "sha256": "7d90d146bdf636ac558ad0fd235ba41d2bd8509ce488c499c639ee7eecbfe875"
+    },
+    {
+      "name": "Content-Credentials/Shelter-Access/Tamper-Detection.json",
+      "bytes": 184,
+      "sha256": "c2e2d5bc642cb86ebfe21c8327e3c30d8b2a2ce97685985f06eb6fe4a8fd9657"
+    },
+    {
+      "name": "Content-Credentials/Shelter-Access/credential.c2pa",
+      "bytes": 58616,
+      "sha256": "370d36ea1d73ddd956aec649ad2b33850244728236b735a3905f952e153b5a8a"
+    },
+    {
+      "name": "Content-Credentials/Shelter-Access/default-trust.json",
+      "bytes": 58557,
+      "sha256": "475161fe8d5f202972db218909259418cb595ae6a87fe3f752d88b8a9ce3cc6c"
+    },
+    {
+      "name": "Content-Credentials/Shelter-Access/manifest-definition.json",
+      "bytes": 21934,
+      "sha256": "d86d9f10c8728ee1452f5945648c78f2ccfc3def481fcdf55c62a6b9eb86a839"
+    },
+    {
+      "name": "Content-Credentials/Shelter-Access/publisher-trust.json",
+      "bytes": 58584,
+      "sha256": "8dfa31de7767541ace631d57f484e52b6aff625be3431bc56fcc2b61fe9d7ffa"
+    },
+    {
+      "name": "Content-Credentials/Shelter-Access/trust-settings.json",
+      "bytes": 4304,
+      "sha256": "f40aec9cac6f61f7beb73e3f2d654fcdf9b7e80a1e27d9ff2fffd0ae2e6e7399"
+    },
+    {
+      "name": "Content-Credentials/Timestamp-Provider-Probe.json",
+      "bytes": 1775,
+      "sha256": "dcd48af1f65f8461179be349d175c91edbe8d6680f30a5a49c7cd7a0e1741466"
+    },
+    {
+      "name": "Content-Credentials/Timestamp-Requests.jsonl",
+      "bytes": 8874,
+      "sha256": "33d82b47d98895ed4d42ca623a79a4a0f4ef6f24a47e876661834903719e8849"
+    },
+    {
+      "name": "Content-Credentials/Verification.json",
+      "bytes": 4940,
+      "sha256": "ccb788c2417758574103205e5daea2c7df47392605c7b4c6b6d481f296898862"
+    },
+    {
+      "name": "Content-Credentials/author-chain.pem",
+      "bytes": 3104,
+      "sha256": "e79b7f2a466b269384e4ac337763eb637d3596075acbc09db5ec829f66d5b8dd"
+    },
+    {
+      "name": "Content-Credentials/c2pa-issuing-ca.crt",
+      "bytes": 1143,
+      "sha256": "d49bfc9f5686f44fb90087892f1c5089e8a36eaddb23645f9840eae77cfa561f"
+    },
+    {
+      "name": "Content-Credentials/c2pa-root-ca.crt",
+      "bytes": 1013,
+      "sha256": "6757b95f20da0e87a9f58b705d1a9ac76f6f281e4e5e8d2f7adf0c6abe51f3c8"
+    },
+    {
+      "name": "Content-Credentials/executive-did.json",
+      "bytes": 699,
+      "sha256": "5cfcf4401b3588959d81fb804c29d87a72522fcb5f056d77fb2e05a2abaff1da"
+    },
+    {
+      "name": "Content-Credentials/publisher-chain.pem",
+      "bytes": 3120,
+      "sha256": "69837ca4d4c4b401e285ac96efae29ecaf8041060b85e144ab3bee14b02f1769"
+    },
+    {
+      "name": "Content-Credentials/writerslogic-did.json",
+      "bytes": 5766,
+      "sha256": "2c0ef7a1d192b92a0b1868d4922c13de6be7198a23032a2446ec85446890d874"
+    },
+    {
+      "name": "Control-Validation.json",
+      "bytes": 137914,
+      "sha256": "4710ce0eabf0d720700f7f5e3ab8c5e058a12169137ac739413ac88221ee9631"
+    },
+    {
+      "name": "Council-Decision-Brief.html",
+      "bytes": 2931335,
+      "sha256": "1b4ab18ff551df32cff1beadb2cee23fd93d24543e291a08aca6545d0b99e9a4"
+    },
+    {
+      "name": "Council-Decision-Brief.pdf",
+      "bytes": 144831,
+      "sha256": "52853804e5cefc50757e34b4e1edc8d3d79dafb5b29c7f39cab255ccaf7a773f"
+    },
+    {
+      "name": "Decision-Revision-Source-Validation.json",
+      "bytes": 27848,
+      "sha256": "b10ae4b7765b5e364040e3485c722f9dcb54b74f58b044a575b311c19dff8ec3"
+    },
+    {
+      "name": "Decision-Revision-Update.json",
+      "bytes": 3510,
+      "sha256": "8a090a6a684d0a10315150dabc6efb40b9ebc73c0e63cae89ded9462606600eb"
+    },
+    {
+      "name": "Decision-Revision-Validation.json",
+      "bytes": 341924,
+      "sha256": "461ba554d6fdb3ee675b6a3697bc7929beda0ad730eaeffe123335288d432777"
+    },
+    {
+      "name": "Deep-Research-Validation.json",
+      "bytes": 103312,
+      "sha256": "49572b3a7a5d8f5c6fc8b6ef726d1ecccfcd92362d123b7f8e5f65d5b331de35"
+    },
+    {
+      "name": "Directory-Layout.json",
+      "bytes": 7595,
+      "sha256": "055971a2a0fe0b7ccb7dfa23ee4e2295e36d220ced30e803cc76068a016f5be4"
+    },
+    {
+      "name": "Editorial-Refinement.json",
+      "bytes": 3011,
+      "sha256": "8efbbf380b6e00bf2204ac0872fc2a93a0f88cd08c11313e913973ab24438fde"
+    },
+    {
+      "name": "Evidence-Ledger.xlsx",
+      "bytes": 154883,
+      "sha256": "53f269febb0ff87d68619e6e7f84df0c2c86b90ceeceba160e8261a91cfbe29c"
+    },
+    {
+      "name": "Evidence.zip",
+      "bytes": 237885547,
+      "sha256": "2da970cd8f8fc3e7e6b7ab14c0a035400178426d92186957136d6e8c744687f7"
+    },
+    {
+      "name": "Excerpt-Container-Repairs.json",
+      "bytes": 47594,
+      "sha256": "336f2c0364f3b1d1ff22722e45eed64183c27612b20b76565ced82b0cf252f13"
+    },
+    {
+      "name": "Expansion-Report-Review.json",
+      "bytes": 133514,
+      "sha256": "9c7f94570f6229fdda88b08359ad9bea8f8dff42d2bb18a65dbb00bb9151c680"
+    },
+    {
+      "name": "Expansion-Source-Validation.json",
+      "bytes": 54805,
+      "sha256": "a00011020c4387789286d214b83bcff953d6313d2b2bcd1867adaa4fda3ab69f"
+    },
+    {
+      "name": "Expansion-Update.json",
+      "bytes": 937,
+      "sha256": "426ad363625265475b3bb0bab65c9fa503a61a25341d065c0231ca8c3f5d00f3"
+    },
+    {
+      "name": "Expansion-Validation.json",
+      "bytes": 501911,
+      "sha256": "54f2fc59785c0d938b5a31eab7dfa1d117a8b3d269be02854d312ef7d49b1263"
+    },
+    {
+      "name": "Gap-Closure-Status.html",
+      "bytes": 26048,
+      "sha256": "a418df37b7f1511664c5115ffa23cc57b73ec853b68b7f3980b0a077c939389b"
+    },
+    {
+      "name": "Gap-Closure-Status.json",
+      "bytes": 73615,
+      "sha256": "3264aaa6ff216565b0fff405d685a1d60b5409fdde9f9f20f5f0879d815ef505"
+    },
+    {
+      "name": "License.txt",
+      "bytes": 525,
+      "sha256": "6a873f78af41676556e260357d978001c04c6d5265345b5040f65c22c87ea109"
+    },
+    {
+      "name": "Notable-Research-Validation.json",
+      "bytes": 32151,
+      "sha256": "29904c8eb1a8c86701d91edc423308d6f8d3339745d023bb90dd7851d58238ea"
+    },
+    {
+      "name": "PDF-Accessibility-Audit.json",
+      "bytes": 1971,
+      "sha256": "4a197e945b6ddb8e4cff9781fdb225b7a4ab534356051e1c18bd8b4aa76c6832"
+    },
+    {
+      "name": "Portable-Package-Audit.json",
+      "bytes": 3442,
+      "sha256": "e64e8b5493e1c46ba9656da278cadbfaf19c2dba850c21693b4d2faf4a40e0c4"
+    },
+    {
+      "name": "Publication-Metadata.json",
+      "bytes": 2656,
+      "sha256": "16720497f17cbbd2b91b7576d1f94872eb923ecca378c110429f01e5f74146df"
+    },
+    {
+      "name": "Publication-Series-Validation.json",
+      "bytes": 327,
+      "sha256": "b586d3f66476c28165bc10dcae16e7bf81b27506ab7dce931e8284582c04eddf"
+    },
+    {
+      "name": "Publication-Source/Zenodo-Submission-v1.3/Zenodo-Listing-Fields.json",
+      "bytes": 56758,
+      "sha256": "238f29f69bc3de0177719fef4438103264edfdd73bb5bb58e49d5d38bfda692c"
+    },
+    {
+      "name": "Publication-Source/Zenodo-Submission-v1.3/zenodo_listing.py",
+      "bytes": 13224,
+      "sha256": "efd87982c0ccfddc0ca2b01ba80510ecd6ee14fa1fe9584282e91da4dadbe12e"
+    },
+    {
+      "name": "Publication-Structure.json",
+      "bytes": 42957,
+      "sha256": "8c5bb9740be9a9e149286cb6218189910c78bea365e766a0445d690818d47e12"
+    },
+    {
+      "name": "README.txt",
+      "bytes": 59279,
+      "sha256": "e6722327fb628497e2b16ad9690667873008ca01df4ef17debb82d01127ad159"
+    },
+    {
+      "name": "Record-Specifications.html",
+      "bytes": 19015,
+      "sha256": "5837ad9d2ffdaa5234af8e6ffc5b2c1a5513d2eb0814149cbc674a2e62d4cdf7"
+    },
+    {
+      "name": "Relational-Research-Validation.json",
+      "bytes": 156793,
+      "sha256": "f6e89b53c745b7a0db74ccfafc8a57219af33881cbdc0aef133ac21ed56fd0f1"
+    },
+    {
+      "name": "Research-Updates.html",
+      "bytes": 50748,
+      "sha256": "e6c81433e2fb8608b2f77bbd705edad1a8cbb231e7d2404e31e184b9a9c0aee9"
+    },
+    {
+      "name": "Research-Updates.json",
+      "bytes": 5153,
+      "sha256": "c473ae37ec31fb1220b4baa4318259dd03a0bf3879b7a934367066d4d32d30fc"
+    },
+    {
+      "name": "San-Diego-Homelessness-Accountability.html",
+      "bytes": 4100739,
+      "sha256": "d6dda31f4400f156596d71355b894bcdfd9ec62f11ce8f2c58dc9f9cb18cf80d"
+    },
+    {
+      "name": "San-Diego-Homelessness-Accountability.md",
+      "bytes": 471629,
+      "sha256": "f8fcb2733ee070ea0605390d27aab1b3eacad9a1d5f452739113cf38f5f936ff"
+    },
+    {
+      "name": "San-Diego-Homelessness-Accountability.pdf",
+      "bytes": 3655744,
+      "sha256": "5c81aba50ab8d785655ef0f678f7561f4230ad6764bb8010a949f2f83d5cd8e8"
+    },
+    {
+      "name": "San-Diego-Homelessness-Accountability.txt",
+      "bytes": 294925,
+      "sha256": "6126efb86855afe94fd4c963627bf7307a0f0c900f0d624dd52b18ccf7cf0b83"
+    },
+    {
+      "name": "Source-Directory.json",
+      "bytes": 390100,
+      "sha256": "f27f061a2ad734f323a766f1076c2b4f722a4ecbc3984d40cf3e23ec73eac8ed"
+    },
+    {
+      "name": "Structural-Budget-Recovery/San-Diego-Structural-Budget-Recovery-Plan.pdf",
+      "bytes": 500498,
+      "sha256": "4b777d68628eb20e04f266ec00ef16e524462a1cb3c557fa8aba644c86fe0a7b"
+    },
+    {
+      "name": "Targeted-Series-Reading-and-Proof.zip",
+      "bytes": 11482126,
+      "sha256": "31f4884bfe9dae6be5e5305f751452b65743b340ef6f10ca4985b0f1ba47cac3"
+    },
+    {
+      "name": "Targeted-Series/Follow-the-Charge.pdf",
+      "bytes": 162622,
+      "sha256": "2a6475a5d76e077c5f3e4e0abf60ea5ee7f1acef94b116ec6d9b3a634ff40d50"
+    },
+    {
+      "name": "Targeted-Series/Funded-Handoff.pdf",
+      "bytes": 183339,
+      "sha256": "922165469b354d9363656464e58e9cdd678709f224c6d08446af133e09fc4de3"
+    },
+    {
+      "name": "Targeted-Series/Outcome-Numbers.pdf",
+      "bytes": 315226,
+      "sha256": "d852d9d3469da4a71bb19b37f4214525f2f97f4565e6407cdda1cdbfbfcaf2f6"
+    },
+    {
+      "name": "Targeted-Series/Service-Quality.pdf",
+      "bytes": 250624,
+      "sha256": "bd2bcceb7dd5707c559c03376ed5a4e0671bc2e191db2197d7202642327a80a4"
+    },
+    {
+      "name": "Targeted-Series/Shelter-Access.pdf",
+      "bytes": 206471,
+      "sha256": "7ccc2f2405e54b2b84fe6fef3550aec030795a33a471dbc288dce749a76f7be7"
+    },
+    {
+      "name": "Validation.json",
+      "bytes": 342399,
+      "sha256": "a027cd0a6dfdd1c56c383816192b5fa145cf93265bf4ec1e49ad5a1cc5b15b76"
+    },
+    {
+      "name": "Zenodo-Metadata.txt",
+      "bytes": 54726,
+      "sha256": "aecaa56b16c85965d839edf3a67773416a19b78960a3f66c1ffd9b83460c4fb3"
+    },
+    {
+      "name": "Zenodo-New-Version-Metadata.json",
+      "bytes": 49393,
+      "sha256": "f1bfaa28cd3e5cd64136241dfe85bab17f36d3918d8d838d54ea667b1a560102"
+    }
+  ],
+  "legacy_outreach_drafts": [
+    "LinkedIn-Article.html",
+    "LinkedIn-Article.txt",
+    "Email-Templates.html",
+    "Email-Templates.txt",
+    "Banner.png"
+  ]
+}

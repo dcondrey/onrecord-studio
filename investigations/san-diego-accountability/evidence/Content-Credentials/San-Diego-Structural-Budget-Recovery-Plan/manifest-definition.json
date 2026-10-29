@@ -1,0 +1,809 @@
+{
+  "claim_generator_info": [
+    {
+      "name": "OnRecord research report publisher",
+      "version": "1.3",
+      "specVersion": "2.4.0"
+    }
+  ],
+  "title": "San Diego Structural Budget Recovery Plan",
+  "format": "application/pdf",
+  "assertions": [
+    {
+      "label": "c2pa.actions",
+      "created": true,
+      "data": {
+        "actions": [
+          {
+            "action": "c2pa.created",
+            "when": "2026-10-19T08:23:45.522382Z",
+            "softwareAgent": {
+              "name": "OnRecord report release signing tool",
+              "version": "0.1.0"
+            },
+            "digitalSourceType": "http://cv.iptc.org/newscodes/digitalsourcetype/compositeWithTrainedAlgorithmicMedia",
+            "description": "Assembled an author-directed, AI-assisted research publication from the identified reviewed render and documentary evidence. Earlier unsignaled editing history is not reconstructed."
+          }
+        ],
+        "allActionsIncluded": false
+      }
+    },
+    {
+      "label": "cawg.metadata",
+      "data": {
+        "@context": {
+          "dc": "http://purl.org/dc/elements/1.1/",
+          "dcterms": "http://purl.org/dc/terms/",
+          "schema": "https://schema.org/"
+        },
+        "dc:title": [
+          "San Diego Structural Budget Recovery Plan"
+        ],
+        "dc:creator": [
+          "David L. Condrey"
+        ],
+        "dc:identifier": [
+          "SDBR-2026-01/v1.0/San-Diego-Structural-Budget-Recovery-Plan"
+        ],
+        "dc:language": [
+          "en-US"
+        ],
+        "dc:rights": "Original report text, figures and analysis: David L. Condrey, CC BY 4.0. Third-party records retain their own rights and status.",
+        "dcterms:license": "https://creativecommons.org/licenses/by/4.0/",
+        "schema:version": "1.0",
+        "schema:author": {
+          "@id": "did:web:writerslogic.com:executives:dcondrey",
+          "schema:name": "David L. Condrey"
+        },
+        "schema:publisher": {
+          "@id": "did:web:writerslogic.com",
+          "schema:name": "WritersLogic Inc."
+        }
+      }
+    },
+    {
+      "label": "com.writerslogic.research-provenance",
+      "data": {
+        "version": 1,
+        "report_id": "SDBR-2026-01",
+        "edition": "1.0",
+        "physical_pages": 26,
+        "unsigned_render_sha256": "9ddfa26e9c531a20d3e86e528793394cd34bc0d9ce706a5a21e720532fb87c1f",
+        "reading_edition_sha256": "8211ce4b061a03106dd12d435c2a12181896b2d34b56ff7eb3a1c2b0a4091665",
+        "normalized_text_sha256": "0d3928fa2c511d69b9f2c2694a65961596e8c40bcfbf30635d351eb4c5d5fbf6",
+        "text_digest_method": "PyMuPDF extracted page text in order; Unicode NFKC; whitespace collapsed to single spaces; UTF-8; SHA-256. This is a custom research digest, not a registered C2PA soft-binding algorithm.",
+        "source_directory_sha256": "2bf6f48384f31f09851768dfe1d6016f2ca07b6f3589e9c8a08ad2dfa07b1af5",
+        "publisher_identity_document": "https://writerslogic.com/.well-known/did.json",
+        "author_identity_document": "https://writerslogic.com/executives/dcondrey/did.json",
+        "publisher_did_document_sha256": "2c0ef7a1d192b92a0b1868d4922c13de6be7198a23032a2446ec85446890d874",
+        "executive_did_document_sha256": "5cfcf4401b3588959d81fb804c29d87a72522fcb5f056d77fb2e05a2abaff1da",
+        "published_issuing_certificate": "https://writerslogic.com/.well-known/c2pa/issuing-ca.crt",
+        "published_root_certificate": "https://writerslogic.com/.well-known/c2pa/root-ca.crt",
+        "evidence_scope": "Selected public records, attributed source statements, reproducible calculations and bounded interpretations.",
+        "ai_assistance": {
+          "tool": "OpenAI Codex",
+          "roles": [
+            "research assistance",
+            "drafting",
+            "software generation",
+            "automated verification"
+          ],
+          "human_direction": "David L. Condrey",
+          "human_only_authorship_attestation": false
+        },
+        "release_status": "Prepared for author manual Zenodo deposit; no edition DOI assigned at signing. The structural budget plan is a separate publication.",
+        "current_edition_doi": null,
+        "prior_published_edition": null,
+        "report_policy": "Fixed edition; subsequent dataset supplements do not amend this PDF.",
+        "limitations": [
+          "Signatures bind bytes and assertions; they do not establish underlying accounting truth, fraud or a legal conclusion.",
+          "The signed provenance starts at release assembly; earlier unsignaled history and independent human review are not certified.",
+          "Software-held publisher and executive keys are used; hardware attestation and C2PA generator conformance are not claimed."
+        ]
+      }
+    },
+    {
+      "label": "com.writerslogic.source-register",
+      "data": {
+        "version": 1,
+        "hash_algorithm": "sha256",
+        "cited_source_count": 29,
+        "sources": [
+          {
+            "file": "Sources/AP-Recovery-10090424-26-L.pdf",
+            "sha256": "484904890c3f262acf7b0783e9225cedde48ac3d5cb114638192426c6c78b552",
+            "bytes": 7158829,
+            "kind": "retained native source file"
+          },
+          {
+            "file": "Sources/Civilian-Staffing-Study-2025.pdf",
+            "sha256": "d9a1536effa284d466069e612b1a52651db8eb7c52a997d38491e4990e1f2555",
+            "bytes": 131917,
+            "kind": "retained native source file"
+          },
+          {
+            "id": "FIXED-FRINGE",
+            "file": "Sources/FIXED-FRINGE.pdf",
+            "sha256": "b412ba6952634bea2b3e62877719a8152b6fcfaae46efa33e8869cfc22a5256e",
+            "kind": "unchanged original PDF bytes",
+            "bytes": 654113
+          },
+          {
+            "id": "HISTORICAL-BUDGET",
+            "file": "Sources/Historical-Operating-Budgets.csv",
+            "sha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5",
+            "url": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+            "kind": "unchanged archived CSV",
+            "limitation": "FY2026 cycle unlabeled and does not equal final published FY2026 budget; historical analysis excludes it as authoritative adopted baseline.",
+            "bytes": 63825383
+          },
+          {
+            "id": "IBA2611",
+            "file": "Sources/IBA26-11.pdf",
+            "kind": "unchanged original PDF bytes",
+            "url": "https://www.sandiego.gov/sites/default/files/2026-04/iba-report-26-11-review-of-the-fiscal-year-2027-proposed-budget_0.pdf",
+            "sha256": "6b4b28acb206c566450237f69baf38574044a4cae7611f3dcbdfc0819e3923bb",
+            "bytes": 5747460
+          },
+          {
+            "id": "MONITOR26",
+            "file": "Sources/MONITOR26.pdf",
+            "sha256": "ed66ded0c09670c5e0dd573641ce148f9e5c9fd9090d9e3dc400080e518ee720",
+            "kind": "unchanged original PDF bytes",
+            "bytes": 1976637
+          },
+          {
+            "file": "Sources/NPD-Historical-Overtime-15246128.pdf",
+            "sha256": "41e3ec19e232a0d1f421213a1473fa91bd77549466242feb9e9f9896335c5612",
+            "bytes": 145567,
+            "kind": "retained native source file"
+          },
+          {
+            "id": "OT-AUDIT",
+            "file": "Sources/OT-AUDIT.pdf",
+            "sha256": "163b9cd057b29b05b8242b10c8bb674549d258cb4e2225ec7e5bc8771c0dd664",
+            "kind": "unchanged original PDF bytes",
+            "bytes": 3910824
+          },
+          {
+            "id": "POA-MOU",
+            "file": "Sources/POA-MOU.pdf",
+            "sha256": "3bb8d64269a35761a90c74e54f34c1cf76ca64bad7db31946393718864043dde",
+            "kind": "unchanged original PDF bytes",
+            "bytes": 2157266
+          },
+          {
+            "id": "POLICE27",
+            "file": "Sources/POLICE27.pdf",
+            "sha256": "fcd3fc8d233c21f4c09a568db0e13b14e5460be4366000e77e03c151c2d6283d",
+            "kind": "unchanged original PDF bytes",
+            "bytes": 1363148
+          },
+          {
+            "file": "Sources/Police-Position-Ledger.csv",
+            "sha256": "92dc1cf49dbdfd5a54f1597ec021ded440c43c43292a657da0d9e9636cf0c1cc",
+            "bytes": 7406,
+            "kind": "analyst transcription of Police budget position table; original POLICE27.pdf physical p. 12"
+          },
+          {
+            "id": "adopted-executive-summary.web",
+            "file": "Sources/adopted-executive-summary.web.txt",
+            "sha256": "2d10828ba2acd50e47d676ea3c207a53886b8dcb998d98f2c1ec1d7fd152b918",
+            "kind": "retrieved web text snapshot; not original PDF bytes",
+            "limitation": "Underlying public URLs and physical page labels appear in the snapshot. Original-byte download unavailable due local DNS failure.",
+            "bytes": 20133
+          },
+          {
+            "id": "adopted-fiscal-policies.web",
+            "file": "Sources/adopted-fiscal-policies.web.txt",
+            "sha256": "ec9c8f9cdf1a6754f159936b1178a60f1f825724b71f0a55c243c1282e15f582",
+            "kind": "retrieved web text snapshot; not original PDF bytes",
+            "limitation": "Underlying public URLs and physical page labels appear in the snapshot. Original-byte download unavailable due local DNS failure.",
+            "bytes": 25177
+          },
+          {
+            "id": "adopted-gf-expenditures.web",
+            "file": "Sources/adopted-gf-expenditures.web.txt",
+            "sha256": "ee3652805eab24226e87636e67aa04a636f876c8280d581146235dc18568d1d0",
+            "kind": "retrieved web text snapshot; not original PDF bytes",
+            "limitation": "Underlying public URLs and physical page labels appear in the snapshot. Original-byte download unavailable due local DNS failure.",
+            "bytes": 25784
+          },
+          {
+            "id": "ballot-revenue-estimates.web",
+            "file": "Sources/ballot-revenue-estimates.web.txt",
+            "sha256": "47f0ec128d5bf66eabf2ce9a83005ac3478a00c6fac3a87aa84642f3aa012551",
+            "kind": "retrieved web text snapshot; not original PDF bytes",
+            "limitation": "Underlying public URLs and physical page labels appear in the snapshot. Original-byte download unavailable due local DNS failure.",
+            "bytes": 6611
+          },
+          {
+            "id": "baseline-reconciliation.web",
+            "file": "Sources/baseline-reconciliation.web.txt",
+            "sha256": "c92ddc3e19953214f9abbabb4c8389bb156310590192dbd31fa05f790a4bb56e",
+            "kind": "retrieved web text snapshot; not original PDF bytes",
+            "limitation": "Underlying public URLs and physical page labels appear in the snapshot. Original-byte download unavailable due local DNS failure.",
+            "bytes": 27766
+          },
+          {
+            "id": "category-tax-authority-and-iba.web",
+            "file": "Sources/category-tax-authority-and-iba.web.txt",
+            "sha256": "bbdc644a368519a1f8ddcd07a7b44fef66ff8debffc42107f71512ab42a73793",
+            "kind": "retrieved web text snapshot; not original PDF bytes",
+            "limitation": "Underlying public URLs and physical page labels appear in the snapshot. Original-byte download unavailable due local DNS failure.",
+            "bytes": 24548
+          },
+          {
+            "file": "Sources/department-driver-excerpts-and-current-tax.web.txt",
+            "sha256": "d4a9acdf2c1f6ff2d4ff2a36c0b12a56c175c753aa5b9ec1c1fb8b09b5e75556",
+            "bytes": 25086,
+            "kind": "retrieved web text snapshot; not original PDF bytes"
+          },
+          {
+            "id": "department-growth-and-ballot.web",
+            "file": "Sources/department-growth-and-ballot.web.txt",
+            "sha256": "7accfdf09a5ee82cb13e91b7313cb5012c70296e5e2440d3ec1b82dae46ab66b",
+            "kind": "retrieved web text snapshot; not original PDF bytes",
+            "limitation": "Underlying public URLs and physical page labels appear in the snapshot. Original-byte download unavailable due local DNS failure.",
+            "bytes": 28116
+          },
+          {
+            "id": "department-policy-candidates.web",
+            "file": "Sources/department-policy-candidates.web.txt",
+            "sha256": "59bd105cd2224024db58bd6dc2460e26f7804b00820f83786df69b3b3477a2ce",
+            "kind": "retrieved web text snapshot; not original PDF bytes",
+            "limitation": "Underlying public URLs and physical page labels appear in the snapshot. Original-byte download unavailable due local DNS failure.",
+            "bytes": 25443
+          },
+          {
+            "id": "financial-schedules-and-forecast.web",
+            "file": "Sources/financial-schedules-and-forecast.web.txt",
+            "sha256": "cb0330fb4bcfe752995c5f514c17c97fa3065b6d5f6c532acd00aacf5e3a89b2",
+            "kind": "retrieved web text snapshot; not original PDF bytes",
+            "limitation": "Underlying public URLs and physical page labels appear in the snapshot. Original-byte download unavailable due local DNS failure.",
+            "bytes": 23496
+          },
+          {
+            "file": "Sources/general-tax-election-authority.web.txt",
+            "sha256": "db0e9771f90eca4361cf9c2db1cc6aea0a11c0e1e302f67d13f90c2e336fa683",
+            "bytes": 18997,
+            "kind": "retrieved web text snapshot; not original PDF bytes"
+          },
+          {
+            "file": "Sources/labor-county-tax-and-outlook.web.txt",
+            "sha256": "c10f29a88e23c17515c28fda047aaf7250f26dba7c5993ea4dbc41d7d7cfcf05",
+            "bytes": 33331,
+            "kind": "retrieved web text snapshot; not original PDF bytes"
+          },
+          {
+            "id": "revenue-options-fiscal-analyses.web",
+            "file": "Sources/revenue-options-fiscal-analyses.web.txt",
+            "sha256": "feecd0e9feb88dfa1701b550f93db069d78b32aac19eb97c503587577730843d",
+            "kind": "retrieved web text snapshot; not original PDF bytes",
+            "limitation": "Underlying public URLs and physical page labels appear in the snapshot. Original-byte download unavailable due local DNS failure.",
+            "bytes": 12705
+          },
+          {
+            "id": "APREG",
+            "file": "Sources/PRA_26-10308.xlsx",
+            "sha256": "62f4c4075fd8e9cff87a53356cfe4234f60923acb367d366a6f0d5fac82cd64d",
+            "bytes": 15890810,
+            "kind": "unchanged original XLSX bytes",
+            "url": "https://sandiego.nextrequest.com/documents/71540521"
+          },
+          {
+            "id": "COUNTY-CALAIM",
+            "file": "Sources/COUNTY-CALAIM.docx",
+            "sha256": "560a812361bc59047ddd8cfecb5738676bc18f8ed8a960307485d8493f84fa93",
+            "bytes": 121121,
+            "kind": "unchanged official original",
+            "url": "https://sdcounty.legistar1.com/sdcounty/attachments/fe582821-8760-4946-8442-76961966aad6.docx"
+          },
+          {
+            "id": "COUNTY-CALAIM-ORDER",
+            "file": "Sources/COUNTY-CALAIM-ORDER.pdf",
+            "sha256": "9a6cad33f402997848303f0d5936db30a79aaa9fc30d20cc8dba656d4464ae77",
+            "bytes": 198300,
+            "kind": "unchanged official original",
+            "url": "https://sdcounty.legistar1.com/sdcounty/attachments/b8d71508-c152-4cd3-a04c-bd1e032ca692.pdf"
+          },
+          {
+            "kind": "Authored report citation map; publisher URLs and exact locators",
+            "citations": [
+              {
+                "report_page": 1,
+                "source": "FIN27",
+                "title": "FY2027 adopted financial summary and schedules",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v1financialsummary.pdf#page=5",
+                "locator": "PDF p. 5"
+              },
+              {
+                "report_page": 1,
+                "source": "EX27",
+                "title": "FY2027 adopted executive summary",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v1executivesummary.pdf#page=3",
+                "locator": "PDF p. 3 / printed p. 5"
+              },
+              {
+                "report_page": 2,
+                "source": "EX27",
+                "title": "FY2027 adopted executive summary",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v1executivesummary.pdf#page=3",
+                "locator": "PDF p. 3"
+              },
+              {
+                "report_page": 2,
+                "source": "IBA2611",
+                "title": "IBA 26-11: review of FY2027 proposed budget",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-04/iba-report-26-11-review-of-the-fiscal-year-2027-proposed-budget_0.pdf#page=7",
+                "locator": "PDF p. 7 / printed p. 2"
+              },
+              {
+                "report_page": 2,
+                "source": "ANNUAL",
+                "title": "City Finance: current adopted budget index",
+                "url": "https://www.sandiego.gov/finance/annual",
+                "locator": "current index"
+              },
+              {
+                "report_page": 2,
+                "source": "MONITOR",
+                "title": "City Finance: financial reports index",
+                "url": "https://www.sandiego.gov/finance/financialrpts",
+                "locator": "current index"
+              },
+              {
+                "report_page": 2,
+                "source": "OUTLOOK",
+                "title": "FY2027–2031 financial outlook, November 2025",
+                "url": "https://www.sandiego.gov/sites/default/files/2025-11/fy2027-2031-five-year-financial-outlook-and-attachments-general-fund.pdf",
+                "locator": "November 2025; pre-adoption baseline"
+              },
+              {
+                "report_page": 3,
+                "source": "MON26",
+                "title": "FY2026 year-end financial performance report, October 2026",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-10/fy2026-year-end-financial-performance-report.pdf#page=20",
+                "locator": "PDF pp. 20–21, 31, 35–36, 42, 45–47"
+              },
+              {
+                "report_page": 4,
+                "source": "FIN27",
+                "title": "FY2027 adopted financial summary and schedules",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v1financialsummary.pdf#page=4",
+                "locator": "PDF pp. 4–5, 14"
+              },
+              {
+                "report_page": 5,
+                "source": "FIN27",
+                "title": "FY2027 adopted financial summary and schedules",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v1financialsummary.pdf#page=4",
+                "locator": "PDF pp. 4–5, 14"
+              },
+              {
+                "report_page": 5,
+                "source": "ATTY27",
+                "title": "FY2027 adopted City Attorney department detail",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v2cityattorney.pdf#page=7",
+                "locator": "PDF pp. 7–8"
+              },
+              {
+                "report_page": 6,
+                "source": "FIN27",
+                "title": "FY2027 adopted financial summary and schedules",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v1financialsummary.pdf#page=4",
+                "locator": "PDF pp. 4–5, 14"
+              },
+              {
+                "report_page": 6,
+                "source": "HSSD27",
+                "title": "FY2027 adopted HSSD department detail",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v2hssd.pdf#page=5",
+                "locator": "PDF pp. 5–7"
+              },
+              {
+                "report_page": 7,
+                "source": "FIN27",
+                "title": "FY2027 adopted financial summary and schedules",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v1financialsummary.pdf#page=4",
+                "locator": "PDF pp. 4–5, 14"
+              },
+              {
+                "report_page": 7,
+                "source": "TRANS27",
+                "title": "FY2027 adopted Transportation department detail",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v2transportation.pdf#page=5",
+                "locator": "PDF pp. 5–7"
+              },
+              {
+                "report_page": 8,
+                "source": "FIN27",
+                "title": "FY2027 adopted financial summary and schedules",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v1financialsummary.pdf#page=28",
+                "locator": "PDF p. 28"
+              },
+              {
+                "report_page": 8,
+                "source": "CW27",
+                "title": "FY2027 adopted Citywide Program Expenditures",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v2citywide.pdf#page=2",
+                "locator": "PDF pp. 2–4"
+              },
+              {
+                "report_page": 8,
+                "source": "FIRE27",
+                "title": "FY2027 adopted Fire-Rescue department detail",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v2firerescue.pdf#page=7",
+                "locator": "PDF p. 7"
+              },
+              {
+                "report_page": 8,
+                "source": "TRANS27",
+                "title": "FY2027 adopted Transportation department detail",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v2transportation.pdf#page=6",
+                "locator": "PDF p. 6"
+              },
+              {
+                "report_page": 8,
+                "source": "HSSD27",
+                "title": "FY2027 adopted HSSD department detail",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v2hssd.pdf#page=5",
+                "locator": "PDF p. 5"
+              },
+              {
+                "report_page": 9,
+                "source": "POL27",
+                "title": "FY2027 adopted Police department detail",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v2police.pdf#page=7",
+                "locator": "PDF pp. 7, 10"
+              },
+              {
+                "report_page": 9,
+                "source": "MON26",
+                "title": "FY2026 year-end financial performance report, October 2026",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-10/fy2026-year-end-financial-performance-report.pdf#page=36",
+                "locator": "PDF pp. 36, 46"
+              },
+              {
+                "report_page": 10,
+                "source": "MON26",
+                "title": "FY2026 year-end financial performance report, October 2026",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-10/fy2026-year-end-financial-performance-report.pdf#page=2",
+                "locator": "PDF pp. 2, 54–57; especially 56"
+              },
+              {
+                "report_page": 10,
+                "source": "APREG",
+                "title": "NextRequest 26-10308, PO workbook document 71540521",
+                "url": "https://sandiego.nextrequest.com/documents/71540521",
+                "locator": "native workbook; label-pair audit in full report Evidence.zip"
+              },
+              {
+                "report_page": 11,
+                "source": "HISTORY",
+                "title": "City historical operating-budget CSV",
+                "url": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+                "locator": "archived CSV: report_fy / budget_cycle / fund_type / account"
+              },
+              {
+                "report_page": 11,
+                "source": "FIN27",
+                "title": "FY2027 adopted financial summary and schedules",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v1financialsummary.pdf#page=5",
+                "locator": "PDF p. 5"
+              },
+              {
+                "report_page": 12,
+                "source": "POA",
+                "title": "POA memorandum of understanding FY2027–2030",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-10/poa-mou-fy27-30.pdf#page=7",
+                "locator": "PDF pp. 7, 38–39"
+              },
+              {
+                "report_page": 12,
+                "source": "POL27",
+                "title": "FY2027 adopted Police department detail",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v2police.pdf#page=11",
+                "locator": "PDF pp. 11–14; positive-wage covered classes p. 12"
+              },
+              {
+                "report_page": 12,
+                "source": "MEA",
+                "title": "MEA memorandum of understanding FY2027–2029",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-06/mea-mou-fy27-29.pdf#page=42",
+                "locator": "PDF pp. 42–43"
+              },
+              {
+                "report_page": 13,
+                "source": "FIN27",
+                "title": "FY2027 adopted financial summary and schedules",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v1financialsummary.pdf#page=5",
+                "locator": "PDF pp. 5, 28"
+              },
+              {
+                "report_page": 13,
+                "source": "FISCAL",
+                "title": "FY2027 adopted fiscal policies",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v1fiscalpolicies.pdf#page=1",
+                "locator": "PDF pp. 1–8"
+              },
+              {
+                "report_page": 13,
+                "source": "CW27",
+                "title": "FY2027 adopted Citywide Program Expenditures",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v2citywide.pdf#page=2",
+                "locator": "PDF pp. 2–4"
+              },
+              {
+                "report_page": 14,
+                "source": "POL27",
+                "title": "FY2027 adopted Police department detail",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v2police.pdf#page=9",
+                "locator": "PDF pp. 9–10, 14"
+              },
+              {
+                "report_page": 14,
+                "source": "CW27",
+                "title": "FY2027 adopted Citywide Program Expenditures",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v2citywide.pdf#page=2",
+                "locator": "PDF pp. 2–4"
+              },
+              {
+                "report_page": 15,
+                "source": "TAX24",
+                "title": "IBA 24-22: 2024 Measure E fiscal estimate",
+                "url": "https://www.sandiego.gov/sites/default/files/2024-08/24-22-fiscal-impact-statment-for-city-measure-on-november-5-2024-ballot-measure-e.pdf#page=1",
+                "locator": "PDF pp. 1–2"
+              },
+              {
+                "report_page": 15,
+                "source": "CTLAW",
+                "title": "CDTFA: Revenue and Taxation Code 7285.9",
+                "url": "https://cdtfa.ca.gov/lawguides/vol1/alt/additional-local-taxes-sec7285-9.html",
+                "locator": "section 7285.9"
+              },
+              {
+                "report_page": 15,
+                "source": "CTGUIDE",
+                "title": "CDTFA: implementing local district taxes",
+                "url": "https://cdtfa.ca.gov/industry/local-jurisdictions-and-districts/implementing-new-local-jurisdictions-district-taxes.htm",
+                "locator": "local/district bases; operative date; costs"
+              },
+              {
+                "report_page": 15,
+                "source": "RATE26",
+                "title": "CDTFA: city/county tax rates, October 1, 2026",
+                "url": "https://cdtfa.ca.gov/taxes-and-fees/rates.aspx",
+                "locator": "San Diego row"
+              },
+              {
+                "report_page": 15,
+                "source": "COUNTY26",
+                "title": "Registrar: proposed County health and safety tax ordinance",
+                "url": "https://www.sdvote.com/content/dam/rov/en/election/nov-3-2026-gubernatorial-general-election/san-diego-county-fund-health-and-safety-services.pdf#page=8",
+                "locator": "PDF p. 8"
+              },
+              {
+                "report_page": 16,
+                "source": "TAX24",
+                "title": "IBA 24-22: 2024 Measure E fiscal estimate",
+                "url": "https://www.sandiego.gov/sites/default/files/2024-08/24-22-fiscal-impact-statment-for-city-measure-on-november-5-2024-ballot-measure-e.pdf#page=1",
+                "locator": "PDF pp. 1–2; dated planning reference"
+              },
+              {
+                "report_page": 16,
+                "source": "CTGUIDE",
+                "title": "CDTFA: implementing local district taxes",
+                "url": "https://cdtfa.ca.gov/industry/local-jurisdictions-and-districts/implementing-new-local-jurisdictions-district-taxes.htm",
+                "locator": "operative date and implementation dependencies"
+              },
+              {
+                "report_page": 17,
+                "source": "CW27",
+                "title": "FY2027 adopted Citywide Program Expenditures",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v2citywide.pdf#page=2",
+                "locator": "PDF p. 2"
+              },
+              {
+                "report_page": 17,
+                "source": "POL27",
+                "title": "FY2027 adopted Police department detail",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v2police.pdf#page=14",
+                "locator": "PDF p. 14"
+              },
+              {
+                "report_page": 17,
+                "source": "APREG",
+                "title": "NextRequest 26-10308, PO workbook document 71540521",
+                "url": "https://sandiego.nextrequest.com/documents/71540521",
+                "locator": "PRA_26-10308 worksheet; headers row 2"
+              },
+              {
+                "report_page": 17,
+                "source": "MOODY",
+                "title": "Executed accounts-payable recovery agreement 10090424-26-L",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-07/10090424-26-l.pdf#page=12",
+                "locator": "PDF pp. 12–16"
+              },
+              {
+                "report_page": 18,
+                "source": "POL27",
+                "title": "FY2027 adopted Police department detail",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v2police.pdf#page=10",
+                "locator": "PDF pp. 10, 12, 14"
+              },
+              {
+                "report_page": 18,
+                "source": "OT24",
+                "title": "OCA-24-08: Police overtime performance audit",
+                "url": "https://www.sandiego.gov/sites/default/files/2024-02/24-08_performance_audit_sdpd_ot.pdf",
+                "locator": "audit findings and recommendations"
+              },
+              {
+                "report_page": 18,
+                "source": "POA",
+                "title": "POA memorandum of understanding FY2027–2030",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-10/poa-mou-fy27-30.pdf#page=38",
+                "locator": "PDF pp. 38–39, 51–55 / Article 32"
+              },
+              {
+                "report_page": 18,
+                "source": "CALAIM26",
+                "title": "County May 19, 2026 minute order 28: OHS CalAIM expansion",
+                "url": "https://sdcounty.legistar1.com/sdcounty/attachments/b8d71508-c152-4cd3-a04c-bd1e032ca692.pdf#page=1",
+                "locator": "PDF pp. 1–3; conditional revenue projection and adopted direction"
+              },
+              {
+                "report_page": 19,
+                "source": "POL27",
+                "title": "FY2027 adopted Police department detail",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v2police.pdf#page=9",
+                "locator": "PDF pp. 9–14"
+              },
+              {
+                "report_page": 19,
+                "source": "OT24",
+                "title": "OCA-24-08: Police overtime performance audit",
+                "url": "https://www.sandiego.gov/sites/default/files/2024-02/24-08_performance_audit_sdpd_ot.pdf",
+                "locator": "cost and overtime control findings"
+              },
+              {
+                "report_page": 19,
+                "source": "CIVIL25",
+                "title": "SDPD civilian staffing study, October 29, 2025",
+                "url": "https://sandiego.hylandcloud.com/211agendaonlinecomm/Documents/ViewDocument/Staff%20Report.docx.pdf?meetingId=6701&documentType=Agenda&itemId=252142&publishId=1033147&isSection=false#page=2",
+                "locator": "PDF p. 2"
+              },
+              {
+                "report_page": 20,
+                "source": "EX27",
+                "title": "FY2027 adopted executive summary",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v1executivesummary.pdf#page=3",
+                "locator": "PDF p. 3"
+              },
+              {
+                "report_page": 20,
+                "source": "POA",
+                "title": "POA memorandum of understanding FY2027–2030",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-10/poa-mou-fy27-30.pdf#page=38",
+                "locator": "PDF pp. 38–39"
+              },
+              {
+                "report_page": 20,
+                "source": "TAX24",
+                "title": "IBA 24-22: 2024 Measure E fiscal estimate",
+                "url": "https://www.sandiego.gov/sites/default/files/2024-08/24-22-fiscal-impact-statment-for-city-measure-on-november-5-2024-ballot-measure-e.pdf#page=1",
+                "locator": "PDF pp. 1–2"
+              },
+              {
+                "report_page": 20,
+                "source": "FISCAL",
+                "title": "FY2027 adopted fiscal policies",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v1fiscalpolicies.pdf#page=6",
+                "locator": "PDF p. 6"
+              },
+              {
+                "report_page": 20,
+                "source": "CTGUIDE",
+                "title": "CDTFA: implementing local district taxes",
+                "url": "https://cdtfa.ca.gov/industry/local-jurisdictions-and-districts/implementing-new-local-jurisdictions-district-taxes.htm",
+                "locator": "operative dates"
+              },
+              {
+                "report_page": 21,
+                "source": "TAX24",
+                "title": "IBA 24-22: 2024 Measure E fiscal estimate",
+                "url": "https://www.sandiego.gov/sites/default/files/2024-08/24-22-fiscal-impact-statment-for-city-measure-on-november-5-2024-ballot-measure-e.pdf#page=1",
+                "locator": "PDF pp. 1–2"
+              },
+              {
+                "report_page": 21,
+                "source": "TAX25",
+                "title": "IBA 25-01: outlook review and Measure E result",
+                "url": "https://www.sandiego.gov/sites/default/files/2025-01/25-01-iba-review-of-the-mayor-s-fy-2026-2030-five-year-financial-outlook_0.pdf#page=3",
+                "locator": "PDF p. 3"
+              },
+              {
+                "report_page": 21,
+                "source": "CW27",
+                "title": "FY2027 adopted Citywide Program Expenditures",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v2citywide.pdf#page=2",
+                "locator": "PDF p. 2"
+              },
+              {
+                "report_page": 22,
+                "source": "FISCAL",
+                "title": "FY2027 adopted fiscal policies",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v1fiscalpolicies.pdf",
+                "locator": "budget monitoring and reserve policies"
+              },
+              {
+                "report_page": 22,
+                "source": "OT24",
+                "title": "OCA-24-08: Police overtime performance audit",
+                "url": "https://www.sandiego.gov/sites/default/files/2024-02/24-08_performance_audit_sdpd_ot.pdf",
+                "locator": "control recommendations"
+              },
+              {
+                "report_page": 22,
+                "source": "HSSD27",
+                "title": "FY2027 adopted HSSD department detail",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v2hssd.pdf#page=4",
+                "locator": "PDF pp. 4–7"
+              },
+              {
+                "report_page": 23,
+                "source": "FISCAL",
+                "title": "FY2027 adopted fiscal policies",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v1fiscalpolicies.pdf#page=6",
+                "locator": "PDF p. 6"
+              },
+              {
+                "report_page": 23,
+                "source": "CTGUIDE",
+                "title": "CDTFA: implementing local district taxes",
+                "url": "https://cdtfa.ca.gov/industry/local-jurisdictions-and-districts/implementing-new-local-jurisdictions-district-taxes.htm",
+                "locator": "costs and operative dates"
+              },
+              {
+                "report_page": 23,
+                "source": "CW27",
+                "title": "FY2027 adopted Citywide Program Expenditures",
+                "url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v2citywide.pdf#page=2",
+                "locator": "PDF p. 2"
+              },
+              {
+                "report_page": 23,
+                "source": "CONST",
+                "title": "California Constitution, Article XIII C, section 2(b)",
+                "url": "https://leginfo.legislature.ca.gov/faces/codes_displayText.xhtml?lawCode=CONS&division=&title=&part=&chapter=&article=XIII%20C",
+                "locator": "Article XIII C, section 2(b)"
+              },
+              {
+                "report_page": 24,
+                "source": "ANNUAL",
+                "title": "City Finance: current adopted budget index",
+                "url": "https://www.sandiego.gov/finance/annual",
+                "locator": "current adopted index"
+              },
+              {
+                "report_page": 24,
+                "source": "MONITOR",
+                "title": "City Finance: financial reports index",
+                "url": "https://www.sandiego.gov/finance/financialrpts",
+                "locator": "current monitoring index"
+              },
+              {
+                "report_page": 24,
+                "source": "APREG",
+                "title": "NextRequest 26-10308, PO workbook document 71540521",
+                "url": "https://sandiego.nextrequest.com/documents/71540521",
+                "locator": "held original workbook"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

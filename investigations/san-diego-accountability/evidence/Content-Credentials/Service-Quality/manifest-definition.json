@@ -1,0 +1,697 @@
+{
+  "claim_generator_info": [
+    {
+      "name": "OnRecord research report publisher",
+      "version": "1.3",
+      "specVersion": "2.4.0"
+    }
+  ],
+  "title": "Service Quality Beyond the Inspection Checkbox",
+  "format": "application/pdf",
+  "assertions": [
+    {
+      "label": "c2pa.actions",
+      "created": true,
+      "data": {
+        "actions": [
+          {
+            "action": "c2pa.created",
+            "when": "2026-10-19T10:30:57.571760Z",
+            "softwareAgent": {
+              "name": "OnRecord report release signing tool",
+              "version": "0.1.0"
+            },
+            "digitalSourceType": "http://cv.iptc.org/newscodes/digitalsourcetype/compositeWithTrainedAlgorithmicMedia",
+            "description": "Assembled an author-directed, AI-assisted research publication from the identified reviewed render and documentary evidence. Earlier unsignaled editing history is not reconstructed."
+          }
+        ],
+        "allActionsIncluded": false
+      }
+    },
+    {
+      "label": "cawg.metadata",
+      "data": {
+        "@context": {
+          "dc": "http://purl.org/dc/elements/1.1/",
+          "dcterms": "http://purl.org/dc/terms/",
+          "schema": "https://schema.org/"
+        },
+        "dc:title": [
+          "Service Quality Beyond the Inspection Checkbox"
+        ],
+        "dc:creator": [
+          "David L. Condrey"
+        ],
+        "dc:identifier": [
+          "SDHA-2026-01-C/v1.0/Service-Quality"
+        ],
+        "dc:language": [
+          "en-US"
+        ],
+        "dc:rights": "Original report text, figures and analysis: David L. Condrey, CC BY 4.0. Third-party records retain their own rights and status.",
+        "dcterms:license": "https://creativecommons.org/licenses/by/4.0/",
+        "schema:version": "1.0",
+        "schema:author": {
+          "@id": "did:web:writerslogic.com:executives:dcondrey",
+          "schema:name": "David L. Condrey"
+        },
+        "schema:publisher": {
+          "@id": "did:web:writerslogic.com",
+          "schema:name": "WritersLogic Inc."
+        }
+      }
+    },
+    {
+      "label": "com.writerslogic.research-provenance",
+      "data": {
+        "version": 1,
+        "report_id": "SDHA-2026-01-C",
+        "edition": "1.0",
+        "physical_pages": 8,
+        "unsigned_render_sha256": "42dc5bf3159be2c7893ddb97c9e4e3749c635cd5c3198f089b1e92439122c849",
+        "reading_edition_sha256": "171bb7b94aedceca2993ca460fe44253b84ca57ca10dfda1dbb32646cafdf194",
+        "normalized_text_sha256": "259751ef92c0d9e77fb755692882dd373a3e610adc5f7e34b397d1105d7800f2",
+        "text_digest_method": "PyMuPDF extracted page text in order; Unicode NFKC; whitespace collapsed to single spaces; UTF-8; SHA-256. This is a custom research digest, not a registered C2PA soft-binding algorithm.",
+        "source_directory_sha256": "f27f061a2ad734f323a766f1076c2b4f722a4ecbc3984d40cf3e23ec73eac8ed",
+        "publisher_identity_document": "https://writerslogic.com/.well-known/did.json",
+        "author_identity_document": "https://writerslogic.com/executives/dcondrey/did.json",
+        "publisher_did_document_sha256": "2c0ef7a1d192b92a0b1868d4922c13de6be7198a23032a2446ec85446890d874",
+        "executive_did_document_sha256": "5cfcf4401b3588959d81fb804c29d87a72522fcb5f056d77fb2e05a2abaff1da",
+        "published_issuing_certificate": "https://writerslogic.com/.well-known/c2pa/issuing-ca.crt",
+        "published_root_certificate": "https://writerslogic.com/.well-known/c2pa/root-ca.crt",
+        "evidence_scope": "Selected public records, attributed source statements, reproducible calculations and bounded interpretations.",
+        "ai_assistance": {
+          "tool": "OpenAI Codex",
+          "roles": [
+            "research assistance",
+            "drafting",
+            "software generation",
+            "automated verification"
+          ],
+          "human_direction": "David L. Condrey",
+          "human_only_authorship_attestation": false
+        },
+        "release_status": "Prepared with the author manual Zenodo v1.3 upload; no edition DOI assigned at signing.",
+        "current_edition_doi": null,
+        "prior_published_edition": "https://doi.org/10.5281/zenodo.23405739",
+        "report_policy": "Fixed edition; subsequent dataset supplements do not amend this PDF.",
+        "limitations": [
+          "Signatures bind bytes and assertions; they do not establish underlying accounting truth, fraud or a legal conclusion.",
+          "The signed provenance starts at release assembly; earlier unsignaled history and independent human review are not certified.",
+          "Software-held publisher and executive keys are used; hardware attestation and C2PA generator conformance are not claimed."
+        ]
+      }
+    },
+    {
+      "label": "com.writerslogic.source-register",
+      "data": {
+        "version": 1,
+        "hash_algorithm": "sha256",
+        "cited_source_count": 23,
+        "sources": [
+          {
+            "id": "C37828979",
+            "title": "Executed Contract_RFP 10090047-24-O, Meal Delivery Services.pdf (NextRequest 24-5932)",
+            "publisher_original": "https://sandiego.nextrequest.com/documents/37828979",
+            "original_sha256": "3934a46b01c67ea411a97e8a4a7ef22fcfd54dc679350b4a25326e99003bf9e3",
+            "selected_copies": [
+              {
+                "included_file": "sources/C37828979-excerpt.pdf",
+                "included_sha256": "74f28382a965be94c05be23fc32d435906a1179fd59060c918b41aded1c39b26",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 11
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 12
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 13
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 14
+                  },
+                  {
+                    "included_pdf_page": 5,
+                    "original_pdf_page": 17
+                  },
+                  {
+                    "included_pdf_page": 6,
+                    "original_pdf_page": 18
+                  },
+                  {
+                    "included_pdf_page": 7,
+                    "original_pdf_page": 44
+                  },
+                  {
+                    "included_pdf_page": 8,
+                    "original_pdf_page": 45
+                  },
+                  {
+                    "included_pdf_page": 9,
+                    "original_pdf_page": 46
+                  },
+                  {
+                    "included_pdf_page": 10,
+                    "original_pdf_page": 52
+                  },
+                  {
+                    "included_pdf_page": 11,
+                    "original_pdf_page": 53
+                  },
+                  {
+                    "included_pdf_page": 12,
+                    "original_pdf_page": 54
+                  },
+                  {
+                    "included_pdf_page": 13,
+                    "original_pdf_page": 56
+                  },
+                  {
+                    "included_pdf_page": 14,
+                    "original_pdf_page": 57
+                  },
+                  {
+                    "included_pdf_page": 15,
+                    "original_pdf_page": 58
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "C55184122",
+            "title": "FY 25_Rowe_May inv 18_$212,383.33_GR5001681019.pdf",
+            "publisher_original": "https://sandiego.nextrequest.com/documents/55184122",
+            "original_sha256": "6084c81af18af1d255c432e5a4475141a40f93ca1362068609837e5a29764f11",
+            "selected_copies": [
+              {
+                "included_file": "sources/C55184122-excerpt.pdf",
+                "included_sha256": "9a69419cbfa5f00b8b1e354c80a3261c20aaaf8a6078b5c98cf72b808307562e",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "CESCONDIDO",
+            "title": "City of Escondido. (2026, September 16). City Council meeting minutes, consent item 6 and vote.",
+            "publisher_original": "https://mccmeetings.blob.core.usgovcloudapi.net/escondidca-pubu/MEET-Minutes-36fcefecaef3470eaa4a60f0bb7017a8.pdf",
+            "original_sha256": "d6086a250b7066cc1979ebb327ae1e84728d44ecf23d4872aac2a4d4c57f32c3",
+            "selected_copies": [
+              {
+                "included_file": "sources/CESCONDIDO-excerpt.pdf",
+                "included_sha256": "bd14028b8b7352b410a372f6aafc5979678eda7bbe05d23206be835fc7ace632",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 2
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "CITY-FY24-CAPER-IDIS",
+            "title": "City of San Diego. FY2024 CAPER IDIS reports: VVSD fire-alarm closeout. September 2024.",
+            "publisher_original": "https://www.sandiego.gov/sites/default/files/2024-09/attachment-2-city-of-san-diego-fy-2024-caper-idis-reports.pdf",
+            "original_sha256": "6f65eb01a60e9521b256347979eaa87ab3067416af1cde4942c8640b8051b091",
+            "selected_copies": [
+              {
+                "included_file": "sources/CITY-FY24-CAPER-IDIS-excerpt.pdf",
+                "included_sha256": "f3a3c80f01a8002ba38321fc2e807ecaeb4318c23b9232a5a58fa533334fb3e6",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 72
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 73
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "CITY-FY25-ESG-SAGE",
+            "title": "FY25 ESG CAPER SAGE report",
+            "publisher_original": "https://www.sandiego.gov/sites/default/files/2025-09/attachment-3-fy-2025-caper-esg-sage-report.pdf",
+            "original_sha256": "38826919805a93c2762e5ae8dc3c43604956564b1d9b65bd1e17ff02eed75078",
+            "selected_copies": [
+              {
+                "included_file": "sources/CITY-FY25-ESG-SAGE-excerpt.pdf",
+                "included_sha256": "bc011d50d8badb8c5649e171bc7a7ee77c41638dfb23de44bc779785eeac2d8a",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 3
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "COUNTYROWE",
+            "title": "County of San Diego, DEHQ. SD Food Info facility and inspection history: Rowe Solutions, DEH2024-FFPP-017715 (retrieved October 17, 2026).",
+            "publisher_original": "https://www.sdfoodinfo.org/restaurants/search_facility_by_id.htm?business_id=211974616999&lat=32.715736&lng=-117.161087",
+            "original_sha256": "3776e1513d42ca75f5be4f2c1bd560d253d3d54f64fc2786d319e6c8074ae401",
+            "selected_copies": [
+              {
+                "included_file": "sources/COUNTYROWE.json",
+                "included_sha256": "3776e1513d42ca75f5be4f2c1bd560d253d3d54f64fc2786d319e6c8074ae401",
+                "original_page_map": []
+              }
+            ]
+          },
+          {
+            "id": "DR04",
+            "title": "Dreams for Change. (2023, August). Safe sleeping operation manual [City-released copy].",
+            "publisher_original": "https://sandiego.nextrequest.com/documents/28378291",
+            "original_sha256": "3a05692b63d2a5fd211f1488d6370671dd29d3c7fe7d797222699d27a0e68a81",
+            "selected_copies": [
+              {
+                "included_file": "sources/DR04-excerpt.pdf",
+                "included_sha256": "1e60d5d888c281a909e54dfadaa97c2871e4d7941961a34191bb0dc3e543a457",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 22
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 23
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 24
+                  }
+                ]
+              },
+              {
+                "included_file": "sources/DR04-controls.pdf",
+                "included_sha256": "54320f07fc7c596f12bec88318a9461d101da616bd080b3ecce53b9ff938d29c",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 17
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "DR10",
+            "title": "City of San Diego, Homelessness Strategies and Solutions Department. (2025). PRA 25-4606 responsive records [Redacted provider correspondence; selected June 2025 monitoring exchange].",
+            "publisher_original": "https://sandiego.nextrequest.com/documents/51280064",
+            "original_sha256": "17fb8991ca1af851fdc58aad884d684562010992b8971ba5afe2264ef51cdd2e",
+            "selected_copies": []
+          },
+          {
+            "id": "HF-ROWE-FINAL",
+            "title": "City Council resolution R-316911: Rowe meal-delivery agreement, final passage September 2, 2026",
+            "publisher_original": "https://docs.sandiego.gov/council_reso_ordinance/rao2026/R-316911.pdf",
+            "original_sha256": "5cefc04fe88f20330cf4d0e61e344cd8e31dfe6452612405e0d9d96763e47ea4",
+            "selected_copies": [
+              {
+                "included_file": "sources/HF-ROWE-FINAL.pdf",
+                "included_sha256": "5cefc04fe88f20330cf4d0e61e344cd8e31dfe6452612405e0d9d96763e47ea4",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 2
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 3
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "NR34425020",
+            "title": "Contract_RFP 10089902-22-F_PATH San Diego (executed agreement).pdf",
+            "publisher_original": "https://sandiego.nextrequest.com/documents/34425020",
+            "original_sha256": "59cd64a965f39029154c43fa7cc9eb2e3afcd8279102cbf1a8c37aba3b90890f",
+            "selected_copies": [
+              {
+                "included_file": "sources/NR34425020-excerpt.pdf",
+                "included_sha256": "e5dcf8780237067776cc5cbf02bfbbbb8ed71b57fde23d648d92db181e27b7f1",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 9
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 10
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 147
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 148
+                  },
+                  {
+                    "included_pdf_page": 5,
+                    "original_pdf_page": 149
+                  },
+                  {
+                    "included_pdf_page": 6,
+                    "original_pdf_page": 150
+                  },
+                  {
+                    "included_pdf_page": 7,
+                    "original_pdf_page": 151
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "NR51908354",
+            "title": "JHAT B Lot 4.25.pdf",
+            "publisher_original": "https://sandiego.nextrequest.com/documents/51908354",
+            "original_sha256": "64c01cffb746b3cee23913da7065c5214118d0d2b91a9d85bf89d36515f93a47",
+            "selected_copies": [
+              {
+                "included_file": "sources/NR51908354-excerpt.pdf",
+                "included_sha256": "b75342dbacd30f325ea314abb5e98293c2979cc48a6abcf82bb30b6ad0988ce2",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "NR51908355",
+            "title": "JHAT B Lot 3.25.pdf",
+            "publisher_original": "https://sandiego.nextrequest.com/documents/51908355",
+            "original_sha256": "bb3d0c80bef39c1ee88c41fd3f68bd0675f86a810c87c62147f3a95cbaee8d57",
+            "selected_copies": [
+              {
+                "included_file": "sources/NR51908355-excerpt.pdf",
+                "included_sha256": "30777703b40459af260c13e3e6fd9bb8303f921932c7569683f68d9df76bcfd2",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "NR51908357",
+            "title": "JHAT B Lot 5.25.pdf",
+            "publisher_original": "https://sandiego.nextrequest.com/documents/51908357",
+            "original_sha256": "63c0b49c3af85a0f6d8217b09c059772def1e104dd94e47fffee8b54b593fe3c",
+            "selected_copies": [
+              {
+                "included_file": "sources/NR51908357-excerpt.pdf",
+                "included_sha256": "052b7f1e196c653cc85ed1433798da6f1bb00ab8bc7e60081ded1aeec67412c4",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "NR51908358",
+            "title": "JHAT B Lot 6.25.pdf",
+            "publisher_original": "https://sandiego.nextrequest.com/documents/51908358",
+            "original_sha256": "6b7a7f6b093d44a4dbf67a7b8c300988459a71fe9a3782f8bb65ed1881ae4ae9",
+            "selected_copies": [
+              {
+                "included_file": "sources/NR51908358-excerpt.pdf",
+                "included_sha256": "ebf1760d70315c950441c7b9493cc3b2369e31881c4ac027c5b5b6ca7f088c72",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "NR51908359",
+            "title": "JHAT B Lot 7.25.pdf",
+            "publisher_original": "https://sandiego.nextrequest.com/documents/51908359",
+            "original_sha256": "a2729fd5d70e7ea604c71c89a60fddb2e34a3e992269ea68a9165cc49709675c",
+            "selected_copies": [
+              {
+                "included_file": "sources/NR51908359-excerpt.pdf",
+                "included_sha256": "8a7430936de43dc22dec242b8e3a6f44b309070f1aa5ba8731ce627d95424f66",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "NR53761989",
+            "title": "1801 Logan Ave (2) - Violation-PRAR 7306 E.pdf",
+            "publisher_original": "https://sandiego.nextrequest.com/documents/53761989",
+            "original_sha256": "dd19780af12cc3057db82095ec9db9ae1489d54d58f90374a4b791cafad8d798",
+            "selected_copies": [
+              {
+                "included_file": "sources/NR53761989-excerpt.pdf",
+                "included_sha256": "3a6a0badbd76cef6fa99f0e7af6446eef90c5419494e667872d4f34453852599",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 2
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "NR53761990",
+            "title": "1801 Logan Ave (3) - Violation-PRAR 7306 D.pdf",
+            "publisher_original": "https://sandiego.nextrequest.com/documents/53761990",
+            "original_sha256": "a8828a9ce746b29f0f717f00bc2bb6d86adb529198a6f7d4ece8009ef3dc5f7f",
+            "selected_copies": [
+              {
+                "included_file": "sources/NR53761990-excerpt.pdf",
+                "included_sha256": "cb94f112c23296cfdfb173973113f67ab1a6845f8147250e77c45b1166f1a979",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 3
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "NR53761991",
+            "title": "4141 Pacific Highway (2) - Violation-PRAR 7306 B.pdf",
+            "publisher_original": "https://sandiego.nextrequest.com/documents/53761991",
+            "original_sha256": "583deeb0a80fc8470f09e70e683e0044cca3fa1eaf0f840003b987e6f9307a70",
+            "selected_copies": [
+              {
+                "included_file": "sources/NR53761991-excerpt.pdf",
+                "included_sha256": "1967be13409215b883ec8fe12cf0bce4453a84371ce3af4f4e94ff57c3515848",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 3
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "NR53761992",
+            "title": "4141 Pacific Highway (1) - Violation-PRAR 7306 C.pdf",
+            "publisher_original": "https://sandiego.nextrequest.com/documents/53761992",
+            "original_sha256": "469a489d6bd1de84cb5f3da9b4aa799f899bc1f90b8b572ca871e7469bf0357f",
+            "selected_copies": [
+              {
+                "included_file": "sources/NR53761992-excerpt.pdf",
+                "included_sha256": "3a4d23801023984c319278a68b0ed9ec74b40f482ff67dc152f118dd1356c25d",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 3
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "OCA-followup-2023-12",
+            "title": "City Auditor Recommendation Follow-Up 2023-12",
+            "publisher_original": "https://www.sandiego.gov/sites/default/files/2024-03/recommendation-follow-up-report-period-ending-december-31-2023.pdf",
+            "original_sha256": "b989fc852064be190de38dd1dcca481bde8c82cf0978965b25886c22a488b398",
+            "selected_copies": [
+              {
+                "included_file": "sources/OCA-followup-2023-12-excerpt.pdf",
+                "included_sha256": "24d8dc8b5c89e5b1530b2dc01fb6d2672ee17ad49da2930ad5eadc425119dae9",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 31
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 32
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "ROWE1119606",
+            "title": "Staff Report.docx",
+            "publisher_original": "https://sandiego.hylandcloud.com/211agendaonlinecomm/Documents/ViewDocument/Staff%20Report.docx.pdf?meetingId=7088&itemId=263426&publishId=1119606&isSection=false&documentType=Agenda",
+            "original_sha256": "4347add4cfedbd70d3b9b0d79b169b8064c979c8d5684188842f8fe78167950e",
+            "selected_copies": [
+              {
+                "included_file": "sources/ROWE1119606-excerpt.pdf",
+                "included_sha256": "0ed166affb99c16c07acf18f48285b073818ed679e603e83d2b10fd30ac29d78",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 2
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 3
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "ROWE1119610",
+            "title": "Rowe Solutions Contract - Meal Delivery Services (10090426-26-V)",
+            "publisher_original": "https://sandiego.hylandcloud.com/211agendaonlinecomm/Documents/ViewDocument/Rowe%20Solutions%20Contract%20-%20Meal%20Delivery%20Services%20%2810090426-26-V%29.pdf?meetingId=7088&itemId=263426&publishId=1119610&isSection=false&documentType=Agenda",
+            "original_sha256": "453ba612df81f10ee33a4db28f71024a7496a7231c4244cc79dfada2aa6663c7",
+            "selected_copies": [
+              {
+                "included_file": "sources/ROWE1119610-excerpt.pdf",
+                "included_sha256": "9e170d4e30b313cd9d3cb9784e40c9cdf57667e9d439deebd995722d489ec8bc",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 9
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 10
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 12
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 13
+                  },
+                  {
+                    "included_pdf_page": 5,
+                    "original_pdf_page": 14
+                  },
+                  {
+                    "included_pdf_page": 6,
+                    "original_pdf_page": 15
+                  },
+                  {
+                    "included_pdf_page": 7,
+                    "original_pdf_page": 63
+                  },
+                  {
+                    "included_pdf_page": 8,
+                    "original_pdf_page": 67
+                  },
+                  {
+                    "included_pdf_page": 9,
+                    "original_pdf_page": 72
+                  },
+                  {
+                    "included_pdf_page": 10,
+                    "original_pdf_page": 73
+                  },
+                  {
+                    "included_pdf_page": 11,
+                    "original_pdf_page": 91
+                  },
+                  {
+                    "included_pdf_page": 12,
+                    "original_pdf_page": 92
+                  },
+                  {
+                    "included_pdf_page": 13,
+                    "original_pdf_page": 93
+                  },
+                  {
+                    "included_pdf_page": 14,
+                    "original_pdf_page": 94
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "SDHC-FY25-SERVICES-ANNUAL",
+            "title": "SDHC FY25 Annual Report, homelessness solutions",
+            "publisher_original": "https://sdhc.org/about-us/media-center/multimedia-reports/fy25-annual-report/homelessness-solutions/",
+            "original_sha256": "c0da2d03f2632a93e6da16e301d40ef1277e0caf9b8318c995ebcb911ea47ea5",
+            "selected_copies": []
+          }
+        ]
+      }
+    }
+  ]
+}

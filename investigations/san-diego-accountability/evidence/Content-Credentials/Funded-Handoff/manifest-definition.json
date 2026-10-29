@@ -1,0 +1,453 @@
+{
+  "claim_generator_info": [
+    {
+      "name": "OnRecord research report publisher",
+      "version": "1.3",
+      "specVersion": "2.4.0"
+    }
+  ],
+  "title": "Civilian Duties, Police Costs and a Funded Handoff",
+  "format": "application/pdf",
+  "assertions": [
+    {
+      "label": "c2pa.actions",
+      "created": true,
+      "data": {
+        "actions": [
+          {
+            "action": "c2pa.created",
+            "when": "2026-10-19T08:21:54.417252Z",
+            "softwareAgent": {
+              "name": "OnRecord report release signing tool",
+              "version": "0.1.0"
+            },
+            "digitalSourceType": "http://cv.iptc.org/newscodes/digitalsourcetype/compositeWithTrainedAlgorithmicMedia",
+            "description": "Assembled an author-directed, AI-assisted research publication from the identified reviewed render and documentary evidence. Earlier unsignaled editing history is not reconstructed."
+          }
+        ],
+        "allActionsIncluded": false
+      }
+    },
+    {
+      "label": "cawg.metadata",
+      "data": {
+        "@context": {
+          "dc": "http://purl.org/dc/elements/1.1/",
+          "dcterms": "http://purl.org/dc/terms/",
+          "schema": "https://schema.org/"
+        },
+        "dc:title": [
+          "Civilian Duties, Police Costs and a Funded Handoff"
+        ],
+        "dc:creator": [
+          "David L. Condrey"
+        ],
+        "dc:identifier": [
+          "SDHA-2026-01-E/v1.0/Funded-Handoff"
+        ],
+        "dc:language": [
+          "en-US"
+        ],
+        "dc:rights": "Original report text, figures and analysis: David L. Condrey, CC BY 4.0. Third-party records retain their own rights and status.",
+        "dcterms:license": "https://creativecommons.org/licenses/by/4.0/",
+        "schema:version": "1.0",
+        "schema:author": {
+          "@id": "did:web:writerslogic.com:executives:dcondrey",
+          "schema:name": "David L. Condrey"
+        },
+        "schema:publisher": {
+          "@id": "did:web:writerslogic.com",
+          "schema:name": "WritersLogic Inc."
+        }
+      }
+    },
+    {
+      "label": "com.writerslogic.research-provenance",
+      "data": {
+        "version": 1,
+        "report_id": "SDHA-2026-01-E",
+        "edition": "1.0",
+        "physical_pages": 7,
+        "unsigned_render_sha256": "25f9f4b5b4896f233c3c9113f9cbcabc2bf576e9b80706fefd43763dbde6370e",
+        "reading_edition_sha256": "fbbea578bdbc149a95658b133464e66e4630384dfd068aec974c5ff82560f446",
+        "normalized_text_sha256": "9e179e1daf20c6097f5f29ea365f9852f96050882f0b1f2b1e95f0aef1ea7c64",
+        "text_digest_method": "PyMuPDF extracted page text in order; Unicode NFKC; whitespace collapsed to single spaces; UTF-8; SHA-256. This is a custom research digest, not a registered C2PA soft-binding algorithm.",
+        "source_directory_sha256": "f27f061a2ad734f323a766f1076c2b4f722a4ecbc3984d40cf3e23ec73eac8ed",
+        "publisher_identity_document": "https://writerslogic.com/.well-known/did.json",
+        "author_identity_document": "https://writerslogic.com/executives/dcondrey/did.json",
+        "publisher_did_document_sha256": "2c0ef7a1d192b92a0b1868d4922c13de6be7198a23032a2446ec85446890d874",
+        "executive_did_document_sha256": "5cfcf4401b3588959d81fb804c29d87a72522fcb5f056d77fb2e05a2abaff1da",
+        "published_issuing_certificate": "https://writerslogic.com/.well-known/c2pa/issuing-ca.crt",
+        "published_root_certificate": "https://writerslogic.com/.well-known/c2pa/root-ca.crt",
+        "evidence_scope": "Selected public records, attributed source statements, reproducible calculations and bounded interpretations.",
+        "ai_assistance": {
+          "tool": "OpenAI Codex",
+          "roles": [
+            "research assistance",
+            "drafting",
+            "software generation",
+            "automated verification"
+          ],
+          "human_direction": "David L. Condrey",
+          "human_only_authorship_attestation": false
+        },
+        "release_status": "Prepared with the author manual Zenodo v1.3 upload; no edition DOI assigned at signing.",
+        "current_edition_doi": null,
+        "prior_published_edition": "https://doi.org/10.5281/zenodo.23405739",
+        "report_policy": "Fixed edition; subsequent dataset supplements do not amend this PDF.",
+        "limitations": [
+          "Signatures bind bytes and assertions; they do not establish underlying accounting truth, fraud or a legal conclusion.",
+          "The signed provenance starts at release assembly; earlier unsignaled history and independent human review are not certified.",
+          "Software-held publisher and executive keys are used; hardware attestation and C2PA generator conformance are not claimed."
+        ]
+      }
+    },
+    {
+      "label": "com.writerslogic.source-register",
+      "data": {
+        "version": 1,
+        "hash_algorithm": "sha256",
+        "cited_source_count": 10,
+        "sources": [
+          {
+            "id": "BK06",
+            "title": "Police internal orders training bulletin March 2025",
+            "publisher_original": "https://www.sandiego.gov/sites/default/files/2025-03/tb-25-01-updated-internal-orders-for-overtime-reporting-redacted.pdf",
+            "original_sha256": "818f134fadfe28992ea982fe5224de84dd352d8d55e12a958a4b1f2256ed95cf",
+            "selected_copies": [
+              {
+                "included_file": "sources/BK06-excerpt.pdf",
+                "included_sha256": "39a18f57bc36d1e6ae445f0971d8e0a0eb24c58761fd1e659325d23336fa2874",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 2
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 3
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 4
+                  },
+                  {
+                    "included_pdf_page": 5,
+                    "original_pdf_page": 5
+                  },
+                  {
+                    "included_pdf_page": 6,
+                    "original_pdf_page": 9
+                  },
+                  {
+                    "included_pdf_page": 7,
+                    "original_pdf_page": 10
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "BK08",
+            "title": "FY2026 Year-End Financial Performance Report",
+            "publisher_original": "https://www.sandiego.gov/sites/default/files/2026-10/fy2026-year-end-financial-performance-report.pdf",
+            "original_sha256": "ed66ded0c09670c5e0dd573641ce148f9e5c9fd9090d9e3dc400080e518ee720",
+            "selected_copies": [
+              {
+                "included_file": "sources/BK08-excerpt.pdf",
+                "included_sha256": "c0e879cd5cefa54626cf85701e6b6120a3e8f28347aefdbc5fd66ff39dbb86b6",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 36
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 46
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 54
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 55
+                  },
+                  {
+                    "included_pdf_page": 5,
+                    "original_pdf_page": 56
+                  },
+                  {
+                    "included_pdf_page": 6,
+                    "original_pdf_page": 57
+                  }
+                ]
+              },
+              {
+                "included_file": "sources/BK08-controls.pdf",
+                "included_sha256": "75745240dd4d657c3df7bca192d68c80bd7e8e32782d75563b6e8ddbf69c7b38",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 2
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 54
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 55
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 56
+                  },
+                  {
+                    "included_pdf_page": 5,
+                    "original_pdf_page": 57
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "BK22",
+            "title": "October 29,2025 SDPD civilianization workload staff report",
+            "publisher_original": "https://sandiego.hylandcloud.com/211agendaonlinecomm/Documents/ViewDocument/Staff%20Report.docx.pdf?meetingId=6701&documentType=Agenda&itemId=252142&publishId=1033147&isSection=false",
+            "original_sha256": "d9a1536effa284d466069e612b1a52651db8eb7c52a997d38491e4990e1f2555",
+            "selected_copies": [
+              {
+                "included_file": "sources/BK22-excerpt.pdf",
+                "included_sha256": "0c1583653aff2bd531c30f037d5886ddd75e011dfb8027fee5da6d258dfa9f5e",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 2
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "BK23",
+            "title": "October 29,2025 SDPD civilianization workload presentation",
+            "publisher_original": "https://sandiego.hylandcloud.com/211agendaonlinecomm/Documents/ViewDocument/Item%204%20Presentation.pptx.pdf?meetingId=6701&documentType=Agenda&itemId=252142&publishId=1033148&isSection=false",
+            "original_sha256": "5e68dab0de6486725b7cee4ba483341aa29219193feb93cf67c6594c21607e96",
+            "selected_copies": [
+              {
+                "included_file": "sources/BK23-excerpt.pdf",
+                "included_sha256": "90e578b259444a45e0c37aaa81d3128a3a8abe4d26def7094ed0c59e3378f484",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 8
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 10
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "FPB02",
+            "title": "IBA26-19 REV FY2027 Homelessness Programs and Funding",
+            "publisher_original": "https://www.sandiego.gov/sites/default/files/2026-09/26-19-fy-2027-homelessness-programs-and-funding_rev.pdf",
+            "original_sha256": "08555a64852d27c8871a8ff3a94fb1d73870fd206cf40dcba91e29697f6a772a",
+            "selected_copies": [
+              {
+                "included_file": "sources/FPB02-excerpt.pdf",
+                "included_sha256": "fcd070c666afe547b4fa8936001fa75c535188eb6e287ac6ea74c2fed5c05148",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 4
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 5
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 7
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "GID26",
+            "title": "Derived aggregate of City Get It Done archive captured October 7, 2026",
+            "publisher_original": "https://data.sandiego.gov/datasets/get-it-done-reports/",
+            "original_sha256": "76ae4622b26bccaa7f7bbd5fcc73fb8e8aa59f0ff0bb7c78a4036fe7043a4907",
+            "selected_copies": [
+              {
+                "included_file": "sources/GID26.json",
+                "included_sha256": "76ae4622b26bccaa7f7bbd5fcc73fb8e8aa59f0ff0bb7c78a4036fe7043a4907",
+                "original_page_map": []
+              }
+            ]
+          },
+          {
+            "id": "S01",
+            "title": "City Auditor, Performance Audit of the City’s Response to Homeless Encampments, 26-07, April 2026",
+            "publisher_original": "https://www.sandiego.gov/sites/default/files/2026-04/performance-audit-of-the-city-s-response-to-homeless-encampments-since-the-unsafe-camping-ordinance.pdf",
+            "original_sha256": "f1380ba3cc650087bc307e3434ce160c8903b3fb8bc6155fefdc7a0814142759",
+            "selected_copies": [
+              {
+                "included_file": "sources/S01-excerpt.pdf",
+                "included_sha256": "238d43d7b3224cc78788ecb37e943a9b6cf0c8eff2efa088a3c8b308fd178afc",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 10
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 39
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 42
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 43
+                  },
+                  {
+                    "included_pdf_page": 5,
+                    "original_pdf_page": 44
+                  },
+                  {
+                    "included_pdf_page": 6,
+                    "original_pdf_page": 45
+                  },
+                  {
+                    "included_pdf_page": 7,
+                    "original_pdf_page": 48
+                  },
+                  {
+                    "included_pdf_page": 8,
+                    "original_pdf_page": 49
+                  },
+                  {
+                    "included_pdf_page": 9,
+                    "original_pdf_page": 50
+                  },
+                  {
+                    "included_pdf_page": 10,
+                    "original_pdf_page": 51
+                  },
+                  {
+                    "included_pdf_page": 11,
+                    "original_pdf_page": 52
+                  },
+                  {
+                    "included_pdf_page": 12,
+                    "original_pdf_page": 58
+                  },
+                  {
+                    "included_pdf_page": 13,
+                    "original_pdf_page": 60
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "S03",
+            "title": "Independent Budget Analyst, Analysis of Police FY2026 Budget, report 26-09",
+            "publisher_original": "https://www.sandiego.gov/sites/default/files/2026-03/26-09-analysis-of-the-police-department-s-fiscal-year-2026-budget.pdf",
+            "original_sha256": "2192c3580131731f5625ebe2caa73171f1289cca49e23c0042fa0493412576d5",
+            "selected_copies": [
+              {
+                "included_file": "sources/S03-excerpt.pdf",
+                "included_sha256": "ac06c976dec6f287e6653c6ec58e2f3e30ccb08d27bcec871043a13334bde9f9",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 61
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "S08",
+            "title": "City FY2027 Adopted Budget: Police",
+            "publisher_original": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v2police.pdf",
+            "original_sha256": "fcd3fc8d233c21f4c09a568db0e13b14e5460be4366000e77e03c151c2d6283d",
+            "selected_copies": [
+              {
+                "included_file": "sources/S08-excerpt.pdf",
+                "included_sha256": "8792cd0da36144c80b1f79df9782299fb8cc8baf6864294d4aaa352873037a86",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 5
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "V15",
+            "title": "SDPD Neighborhood Policing Operations Manual, published May 2026",
+            "publisher_original": "https://www.sandiego.gov/sites/default/files/2026-05/neighborhood-policing-operations-manual-2026-redacted.pdf",
+            "original_sha256": "a986ff833c30b32b08d72eb23306e56598c55fa8705f3f58e1bee38eefb23a96",
+            "selected_copies": [
+              {
+                "included_file": "sources/V15-excerpt.pdf",
+                "included_sha256": "e02e56ca0538d5c6f712dbacd4182550c1685199f530799e1c57fe5247053066",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 18
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 19
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 21
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 25
+                  },
+                  {
+                    "included_pdf_page": 5,
+                    "original_pdf_page": 26
+                  },
+                  {
+                    "included_pdf_page": 6,
+                    "original_pdf_page": 27
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

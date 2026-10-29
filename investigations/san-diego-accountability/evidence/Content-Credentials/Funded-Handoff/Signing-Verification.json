@@ -1,0 +1,105 @@
+{
+  "source": "Targeted-Series/Funded-Handoff.pdf",
+  "original_sha256": "25f9f4b5b4896f233c3c9113f9cbcabc2bf576e9b80706fefd43763dbde6370e",
+  "signed_sha256": "922165469b354d9363656464e58e9cdd678709f224c6d08446af133e09fc4de3",
+  "signed_file": "Targeted-Series/Funded-Handoff.pdf",
+  "pages": [
+    {
+      "page": 1,
+      "pixels_sha256": "5fe57037539f1cefcc30d6b1eba0a5a1b3ae2fcc1cc3093ba6435d13be3e006c",
+      "content_sha256": "c3dbdc1fe874ffe1aa0bd1e4e26edce221df225cef53d3d641c82bb4437a7422"
+    },
+    {
+      "page": 2,
+      "pixels_sha256": "19e78e7502c65a10938563b9cddf5b93dbb178eb70afe15ef85d521e4678541a",
+      "content_sha256": "15b910a57c98db37d360eb2c38245126ac3aaeafe8dcfa34d94c62eceffbbca1"
+    },
+    {
+      "page": 3,
+      "pixels_sha256": "b66d0426c64463abd768cbaa483dccb56060f24b6fb6180719034c7ec5c278d4",
+      "content_sha256": "7c7e839609ee496227da1984f211540888b630c67acbaff275c43a5fe0b2858d"
+    },
+    {
+      "page": 4,
+      "pixels_sha256": "3bdfac175ad5fd63794040e315c6e2fc8279e69931910eca6e9d8a46f7816f19",
+      "content_sha256": "8f440c1ca5eaf0631b6a05a5be49504d8b7faab944c7addb1ceb7a1ae2c203f2"
+    },
+    {
+      "page": 5,
+      "pixels_sha256": "cc9ea53dc622215d8a7f842fca8999986feaa088e833bcdeadf34393e9b4def5",
+      "content_sha256": "0946787f37bf9a0f2baa830c14e718cdc091819a561dee022ee5f3bfd72a5014"
+    },
+    {
+      "page": 6,
+      "pixels_sha256": "60c546973e0969b241b5459f6ef7a48c4a170ba770b988ab314c5c2ac3d935ff",
+      "content_sha256": "570520c5c3087c6d9652e1584e4a153ca8ae80de8cb3b213dbecb9281b7b2843"
+    },
+    {
+      "page": 7,
+      "pixels_sha256": "274547ef5094c3f8de4817a933f80565387407adcccdb6ec35060444f5cf805b",
+      "content_sha256": "ffadac8e8028abe65dcc2829ca2289d93de15480188b206c9924f8a05363a294"
+    }
+  ],
+  "manifest_sha256": "5cd69691b20679d4ecdc107a825e649ef82f80ce976f2151d21ec1432aa6fbc5",
+  "manifest_definition_sha256": "4f4730d080d7db5046f7eb895a87504c84f5b2281922bbe17a6c7a79a29a5665",
+  "status": "passed",
+  "validation": {
+    "default-trust": {
+      "state": "Valid",
+      "successes": [
+        "assertion.dataHash.match",
+        "assertion.hashedURI.match",
+        "cawg.identity.well-formed",
+        "claimSignature.insideValidity",
+        "claimSignature.validated",
+        "timeStamp.validated"
+      ],
+      "trust_failures": [
+        {
+          "code": "signingCredential.untrusted",
+          "url": "self#jumbf=/c2pa/urn:c2pa:1b8f7d47-d4c1-42b4-ae29-4d07fdfbd1f9/c2pa.signature",
+          "explanation": "signing certificate untrusted"
+        },
+        {
+          "code": "signingCredential.untrusted",
+          "url": "self#jumbf=/c2pa/urn:c2pa:1b8f7d47-d4c1-42b4-ae29-4d07fdfbd1f9/c2pa.assertions/cawg.identity",
+          "explanation": "signing certificate untrusted"
+        }
+      ],
+      "informational": [
+        {
+          "code": "timeStamp.untrusted",
+          "url": "self#jumbf=/c2pa/urn:c2pa:1b8f7d47-d4c1-42b4-ae29-4d07fdfbd1f9/c2pa.signature",
+          "explanation": "timestamp cert untrusted: DigiCert SHA256 RSA4096 Timestamp Responder 2026 1"
+        }
+      ]
+    },
+    "publisher-trust": {
+      "state": "Valid",
+      "successes": [
+        "assertion.dataHash.match",
+        "assertion.hashedURI.match",
+        "cawg.identity.well-formed",
+        "claimSignature.insideValidity",
+        "claimSignature.validated",
+        "signingCredential.trusted",
+        "timeStamp.validated"
+      ],
+      "trust_failures": [
+        {
+          "code": "signingCredential.untrusted",
+          "url": "self#jumbf=/c2pa/urn:c2pa:1b8f7d47-d4c1-42b4-ae29-4d07fdfbd1f9/c2pa.assertions/cawg.identity",
+          "explanation": "signing certificate untrusted"
+        }
+      ],
+      "informational": [
+        {
+          "code": "timeStamp.untrusted",
+          "url": "self#jumbf=/c2pa/urn:c2pa:1b8f7d47-d4c1-42b4-ae29-4d07fdfbd1f9/c2pa.signature",
+          "explanation": "timestamp cert untrusted: DigiCert SHA256 RSA4096 Timestamp Responder 2026 1"
+        }
+      ]
+    },
+    "tamper_detection": "assertion.dataHash.mismatch"
+  }
+}

@@ -1,0 +1,3263 @@
+{
+  "research_cutoff": "2026-10-16",
+  "scope": "Targeted expansion addressing the prior argument weaknesses; not a census of every public record.",
+  "downloads": {
+    "indexed_files": 218,
+    "distinct_pdfs": 206,
+    "indexed_pages": 5090,
+    "ocr_pages": 1315,
+    "limit": "Indexed and searched; not every page was manually reviewed."
+  },
+  "research_logs": {
+    "root/search-log.json": {
+      "retrieved_at": "2026-10-13T19:06:48.353600+00:00",
+      "queries": [
+        {
+          "term": "sleeping bag",
+          "total": 12,
+          "read": 12,
+          "truncated": false
+        },
+        {
+          "term": "survival supplies",
+          "total": 4,
+          "read": 4,
+          "truncated": false
+        },
+        {
+          "term": "outreach supplies",
+          "total": 4,
+          "read": 4,
+          "truncated": false
+        },
+        {
+          "term": "tent purchase",
+          "total": 9,
+          "read": 9,
+          "truncated": false
+        },
+        {
+          "term": "homeless clothing",
+          "total": 1,
+          "read": 1,
+          "truncated": false
+        },
+        {
+          "term": "Think Dignity",
+          "total": 9,
+          "read": 9,
+          "truncated": false
+        },
+        {
+          "term": "Isaiah Project",
+          "total": 1,
+          "read": 1,
+          "truncated": false
+        },
+        {
+          "term": "donated property",
+          "total": 41,
+          "read": 41,
+          "truncated": false
+        },
+        {
+          "term": "donated tents",
+          "total": 15,
+          "read": 15,
+          "truncated": false
+        },
+        {
+          "term": "homeless basic needs",
+          "total": 3,
+          "read": 3,
+          "truncated": false
+        },
+        {
+          "term": "homeless supply",
+          "total": 1,
+          "read": 1,
+          "truncated": false
+        },
+        {
+          "term": "street outreach invoices",
+          "total": 1,
+          "read": 1,
+          "truncated": false
+        },
+        {
+          "term": "PATH invoices",
+          "total": 5,
+          "read": 5,
+          "truncated": false
+        },
+        {
+          "term": "supply distribution",
+          "total": 13,
+          "read": 13,
+          "truncated": false
+        },
+        {
+          "term": "Clean SD Summary",
+          "total": 40,
+          "read": 40,
+          "truncated": false
+        },
+        {
+          "term": "camp abatements",
+          "total": 12,
+          "read": 12,
+          "truncated": false
+        },
+        {
+          "term": "abatement daily report",
+          "total": 5,
+          "read": 5,
+          "truncated": false
+        },
+        {
+          "term": "abatement register",
+          "total": 12,
+          "read": 12,
+          "truncated": false
+        },
+        {
+          "term": "blankets",
+          "total": 81,
+          "read": 81,
+          "truncated": false
+        },
+        {
+          "term": "hygiene kits",
+          "total": 1,
+          "read": 1,
+          "truncated": false
+        },
+        {
+          "term": "clothing distribution",
+          "total": 9,
+          "read": 9,
+          "truncated": false
+        },
+        {
+          "term": "clothing invoice",
+          "total": 0,
+          "read": 0,
+          "truncated": false
+        },
+        {
+          "term": "homeless purchases",
+          "total": 7,
+          "read": 7,
+          "truncated": false
+        },
+        {
+          "term": "tent invoice",
+          "total": 0,
+          "read": 0,
+          "truncated": false
+        }
+      ],
+      "search_hits_with_overlap": 286,
+      "distinct_requests_including_prior_inventory": 3098,
+      "listed_release_families": 66,
+      "public_document_entries": 139,
+      "additional_portals": [
+        {
+          "portal": "SDHC",
+          "base_url": "https://sandiegohousingcommission.nextrequest.com",
+          "term": "sleeping bags",
+          "total": 0,
+          "read": 0,
+          "error": null,
+          "truncated": false
+        },
+        {
+          "portal": "SDHC",
+          "base_url": "https://sandiegohousingcommission.nextrequest.com",
+          "term": "outreach supplies",
+          "total": 0,
+          "read": 0,
+          "error": null,
+          "truncated": false
+        },
+        {
+          "portal": "SDHC",
+          "base_url": "https://sandiegohousingcommission.nextrequest.com",
+          "term": "street outreach",
+          "total": 0,
+          "read": 0,
+          "error": null,
+          "truncated": false
+        },
+        {
+          "portal": "SDHC",
+          "base_url": "https://sandiegohousingcommission.nextrequest.com",
+          "term": "Think Dignity",
+          "total": 0,
+          "read": 0,
+          "error": null,
+          "truncated": false
+        },
+        {
+          "portal": "County",
+          "base_url": "https://pra.sandiegocounty.gov",
+          "term": "sleeping bags",
+          "total": 2,
+          "read": 2,
+          "error": null,
+          "truncated": false
+        },
+        {
+          "portal": "County",
+          "base_url": "https://pra.sandiegocounty.gov",
+          "term": "homeless supplies",
+          "total": 1,
+          "read": 1,
+          "error": null,
+          "truncated": false
+        },
+        {
+          "portal": "County",
+          "base_url": "https://pra.sandiegocounty.gov",
+          "term": "encampment property",
+          "total": 1,
+          "read": 1,
+          "error": null,
+          "truncated": false
+        },
+        {
+          "portal": "County",
+          "base_url": "https://pra.sandiegocounty.gov",
+          "term": "outreach invoices",
+          "total": 5,
+          "read": 5,
+          "error": null,
+          "truncated": false
+        }
+      ],
+      "county_release_metadata": [
+        {
+          "request_id": "26-1137",
+          "url": "https://pra.sandiegocounty.gov/requests/26-1137",
+          "listed_total": 1117,
+          "read": 1117
+        },
+        {
+          "request_id": "24-1757",
+          "url": "https://pra.sandiegocounty.gov/requests/24-1757",
+          "listed_total": null,
+          "read": 0
+        }
+      ],
+      "scope": "All search pages were read for 24 additional City NextRequest terms. Selected family document metadata were fully paginated. Search hits overlap; accumulated request inventory includes prior research.",
+      "pagination_correction": "Use raw 25-row public document pages and total_documents_count. An earlier assumed 100-row page size truncated release listings; the new listings are corrected.",
+      "exclusions": [
+        "Unrelated resident case and permit records were excluded from original acquisition and the shareable package.",
+        "Raw request text and signed viewer URLs are not included in the shareable package.",
+        "County PATH prevention records concern people already housed in a geography excluding the City; they do not measure City street outreach."
+      ],
+      "access_limits": [
+        "Vendor grant receipts require login.",
+        "Public document metadata do not guarantee access to underlying JPG/video objects.",
+        "No current aid-to-disposal item chain or current executed 2026 DMA renewal was acquired."
+      ],
+      "web_research_topics": [
+        "Provider public tax filings and annual reports",
+        "Sleeping-supply grants and donation records",
+        "Historical storage appropriations and property litigation",
+        "City, County and SDHC public portals"
+      ]
+    },
+    "budget/search-log.json": {
+      "research_date": "2026-10-13",
+      "limits": "Bounded public-source research, not a claim that every City or NextRequest document was reviewed. Search terms do not prove absence of unreleased records.",
+      "web_research_families": [
+        {
+          "family": "Current Finance, Charter39 and adopted-budget sources",
+          "query_topics_used": [
+            "FY2026 third-quarter Police actuals",
+            "FY2026 year-end financial performance report",
+            "June 2026 Charter 39",
+            "Police vacancy status FY2026",
+            "FY2027 Police adopted budget"
+          ],
+          "source_ids": [
+            "BK01",
+            "BK02",
+            "BK07",
+            "BK08",
+            "BK09",
+            "BK39"
+          ],
+          "result": "Current actuals and vacancy snapshot acquired. No current task-specific paid Clean SD, Reports or court ledger in the published department reports."
+        },
+        {
+          "family": "Adopted Environmental Services Caltrans DMA expansion",
+          "query_topics_used": [
+            "Existing adopted FY2027 ESD Caltrans DMA budget adjustment"
+          ],
+          "source_ids": [
+            "BK42"
+          ],
+          "result": "Adopted addition of two civilian Code Compliance Officers with $479380 expenditure/$100000 incremental revenue found. This does not resolve the executed renewal cap or current reimbursement receipts."
+        },
+        {
+          "family": "IBA Police budget analysis and historical civilianization",
+          "query_topics_used": [
+            "IBA Police budget March 2026",
+            "Police civilianization 2006",
+            "Police Business Process Reengineering 2008",
+            "civilian court liaison and fleet conversion"
+          ],
+          "source_ids": [
+            "BK03",
+            "BK13",
+            "BK28",
+            "BK29",
+            "BK30",
+            "BK38"
+          ],
+          "result": "Specific current administrative roles identified. Historical proposals and projected capacity do not establish present paid savings."
+        },
+        {
+          "family": "Council committees: civilianization and NPD deployment",
+          "query_topics_used": [
+            "October 29,2025 SDPD civilianization 78 PISO17.6 million",
+            "August 19,2026 Neighborhood Policing overtime and deployment"
+          ],
+          "source_ids": [
+            "BK04",
+            "BK11",
+            "BK14",
+            "BK16",
+            "BK17",
+            "BK18P",
+            "BK19P",
+            "BK20",
+            "BK21",
+            "BK22",
+            "BK23"
+          ],
+          "result": "Public agenda attachments acquired through the ordinary viewer download flow. Call shares and class planning costs found, but no absolute call counts/OST totals. Agency modeled additions, not net-saving substitutions."
+        },
+        {
+          "family": "Auditor overtime and latest implementation follow-up",
+          "query_topics_used": [
+            "SDPD overtime audit 24-08",
+            "audit recommendation follow-up June 30,2026",
+            "October 7,2026 Audit Committee overtime controls"
+          ],
+          "source_ids": [
+            "BK05",
+            "BK10",
+            "BK15",
+            "BK33",
+            "BK34",
+            "BK35",
+            "BK36"
+          ],
+          "result": "Observed FY2023 Reports hours and latest follow-up acquired. Claimed staffing-sergeant hours saved are unquantified; key safeguards remain past due as ofJune 30,2026."
+        },
+        {
+          "family": "Court scheduling, duty codes and compensation",
+          "query_topics_used": [
+            "Police court overtime scheduling shift MOU",
+            "SDPD Reports overtime internal order 11003715",
+            "CY2025 City compensation Police",
+            "MEA2026 flexible benefit credits",
+            "FY2027 fixed fringe glossary"
+          ],
+          "source_ids": [
+            "BK06",
+            "BK24",
+            "BK25",
+            "BK27",
+            "BK31",
+            "BK37",
+            "BK40"
+          ],
+          "result": "Current code definitions, MOU rules, anonymous historical pay and benefit rules acquired. No measured current court scheduling saving."
+        },
+        {
+          "family": "Open-data operating actuals",
+          "query_topics_used": [
+            "San Diego operating actuals payroll overtime fund cost center"
+          ],
+          "source_ids": [
+            "BK32"
+          ],
+          "result": "Checked current metadata against the existing archive. Coverage remains historical through 2023; not a FY2026 duty-code payroll source."
+        }
+      ],
+      "web_query_record_limit": "Web searches are logged here by research topic and source family. Exact historical search-session strings are not retained in these owned files; exact NextRequest and local FTS query strings are preserved below.",
+      "nextrequest": {
+        "prior_cached_searches_screened": [
+          {
+            "query": "overtime",
+            "cached_search_total": 109
+          },
+          {
+            "query": "Neighborhood Policing",
+            "cached_search_total": 178
+          }
+        ],
+        "subject_specific_release_families": [
+          {
+            "request_id": "22-4629",
+            "request_url": "https://sandiego.nextrequest.com/requests/22-4629",
+            "listed_public_documents": 7
+          },
+          {
+            "request_id": "23-4721",
+            "request_url": "https://sandiego.nextrequest.com/requests/23-4721",
+            "listed_public_documents": 0
+          },
+          {
+            "request_id": "22-3442",
+            "request_url": "https://sandiego.nextrequest.com/requests/22-3442",
+            "listed_public_documents": 2
+          },
+          {
+            "request_id": "25-3340",
+            "request_url": "https://sandiego.nextrequest.com/requests/25-3340",
+            "listed_public_documents": 0
+          },
+          {
+            "request_id": "25-3001",
+            "request_url": "https://sandiego.nextrequest.com/requests/25-3001",
+            "listed_public_documents": 1
+          },
+          {
+            "request_id": "22-5654",
+            "request_url": "https://sandiego.nextrequest.com/requests/22-5654",
+            "listed_public_documents": 9
+          }
+        ],
+        "new_exact_queries": [
+          {
+            "query": "civilianization",
+            "total_count": 61,
+            "read_count": 61,
+            "published_ids": [
+              "23-2711",
+              "22-1644",
+              "26-8860",
+              "23-1037",
+              "22-1809",
+              "26-2294",
+              "24-1802",
+              "22-2415",
+              "26-2265",
+              "25-8316",
+              "25-3923",
+              "26-4723",
+              "21-5736",
+              "23-2601",
+              "23-33",
+              "26-8086",
+              "23-3448",
+              "26-5015",
+              "24-1911",
+              "26-1424",
+              "26-4326",
+              "26-617",
+              "25-4559",
+              "26-8268",
+              "26-4325",
+              "25-6038",
+              "23-2694",
+              "26-5257",
+              "25-9737",
+              "24-7606",
+              "26-7384",
+              "22-5370",
+              "26-6135",
+              "24-7915",
+              "26-5202",
+              "26-10395",
+              "21-5185",
+              "26-3460",
+              "26-6137",
+              "25-3449",
+              "26-6136",
+              "22-2652",
+              "26-6134",
+              "24-3858",
+              "26-1570",
+              "26-10466",
+              "25-7377",
+              "26-3928",
+              "25-10104",
+              "24-6012",
+              "25-1562",
+              "22-2684",
+              "21-6257",
+              "22-2239",
+              "22-5089",
+              "24-1769",
+              "22-2528",
+              "22-2827",
+              "22-3404",
+              "22-4235",
+              "22-993"
+            ],
+            "truncated": false,
+            "rate_limited": false
+          },
+          {
+            "query": "PISO",
+            "total_count": 18,
+            "read_count": 18,
+            "published_ids": [
+              "24-1768",
+              "25-5173",
+              "24-4991",
+              "24-4433",
+              "24-8609",
+              "23-969",
+              "24-8560",
+              "24-7878",
+              "25-810",
+              "22-3444",
+              "24-7340",
+              "23-2072",
+              "25-4135",
+              "25-7624",
+              "25-4543",
+              "24-5914",
+              "26-1131",
+              "23-1680"
+            ],
+            "truncated": false,
+            "rate_limited": false
+          },
+          {
+            "query": "Dispatch Analysis",
+            "total_count": 42,
+            "read_count": 42,
+            "published_ids": [
+              "26-831",
+              "22-6591",
+              "23-322",
+              "25-10132",
+              "26-399",
+              "26-7392",
+              "26-10074",
+              "26-7391",
+              "26-1288",
+              "26-10063",
+              "26-7393",
+              "26-7394",
+              "26-9181",
+              "26-2045",
+              "26-6684",
+              "26-1730",
+              "26-1033",
+              "25-10133",
+              "26-1731",
+              "26-1024",
+              "26-8103",
+              "22-2827",
+              "22-993",
+              "22-5966",
+              "26-4753",
+              "26-5858",
+              "22-3362",
+              "22-2231",
+              "26-6712",
+              "21-2929",
+              "23-1344",
+              "22-3942",
+              "21-6056",
+              "21-5445",
+              "21-5447",
+              "21-5448",
+              "21-5446",
+              "24-1769",
+              "21-6367",
+              "22-4235",
+              "24-3465",
+              "22-754"
+            ],
+            "truncated": false,
+            "rate_limited": false
+          },
+          {
+            "query": "11003715",
+            "total_count": 0,
+            "read_count": 0,
+            "published_ids": [],
+            "truncated": false,
+            "rate_limited": false
+          },
+          {
+            "query": "Reports overtime",
+            "total_count": 54,
+            "read_count": 54,
+            "published_ids": [
+              "22-3442",
+              "24-2601",
+              "23-952",
+              "24-4597",
+              "23-3961",
+              "24-680",
+              "23-107",
+              "23-2348",
+              "26-4187",
+              "26-406",
+              "22-6330",
+              "25-10292",
+              "25-2047",
+              "22-69",
+              "23-4231",
+              "25-4279",
+              "25-4488",
+              "25-4278",
+              "26-1166",
+              "23-2433",
+              "22-2269",
+              "26-6322",
+              "24-3013",
+              "25-10282",
+              "26-1061",
+              "22-1712",
+              "22-4629",
+              "22-4630",
+              "22-2027",
+              "21-6139",
+              "24-2870",
+              "26-485",
+              "23-2147",
+              "26-3859",
+              "25-3675",
+              "26-1237",
+              "25-3001",
+              "22-5089",
+              "24-1769",
+              "22-6264",
+              "22-1168",
+              "22-1253",
+              "23-1127",
+              "22-3249",
+              "22-3877",
+              "24-4950",
+              "22-5610",
+              "22-1865",
+              "22-5349",
+              "22-1074",
+              "23-1680",
+              "22-993",
+              "22-4468",
+              "24-599"
+            ],
+            "truncated": false,
+            "rate_limited": false
+          },
+          {
+            "query": "CleanSD overtime",
+            "total_count": 1,
+            "read_count": 1,
+            "published_ids": [
+              "25-3001"
+            ],
+            "truncated": false,
+            "rate_limited": false
+          },
+          {
+            "query": "Alpha Project invoices",
+            "total_count": 2,
+            "read_count": 2,
+            "published_ids": [
+              "21-1609",
+              "23-1058"
+            ],
+            "truncated": false,
+            "rate_limited": false
+          },
+          {
+            "query": "Urban Corps invoices",
+            "total_count": 1,
+            "read_count": 1,
+            "published_ids": [
+              "25-8547"
+            ],
+            "truncated": false,
+            "rate_limited": false
+          }
+        ],
+        "screening": "Excluded unrelated personal, legal and employment cases. The portal stems civilianization to civilian; all 61 search rows were read, then staffing/budget candidates screened. Search result counts are not counts of relevant budget releases.",
+        "acquired_public_document_ids": [
+          15246128,
+          14492848,
+          56369076
+        ],
+        "Urban_Corps_family": {
+          "request_id": "25-8547",
+          "total_reported": 51,
+          "records_read": 51,
+          "pagination": "Read until accumulated row count reached total_documents_count; 25 rows/page. Did not use the erroneous page×100 stopping rule.",
+          "result": "New 53-page invoicesPDF acquired and 52 scanned pages OCRed. FY2025 financial ledger reconciled to existing City cost schedule."
+        },
+        "access_limit": "44 billing spreadsheet records were listed in the Urban Corps family. The tested public spreadsheet document had no embedded viewer; its ordinary download links returned 403. No bypass or authenticated access was attempted. The public invoicePDF viewer was accessible.",
+        "no_requests_submitted": true
+      },
+      "local_index": {
+        "database": "/Volumes/A/onrecord-studio/investigations/san-diego-accountability-2026-10-12/analysis/v2/documents.sqlite",
+        "coverage_at_search": {
+          "indexed_pages": 5090,
+          "distinct_indexed_PDFs": 206,
+          "downloaded_PDF_registry_count": 218
+        },
+        "exact_queries_and_screened_results": [
+          {
+            "query": "\"overtime\"",
+            "matches_screened": 7,
+            "source_pages": [
+              {
+                "id": "DL38697f150c3c",
+                "page": 1,
+                "snippet": " … Neither\nContractor nor Contractor's employees or subcontractors shall be entitled to any benefits to which County employees are\nentitled, including without limitation, overtime, retirement benefits, workers’ compensation … "
+              },
+              {
+                "id": "DL595c317fca6e",
+                "page": 1,
+                "snippet": " … Neither\nContractor nor Contractor's employees or subcontractors shall be entitled to any benefits to which County employees are\nentitled, including without limitation, overtime, retirement benefits, workers’ compensation … "
+              },
+              {
+                "id": "DL595c317fca6e",
+                "page": 30,
+                "snippet": " … Applies\n\nto contracts over $100,000 and requires that workers receive overtime\ncompensation for hours worked in excess of 40 hours in one week.\n\nPREVAILING WAGES\n\nAl3.1 … "
+              },
+              {
+                "id": "DLce6180f6ad78",
+                "page": 33,
+                "snippet": " … The \nproposal requests $374,907, which will fund an SDPD consultant, overtime for Homicide \nDetectives and Criminalists, as well as equipment necessary to carry out the project. \n \nFISCAL … "
+              },
+              {
+                "id": "DL179a5bbaa131",
+                "page": 44,
+                "snippet": " … It is anticipated that $3,000,000 will be available \novertime from Agency funds and other funding sources to finance the design, repair and \ninstallation of sidewalks (CIP … "
+              },
+              {
+                "id": "DLc4a4a25e046b",
+                "page": 41,
+                "snippet": " … It is anticipated that $3,000,000 will be available\novertime from Agency funds and other flmding sources to finance the design, repair and\ninstallation of sidewalks (CIP … "
+              },
+              {
+                "id": "DL43103237e8ae",
+                "page": 30,
+                "snippet": " … The\nproposal requests $374,907, which will fund an SDPD consultant, overtime for Homicide\nDetectives and Criminalists, as well as equipment necessary to carry out the project.\nFISCAL … "
+              }
+            ]
+          },
+          {
+            "query": "\"Clean SD\" AND \"hours\"",
+            "matches_screened": 1,
+            "source_pages": [
+              {
+                "id": "DLbbfb9699583d",
+                "page": 1,
+                "snippet": " … City of San Diego \nEnvironmental Services Department \nClean SD Division \n24 Hour Notice of Cleanup and \nProperty Removal \nSan Diego Municipal Codes 54.0105, 54.0209, 54.0210 … "
+              }
+            ]
+          },
+          {
+            "query": "\"civilianization\"",
+            "matches_screened": 0,
+            "source_pages": []
+          },
+          {
+            "query": "\"civilian\" AND \"officer\"",
+            "matches_screened": 2,
+            "source_pages": [
+              {
+                "id": "DLebff75c38e43",
+                "page": 18,
+                "snippet": "Page 18 of 18 \n \nto \n, an unarmed civilian who was simply asking Officer Fritsch who called  \nthe police. IA should refer this case to the Professional Standards Unit … "
+              },
+              {
+                "id": "DL8061196afd6f",
+                "page": 14,
+                "snippet": " … 1.2 Provide or prepare others to provide, education and training for (Fire-\nRescue and Police Departments) personnel, both sworn and civilian,\nwhich include the following areas:\n\n1 … "
+              }
+            ]
+          },
+          {
+            "query": "\"court\" AND \"overtime\"",
+            "matches_screened": 0,
+            "source_pages": []
+          },
+          {
+            "query": "\"vacancies\" AND \"police\"",
+            "matches_screened": 0,
+            "source_pages": []
+          },
+          {
+            "query": "\"timecard\"",
+            "matches_screened": 0,
+            "source_pages": []
+          },
+          {
+            "query": "\"GID\" AND \"hours\"",
+            "matches_screened": 0,
+            "source_pages": []
+          },
+          {
+            "query": "\"NPD\" AND \"overtime\"",
+            "matches_screened": 0,
+            "source_pages": []
+          },
+          {
+            "query": "\"Alpha\" AND \"hours\"",
+            "matches_screened": 11,
+            "source_pages": [
+              {
+                "id": "DL1dbdbb775c92",
+                "page": 23,
+                "snippet": "Kaitlin Patterson\nAlpha Project for the Homeless\nResource and Development Manager\n(619)542-1877\n[email]\n \n \nFrom: Kaitlin Patterson \nSent: Monday, October 17, 2022 11:13 AM … "
+              },
+              {
+                "id": "DL1dbdbb775c92",
+                "page": 27,
+                "snippet": " … be provided for the family shelter? Is\nthere a certain number of days? Hours?\n \nWhat will the process look like for submitting an RFSQ if you later decide … "
+              },
+              {
+                "id": "DL1dbdbb775c92",
+                "page": 30,
+                "snippet": " … Do you know when the responses to questions will be posted?\n \nThank you,\n \nKaitlin Patterson\nAlpha Project for the Homeless\nResource and Development Manager\n(619)542-1877\nKaitlin … "
+              },
+              {
+                "id": "DL1dbdbb775c92",
+                "page": 46,
+                "snippet": " … be provided for the family shelter? Is\nthere a certain number of days? Hours?\n \nWhat will the process look like for submitting an RFSQ if you later decide … "
+              },
+              {
+                "id": "DL1dbdbb775c92",
+                "page": 55,
+                "snippet": "Can you expand on the childcare services that are expected to be provided for the family shelter? Is\nthere a certain number of days? Hours?\n \nWhat will the … "
+              },
+              {
+                "id": "DL1dbdbb775c92",
+                "page": 57,
+                "snippet": " … Do you know when the responses to questions will be posted?\n \nThank you,\n \nKaitlin Patterson\nAlpha Project for the Homeless\nResource and Development Manager\n(619)542-1877\nKaitlin … "
+              },
+              {
+                "id": "DL1dbdbb775c92",
+                "page": 60,
+                "snippet": " … be provided for the family shelter? Is\nthere a certain number of days? Hours?\n \nWhat will the process look like for submitting an RFSQ if you later decide … "
+              },
+              {
+                "id": "DL1dbdbb775c92",
+                "page": 62,
+                "snippet": " … be provided for the family shelter? Is\nthere a certain number of days? Hours?\n \nWhat will the process look like for submitting an RFSQ if you later decide … "
+              },
+              {
+                "id": "DL1dbdbb775c92",
+                "page": 63,
+                "snippet": " … Do you know when the responses to questions will be posted?\n \nThank you,\n \nKaitlin Patterson\nAlpha Project for the Homeless\nResource and Development Manager\n(619)542-1877\nKaitlin … "
+              },
+              {
+                "id": "DL1dbdbb775c92",
+                "page": 68,
+                "snippet": " … be provided for the family shelter? Is\nthere a certain number of days? Hours?\n \nWhat will the process look like for submitting an RFSQ if you later decide … "
+              },
+              {
+                "id": "DL445b4ca6a1e0",
+                "page": 2,
+                "snippet": " … UID # \n \nThank you\n \nBrieanna Perez \nALPHA PROJECT FOR THE HOMELESS\nAsst. Program Manger\nBridge Shelter 1 \nPhone: 619-208-3486 (cell)\nWorking Hours: Mon-Fri. 5:00am-1 … "
+              }
+            ]
+          },
+          {
+            "query": "\"Urban Corps\" AND \"hours\"",
+            "matches_screened": 2,
+            "source_pages": [
+              {
+                "id": "DLdd9049db9985",
+                "page": 1,
+                "snippet": "FIRST AMENDMENT TO CONTRACT BETWEEN THE CITY OF SAN DIEGO AND\nURBAN CORPS OF SAN DIEGO COUNTY FOR AS-NEEDED CLEAN-UP,\nMAINTENANCE, AND GENERAL LABOR SERVICES AT … "
+              },
+              {
+                "id": "DLc3d88dc95c66",
+                "page": 1,
+                "snippet": "FIRST AMENDMENT TO THE CONTRACT BETWEEN THE CITY OF SAN DIEGO\nAND URBAN CORPS FOR AS-NEEDED CLEAN-UP, MAINTENANCE, AND GENERAL\nLABOR SERVICES AT CITY LANDFILL SITES … "
+              }
+            ]
+          },
+          {
+            "query": "\"staffing\" AND \"2026\"",
+            "matches_screened": 0,
+            "source_pages": []
+          }
+        ],
+        "result": "No measured sworn GID admin minutes, current task-specific paid payroll or Alpha abatement-crew billing hours found in screened index results. Many matches were shelter-grant boilerplate or unrelated case emails."
+      },
+      "failed_or_exhausted_leads": [
+        "The guessed legacy IBA06_26.pdf path returned404; the correct report06_26.pdf and proposal attachment were preserved asBK28/BK13.",
+        "Court-witness-pay request 23-4721 and auditor-evidence request 25-3340 had no public documents in their relevant request metadata.",
+        "PISO and Dispatch Analysis NextRequest hits were largely unrelated cases; no public underlying G-1.8 d absolute call-count/OST dataset was found.",
+        "Alpha invoice query results related to migrant shelter or Golden Hall maintenance, rather than abatement staffing; no new Alpha crew invoice was acquired.",
+        "Older NextRequest monthly-pay request 22-1644 could involve individual personnel; current anonymous official compensation report was used instead.",
+        "The existing downloaded-file registry contained no matching Urban Corps billing spreadsheet; the public scanned invoice release supplied the financial and selected service-hour evidence.",
+        "No published measured current civilian-eligible fraction of Reports overtime, sworn GID desk hours, or cashable court-shift savings was found."
+      ],
+      "search_status": "Meaningful relevant primary-source families followed to their public attachments, current reports and explicit access/data limits. No claim that unavailable ledgers or unreleased documents do not exist."
+    },
+    "property/search-log.json": {
+      "updated_at": "2026-10-13T19:10:40.434776+00:00",
+      "portal_queries": [
+        {
+          "term": "Isaiah",
+          "total": 10,
+          "read": 10,
+          "truncated": false
+        },
+        {
+          "term": "Spencer",
+          "total": 22,
+          "read": 22,
+          "truncated": false
+        },
+        {
+          "term": "Arundel",
+          "total": 6,
+          "read": 6,
+          "truncated": false
+        },
+        {
+          "term": "Connecting Hope",
+          "total": 117,
+          "read": 117,
+          "truncated": false
+        },
+        {
+          "term": "homeless property destroyed",
+          "total": 1,
+          "read": 1,
+          "truncated": false
+        },
+        {
+          "term": "homeless property claim",
+          "total": 11,
+          "read": 11,
+          "truncated": false
+        },
+        {
+          "term": "abatement claim",
+          "total": 96,
+          "read": 96,
+          "truncated": false
+        },
+        {
+          "term": "property sorting",
+          "total": 134,
+          "read": 134,
+          "truncated": false
+        },
+        {
+          "term": "abatement notice",
+          "total": 221,
+          "read": 221,
+          "truncated": false
+        },
+        {
+          "term": "impound property",
+          "total": 13,
+          "read": 13,
+          "truncated": false
+        },
+        {
+          "term": "property disposal",
+          "total": 119,
+          "read": 119,
+          "truncated": false
+        },
+        {
+          "term": "property retrieval",
+          "total": 39,
+          "read": 39,
+          "truncated": false
+        },
+        {
+          "term": "homeless belongings",
+          "total": 4,
+          "read": 4,
+          "truncated": false
+        },
+        {
+          "term": "Chollas Parkway",
+          "total": 15,
+          "read": 15,
+          "truncated": false
+        },
+        {
+          "term": "Mario Sierra",
+          "total": 1,
+          "read": 1,
+          "truncated": false
+        },
+        {
+          "term": "90 days",
+          "total": 77,
+          "read": 77,
+          "truncated": false
+        },
+        {
+          "term": "abatement photographs",
+          "total": 35,
+          "read": 35,
+          "truncated": false
+        },
+        {
+          "term": "settlement compliance",
+          "total": 35,
+          "read": 35,
+          "truncated": false
+        }
+      ],
+      "distinct_public_request_metadata": 710,
+      "request_families_listed": 281,
+      "public_document_entries": 899,
+      "portal_listing_complete": false,
+      "local_fts_queries": [
+        {
+          "query": "3356753",
+          "pages": 0,
+          "matches": []
+        },
+        {
+          "query": "3367112",
+          "pages": 0,
+          "matches": []
+        },
+        {
+          "query": "3364404",
+          "pages": 0,
+          "matches": []
+        },
+        {
+          "query": "3179697",
+          "pages": 0,
+          "matches": []
+        },
+        {
+          "query": "3358755",
+          "pages": 0,
+          "matches": []
+        },
+        {
+          "query": "\"Born Again\"",
+          "pages": 0,
+          "matches": []
+        },
+        {
+          "query": "\"destroy\" AND \"belongings\"",
+          "pages": 0,
+          "matches": []
+        },
+        {
+          "query": "\"settlement\" AND \"breach\"",
+          "pages": 6,
+          "matches": [
+            {
+              "id": "DL38697f150c3c",
+              "title": "563165 - Regional Task Force on the Homeless Contract - EXECUTED.pdf",
+              "page": 65
+            },
+            {
+              "id": "DLa10285cf6aa6",
+              "title": "Executed_OCL NAMI Alliance Program Agreement HSSD.pdf",
+              "page": 49
+            },
+            {
+              "id": "DLdfa6225c49c5",
+              "title": "PRA #22-5654 - ESD/PRA #22-5654 ESD - 2019 Alpha Project Contract.pdf",
+              "page": 20
+            },
+            {
+              "id": "DLfca574374ccc",
+              "title": "PRA #22-5654 - ESD/PRA #22-5654 ESD - RFP 10089597-20-B Center for Employment Opportunities Contract - Final.pdf",
+              "page": 9
+            },
+            {
+              "id": "DL9ed2662d16ba",
+              "title": "PRA #22-5654 - ESD/PRA #22-5654 ESD - Executed-CEO Agreement _ Current Nonprofit.pdf",
+              "page": 37
+            },
+            {
+              "id": "DL8c8e7914adc8",
+              "title": "PRA #22-5654 - ESD/PRA #22-5654 ESD - Urban Corps Original Agreement (2015-2020).pdf",
+              "page": 33
+            }
+          ]
+        },
+        {
+          "query": "\"notice\" AND \"incorrect\"",
+          "pages": 1,
+          "matches": [
+            {
+              "id": "DL47bf63df3f1c",
+              "title": "PRA 26-1367 Responsive Records.pdf",
+              "page": 25
+            }
+          ]
+        },
+        {
+          "query": "\"impound\" AND \"lost\"",
+          "pages": 0,
+          "matches": []
+        }
+      ],
+      "web_search_families": [
+        "Isaiah/Spencer/Arundelcomplaintsettlementandamendments",
+        "2009propertydestructionnonprofitcarts",
+        "2010grandjuryandCityresponse",
+        "2018Chollasunauthorizedcleanup",
+        "2017occupiedtenttrashtruckanddiscipline",
+        "2022CommercialStreetnotice/propertydestruction",
+        "2025–2026Citypropertyclaims",
+        "Bloom2024fees/damagesand2025–2026enforcementmotions",
+        "BloomJune29,2026laterstatus",
+        "HopeForTheHomelessLakesideCountyCaltrans2024–2026",
+        "HistoricalESD90dayretentionand2021noticeexceptions",
+        "Adjacentvendingimpoundcaseexcludedfrommainhomelessevidence"
+      ],
+      "failed_access": [
+        {
+          "id": "P01-grand-jury",
+          "url": "https://www.sandiegocounty.gov/grandjury/reports/2009_2010/Homeless_Report.pdf",
+          "error": "404 Client Error: Not Found for url: https://www.sandiegocounty.gov/grandjury/reports/2009_2010/Homeless_Report.pdf"
+        },
+        {
+          "id": "P04-inewsource2022",
+          "url": "https://www.kpbs.org/news/local/2022/07/01/san-diego-homeless-enforcement-violates-court-orders-attorneys-say",
+          "error": "403 Client Error: Forbidden for url: https://www.kpbs.org/news/local/2022/07/01/san-diego-homeless-enforcement-violates-court-orders-attorneys-say"
+        },
+        {
+          "id": "P22-lakeside-order2026",
+          "url": "https://law.justia.com/cases/federal/district-courts/california/casdce/3%3A2024cv01009/786587/42/",
+          "error": "403 Client Error: Forbidden for url: https://law.justia.com/cases/federal/district-courts/california/casdce/3%3A2024cv01009/786587/42/"
+        },
+        {
+          "id": "P25-bloom-mods",
+          "url": "https://www.govinfo.gov/content/pkg/USCOURTS-casd-3_17-cv-02324/mods.xml",
+          "error": "404 Client Error: Not Found for url: https://www.govinfo.gov/content/pkg/USCOURTS-casd-3_17-cv-02324/mods.xml"
+        }
+      ],
+      "acquisition_scope": "Existing published records only. No public-records requests filed, no external contact, no fees incurred.",
+      "coverage_limit": "All28 defined request-search resultsets were read. Corrected metadata pagination completed for71 topical/context families.917publicdocumententries are metadata, not917originalfilesreviewed.211irrelevantmatches excluded. No unrelated private case files acquired; key relevant pages and four TimePhoto PDFs closely reviewed.",
+      "additional_targeted_queries": [
+        {
+          "term": "Colton",
+          "total": 17,
+          "read": 17,
+          "truncated": false
+        },
+        {
+          "term": "compactor",
+          "total": 0,
+          "read": 0,
+          "truncated": false
+        },
+        {
+          "term": "property stolen abatement",
+          "total": 1,
+          "read": 1,
+          "truncated": false
+        },
+        {
+          "term": "discarded belongings",
+          "total": 4,
+          "read": 4,
+          "truncated": false
+        },
+        {
+          "term": "destroyed belongings",
+          "total": 12,
+          "read": 12,
+          "truncated": false
+        },
+        {
+          "term": "homeless damage claim",
+          "total": 4,
+          "read": 4,
+          "truncated": false
+        },
+        {
+          "term": "Isaiah compliance",
+          "total": 0,
+          "read": 0,
+          "truncated": false
+        },
+        {
+          "term": "3367112",
+          "total": 0,
+          "read": 0,
+          "truncated": false
+        },
+        {
+          "term": "3179697",
+          "total": 0,
+          "read": 0,
+          "truncated": false
+        },
+        {
+          "term": "40679",
+          "total": 35,
+          "read": 35,
+          "truncated": false
+        }
+      ],
+      "additional_targeted_request_metadata_rows": 73,
+      "case_photo_access": {
+        "public_images_listed": 591,
+        "image_originals_obtained": 0,
+        "original_S3_attempts": 168,
+        "representative_official_download_checks": 4,
+        "representative_official_download_status": 403,
+        "newly_discovered_images_not_individually_attempted": 423,
+        "case_photo_pdfs_obtained": 4,
+        "case_photo_pdfs_visually_checked": 4,
+        "family_raw_rows": 601,
+        "family_reported_total": 601,
+        "family_pages": 25,
+        "folder_counts": {
+          "PRA #23-3164 - ESD Case 03282142": 7,
+          "PRA #23-3164 - ESD Case 03437818": 354,
+          "PRA #23-3164 - ESD Case 03865237": 160,
+          "PRA #23-3164 - ESD Case 04201365": 40,
+          "PRA #23-3164 - ESD Case 04263617": 30
+        },
+        "limits": "Image metadata was screened. Inaccessible originals were not reviewed; no inference about what they show.",
+        "public_videos_listed": 3,
+        "video_originals_obtained": 0,
+        "representative_official_video_download_status": 403
+      },
+      "successful_source_entries": 26,
+      "unique_successful_original_hashes": 26,
+      "pdf_pages_indexed_new_primary": 607,
+      "full_originals_reviewed": "Selected relevant pages, primary provisions and visual evidence; not every indexed page was closely read.",
+      "family_screen_categories": {
+        "Irrelevant or weak keyword match": 211,
+        "Direct legal settlement records": 1,
+        "Potential operational/context lead": 18,
+        "Direct Risk Management claim listing": 1,
+        "Monthly operational summaries already investigated": 50
+      },
+      "pagination_correction": "The inherited document-list loop assumed100rows perpage while actual responses contain25. This was corrected:71 topicalfamilies, including23-3164, now accumulated actual raw rowcounts through total_documents_count.211irrelevantkeywordmatches remain metadata-only exclusions. Request-search pagination was already based on actual rowcounts.",
+      "topical_document_metadata_complete": true,
+      "topical_families_fully_paginated": 71,
+      "topical_public_document_entries": 917,
+      "excluded_irrelevant_family_matches": 211
+    },
+    "outcomes/search-log.json": {
+      "created_at": "2026-10-13T18:56:38.928406+00:00",
+      "web_search_topics": [
+        "San Diego encampment audit and housing placements",
+        "SDHC Coordinated Street Outreach outcomes and budget",
+        "County MCRT actual performance and budget",
+        "ERF riverbed housing outcomes",
+        "San Diego sweeps and health research",
+        "JAMA involuntary displacement simulation",
+        "Denver supportive-housing randomized trial and police costs",
+        "San Diego randomized cash-assistance evaluation",
+        "CAHOOTS calls, costs and closure",
+        "RTFH FY2025 data and street-outreach exit definitions",
+        "Oceanside HEART approved police-to-civilian transfer",
+        "Lemon Grove outreach and housing pilot",
+        "JAMA encampment economic model full text",
+        "San Diego photovoice hepatitis A study",
+        "NBER CAHOOTS working paper 33761",
+        "SDHC May 8 minutes: unique people and completed referrals"
+      ],
+      "local_fts_database": "analysis/v2/documents.sqlite",
+      "local_fts_queries": [
+        "\"outreach\" \"housing\"",
+        "\"Coordinated Street\"",
+        "\"Multidisciplinary\"",
+        "\"Encampment Resolution\"",
+        "\"Caltrans\" \"housing\"",
+        "\"monthly\" \"outreach\"",
+        "\"Coordinated Street\" \"housed\"",
+        "\"PATH\" \"placements\"",
+        "\"retention\" \"housing\""
+      ],
+      "acquisition_attempts": [
+        {
+          "id": "O01",
+          "title": "FY2025 SDHC annual appendix",
+          "url": "https://sdhc.org/wp-content/uploads/2025/11/FY-25-AR-Appendix-WEB.pdf",
+          "status": "failed",
+          "error": "403 Client Error: Forbidden for url: https://sdhc.org/wp-content/uploads/2025/11/FY-25-AR-Appendix-WEB.pdf"
+        },
+        {
+          "id": "O02",
+          "title": "FY2026 SDHC proposed budget",
+          "url": "https://sdhc.org/wp-content/uploads/2025/06/HAR25-005-SDHC-Proposed-Fiscal-Year-2026-Budget.pdf",
+          "status": "failed",
+          "error": "403 Client Error: Forbidden for url: https://sdhc.org/wp-content/uploads/2025/06/HAR25-005-SDHC-Proposed-Fiscal-Year-2026-Budget.pdf"
+        },
+        {
+          "id": "O03",
+          "title": "IBA FY2026 homelessness programs and funding revised",
+          "url": "https://www.sandiego.gov/sites/default/files/2025-08/25-26-rev-fy-2026-homelessness-programs-and-funding.pdf",
+          "file": "sources/strengthening/outcomes/O03.pdf",
+          "sha256": "007bd2db0e8f077f8555318a2d8cf1e79403ac1b7542e5dba8926ced73ec43aa",
+          "bytes": 333460,
+          "pages": 7,
+          "retrieved_at": "2026-10-13T18:41:30.905779+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O04",
+          "title": "OCA 20-009 City efforts to address homelessness",
+          "url": "https://www.sandiego.gov/sites/default/files/20-009_homelessness_0.pdf",
+          "file": "sources/strengthening/outcomes/O04.pdf",
+          "sha256": "e74439292d82e9cdb0ba87c35c7f1d3643c3b9291da107f6724f67caeaee3a49",
+          "bytes": 3054484,
+          "pages": 114,
+          "retrieved_at": "2026-10-13T18:41:31.186883+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O05",
+          "title": "SDHC FY2025 annual homelessness solutions",
+          "url": "https://sdhc.org/about-us/media-center/multimedia-reports/fy25-annual-report/homelessness-solutions/",
+          "status": "failed",
+          "error": "403 Client Error: Forbidden for url: https://sdhc.org/about-us/media-center/multimedia-reports/fy25-annual-report/homelessness-solutions/"
+        },
+        {
+          "id": "O06",
+          "title": "Oceanside HEART OPD to civilian budget transfer item26-1612",
+          "url": "https://oceanside.legistar.com/LegislationDetail.aspx?FullText=1&GUID=AEADF8FD-2F3A-4437-A8CE-8EAADB0DF295&ID=8172873&Options=&Search=",
+          "file": "sources/strengthening/outcomes/O06.html",
+          "sha256": "1415a39f0b80a0db463734bbb5ad5216d92269e08c7b56500363a8719f360215",
+          "bytes": 128474,
+          "pages": null,
+          "retrieved_at": "2026-10-13T18:41:31.524062+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O07",
+          "title": "Oceanside HEART position item26-1471",
+          "url": "https://oceanside.legistar.com/LegislationDetail.aspx?FullText=1&GUID=4FBD9831-9A17-407C-B191-4D49243AF1ED&ID=8032133",
+          "file": "sources/strengthening/outcomes/O07.html",
+          "sha256": "23ab6841ed6f3e3c71b5b39deee72903f8c88fdc0b7013b21d75a898843e1666",
+          "bytes": 313486,
+          "pages": null,
+          "retrieved_at": "2026-10-13T18:41:32.788216+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O08",
+          "title": "County Mobile Crisis Response Teams",
+          "url": "https://www.sandiegocounty.gov/mcrt/",
+          "file": "sources/strengthening/outcomes/O08.html",
+          "sha256": "fbc14978900d34cde47d8ce4239a5923acd9e028841766a2fe4278880c3a6384",
+          "bytes": 84242,
+          "pages": null,
+          "retrieved_at": "2026-10-13T18:41:30.817020+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O09",
+          "title": "City homelessness dashboard landing",
+          "url": "https://www.sandiego.gov/homelessness-strategies-and-solutions",
+          "file": "sources/strengthening/outcomes/O09.html",
+          "sha256": "8c406fed646d7cfa0d7cc1105212b9ffb5163012de1de35c0dd4f41701e73d22",
+          "bytes": 151895,
+          "pages": null,
+          "retrieved_at": "2026-10-13T18:41:31.514834+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O10",
+          "title": "County FY2024-25 adopted plan",
+          "url": "https://www.sandiegocounty.gov/content/dam/sdc/fg3/budget/2024-2025%20Adopted.pdf",
+          "file": "sources/strengthening/outcomes/O10.pdf",
+          "sha256": "0e73644e702588372d0688e2a5efbad4373efd35c51ede6a5914adeddf74eb68",
+          "bytes": 19427386,
+          "pages": 668,
+          "retrieved_at": "2026-10-13T18:41:34.246092+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O11",
+          "title": "FY2025 SDHC annual appendix alternate canonical host",
+          "url": "https://www.sdhc.org/wp-content/uploads/2025/11/FY-25-AR-Appendix-WEB.pdf",
+          "status": "failed",
+          "error": "403 Client Error: Forbidden for url: https://www.sdhc.org/wp-content/uploads/2025/11/FY-25-AR-Appendix-WEB.pdf"
+        },
+        {
+          "id": "O12",
+          "title": "FY2026 SDHC proposed budget alternate host",
+          "url": "https://www.sdhc.org/wp-content/uploads/2025/06/HAR25-005-SDHC-Proposed-Fiscal-Year-2026-Budget.pdf",
+          "status": "failed",
+          "error": "403 Client Error: Forbidden for url: https://www.sdhc.org/wp-content/uploads/2025/06/HAR25-005-SDHC-Proposed-Fiscal-Year-2026-Budget.pdf"
+        },
+        {
+          "id": "O13",
+          "title": "Oceanside August2026 approved outreach staff report",
+          "url": "https://oceanside.legistar.com/View.ashx?M=F&ID=15769619&GUID=6AFAFDC0-53C1-42C7-87BF-6056FDA6B2F5",
+          "file": "sources/strengthening/outcomes/O13.pdf",
+          "sha256": "7575eb57024f5727751b7ea2543d8c1ef2a4f61b7a597026313a892ada1e7cea",
+          "bytes": 136135,
+          "pages": 3,
+          "retrieved_at": "2026-10-13T18:43:41.578879+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O14",
+          "title": "Oceanside May2026 approved HEARTstaff report",
+          "url": "https://oceanside.legistar.com/View.ashx?M=F&ID=15486302&GUID=ED77A633-A917-4FB1-8EEC-E9853E707439",
+          "file": "sources/strengthening/outcomes/O14.pdf",
+          "sha256": "145bfb481b1bbc9e2babd9f532e400f8345ccdc82611d6eb5cfea0a016436233",
+          "bytes": 197643,
+          "pages": 5,
+          "retrieved_at": "2026-10-13T18:43:41.814150+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O15",
+          "title": "Oceanside original Interfaith social worker agreement",
+          "url": "https://oceanside.legistar.com/View.ashx?M=F&ID=15769575&GUID=426170BB-611D-4644-BFF9-CF01010B0982",
+          "file": "sources/strengthening/outcomes/O15.pdf",
+          "sha256": "8dcee7864572c0c8eceb2f508aa0c406c2719841e39083e17957a9ebb48ccda3",
+          "bytes": 5160436,
+          "pages": 21,
+          "retrieved_at": "2026-10-13T18:43:46.744762+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O16",
+          "title": "Oceanside amended Interfaith social worker agreement",
+          "url": "https://oceanside.legistar.com/View.ashx?M=F&ID=15769564&GUID=92EDBC74-72BE-4346-9C32-71242BC0B6EC",
+          "file": "sources/strengthening/outcomes/O16.pdf",
+          "sha256": "7d1b5aea04b62aea21eeb22712dd8fb3d821e402543745e14996a3ee55a32ee6",
+          "bytes": 301117,
+          "pages": 6,
+          "retrieved_at": "2026-10-13T18:43:42.059968+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O17",
+          "title": "City homelessness data reports",
+          "url": "https://www.sandiego.gov/homelessness-strategies-and-solutions/data-reports",
+          "file": "sources/strengthening/outcomes/O17.html",
+          "sha256": "456682dcb3254a4e3001e5c5ace4b3cc884cf08520c9d1d2ccbcaa522839399e",
+          "bytes": 143219,
+          "pages": null,
+          "retrieved_at": "2026-10-13T18:43:40.622547+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O18",
+          "title": "County MCRT four year results",
+          "url": "https://www.countynewscenter.com/mobile-crisis-response-program-celebrates-four-years/",
+          "file": "sources/strengthening/outcomes/O18.html",
+          "sha256": "14ad128fc4b6725daa5bf541423430123fede2dbd20a97da938e5840201e6d0a",
+          "bytes": 171681,
+          "pages": null,
+          "retrieved_at": "2026-10-13T18:43:41.813563+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O19",
+          "title": "Oceanside Encampment Resolution Grant primary performance update",
+          "url": "https://www.ci.oceanside.ca.us/government/housing-neighborhood-services/homeless-services/program-services/state-encampment-resolution-grant",
+          "status": "failed",
+          "error": "403 Client Error: Forbidden for url: https://www.ci.oceanside.ca.us/government/housing-neighborhood-services/homeless-services/program-services/state-encampment-resolution-grant"
+        },
+        {
+          "id": "O20",
+          "title": "Vancouver prospective cohort sweep and housing study primary PLOS",
+          "url": "https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.1005033",
+          "file": "sources/strengthening/outcomes/O20.html",
+          "sha256": "4a846945fbca01f5682c402a367f56d54909a00a08d713041c41aa36294340a4",
+          "bytes": 194375,
+          "pages": null,
+          "retrieved_at": "2026-10-13T18:43:41.139068+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O21",
+          "title": "Seattle clearance longitudinal outreach preprint August2026",
+          "url": "https://arxiv.org/pdf/2608.04076",
+          "file": "sources/strengthening/outcomes/O21.pdf",
+          "sha256": "eb8a3c44b862af1a16db3d2a53f63a10a643e963e3d786fd2e445b673e61e332",
+          "bytes": 2800771,
+          "pages": 35,
+          "retrieved_at": "2026-10-13T18:43:41.815095+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O22",
+          "title": "Denver RCT supportive housing costs and offsets primary evaluator",
+          "url": "https://www.urban.org/sites/default/files/publication/104499/costs-and-offsets-of-providing-supportive-housing-to-break-the-homelessness-jail-cycle_0.pdf",
+          "file": "sources/strengthening/outcomes/O22.pdf",
+          "sha256": "e9460bf051d98f6096c8f82bdd1f3d3d06b0a0491e2939eef60964b6fabeb4cc",
+          "bytes": 983834,
+          "pages": 49,
+          "retrieved_at": "2026-10-13T18:43:42.522659+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O23",
+          "title": "JAMA2023 involuntary displacement simulation primary author copy",
+          "url": "https://hpri.usc.edu/wp-content/uploads/2023/09/Health-Effects-of-Involuntary-Displacement.pdf",
+          "file": "sources/strengthening/outcomes/O23.pdf",
+          "sha256": "da6998b30f4a734210dc5ce8b5000089447bfcca0404ef2cf1ad7230e464229b",
+          "bytes": 421906,
+          "pages": 9,
+          "retrieved_at": "2026-10-13T18:43:42.244461+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O24",
+          "title": "County RAFT randomized cash program evaluation",
+          "url": "https://www.sandiegocounty.gov/content/sdc/oepa/RAFT_Report.html",
+          "file": "sources/strengthening/outcomes/O24.html",
+          "sha256": "d693b35288b382f1c4c2a7d0c41f30e70f82c683c2980822df6a2b42ce760994",
+          "bytes": 53028,
+          "pages": null,
+          "retrieved_at": "2026-10-13T18:43:42.129490+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O25",
+          "title": "RTFH2025 Homelessness Crisis Response System Data and Performance Report",
+          "url": "https://www.rtfhsd.org/wp-content/uploads/2026/07/2025-Data-Performance-Report_Email.pdf",
+          "file": "sources/strengthening/outcomes/O25.pdf",
+          "sha256": "f4488ac5485b40b85fc0a3267fff4f67d443fa6bcb90541a7b564fa51b0350c5",
+          "bytes": 7764617,
+          "pages": 33,
+          "retrieved_at": "2026-10-13T18:45:48.179196+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O26",
+          "title": "RTFH2025 report publisher press release",
+          "url": "https://www.rtfhsd.org/new-report-shows-gains-in-housing-outcomes-even-as-homelessness-system-faces-sustained-demand/",
+          "file": "sources/strengthening/outcomes/O26.html",
+          "sha256": "bfcc2faa42af5af985e38d921a6c9583ea4095e75dbbc46eea8a2c94ca5a40e8",
+          "bytes": 108069,
+          "pages": null,
+          "retrieved_at": "2026-10-13T18:45:47.466090+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O27",
+          "title": "San Diego county RAFT randomized evaluation full report",
+          "url": "https://www.sandiegocounty.gov/content/dam/sdc/oepa/docs/RAFT%20Evaluation_Report_wExecSummary.pdf",
+          "file": "sources/strengthening/outcomes/O27.pdf",
+          "sha256": "fc211fb1825f8cfe31bafd4e6974cfb4d6ee9b44455c0cd8f85b9b2e979796ba",
+          "bytes": 648155,
+          "pages": 25,
+          "retrieved_at": "2026-10-13T18:45:48.211515+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O28",
+          "title": "MCRT county FY2025-27 adopted budget",
+          "url": "https://www.sandiegocounty.gov/content/dam/sdc/fg3/budget/2025-2027%20Adopted.pdf",
+          "status": "failed",
+          "error": "404 Client Error: Not Found for url: https://www.sandiegocounty.gov/content/dam/sdc/fg3/budget/2025-2027%20Adopted.pdf"
+        },
+        {
+          "id": "O29",
+          "title": "San Diego photovoice youth study hepatitisA outbreak full PMC",
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7356680/",
+          "status": "failed",
+          "error": "403 Client Error: Forbidden for url: https://pmc.ncbi.nlm.nih.gov/articles/PMC7356680/"
+        },
+        {
+          "id": "O30",
+          "title": "Longitudinal LA police and sweep psychosocial health publisher original",
+          "url": "https://www.sciencedirect.com/science/article/pii/S0277953626001085",
+          "status": "failed",
+          "error": "403 Client Error: Forbidden for url: https://www.sciencedirect.com/science/article/pii/S0277953626001085"
+        },
+        {
+          "id": "O31",
+          "title": "JAMA2025 encampment health economic model publisher original",
+          "url": "https://jamanetwork.com/journals/jamanetworkopen/fullarticle/2835707",
+          "status": "failed",
+          "error": "403 Client Error: Forbidden for url: https://jamanetwork.com/journals/jamanetworkopen/fullarticle/2835707"
+        },
+        {
+          "id": "O32",
+          "title": "Oceanside ERF grant alternative official host",
+          "url": "https://www.oceanside.gov/government/housing-neighborhood-services/homeless-services/program-services/state-encampment-resolution-grant",
+          "status": "failed",
+          "error": "HTTPSConnectionPool(host='www.oceanside.gov', port=443): Max retries exceeded with url: /government/housing-neighborhood-services/homeless-services/program-services/state-encampment-resolution-grant (Caused by NameResolutionError(\"HTTPSConnection(host='www.oceanside.gov', port=443): Failed to resolve 'www.oceanside.gov' ([Errno 8] nodename nor servname provided, or not known)\"))"
+        },
+        {
+          "id": "O33",
+          "title": "County2026 homeless solutions comprehensive update item26-314",
+          "url": "https://sdcounty.legistar.com/LegislationDetail.aspx?FullText=1&GUID=F0DDCB2A-962D-40E0-8463-9B0F4818F984&ID=8024235&Options=&Search=",
+          "file": "sources/strengthening/outcomes/O33.html",
+          "sha256": "6a362733882aa62c2f1ec17ec47596874cd16c23ee1b3c38556ba8b0dfe050f7",
+          "bytes": 1857857,
+          "pages": null,
+          "retrieved_at": "2026-10-13T18:45:56.604625+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O34",
+          "title": "University of Oregon 2026 CAHOOTS primary research overview",
+          "url": "https://cas.uoregon.edu/news/de-escalation-program-saves-cities-money-increases-public-safety",
+          "file": "sources/strengthening/outcomes/O34.html",
+          "sha256": "875a8a48a5f077852d4310cc91c9b6ae357425be27872d9217f11209d6112770",
+          "bytes": 67426,
+          "pages": null,
+          "retrieved_at": "2026-10-13T18:45:48.188677+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O35",
+          "title": "Eugene official CAHOOTS closure gap analysis",
+          "url": "https://www.eugene-or.gov/DocumentCenter/View/80917/Gap-Analysis-of-Eugenes-Crisis-Response-Services-Post-CAHOOTS-Closure",
+          "status": "failed",
+          "error": "403 Client Error: Forbidden for url: https://www.eugene-or.gov/DocumentCenter/View/80917/Gap-Analysis-of-Eugenes-Crisis-Response-Services-Post-CAHOOTS-Closure"
+        },
+        {
+          "id": "O36",
+          "title": "CAHOOTS primary evaluator NBER working paper33761",
+          "url": "https://www.nber.org/system/files/working_papers/w33761/w33761.pdf",
+          "file": "sources/strengthening/outcomes/O36.pdf",
+          "sha256": "e8d50c18c1c9e2fe95f333eb3aa53573032a52b624a7a63f2afa0a6c11b813f9",
+          "bytes": 1182546,
+          "pages": 59,
+          "retrieved_at": "2026-10-13T18:46:29.750039+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O37",
+          "title": "RTFH Lemon Grove coordinated housing effort primary account",
+          "url": "https://www.rtfhsd.org/collaborative-housing-effort-helps-dozens-exit-homelessness-in-lemon-grove/",
+          "file": "sources/strengthening/outcomes/O37.html",
+          "sha256": "746b9e33620dec4f8927e3150c04827e26d85b5904d4668a3277a6b0af37b9f7",
+          "bytes": 109508,
+          "pages": null,
+          "retrieved_at": "2026-10-13T18:46:30.215402+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O38",
+          "title": "2025 Mayor progress report",
+          "url": "https://www.sandiego.gov/sites/default/files/2026-01/2025-mayor-progress-report.pdf",
+          "file": "sources/strengthening/outcomes/O38.pdf",
+          "sha256": "ed551ff41399aba7f9c4160d466c17089db7b3e031eb9f9d57585ffc63110fee",
+          "bytes": 7283778,
+          "pages": 8,
+          "retrieved_at": "2026-10-13T18:46:31.524329+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O39",
+          "title": "CAHOOTS latest primary author draft",
+          "url": "https://yotamshemtov.github.io/files/cahoots.pdf",
+          "status": "failed",
+          "error": "404 Client Error: Not Found for url: https://yotamshemtov.github.io/files/cahoots.pdf"
+        },
+        {
+          "id": "O40",
+          "title": "County Lemon Grove outreach pilot final outcomes item25-593",
+          "url": "https://sdcounty.legistar.com/LegislationDetail.aspx?FullText=1&GUID=D1357694-2C15-4E49-B9D4-A3B6DBF87405&ID=7733435&Options=&Search=",
+          "file": "sources/strengthening/outcomes/O40.html",
+          "sha256": "f5e047ac90161d0b432f839417b94c8758e3ce5c9aaaa97827812c0efce56014",
+          "bytes": 1794523,
+          "pages": null,
+          "retrieved_at": "2026-10-13T18:48:36.982942+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O41",
+          "title": "RTFH Oceanside direct housing model June2025 primaryprovider",
+          "url": "https://www.rtfhsd.org/from-encampment-to-housing-coordinated-effort-in-oceanside-first-of-its-kind-in-county/",
+          "file": "sources/strengthening/outcomes/O41.html",
+          "sha256": "9f47940329f4f6a6263edd2ccc5ceacb868567ab634fb9bbfc759dcec95a06e7",
+          "bytes": 136437,
+          "pages": null,
+          "retrieved_at": "2026-10-13T18:48:37.485907+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O42",
+          "title": "State public accountability SanDiego homelessness dashboard",
+          "url": "https://www.accountability.ca.gov/county/san-diego/homelessness/",
+          "file": "sources/strengthening/outcomes/O42.html",
+          "sha256": "b1ca7377801035a848c0992caee69f85279980aab7fd0189d8a3eebe76157e6f",
+          "bytes": 26671,
+          "pages": null,
+          "retrieved_at": "2026-10-13T18:48:37.687080+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O43",
+          "title": "County2025 GeneralPlan annual progress",
+          "url": "https://www.sandiegocounty.gov/content/dam/sdc/pds/advance/GeneralPlan/2025GPAPR.pdf",
+          "file": "sources/strengthening/outcomes/O43.pdf",
+          "sha256": "7c3d68386e53ead37e325f9cdbad0fdb477381bfde04a8392b8e875f3a901963",
+          "bytes": 5170690,
+          "pages": 229,
+          "retrieved_at": "2026-10-13T18:48:38.877371+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O44",
+          "title": "JAMA2025 economic encampment model full author XML viaEuropePMC",
+          "url": "https://www.ebi.ac.uk/europepmc/webservices/rest/PMC12205401/fullTextXML",
+          "file": "sources/strengthening/outcomes/O44.xml",
+          "sha256": "b9d07312b95140a88770be34947292a1b3779a1447ba62a58a928f98f05779d1",
+          "bytes": 128951,
+          "format": "xml",
+          "pages": null,
+          "retrieved_at": "2026-10-13T18:49:15.779511+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O45",
+          "title": "San Diego photovoice youth study full author XML viaEuropePMC",
+          "url": "https://www.ebi.ac.uk/europepmc/webservices/rest/PMC7369867/fullTextXML",
+          "file": "sources/strengthening/outcomes/O45.xml",
+          "sha256": "9e18254507e509257700743bc30e9fa99cfdec2e368c27b3eaf81d69713958ad",
+          "bytes": 155625,
+          "format": "xml",
+          "pages": null,
+          "retrieved_at": "2026-10-13T18:49:17.556699+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "O46",
+          "title": "SDHC regular meeting minutes May8,2026 unique shelter seekers",
+          "url": "https://sdhc.org/wp-content/uploads/2026/05/5-8-2026-SDHC-Regular-Meeting-Minutes-final.pdf",
+          "file": "sources/strengthening/outcomes/O46.pdf",
+          "sha256": "7c59b6d434e8e69e4f8b2f3148e1d5931b7d4a440ebc54cc427069a78b45c98c",
+          "bytes": 180772,
+          "pages": 6,
+          "status": "acquired",
+          "access_method": "Preserved userprovided NextRequest download; official publisher public URL independently found via search; original acquisition timestamp unknown",
+          "existing_id": "DL7c59b6d434e8",
+          "retrieved_at": "2026-10-13T18:52:34.882035+00:00"
+        }
+      ],
+      "notes": [
+        "Conclusions use identified primary records.",
+        "SDHC direct downloads returned 403; the May 8 original in Downloads was preserved and independently matched to the official public URL.",
+        "Full scientific XML was obtained from official EuropePMC after direct archive/publisher access failed.",
+        "The initial unverified PMC identifier O29 is not used; correct identifier PMC7369867 was acquired as O45.",
+        "No exhaustive review of the entire web or NextRequest corpus is claimed."
+      ]
+    },
+    "outcomes/search-log-addendum.json": {
+      "created_at": "2026-10-13T19:40:15.118736+00:00",
+      "scope": "Finite public primary-source acquisition; no external contacts or new records requests; writes limited to assigned outcomes directories.",
+      "sources_acquired": [
+        {
+          "id": "CDMA01",
+          "title": "2025 signedCity-CaltransDMAcleancontractrelease",
+          "url": "https://sandiego.nextrequest.com/documents/50850918",
+          "file": "sources/strengthening/outcomes/current-dma/CDMA01.pdf",
+          "sha256": "2b441d5c6596aa5e07082423ee8188f02d7fa389cd5d8a3de430667b130091e3",
+          "bytes": 1758891,
+          "pages": 18,
+          "retrieved_at": "2026-10-13T19:23:41.564348+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "CDMA02",
+          "title": "CityJuly29, 2026 DMArenewalannouncementPDF",
+          "url": "https://www.sandiego.gov/sites/default/files/2026-07/2026-7-29-city-of-san-diego-caltrans-mark-one-year-of-successful-partnership-renew-agreement-to-address-freeway-encampments.pdf",
+          "file": "sources/strengthening/outcomes/current-dma/CDMA02.pdf",
+          "sha256": "0f4c4623f47b891ba9e3528426ead06ea1597c3ac2168064e8148bfdac3a8fee",
+          "bytes": 173366,
+          "pages": 3,
+          "retrieved_at": "2026-10-13T19:23:42.052234+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "CDMA03",
+          "title": "GovernorJuly28, 2026 DMApartnershipannouncement",
+          "url": "https://www.gov.ca.gov/2026/07/28/governor-newsom-expands-statewide-partnerships-with-additional-cities-to-clean-up-encampments-on-highways/",
+          "status": "failed",
+          "error": "403 Client Error: Forbidden for url: https://www.gov.ca.gov/2026/07/28/governor-newsom-expands-statewide-partnerships-with-additional-cities-to-clean-up-encampments-on-highways/"
+        },
+        {
+          "id": "CDMA04",
+          "title": "HeySoCalCaltransspokesmanreportedFY 2027 reimbursementlead",
+          "url": "https://heysocal.com/2026/07/28/state-funds-highway-encampment-removals-in-3-more-socal-cities/",
+          "file": "sources/strengthening/outcomes/current-dma/CDMA04.html",
+          "sha256": "ebcd0812e1222c7f6e4cbf2f593a19fd9f61ecc819698ec8a89a5d347e0ba581",
+          "bytes": 244936,
+          "pages": null,
+          "retrieved_at": "2026-10-13T19:23:42.687446+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "CDMA05",
+          "title": "IBAFY 2026 proposedbudgetreviewCaltransOutreachoutcomes",
+          "url": "https://www.sandiego.gov/sites/default/files/2025-04/review-of-fy26-proposed-budget.pdf",
+          "file": "sources/strengthening/outcomes/current-dma/CDMA05.pdf",
+          "sha256": "c99c0f36ed347fc6ef3ff30640c103d7904903803018c2398f46e308d8d4af12",
+          "bytes": 11500589,
+          "pages": 255,
+          "retrieved_at": "2026-10-13T19:23:45.780302+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "CDMA06",
+          "title": "June 3, 2025 BRC May 8 referral responses: Caltrans outreach baseline and outcomes",
+          "url": "https://www.sandiego.gov/sites/default/files/2025-06/fy26-brc-referral-responses-day4-may-2025.pdf",
+          "file": "sources/strengthening/outcomes/current-dma/CDMA06.pdf",
+          "sha256": "2ed8daaef9981fb721a12684382b6def845cb256f1efcd15b4c62061 cb1fa72c",
+          "bytes": 165237,
+          "pages": 2,
+          "retrieved_at": "2026-10-13T19:27:31.191899+00:00",
+          "status": "acquired"
+        },
+        {
+          "id": "CDMA07",
+          "title": "Original October 2021 CityNet Caltrans outreach agreement",
+          "url": "https://sandiego.nextrequest.com/documents/9765089",
+          "retrieved_at": "2026-10-13T19:31:42.264180+00:00",
+          "file": "sources/strengthening/outcomes/current-dma/CDMA07.pdf",
+          "sha256": "4144b2abf0375bc55852315c7a43c2cdf8e000f73bc80e8c73db07e265fc35b7",
+          "bytes": 2344188,
+          "pages": 46,
+          "status": "acquired"
+        },
+        {
+          "id": "CDMA08",
+          "title": "Executed July 2023 CityNet Caltrans outreach agreement from user NextRequest download",
+          "url": "/Users/davidcondrey/Downloads/Executed_CityNet Coordinated Street Outreach Svcs Agreement.pdf",
+          "retrieved_at": "2026-10-13T19:31:43.598271+00:00",
+          "duplicate_of": "DL8e00bdd5c0af",
+          "provenance": "User-provided NextRequest download; public request mapping not yet established for this 2023 renewal.",
+          "file": "sources/strengthening/outcomes/current-dma/CDMA08.pdf",
+          "sha256": "8e00bdd5c0afb7dd6a733a73ab3d8dd4a15f2d9c3799d96296fc1b4057d4355f",
+          "bytes": 721017,
+          "pages": 43,
+          "status": "acquired"
+        },
+        {
+          "id": "CDMA09",
+          "title": "City May 1, 2026 release: Jul 2025-Mar 2026 Caltrans outreach outcomes",
+          "url": "https://www.sandiego.gov/sites/default/files/2026-05/2026-5-1-street-homelessness-down-two-years-in-a-row-in-city-of-san-diego.pdf",
+          "retrieved_at": "2026-10-13T19:31:43.715892+00:00",
+          "file": "sources/strengthening/outcomes/current-dma/CDMA09.pdf",
+          "sha256": "f2518b06c63396bc033831af892211afaca7d293f2f02193df01a003a4862dbe",
+          "bytes": 186688,
+          "pages": 4,
+          "status": "acquired"
+        },
+        {
+          "id": "CDMA10",
+          "title": "April 13, 2026 VOSD: current Caltrans repeated clearance and spending lead",
+          "url": "https://voiceofsandiego.org/2026/04/13/city-crews-have-cleared-a-freeway-encampment-nearly-70-times-people-keep-returning/",
+          "retrieved_at": "2026-10-13T19:31:44.023698+00:00",
+          "file": "sources/strengthening/outcomes/current-dma/CDMA10.html",
+          "sha256": "97855e889d8841799bb6fbaaf945f3654b16c07f0cab50cfb78a52bcb34bebea",
+          "bytes": 379869,
+          "pages": null,
+          "status": "acquired"
+        }
+      ],
+      "public_nextrequest_query_coverage": [
+        {
+          "term": "delegated maintenance",
+          "total": 8,
+          "raw_records_read": 8,
+          "pages": 1,
+          "complete": true
+        },
+        {
+          "term": "Caltrans renewal",
+          "total": 1,
+          "raw_records_read": 1,
+          "pages": 1,
+          "complete": true
+        },
+        {
+          "term": "Caltrans reimbursement",
+          "total": 1,
+          "raw_records_read": 1,
+          "pages": 1,
+          "complete": true
+        },
+        {
+          "term": "EDMA",
+          "total": 44,
+          "raw_records_read": 44,
+          "pages": 1,
+          "complete": true
+        },
+        {
+          "term": "freeway encampment",
+          "total": 1,
+          "raw_records_read": 1,
+          "pages": 1,
+          "complete": true
+        },
+        {
+          "term": "Caltrans agreement",
+          "total": 4,
+          "raw_records_read": 4,
+          "pages": 1,
+          "complete": true
+        },
+        {
+          "term": "Caltrans invoice",
+          "total": 2,
+          "raw_records_read": 2,
+          "pages": 1,
+          "complete": true
+        },
+        {
+          "term": "Caltrans",
+          "total": 41,
+          "raw_records_read": 41,
+          "pages": 1,
+          "complete": true
+        },
+        {
+          "term": "City Net",
+          "total": 154,
+          "raw_records_read": 154,
+          "pages": 2,
+          "complete": true
+        },
+        {
+          "term": "Citynet",
+          "total": 17,
+          "raw_records_read": 17,
+          "pages": 1,
+          "complete": true
+        },
+        {
+          "term": "Caltrans after action",
+          "total": 3,
+          "raw_records_read": 3,
+          "pages": 1,
+          "complete": true
+        }
+      ],
+      "request_document_pagination": "25 raw document records/page; counted raw records until reportedtotal_documents_count, never public-filtered document count. All logged relevant release-family reads completed.",
+      "web_searches": [
+        {
+          "query": "\"Caltrans\" \"98.3%\" San Diego outreach",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "\"Citynet\" \"Caltrans\" \"2024\" outcomes San Diego 98.3",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "site.sandiego.gov \"Caltrans Outreach\" \"outcomes\"",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "\"EDMA-26\" \"San Diego\" agreement",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "\"San Diego\" \"Caltrans\" \"2026\" \"delegated maintenance agreement\" filetype:pdf",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "\"San Diego\" \"Caltrans\" \"2026\" \"EDMA\" agreement",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "site.sandiego.nextrequest.com \"Caltrans\" \"2026\" \"agreement\"",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "site.sandiego.gov \"Caltrans\" \"renewal\" \"2026\"",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "\"San Diego\" \"Caltrans outreach\" \"98\" -site:dof.ca.gov -site:catc.ca.gov",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "\"San Diego\" \"Citynet\" \"housing\" \"2025\" Caltrans",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "\"Caltrans\" \"outreach\" \"1.7%\" San Diego",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "site.sandiego.gov \"Caltrans\" \"outreach\" \"clients\" \"2025\"",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "site.sandiego.gov \"Caltrans\" \"2025\" \"98.3\" -site:dof.ca.gov",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "site.sandiego.gov \"Caltrans\" \"May 8, 2025\" outreach presentation",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "site.citynet.org \"San Diego\" \"Caltrans\" 2024",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "site.dot.ca.gov \"San Diego\" \"delegated maintenance\" \"2026\"",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "site.docs.sandiego.gov \"Caltrans\" \"2026\" \"maintenance\" encampment",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "site.sandiego.gov \"July 16, 2026\" Caltrans",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "site.dot.ca.gov \"San Diego\" \"$800,000\" \"2026\"",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "site.dot.ca.gov \"San Diego\" \"renewed\" encampments agreement",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "site.sandiego.gov \"contracts\" \"Caltrans\" \"2026\" agreement encampment",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "site.sandiego.gov \"delegated maintenance\" \"agreement\" -site:sandiego.gov/sites/default/files/2026-04 -site:sandiego.gov/sites/default/files/2025-04",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "site.dot.ca.gov \"Encampment Delegated Maintenance Agreements\" San Diego documents",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "site.sandiego.nextrequest.com \"after action\" \"Caltrans\"",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "site.sandiego.gov \"Caltrans\" \"March 30, 2026\"",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "\"Caltrans\" \"67\" \"Imperial\" San Diego",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "site.sandiego.nextrequest.com \"Caltrans\" \"abatements\" \"2026\"",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "site.sandiego.gov \"Caltrans\" \"650,000\"",
+          "outcome": "Assessment and programme announcement sources preserved; current 2026 signed renewal and originating sweep ledger not acquired."
+        },
+        {
+          "query": "\"delegated maintenance\" \"San Diego\" 2026",
+          "domains": [
+            "sandiego.gov",
+            "docs.sandiego.gov",
+            "dot.ca.gov"
+          ],
+          "outcome": "No current executed San Diego renewal, originating 67-sweep register or paid reimbursement ledger acquired."
+        },
+        {
+          "query": "\"Caltrans\" \"July 16, 2026\"",
+          "domains": [
+            "sandiego.gov",
+            "docs.sandiego.gov",
+            "dot.ca.gov"
+          ],
+          "outcome": "No current executed San Diego renewal, originating 67-sweep register or paid reimbursement ledger acquired."
+        },
+        {
+          "query": "\"Caltrans\" \"67\" \"Imperial\"",
+          "domains": [
+            "sandiego.gov",
+            "docs.sandiego.gov"
+          ],
+          "outcome": "No current executed San Diego renewal, originating 67-sweep register or paid reimbursement ledger acquired."
+        },
+        {
+          "query": "\"Caltrans\" \"$650,000\"",
+          "domains": [
+            "sandiego.gov",
+            "docs.sandiego.gov"
+          ],
+          "outcome": "No current executed San Diego renewal, originating 67-sweep register or paid reimbursement ledger acquired."
+        }
+      ],
+      "primary_leads_pursued": [
+        {
+          "lead": "VOSDApril13currentprogrammecounts",
+          "result": "All article links inspected. No originatingregister/NextRequest/AAR/invoice attachment; City-attributed image onlyDMA boundary map. Relevant initialpressannouncement andSDHC links identify programmecontext but do not substantiate67 independently."
+        },
+        {
+          "lead": "Local98.3assessment",
+          "result": "IBA PDF 180/printed176 plus June 3 BRCresponsePDF1 preserved and visuallyverified. Older executedcontracts confirm reporting duties/2023 reportingonlybenchmarks. No underlyingpercentdenominator or window found in reviewed sources."
+        },
+        {
+          "lead": "FY 2026 adoption",
+          "result": "Disjoint propertyagent reviewed finaladoption/addbacks; I independently checked CALB01PDF6 numericreduction and referenced durableartifact."
+        },
+        {
+          "lead": "FY 2027 adopted revenue",
+          "result": "Budgetagent B10PDF7/printed228 has incremental$100kESDrevenue/+2FTE/$479380expenditures; this is not totalcurrentreimbursement or signedcap."
+        }
+      ],
+      "partial_access": [
+        {
+          "source_id": "CDMA03",
+          "status": "403 directoriginal retrieval; accessibletext read viawebbrowse; no originalarchived."
+        }
+      ],
+      "negative_findings_are_not_absence_proof": true,
+      "local_corpus_queries": [
+        {
+          "database": "analysis/v2/documents.sqlite",
+          "queries": [
+            "Caltrans ANDoutreach",
+            "Citynet",
+            "98.3"
+          ],
+          "result": "FoundJuly 2023 executedCityNet download clauses; no98.3 source in priorindexedcorpus."
+        }
+      ],
+      "validation": [
+        {
+          "id": "CDMA01",
+          "sha256_matches": true,
+          "bytes_match": true
+        },
+        {
+          "id": "CDMA02",
+          "sha256_matches": true,
+          "bytes_match": true
+        },
+        {
+          "id": "CDMA04",
+          "sha256_matches": true,
+          "bytes_match": true
+        },
+        {
+          "id": "CDMA05",
+          "sha256_matches": true,
+          "bytes_match": true
+        },
+        {
+          "id": "CDMA06",
+          "sha256_matches": true,
+          "bytes_match": true
+        },
+        {
+          "id": "CDMA07",
+          "sha256_matches": true,
+          "bytes_match": true
+        },
+        {
+          "id": "CDMA08",
+          "sha256_matches": true,
+          "bytes_match": true
+        },
+        {
+          "id": "CDMA09",
+          "sha256_matches": true,
+          "bytes_match": true
+        },
+        {
+          "id": "CDMA10",
+          "sha256_matches": true,
+          "bytes_match": true
+        }
+      ],
+      "domain_filter_note": "Earlier queries containing site.sandiego.gov are preserved exactly as entered; the dotted text is not a strict site: operator. A final finite search used explicit official-domain filters below."
+    },
+    "restrooms/budget/search-log.json": {
+      "research_date": "2026-10-13",
+      "local_index": [
+        {
+          "query": "\"Portland Loo\"",
+          "matches_screened": 0,
+          "matches": []
+        },
+        {
+          "query": "\"public restroom\"",
+          "matches_screened": 0,
+          "matches": []
+        },
+        {
+          "query": "\"portable restroom\"",
+          "matches_screened": 0,
+          "matches": []
+        },
+        {
+          "query": "\"restroom\" AND \"downtown\"",
+          "matches_screened": 0,
+          "matches": []
+        },
+        {
+          "query": "\"Civic Center\" AND \"restroom\"",
+          "matches_screened": 0,
+          "matches": []
+        },
+        {
+          "query": "\"handwashing\"",
+          "matches_screened": 7,
+          "matches": [
+            {
+              "source_id": "DL953cc388a852",
+              "title": "23-5783_2026-09-02 09_04_53 -0700/Order 4000191078.pdf",
+              "page": 2,
+              "snippet": "10/19/23, 3:19 PM\nOrder 4000191078\nhttps://s1.ariba.com/Buyer/render/1MH4RTAXW5GXL\n2/4\n2\nFY24 ADA\nHandwashing Sinks-\nSpecial ...\nContainer\nTrays-20th\n& B\n400\neach\nWednesday,\nAugust 23,\n2023 PDT\n$1.00\nUSD\n$400.00\nUSD\n$0.00\nUSD\n$400.00\nUSD\nFull Description … "
+            },
+            {
+              "source_id": "DL6c6617ac43e3",
+              "title": "25-9123_2026-09-02 09_02_07 -0700/20230627_Agenda Material_Item 58.PDF.pdf",
+              "page": 9,
+              "snippet": " … The County has asked cities “to locate encampments and provide \nhousing and/or more frequent cleaning along with handwashing stations and portable restrooms. \nOutreach workers also are identifying locations where increased sanitation would be beneficial.” 1 \nIn addition, in 2021 San Diego experienced an outbreak of shigellosis among … "
+            },
+            {
+              "source_id": "DL42386120f6bd",
+              "title": "25-9123_2026-09-02 09_02_07 -0700/20230613_Agenda Material_Item 613.PDF.pdf",
+              "page": 9,
+              "snippet": " … The County has asked cities “to locate encampments and provide \nhousing and/or more frequent cleaning along with handwashing stations and portable restrooms. \nOutreach workers also are identifying locations where increased sanitation would be beneficial.” 1 \nIn addition, in 2021 San Diego experienced an outbreak of shigellosis among … "
+            },
+            {
+              "source_id": "DL6c6617ac43e3",
+              "title": "25-9123_2026-09-02 09_02_07 -0700/20230627_Agenda Material_Item 58.PDF.pdf",
+              "page": 225,
+              "snippet": " … The law stipulates that additional safe sleeping or shelter spaces be in facilities that \ninclude water, handwashing stations, and portable toilets. Those in violation of the ordinance will \nbe issued a verbal or written warning before receiving an infraction citation, which is not to exceed \n$20. If violations … "
+            },
+            {
+              "source_id": "DL42386120f6bd",
+              "title": "25-9123_2026-09-02 09_02_07 -0700/20230613_Agenda Material_Item 613.PDF.pdf",
+              "page": 225,
+              "snippet": " … The law stipulates that additional safe sleeping or shelter spaces be in facilities that \ninclude water, handwashing stations, and portable toilets. Those in violation of the ordinance will \nbe issued a verbal or written warning before receiving an infraction citation, which is not to exceed \n$20. If violations … "
+            },
+            {
+              "source_id": "DL6c6617ac43e3",
+              "title": "25-9123_2026-09-02 09_02_07 -0700/20230627_Agenda Material_Item 58.PDF.pdf",
+              "page": 18,
+              "snippet": " … Additional Efforts to Reduce Homelessness with the Addition of Safe Sleeping Sites \nThis ordinance is part of a larger effort aimed at reducing the number of San Diego residents who \nare sleeping on San Diego streets without vital care and access to basic facilities, like restrooms and \nhandwashing … "
+            },
+            {
+              "source_id": "DL42386120f6bd",
+              "title": "25-9123_2026-09-02 09_02_07 -0700/20230613_Agenda Material_Item 613.PDF.pdf",
+              "page": 18,
+              "snippet": " … Additional Efforts to Reduce Homelessness with the Addition of Safe Sleeping Sites \nThis ordinance is part of a larger effort aimed at reducing the number of San Diego residents who \nare sleeping on San Diego streets without vital care and access to basic facilities, like restrooms and \nhandwashing … "
+            }
+          ]
+        },
+        {
+          "query": "\"restroom\" AND \"cost\"",
+          "matches_screened": 1,
+          "matches": [
+            {
+              "source_id": "DLa46852981774",
+              "title": "23-5783_2026-09-02 09_04_53 -0700/20th & B United Quote.pdf",
+              "page": 1,
+              "snippet": " … COST IS BASED ON A FULL MONTH IN ARREARS BILLING CYCLE\nRATES ARE ACCORDING TO THE CONTRACT\nADA HAND WASH SINK IS A SPECIALTY ITEM AT A DIFFERENT COST\nTOTAL ESTIMATED COST PER MONTH =16, 442.82\n Item\nUnit\nQuantity\nFrom\nThru\nUnit Price\nTotal Price\nStandard Restroom … "
+            }
+          ]
+        }
+      ],
+      "web_exact_queries": [
+        "site:sandiego.gov FY2027 \"Civic Center\" restrooms",
+        "site:sandiego.gov \"Portland Loo\" cost",
+        "site:sandiego.gov FY2026 \"portable restrooms\" handwashing",
+        "site:sandiego.gov \"FY2027\" \"Portable Restrooms\" \"Reduction\"",
+        "site:sandiego.gov \"FY2027\" \"Civic Center\" \"restroom\" \"Reduction\"",
+        "site:sandiego.gov \"FY2026\" \"Portable Restrooms\" \"400,000\"",
+        "site:sandiego.gov \"FY2027\" \"handwashing\"",
+        "site:sandiego.gov \"FY2027\" \"Civic Center\" \"restrooms\"",
+        "site:sandiego.gov \"fy27ab\" \"General Services\"",
+        "site:sandiego.gov \"fy26ab\" \"Portable Restrooms\"",
+        "site:sandiego.gov \"26-11\" \"handwashing\"",
+        "San Diego FY2027 budget portable restroom handwashing stations eliminated",
+        "San Diego FY2026 Civic Center restroom hours reduction 6 22 budget",
+        "site:sandiego.gov \"26-11\" \"Portable\"",
+        "site:sandiego.gov \"restroom\" \"FY 2027\" budget",
+        "site:sandiego.gov \"FY 2027\" \"Portable Restrooms\"",
+        "site:sandiego.gov \"FY2027\" \"Portable Restrooms\" \"750\"",
+        "site:sandiego.gov \"FY2027\" \"handwashing stations\" HSSD",
+        "site:sandiego.gov \"Civic Center\" \"restrooms\" \"244,567\"",
+        "site:sandiego.gov \"FY 2027\" \"Portable\" \"750,000\"",
+        "site:sandiego.gov \"FY2027\" \"restrooms\" \"HSSD\"",
+        "site:sandiego.gov \"FY2027\" \"homelessness\" \"funding\" \"restrooms\"",
+        "site:sandiego.gov \"portable restrooms\" \"2026\" \"$750\""
+      ],
+      "official_sources_followed": [
+        "FY2026/FY2027 adopted indexes and VolumeI/II links",
+        "Parks, HSSD, ESD and General Services adopted department budgets",
+        "FY2027 IBA proposed-budget review and June modification review",
+        "Official procurement index and executed janitorial/portable contracts",
+        "July2026 Civic Center CDBG capital-upgrade announcement",
+        "IBA23-27 and its attached Grand Jury report"
+      ],
+      "nextrequest_searches": [
+        {
+          "query": "restroom budget",
+          "total_count": 4,
+          "read_count": 4,
+          "truncated": false,
+          "candidates": []
+        },
+        {
+          "query": "restroom invoices",
+          "total_count": 1,
+          "read_count": 1,
+          "truncated": false,
+          "candidates": [
+            {
+              "request_id": "25-5904",
+              "url": "https://sandiego.nextrequest.com/requests/25-5904"
+            }
+          ]
+        },
+        {
+          "query": "Civic Center restrooms",
+          "total_count": 5,
+          "read_count": 5,
+          "truncated": false,
+          "candidates": [
+            {
+              "request_id": "24-6183",
+              "url": "https://sandiego.nextrequest.com/requests/24-6183"
+            },
+            {
+              "request_id": "24-7388",
+              "url": "https://sandiego.nextrequest.com/requests/24-7388"
+            },
+            {
+              "request_id": "24-5865",
+              "url": "https://sandiego.nextrequest.com/requests/24-5865"
+            },
+            {
+              "request_id": "23-1045",
+              "url": "https://sandiego.nextrequest.com/requests/23-1045"
+            }
+          ]
+        },
+        {
+          "query": "Portland Loo",
+          "total_count": 5,
+          "read_count": 5,
+          "truncated": false,
+          "candidates": [
+            {
+              "request_id": "23-3592",
+              "url": "https://sandiego.nextrequest.com/requests/23-3592"
+            }
+          ]
+        },
+        {
+          "query": "10090201",
+          "total_count": 13,
+          "read_count": 13,
+          "truncated": false,
+          "candidates": [
+            {
+              "request_id": "24-5865",
+              "url": "https://sandiego.nextrequest.com/requests/24-5865"
+            },
+            {
+              "request_id": "24-6183",
+              "url": "https://sandiego.nextrequest.com/requests/24-6183"
+            }
+          ]
+        },
+        {
+          "query": "portable toilets",
+          "total_count": 13,
+          "read_count": 13,
+          "truncated": false,
+          "candidates": [
+            {
+              "request_id": "26-1674",
+              "url": "https://sandiego.nextrequest.com/requests/26-1674"
+            }
+          ]
+        }
+      ],
+      "nextrequest_release_families": [
+        {
+          "request_id": "25-5904",
+          "url": "https://sandiego.nextrequest.com/requests/25-5904",
+          "total_documents_count": 6,
+          "records_read": 6,
+          "truncated": false,
+          "rate_limited": false
+        },
+        {
+          "request_id": "24-6183",
+          "url": "https://sandiego.nextrequest.com/requests/24-6183",
+          "total_documents_count": 3,
+          "records_read": 3,
+          "truncated": false,
+          "rate_limited": false
+        },
+        {
+          "request_id": "24-7388",
+          "url": "https://sandiego.nextrequest.com/requests/24-7388",
+          "total_documents_count": 1,
+          "records_read": 1,
+          "truncated": false,
+          "rate_limited": false
+        },
+        {
+          "request_id": "24-5865",
+          "url": "https://sandiego.nextrequest.com/requests/24-5865",
+          "total_documents_count": 5,
+          "records_read": 5,
+          "truncated": false,
+          "rate_limited": false
+        },
+        {
+          "request_id": "23-1045",
+          "url": "https://sandiego.nextrequest.com/requests/23-1045",
+          "total_documents_count": 1,
+          "records_read": 1,
+          "truncated": false,
+          "rate_limited": false
+        },
+        {
+          "request_id": "23-3592",
+          "url": "https://sandiego.nextrequest.com/requests/23-3592",
+          "total_documents_count": 1,
+          "records_read": 1,
+          "truncated": false,
+          "rate_limited": false
+        },
+        {
+          "request_id": "26-1674",
+          "url": "https://sandiego.nextrequest.com/requests/26-1674",
+          "total_documents_count": 6,
+          "records_read": 6,
+          "truncated": false,
+          "rate_limited": false
+        }
+      ],
+      "pagination": "Search and document listings counted actual returned rows until total_count/total_documents_count was reached. No page×100 assumption was used for25-record document pages.",
+      "public_invoice_access": {
+        "document_id": 51883083,
+        "public_page_status": 200,
+        "has_viewer": false,
+        "ordinary_download_attempts": [
+          {
+            "canonical_path": "/documents/51883083/download?token=",
+            "status": 403,
+            "bytes": 52,
+            "mime": "text/html; charset=utf-8"
+          },
+          {
+            "canonical_path": "/documents/51883083/download",
+            "status": 403,
+            "bytes": 52,
+            "mime": "text/html; charset=utf-8"
+          }
+        ]
+      },
+      "limits": [
+        "No current cash-payment ledger or full current overnight cost was acquired. Public PO extracts are authorization records, not paid-invoice totals.",
+        "The HSSD invoiceZIP was publicly listed but both ordinary download links returned403; no login, token guessing or access bypass was attempted.",
+        "FY2027 adopted HSSD aggregate adjustments do not independently verify the proposed portable program elimination. Current operating logs were not supplied in the public contracts reviewed.",
+        "Unrelated personal case records found in searches were excluded; their subject text was not retained in final research metadata.",
+        "Historical Portland Loo construction amounts were not independently audited or reused as current price quotes.",
+        "This is bounded primary-source research, not a claim that every restroom document exists in the public portal or has been reviewed."
+      ],
+      "no_requests_submitted": true
+    },
+    "restrooms/outcomes/search-log.json": {
+      "created_at": "2026-10-13T20:01:59.721286+00:00",
+      "searches": [
+        {
+          "query": "San Diego downtown public restrooms homeless sanitation public urination Grand Jury 2025 2026",
+          "result": "Relevant primary local health/policy sources preserved or explicitly marked unacquired; no event-linked causal restroom/enforcement cost evaluation acquired."
+        },
+        {
+          "query": "San Diego Grand Jury public restrooms hepatitisA 2017 2024 downtown",
+          "result": "Relevant primary local health/policy sources preserved or explicitly marked unacquired; no event-linked causal restroom/enforcement cost evaluation acquired."
+        },
+        {
+          "query": "site:sandiegocounty.gov shigella homelessness sanitation bathrooms 2025 SanDiego",
+          "result": "Relevant primary local health/policy sources preserved or explicitly marked unacquired; no event-linked causal restroom/enforcement cost evaluation acquired."
+        },
+        {
+          "query": "San Diego public urination citations bathrooms homelessness study",
+          "result": "Relevant primary local health/policy sources preserved or explicitly marked unacquired; no event-linked causal restroom/enforcement cost evaluation acquired."
+        },
+        {
+          "query": "site:sandiegocounty.gov hepatitisA 2017 outbreakfinal 59220reportsanitation",
+          "result": "Relevant primary local health/policy sources preserved or explicitly marked unacquired; no event-linked causal restroom/enforcement cost evaluation acquired."
+        },
+        {
+          "query": "site:sandiegocounty.gov shigella 2021 outbreakhomeless 2022 endedrestrooms",
+          "result": "Relevant primary local health/policy sources preserved or explicitly marked unacquired; no event-linked causal restroom/enforcement cost evaluation acquired."
+        },
+        {
+          "query": "San Diego public urination enforcement restroom access Welsh Carroll citations study 2024",
+          "result": "Relevant primary local health/policy sources preserved or explicitly marked unacquired; no event-linked causal restroom/enforcement cost evaluation acquired."
+        },
+        {
+          "query": "San Diego public urination bathroom ordinance 56.54municipalcode",
+          "result": "Relevant primary local health/policy sources preserved or explicitly marked unacquired; no event-linked causal restroom/enforcement cost evaluation acquired."
+        },
+        {
+          "query": "Restroom access and health among people experiencing homelessness SanDiegoCalzoCarson 2024",
+          "result": "Relevant primary local health/policy sources preserved or explicitly marked unacquired; no event-linked causal restroom/enforcement cost evaluation acquired."
+        },
+        {
+          "query": "56.55urinate officialCitydomains",
+          "result": "Relevant primary local health/policy sources preserved or explicitly marked unacquired; no event-linked causal restroom/enforcement cost evaluation acquired."
+        },
+        {
+          "query": "sanitation urination SanDiegocitationsWelshstudy",
+          "result": "Relevant primary local health/policy sources preserved or explicitly marked unacquired; no event-linked causal restroom/enforcement cost evaluation acquired."
+        },
+        {
+          "query": "There is no place to go SanDiego 2020 survey",
+          "result": "Relevant primary local health/policy sources preserved or explicitly marked unacquired; no event-linked causal restroom/enforcement cost evaluation acquired."
+        },
+        {
+          "query": "Starbucks bathroompolicy publicurinationcitations study 20182020 researcher",
+          "result": "Relevant primary local health/policy sources preserved or explicitly marked unacquired; no event-linked causal restroom/enforcement cost evaluation acquired."
+        },
+        {
+          "query": "washdev.2024.160 PDFIWA 2024 Calzo 115",
+          "result": "Relevant primary local health/policy sources preserved or explicitly marked unacquired; no event-linked causal restroom/enforcement cost evaluation acquired."
+        },
+        {
+          "query": "Restroom access and health 115odds",
+          "result": "Relevant primary local health/policy sources preserved or explicitly marked unacquired; no event-linked causal restroom/enforcement cost evaluation acquired."
+        },
+        {
+          "query": "Restroom access and health among people experiencing homelessness filetype:pdf -site:researchgate.net",
+          "result": "Relevant primary local health/policy sources preserved or explicitly marked unacquired; no event-linked causal restroom/enforcement cost evaluation acquired."
+        },
+        {
+          "query": "14624745241246650 pdfSDSUrepository",
+          "result": "Relevant primary local health/policy sources preserved or explicitly marked unacquired; no event-linked causal restroom/enforcement cost evaluation acquired."
+        },
+        {
+          "query": "gurun nickerson solomon PublicUrinationpaper 2022",
+          "result": "Relevant primary local health/policy sources preserved or explicitly marked unacquired; no event-linked causal restroom/enforcement cost evaluation acquired."
+        },
+        {
+          "query": "56.55Urinatingmunicode officialdomains",
+          "result": "Relevant primary local health/policy sources preserved or explicitly marked unacquired; no event-linked causal restroom/enforcement cost evaluation acquired."
+        },
+        {
+          "query": "San Diego downtown public restrooms 2026 closure sanitation bathrooms Voice of SanDiegoKPBS",
+          "result": "Relevant primary local health/policy sources preserved or explicitly marked unacquired; no event-linked causal restroom/enforcement cost evaluation acquired."
+        },
+        {
+          "query": "SanDiego downtownrestroom 2025 urinationlockedCivicCenter",
+          "result": "Relevant primary local health/policy sources preserved or explicitly marked unacquired; no event-linked causal restroom/enforcement cost evaluation acquired."
+        },
+        {
+          "query": "SanDiego 2026 bathroomsGrandJuryresponserestroomopencleansanitation",
+          "result": "Relevant primary local health/policy sources preserved or explicitly marked unacquired; no event-linked causal restroom/enforcement cost evaluation acquired."
+        }
+      ],
+      "local_corpus_searches": [
+        {
+          "database": "analysis/v2/documents.sqlite",
+          "terms": [
+            "public urination",
+            "public restrooms",
+            "restroom ANDhepatitis",
+            "shigella"
+          ],
+          "result": "Found 2023 campingordinance packets and publiccomplaint correspondence; no primaryhealthorcurrentcitation/facilitylinkage evaluation."
+        }
+      ],
+      "primary_acquisition_status": [
+        {
+          "id": "RHO01",
+          "title": "Restroom access and health among people experiencing homelessness: San Diego 2024",
+          "url": "https://doi.org/10.2166/washdev.2024.160",
+          "retrieved_at": "2026-10-13T19:52:45.076065+00:00",
+          "status": "unacquired_original_abstract_only",
+          "error": "403 Client Error: Forbidden for url: https://iwaponline.com/washdev/article/14/11/1155/105559/Restroom-access-and-health-among-people",
+          "access_note": "Publisher DOI landing page and both public PDF URL variants returned 403. Crossref metadata preserved; primary publisher search excerpts expose abstract/discussion, but no full article acquired. No odds ratios or clinical effect estimates used."
+        },
+        {
+          "id": "RHO02",
+          "title": "San Diego basic sanitation deprivation study, Punishment and Society 2024online/2025issue",
+          "url": "https://journals.sagepub.com/doi/pdf/10.1177/14624745241246650",
+          "retrieved_at": "2026-10-13T19:52:45.353754+00:00",
+          "status": "unacquired_original_full_primary_pdf_browsed",
+          "error": "403 Client Error: Forbidden for url: https://journals.sagepub.com/doi/pdf/10.1177/14624745241246650",
+          "pages": 25,
+          "access_note": "Direct HTTP archival retrieval returned403. Full primary publisher HTML/PDF was readable through browsing; exact PDF page locators and reader output preserved in analysis/strengthening/restrooms/outcomes/RHO02-browser-reader.json.",
+          "reader_file": "analysis/strengthening/restrooms/outcomes/RHO02-browser-reader.json"
+        },
+        {
+          "id": "RHO03",
+          "title": "Sanitation justice methods and Pacific Beach case study, PLOS One 2023",
+          "url": "https://journals.plos.org/plosone/article/file?id=10.1371/journal.pone.0288525&type=printable",
+          "retrieved_at": "2026-10-13T19:52:45.405325+00:00",
+          "status": "acquired",
+          "file": "sources/strengthening/restrooms/outcomes/RHO03.pdf",
+          "sha256": "30672a47e1afcc13e28b76546b20f0996b585081dd4e91b99e4bbc34eb576c43",
+          "bytes": 2032488,
+          "pages": 20
+        },
+        {
+          "id": "RHO04",
+          "title": "San Diego youth photovoice and hepatitisA2020 study, primary fulltextXML",
+          "url": "https://www.ebi.ac.uk/europepmc/webservices/rest/PMC7369867/fullTextXML",
+          "retrieved_at": "2026-10-13T19:52:46.264883+00:00",
+          "status": "acquired",
+          "file": "sources/strengthening/restrooms/outcomes/RHO04.xml",
+          "sha256": "9e18254507e509257700743bc30e9fa99cfdec2e368c27b3eaf81d69713958ad",
+          "bytes": 155625,
+          "pages": null
+        },
+        {
+          "id": "RHO05",
+          "title": "County August 2024 monthly communicable disease report: homelessness",
+          "url": "https://www.sandiegocounty.gov/content/dam/sdc/hhsa/programs/phs/Epidemiology/Monthly_CD_Report_August2024.pdf",
+          "retrieved_at": "2026-10-13T19:52:47.752110+00:00",
+          "status": "acquired",
+          "file": "sources/strengthening/restrooms/outcomes/RHO05.pdf",
+          "sha256": "8d397abc0c8cb7c8255989d7c694da8e779256485b5b92b9632e3fb7148f5fb1",
+          "bytes": 402763,
+          "pages": 5
+        },
+        {
+          "id": "RHO06",
+          "title": "County 2017-2018 hepatitisA outbreak after-action report",
+          "url": "https://www.sandiegocounty.gov/content/dam/sdc/cosd/SanDiegoHepatitisAOutbreak-2017-18-AfterActionReport.pdf",
+          "retrieved_at": "2026-10-13T19:52:48.143606+00:00",
+          "status": "acquired",
+          "file": "sources/strengthening/restrooms/outcomes/RHO06.pdf",
+          "sha256": "7c683370836191f1499c3bf8d0ec823325fae9c9beeeda603e619c12cf2a7c8f",
+          "bytes": 14523849,
+          "pages": 200
+        },
+        {
+          "id": "RHO07",
+          "title": "County historical 2021 shigella outbreak final case summary",
+          "url": "https://www.sandiegocounty.gov/content/sdc/hhsa/programs/phs/community_epidemiology/dc/Shigella/outbreak-2021.html",
+          "retrieved_at": "2026-10-13T19:52:49.734329+00:00",
+          "status": "acquired",
+          "file": "sources/strengthening/restrooms/outcomes/RHO07.html",
+          "sha256": "3acc5641e432b8881e10649cfe22757da4c213b7b1de39f8a63eb5fd6edcdd6b",
+          "bytes": 66845,
+          "pages": null
+        },
+        {
+          "id": "RHO08",
+          "title": "County October 11,2021 health advisory: unshared restroom discharge guidance",
+          "url": "https://www.sandiegocounty.gov/content/dam/sdc/hhsa/programs/phs/cahan/communications_documents/10-11-21.pdf",
+          "retrieved_at": "2026-10-13T19:52:50.000794+00:00",
+          "status": "acquired",
+          "file": "sources/strengthening/restrooms/outcomes/RHO08.pdf",
+          "sha256": "d3dffd189609671e0abd84acd85799a1399fda70c16313320c0d6b2a3aee80d7",
+          "bytes": 296220,
+          "pages": 2
+        },
+        {
+          "id": "RHO09",
+          "title": "Private provision public goods, Starbucks access quasi-experimental study 2020 workingpaper",
+          "url": "https://www.chapman.edu/research/institutes-and-centers/economic-science-institute/_files/ifree-papers-and-photos/gurun-nickerson-solomon-2020.pdf",
+          "retrieved_at": "2026-10-13T19:52:50.204442+00:00",
+          "status": "invalid_200_errorpage",
+          "file": "sources/strengthening/restrooms/outcomes/RHO09.html",
+          "sha256": "d7003fabe0ebfcf5f6d1ab9e2788c7e4cbf0aa4e24607657e94ec84f02eadaba",
+          "bytes": 183376,
+          "pages": null,
+          "error": "HTTP200 returned Chapman Page Not Found HTML, not the requested researchPDF. Saved response is an access log artifact, not research evidence.",
+          "research_evidence": false
+        },
+        {
+          "id": "RHO10",
+          "title": "Published City Municipal Code: SDMC56.55, April 2025 edition",
+          "url": "https://docs.sandiego.gov/municode/MuniCodeChapter05/Ch05Art06Division00.pdf",
+          "retrieved_at": "2026-10-13T19:56:01.169701+00:00",
+          "status": "acquired",
+          "acquisition_url": "https://docs.sandiego.gov/municode/MuniCodeChapter05/Ch05Art06Division00.pdf",
+          "file": "sources/strengthening/restrooms/outcomes/RHO10.pdf",
+          "sha256": "23bb0bd45f5ba70fb0d738e7b2c3bdfe5f1d5acf1249b66564c2a2cd6675347b",
+          "bytes": 735794,
+          "pages": 31
+        },
+        {
+          "id": "RP01",
+          "title": "2023 Downtown public restrooms Grand Jury report",
+          "url": "https://www.sandiegocounty.gov/content/dam/sdc/grandjury/reports/2022-2023/Downtown%20Public%20Restrooms.pdf",
+          "retrieved_at": "2026-10-13T19:50:47.558885+00:00",
+          "status": 200,
+          "file": "sources/strengthening/restrooms/property/RP01.pdf",
+          "sha256": "189901e82b9c0f92b11a6766b6a72f9083c7e0af1363445d85a27d94cea16b77",
+          "bytes": 1044200,
+          "pdf_pages": 22,
+          "ownership": "property workstream original, independently read here"
+        },
+        {
+          "id": "RP11",
+          "title": "Final 2023 Council restroom response with resolution",
+          "url": "https://www.sandiego.gov/sites/default/files/2023-11/cr-grand-jury-rpt-on-downtown-public-restrooms.pdf",
+          "retrieved_at": "2026-10-13T19:52:19.854012+00:00",
+          "status": 200,
+          "file": "sources/strengthening/restrooms/property/RP11.pdf",
+          "sha256": "413db658fa5d823db160a9a535afd7c206192f12b5ca8b15157e76d92d6493a1",
+          "bytes": 390826,
+          "pdf_pages": 12,
+          "ownership": "property workstream original, independently read here"
+        }
+      ],
+      "source_notes": [
+        "RHO09requestedworkingpaperURLreturnedHTTP200PageNotFoundHTML; excluded as research evidence.",
+        "RHO01publisher originalPDF blocked 403; abstract/search excerpts only. Crossref/OpenAlex metadata preserved but not treated as full-study evidence.",
+        "RHO02full publisherHTMLand 25pagePDF read through browsing; directarchive 403. Reader-output/locators preserved, not mislabelled as originalPDF.",
+        "RP01 andRP11 are property-workstream originals reused byreference, not duplicate new source counts.",
+        "Relevantpages/sections reviewed; total 200pageCountyAAR coverage is not a claim of 200manuallyreviewedpages."
+      ],
+      "validation": [
+        {
+          "id": "RHO03",
+          "sha256_matches": true,
+          "bytes_match": true
+        },
+        {
+          "id": "RHO04",
+          "sha256_matches": true,
+          "bytes_match": true
+        },
+        {
+          "id": "RHO05",
+          "sha256_matches": true,
+          "bytes_match": true
+        },
+        {
+          "id": "RHO06",
+          "sha256_matches": true,
+          "bytes_match": true
+        },
+        {
+          "id": "RHO07",
+          "sha256_matches": true,
+          "bytes_match": true
+        },
+        {
+          "id": "RHO08",
+          "sha256_matches": true,
+          "bytes_match": true
+        },
+        {
+          "id": "RHO10",
+          "sha256_matches": true,
+          "bytes_match": true
+        }
+      ],
+      "no_external_contact_or_new_requests": true,
+      "negative_results_are_not_absence_proof": true,
+      "failed_url_attempts": [
+        {
+          "source_id": "RHO10",
+          "url": "https://docs.sandiego.gov/municode/MuniCodeChapter05/Ch05Art06Division05.pdf",
+          "result": "HTTP404, incorrect division filename",
+          "successful_url": "https://docs.sandiego.gov/municode/MuniCodeChapter05/Ch05Art06Division00.pdf"
+        }
+      ]
+    },
+    "restrooms/property/search-log.json": {
+      "created_at": "2026-10-13T20:00:58.147922+00:00",
+      "sources_screened_before_acquisition": [
+        "analysis/v2/documents.sqlite206distinctDownloadsPDFs,5090indexedpages",
+        "sources/registry.json",
+        "analysis/strengthening/property/source-registry.json",
+        "Existing CALB05/CALB07 final budget records reused"
+      ],
+      "existing_index_screen": "existing-data-screen.json records six targetedFTSqueries; twopublic-restroom matches were unsafe-camping/safe-sleeping agenda records, notcurrentdowntowninventory. Generalbathroom matches included unrelatedprivatecasefiles and wereexcluded.",
+      "public_source_families_reviewed": [
+        "2023CivilGrandJuryreport and final2023CityMayor/Councilresponse",
+        "2024staffstudy/2025presentation",
+        "CityliveExperienceBuilderconfiguration/currentwebmap andfourpublicrestroomlayers",
+        "CurrentPortparkpages andofficialrestroomlayer",
+        "CountyWaterfrontParkpage/originalcountyrestroomlayer",
+        "FY2026andFY2027adoptedParksbudgets; finalCouncilmodificationrecords",
+        "CouncilPolicy800-07; legacyCityhoursPDFretainedashistorical"
+      ],
+      "web_search_queries": [
+        "site:sandiego.gov downtown public restrooms locations hours2026",
+        "site:sandiegocounty.gov grand jury public restrooms downtown",
+        "site:sandiego.gov public restrooms downtown locations hours portabletoilets2025",
+        "site:sandiegocounty.gov DowntownAreaPublicRestrooms Response",
+        "site:portofsandiego.org restroom hours waterfront park downtown",
+        "SanDiego PublicRestrooms arcgis",
+        "site:sandiego.gov Civic restroom2026",
+        "site:sandiego.gov FY2027 CivicCenterRestroom",
+        "site:sandiego.gov FY2027 GaslampSquare",
+        "site:my.neighbor.org restrooms public24"
+      ],
+      "gis_coverage": [
+        {
+          "source_id": "RP13",
+          "query_filtered_records": 28,
+          "complete_object_ids_reconciled": true
+        },
+        {
+          "source_id": "RP14",
+          "query_records": 344,
+          "complete_object_ids_reconciled": true,
+          "Downtown_attribute_rows": 5
+        },
+        {
+          "source_id": "RP17",
+          "query_records": 19,
+          "complete_object_ids_reconciled": true,
+          "waterfront_candidate_rows": 9
+        },
+        {
+          "source_id": "RP16",
+          "configured_map_query_records": 0,
+          "complete_object_ids_reconciled": true
+        },
+        {
+          "source_id": "RP16-county-source",
+          "independent_County_query_records": 202,
+          "complete_object_ids_reconciled": true,
+          "waterfront_candidate_rows": 5
+        }
+      ],
+      "additional_layer_screen": "RP15libraryservice metadata/IDsonly(92regionalrecords); libraryoriginalhoursguessedURL404, current restroomaccessnotverified. Do not count92libraryrecords as92Cityrestrooms.",
+      "failed_or_unresolved_access": [
+        {
+          "url": "https://www.sandiego.gov/public-restrooms",
+          "status": 404,
+          "resolution": "Actualofficialroute/restroom redirectsnewExperienceBuilder; currentmapacquired."
+        },
+        {
+          "url": "https://webmaps.sandiego.gov/portal/sharing/rest/content/items/dc8bf0d749784fe58326b21f71c4be83?f=json",
+          "api_error": "400Itemdoesnotexistorisinaccessible",
+          "resolution": "Historical2023appdecommissioned/newmapacquired."
+        },
+        {
+          "url": "https://www.sandiego.gov/public-library/locations/central",
+          "status": 404,
+          "limit": "No current original hours source preserved."
+        },
+        {
+          "url": "https://my.neighbor.org/get-help/",
+          "limit": "DirectoriginalHTMLacquisitionunfinished/failed; browsedofficialrenderedpage, butnot usedforquantifiedcurrent24hcount."
+        },
+        {
+          "url": "https://www.sandiego.gov/sites/default/files/14-15.downtownpublicrestrooms_0.pdf",
+          "status": 404,
+          "limit": "Cited2015finalCityresponseoriginalnotacquired; historicalCityresponseisdescribedin2023GrandJurybutnotindependentlyverifiedhere."
+        }
+      ],
+      "scope_limits": [
+        "Noonsiteinspection,contactornewrecordsrequest.",
+        "Noexhaustiveindependentcensusofbusiness/customer-onlytoilets.",
+        "NoADAfacilityauditormicro-stallcapacitycount.",
+        "Nosinglecurrentall-agencydowntownfacilitytotalcalculatedbecausegeographicdefinitions,duplicates,hiddensitesandproviderrestrictionsremain."
+      ],
+      "additional_searches": [
+        {
+          "query": "site:sandiego.gov/auditor downtown restrooms",
+          "result": "Search returned no identified focused City Auditor restroom audit; this is a bounded search result, not proof none exists."
+        },
+        {
+          "query": "site:sandiego.gov audit public restrooms downtown",
+          "result": "Returned Grand Jury/IBA records and planning materials; no separate audit original acquired."
+        },
+        {
+          "query": "site:sandiegocounty.gov The Ongoing Need for Downtown Public Restrooms",
+          "result": "Official2015GrandJury original acquired asRP26, sixpages; primaryfindingsPDF4/5 reviewed."
+        }
+      ]
+    },
+    "final-priorities/budget/search-log.json": {
+      "research_date": "2026-10-13",
+      "existing_source_reused": "BK08 original and extraction; copied asFPB01",
+      "primary_requested_source_followed": "https://www.sandiego.gov/sites/default/files/2026-09/26-19-fy-2027-homelessness-programs-and-funding_rev.pdf",
+      "additional_exact_queries": [
+        "site.hcd.ca.gov HHAP round 5 allowable uses obligated expended deadlines round 6",
+        "site:hcd.ca.gov HHAP 6 guidelines supplant funds obligated deadline"
+      ],
+      "additional_primary_source": "https://www.hcd.ca.gov/funding/hhap/reporting",
+      "targeted_checks": [
+        "HHAP adopted/year-end/variance exact arithmetic",
+        "General Fund projection explanations and differing actual totals",
+        "Figure 3 comparable adopted program amounts and footnote",
+        "Homekey capital versus service-operations funding scope",
+        "Attachment 1 fund-column sums and selected inconsistent rows",
+        "HCD obligation/expenditure distinctions, modifications and deadlines"
+      ],
+      "limits": [
+        "No current encumbrance ledger or grant-round payment attribution acquired.",
+        "No HHAP-specific housing outcomes matched to the annual expenditure row.",
+        "No broad repeat NextRequest search, request submission or external contact.",
+        "HCD reporting page was current at retrieval; City IBA projected availability and plan amounts remain dated reported estimates."
+      ]
+    },
+    "final-priorities/outcomes/search-log.json": {
+      "verified_at": "2026-10-13T20:20:02.387950+00:00",
+      "scope": "Focused verification of current tracker, dated agency/auditor explanations and current City master-plan status; no new requests or external communications.",
+      "primary_pages_read": [
+        {
+          "id": "FOUT01",
+          "url": "https://information.auditor.ca.gov/reports/recommendations/2023-102.2",
+          "status": "acquired"
+        },
+        {
+          "id": "FOUT02",
+          "url": "https://information.auditor.ca.gov/reports/responses/2023-102.2/10",
+          "status": "acquired"
+        },
+        {
+          "id": "FOUT03",
+          "url": "https://information.auditor.ca.gov/reports/responses/2023-102.2/8",
+          "status": "acquired"
+        },
+        {
+          "id": "FOUT04",
+          "url": "https://information.auditor.ca.gov/reports/responses/2023-102.2/9",
+          "status": "acquired"
+        },
+        {
+          "id": "FOUT05",
+          "url": "https://information.auditor.ca.gov/reports/responses/2023-102.2/11",
+          "status": "acquired"
+        },
+        {
+          "id": "FOUT06",
+          "url": "https://www.auditor.ca.gov/reports/responses-2023-102-2-all/",
+          "status": "acquired"
+        },
+        {
+          "id": "FOUT07",
+          "url": "https://www.sandiego.gov/planning/work/affordable-home-development-master-plan",
+          "status": "acquired"
+        },
+        {
+          "id": "FOUT08",
+          "url": "https://www.sandiego.gov/planning/work/working-on",
+          "status": "acquired"
+        },
+        {
+          "id": "FOUT09",
+          "url": "https://www.auditor.ca.gov/reports/recommendationsnotfullyimplemented/",
+          "status": "acquired"
+        },
+        {
+          "id": "FOUT10",
+          "url": "https://www.auditor.ca.gov/wp-content/uploads/2024/04/2023-102.2_Table7.pdf",
+          "status": "acquired"
+        },
+        {
+          "id": "S06",
+          "url": "https://www.auditor.ca.gov/reports/2023-102-2/",
+          "status": "reused_existing"
+        }
+      ],
+      "focused_web_searches": [
+        {
+          "query": "\"Affordable Home Development Master Plan\" \"2026\"",
+          "domains": [
+            "sandiego.gov"
+          ],
+          "result": "Current City page and working-on index say projectedcompletion 2027; actualsurveyAugust 2026 confirms current work."
+        },
+        {
+          "query": "\"2023-102.2\" \"2026\" San Diego auditor",
+          "domains": [
+            "auditor.ca.gov",
+            "information.auditor.ca.gov"
+          ],
+          "result": "Modern response page matches supplied tracker; Aug 12, 2026 unresolvedrecommendation summary provides dated current corroboration."
+        }
+      ],
+      "existing_corpus_lookup": [
+        {
+          "file": "analysis/v2/report-content.json",
+          "result": "Reused original reportS06 metadata and preservedHTML; verified knownhash before reuse."
+        },
+        {
+          "file": "sources/S06.html",
+          "result": "Located originalTable 7 officialPDF link and acquired only the two-page scope table; no broader budget re-audit."
+        }
+      ],
+      "date_and_version_rules": [
+        "Current displayed status is labelled with retrieval date; agency response date is separately stated.",
+        "Legacy information-site detailed responses and modern main-site responses were crosschecked. No newer SanDiego detailed response beyondApr 2025 found.",
+        "August 2026 annual followup is a current summary, not a new individual-response date.",
+        "City current 2027 master-plan projection is distinct from older 2026 estimate and does not imply no existing housing work."
+      ],
+      "no_external_contact_or_records_requests": true,
+      "optional_erf_branch": "Not opened: root requested a finite primary-framework check and existing outcome work already establishes unmatched programme measures. No broad ERF re-audit performed.",
+      "negative_search_is_not_absence_proof": true,
+      "validation": [
+        {
+          "id": "FOUT01",
+          "hash_and_bytes_match": true
+        },
+        {
+          "id": "FOUT02",
+          "hash_and_bytes_match": true
+        },
+        {
+          "id": "FOUT03",
+          "hash_and_bytes_match": true
+        },
+        {
+          "id": "FOUT04",
+          "hash_and_bytes_match": true
+        },
+        {
+          "id": "FOUT05",
+          "hash_and_bytes_match": true
+        },
+        {
+          "id": "FOUT06",
+          "hash_and_bytes_match": true
+        },
+        {
+          "id": "FOUT07",
+          "hash_and_bytes_match": true
+        },
+        {
+          "id": "FOUT08",
+          "hash_and_bytes_match": true
+        },
+        {
+          "id": "FOUT09",
+          "hash_and_bytes_match": true
+        },
+        {
+          "id": "FOUT10",
+          "hash_and_bytes_match": true
+        },
+        {
+          "id": "S06",
+          "hash_and_bytes_match": true
+        }
+      ]
+    },
+    "final-priorities/property/search-log.json": {
+      "created_at": "2026-10-13T20:25:28.152341+00:00",
+      "scope": "Bounded investigation of the underlying source for the news-reported107 K/16th clearances, using existing public releases plus five exact public-portal searches. No requests submitted or external contacts.",
+      "existing_source_review": [
+        "Existing root/v2/property request and corrected release registries",
+        "Existing Downloads/index source inventory",
+        "Existing dated property policy constraints",
+        "Root FP01 operative2023code original reused"
+      ],
+      "fresh_request_searches": [
+        {
+          "term": "encampment sweeps",
+          "raw_rows_read": 10,
+          "total_reported": 10,
+          "metadata_complete": true
+        },
+        {
+          "term": "encampments abated",
+          "raw_rows_read": 81,
+          "total_reported": 81,
+          "metadata_complete": true
+        },
+        {
+          "term": "K Street",
+          "raw_rows_read": 111,
+          "total_reported": 111,
+          "metadata_complete": true
+        },
+        {
+          "term": "16th Street",
+          "raw_rows_read": 162,
+          "total_reported": 162,
+          "metadata_complete": true
+        },
+        {
+          "term": "Kelly Davis",
+          "raw_rows_read": 1,
+          "total_reported": 1,
+          "metadata_complete": true
+        }
+      ],
+      "fresh_relevant_release_coverage": [
+        {
+          "request_id": "25-6108",
+          "raw_rows_read": 1,
+          "portal_total": 1,
+          "metadata_complete": true
+        },
+        {
+          "request_id": "25-7303",
+          "raw_rows_read": 1,
+          "portal_total": 1,
+          "metadata_complete": true
+        },
+        {
+          "request_id": "25-10318",
+          "raw_rows_read": 1,
+          "portal_total": 1,
+          "metadata_complete": true
+        },
+        {
+          "request_id": "25-5806",
+          "raw_rows_read": 1,
+          "portal_total": 1,
+          "metadata_complete": true
+        }
+      ],
+      "original_reviews": [
+        {
+          "source_id": "K16P01",
+          "scope": "Full republished news page; no operation dataset link found."
+        },
+        {
+          "source_id": "K16P02",
+          "scope": "One-page annual cost schedule reviewed and visually checked."
+        },
+        {
+          "source_id": "K16P03",
+          "scope": "Four-page public impound response, including March7 K Street row; nonpersonal date/item-status aggregates only."
+        },
+        {
+          "source_id": "K16P04",
+          "scope": "567-page original extracted; header and year boundaries screened;120modern2025pagesparsed, strictlocationrowsselected. Historical2018–2022sections not newly exhaustively analyzed."
+        },
+        {
+          "source_id": "K16P05",
+          "scope": "One public listing reviewed; native spreadsheet download403."
+        }
+      ],
+      "public_metadata_only_families": "Monthly2025 CleanSD summaries identified from existing metadata; they are aggregates and were not newly downloaded to manufacture case-level joins.",
+      "limits": [
+        "Neither the article nor selected public register reveals the UT107 counting method.",
+        "Modern Date/TimeClosed is not DateAbated.",
+        "No site-specific cost estimate or causal housing/property-harm assertion generated.",
+        "No unbounded additional crawl after the four selected release leads."
+      ]
+    },
+    "final-priorities/root/search-log.json": {
+      "research_cutoff": "2026-10-13",
+      "sources": [
+        "https://docs.sandiego.gov/municode/MuniCodeChapter06/Ch06Art03Division04.pdf"
+      ],
+      "method": "Official eight-page code downloaded, hashed and read; effective date and physical pages verified.",
+      "scope": "Specific statutory tests, not legal adjudication of any individual incident."
+    }
+  },
+  "limitations": [
+    "Public listings and release metadata are distinguished from downloaded originals and examined contents.",
+    "Query hit counts overlap. County contract-library metadata include unrelated files and are not all acquired or reviewed.",
+    "No new requests, emails, messages to agencies or private systems were used.",
+    "Current eligible police tasks, removable spending and marginal replacement costs remain unmeasured.",
+    "No current same-item aid-to-destruction dollar chain or local whole-police-budget causal estimate is established."
+  ],
+  "parallel_mining_2026_10_17": {
+    "date": "2026-10-17",
+    "scope": "Three authorized parallel tracks and root reconciliation; targeted local/native, seeded spot and public-primary research.",
+    "tracks": [
+      {
+        "track": "finance",
+        "source_references": 25,
+        "findings": 6,
+        "verification": {
+          "sources_hashed": 25,
+          "findings_checked": 6,
+          "period_bridges_checked": 4,
+          "urban_native_cells_checked": 5,
+          "status": "PASS"
+        },
+        "source_manifest": "analysis/mining/deep-rounds-2026-10-17/finance/sources.json",
+        "search_log": "analysis/mining/deep-rounds-2026-10-17/finance/search-log.json",
+        "search_log_sha256": "c835b15e9dd63a04a18f45af3feb09fdf606d3c4de6be7c1726b07a790959e0d"
+      },
+      {
+        "track": "services",
+        "source_references": 47,
+        "findings": 10,
+        "verification": {
+          "source_hashes": 47,
+          "jhat_original_hashes": 149,
+          "frp_comparison": {
+            "target": 700,
+            "provider_reported": 513,
+            "below_target": 187,
+            "percent_of_target": 73.28571428571429,
+            "prior_ytd_plus_june": 513
+          },
+          "successive_b_lot_aisle_flags": [
+            "2025-03-14",
+            "2025-04-18",
+            "2025-05-22",
+            "2025-06-26",
+            "2025-07-24"
+          ],
+          "referral_placement_rates": {
+            "may": {
+              "requests": 2216,
+              "placements": 128,
+              "percent": 5.776173285198556
+            },
+            "june": {
+              "requests": 1242,
+              "placements": 233,
+              "percent": 18.760064412238325
+            },
+            "fy25": {
+              "referrals": 24389,
+              "placements": 2820,
+              "percent": 11.562589692074296
+            },
+            "unit_limit": "Referrals/requests are not unique people."
+          },
+          "sbcs_occupancy": {
+            "fy25_target": 95,
+            "fy25_reported_ytd": 73,
+            "fy25_monthly_min": 52,
+            "fy25_monthly_max": 87,
+            "fy25_unweighted_monthly_mean": 72.66666666666667,
+            "fy26_july_oct_reported_ytd": 77,
+            "fy25_families_vs_target_percent": 147.61904761904762,
+            "fy25_permanent_exit_percent": 60.3448275862069,
+            "limit": "Released provider drafts, not certified City acceptance or contract breach."
+          },
+          "maintenance_followup_implemented": true
+        },
+        "source_manifest": "analysis/mining/deep-rounds-2026-10-17/services/sources.json",
+        "search_log": "analysis/mining/deep-rounds-2026-10-17/services/search-log.json",
+        "search_log_sha256": "7de4cf6d3361d61b8d7d5908a60bc6688784a7dc3cd96f13d59f7e51a31656d1"
+      },
+      {
+        "track": "reporting",
+        "source_references": 34,
+        "findings": 7,
+        "verification": {
+          "status": "passed",
+          "findings": 7,
+          "source_hashes_verified": 34,
+          "all_finding_source_ids_resolve": true,
+          "all_five_round_totals_match_to_cent": true,
+          "raw_expenditures": "107518117.60",
+          "distinct_expenditures": "94884516.31",
+          "non_additive_row_difference": "12633601.29",
+          "reproduce": "From project root: uv run python analysis/mining/deep-rounds-2026-10-17/reporting/build_findings.py; uv run python analysis/mining/deep-rounds-2026-10-17/reporting/finalize_reporting.py"
+        },
+        "source_manifest": "analysis/mining/deep-rounds-2026-10-17/reporting/sources.json",
+        "search_log": "analysis/mining/deep-rounds-2026-10-17/reporting/search-log.json",
+        "search_log_sha256": "7d2b1bae6dee1d253fe2f38af2c554715a4fecbd57f7c120c47219d6b464fe35"
+      }
+    ],
+    "source_references": 106,
+    "distinct_source_hashes": 104,
+    "distinct_source_bytes": 148574408,
+    "source_count_limit": "Reused originals and newly acquired originals are combined; these are not all newly downloaded records, nor the size of the entire user corpus.",
+    "canonical_new_claims": 11,
+    "canonical_total_claims": 41,
+    "stopping_assessment": "Severe diminishing returns within the three targeted lanes after alternate-source rounds and terminal spot/FTS screens. The whole corpus is not exhausted. See each track search log for exact coverage and terminal results.",
+    "unresolved": "Invoice-specific net payment/reversal and authorization dispositions, final accepted returns and withheld report versions, maintenance closure crosswalks, matched-period complete costs and nonidentifying retention cohorts remain record-dependent.",
+    "no_external_contact_or_requests_submitted": true
+  }
+}

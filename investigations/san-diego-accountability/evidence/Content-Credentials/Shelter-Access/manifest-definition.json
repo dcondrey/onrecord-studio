@@ -1,0 +1,528 @@
+{
+  "claim_generator_info": [
+    {
+      "name": "OnRecord research report publisher",
+      "version": "1.3",
+      "specVersion": "2.4.0"
+    }
+  ],
+  "title": "Shelter Access: When a Referral Does Not Produce a Place",
+  "format": "application/pdf",
+  "assertions": [
+    {
+      "label": "c2pa.actions",
+      "created": true,
+      "data": {
+        "actions": [
+          {
+            "action": "c2pa.created",
+            "when": "2026-10-19T10:30:56.863778Z",
+            "softwareAgent": {
+              "name": "OnRecord report release signing tool",
+              "version": "0.1.0"
+            },
+            "digitalSourceType": "http://cv.iptc.org/newscodes/digitalsourcetype/compositeWithTrainedAlgorithmicMedia",
+            "description": "Assembled an author-directed, AI-assisted research publication from the identified reviewed render and documentary evidence. Earlier unsignaled editing history is not reconstructed."
+          }
+        ],
+        "allActionsIncluded": false
+      }
+    },
+    {
+      "label": "cawg.metadata",
+      "data": {
+        "@context": {
+          "dc": "http://purl.org/dc/elements/1.1/",
+          "dcterms": "http://purl.org/dc/terms/",
+          "schema": "https://schema.org/"
+        },
+        "dc:title": [
+          "Shelter Access: When a Referral Does Not Produce a Place"
+        ],
+        "dc:creator": [
+          "David L. Condrey"
+        ],
+        "dc:identifier": [
+          "SDHA-2026-01-A/v1.0/Shelter-Access"
+        ],
+        "dc:language": [
+          "en-US"
+        ],
+        "dc:rights": "Original report text, figures and analysis: David L. Condrey, CC BY 4.0. Third-party records retain their own rights and status.",
+        "dcterms:license": "https://creativecommons.org/licenses/by/4.0/",
+        "schema:version": "1.0",
+        "schema:author": {
+          "@id": "did:web:writerslogic.com:executives:dcondrey",
+          "schema:name": "David L. Condrey"
+        },
+        "schema:publisher": {
+          "@id": "did:web:writerslogic.com",
+          "schema:name": "WritersLogic Inc."
+        }
+      }
+    },
+    {
+      "label": "com.writerslogic.research-provenance",
+      "data": {
+        "version": 1,
+        "report_id": "SDHA-2026-01-A",
+        "edition": "1.0",
+        "physical_pages": 8,
+        "unsigned_render_sha256": "9f7c85643ce400c8c2056f02d3a13bd1ca018ad9a289c2f3fd35f6ddd0eae43f",
+        "reading_edition_sha256": "d1962dd5f2718625c44261a880df01f19bd377b7f1cbab779e0b64c3f1a11f06",
+        "normalized_text_sha256": "aa02d9f4b4c03a56d30b026489992d268e83132bf706183cf5ee5e2230d3d343",
+        "text_digest_method": "PyMuPDF extracted page text in order; Unicode NFKC; whitespace collapsed to single spaces; UTF-8; SHA-256. This is a custom research digest, not a registered C2PA soft-binding algorithm.",
+        "source_directory_sha256": "f27f061a2ad734f323a766f1076c2b4f722a4ecbc3984d40cf3e23ec73eac8ed",
+        "publisher_identity_document": "https://writerslogic.com/.well-known/did.json",
+        "author_identity_document": "https://writerslogic.com/executives/dcondrey/did.json",
+        "publisher_did_document_sha256": "2c0ef7a1d192b92a0b1868d4922c13de6be7198a23032a2446ec85446890d874",
+        "executive_did_document_sha256": "5cfcf4401b3588959d81fb804c29d87a72522fcb5f056d77fb2e05a2abaff1da",
+        "published_issuing_certificate": "https://writerslogic.com/.well-known/c2pa/issuing-ca.crt",
+        "published_root_certificate": "https://writerslogic.com/.well-known/c2pa/root-ca.crt",
+        "evidence_scope": "Selected public records, attributed source statements, reproducible calculations and bounded interpretations.",
+        "ai_assistance": {
+          "tool": "OpenAI Codex",
+          "roles": [
+            "research assistance",
+            "drafting",
+            "software generation",
+            "automated verification"
+          ],
+          "human_direction": "David L. Condrey",
+          "human_only_authorship_attestation": false
+        },
+        "release_status": "Prepared with the author manual Zenodo v1.3 upload; no edition DOI assigned at signing.",
+        "current_edition_doi": null,
+        "prior_published_edition": "https://doi.org/10.5281/zenodo.23405739",
+        "report_policy": "Fixed edition; subsequent dataset supplements do not amend this PDF.",
+        "limitations": [
+          "Signatures bind bytes and assertions; they do not establish underlying accounting truth, fraud or a legal conclusion.",
+          "The signed provenance starts at release assembly; earlier unsignaled history and independent human review are not certified.",
+          "Software-held publisher and executive keys are used; hardware attestation and C2PA generator conformance are not claimed."
+        ]
+      }
+    },
+    {
+      "label": "com.writerslogic.source-register",
+      "data": {
+        "version": 1,
+        "hash_algorithm": "sha256",
+        "cited_source_count": 15,
+        "sources": [
+          {
+            "id": "BK08",
+            "title": "FY2026 Year-End Financial Performance Report",
+            "publisher_original": "https://www.sandiego.gov/sites/default/files/2026-10/fy2026-year-end-financial-performance-report.pdf",
+            "original_sha256": "ed66ded0c09670c5e0dd573641ce148f9e5c9fd9090d9e3dc400080e518ee720",
+            "selected_copies": [
+              {
+                "included_file": "sources/BK08-excerpt.pdf",
+                "included_sha256": "c0e879cd5cefa54626cf85701e6b6120a3e8f28347aefdbc5fd66ff39dbb86b6",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 36
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 46
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 54
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 55
+                  },
+                  {
+                    "included_pdf_page": 5,
+                    "original_pdf_page": 56
+                  },
+                  {
+                    "included_pdf_page": 6,
+                    "original_pdf_page": 57
+                  }
+                ]
+              },
+              {
+                "included_file": "sources/BK08-controls.pdf",
+                "included_sha256": "75745240dd4d657c3df7bca192d68c80bd7e8e32782d75563b6e8ddbf69c7b38",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 2
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 54
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 55
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 56
+                  },
+                  {
+                    "included_pdf_page": 5,
+                    "original_pdf_page": 57
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "CITY-FY27-SHELTER-ANNOUNCEMENT",
+            "title": "City of San Diego. FY2027 adopted budget sheltering announcement; June 16, 2026.",
+            "publisher_original": "https://www.insidesandiego.org/2700-sheltering-options-individuals-experiencing-homelessness-funded-fy-2027-budget",
+            "original_sha256": "3daa8c5fc5782890d411bb2305e76949a514760fedd5109947d1b5e596f92f17",
+            "selected_copies": [
+              {
+                "included_file": "sources/CITY-FY27-SHELTER-ANNOUNCEMENT.html",
+                "included_sha256": "3daa8c5fc5782890d411bb2305e76949a514760fedd5109947d1b5e596f92f17",
+                "original_page_map": []
+              }
+            ]
+          },
+          {
+            "id": "CITY-SAFE-PARKING-CURRENT",
+            "title": "City of San Diego. Safe Parking Program locations; updated October 15, 2026.",
+            "publisher_original": "https://www.sandiego.gov/homelessness-strategies-and-solutions/services/safe-parking-program",
+            "original_sha256": "60e616fcfd77342836f72752765cad1fc833593dc9758bd2e639bb794f01aa15",
+            "selected_copies": [
+              {
+                "included_file": "sources/CITY-SAFE-PARKING-CURRENT.html",
+                "included_sha256": "60e616fcfd77342836f72752765cad1fc833593dc9758bd2e639bb794f01aa15",
+                "original_page_map": []
+              }
+            ]
+          },
+          {
+            "id": "EXP-HRC-FACTSHEET",
+            "title": "HRC Factsheet",
+            "publisher_original": "https://www.sdhc.org/wp-content/uploads/2021/02/Homelessness-Response-Center-FS.pdf",
+            "original_sha256": "b8fa50400819ba3de2dfdbab72b3fa2f9f4679c5d2ce12f9916f8f6089a443df",
+            "selected_copies": [
+              {
+                "included_file": "sources/EXP-HRC-FACTSHEET-excerpt.pdf",
+                "included_sha256": "7efa09565f4399605fd5f5e7f493eaa19867e658861f068196ed98467e08fa4c",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "EXP-SDHC-NAV-SLIDES",
+            "title": "Navigation Slides",
+            "publisher_original": "https://sdhc.org/106_workshop_homelessness-system-navigation_final/",
+            "original_sha256": "0edf9212fc2d04c737f58e6901bd30e10c1955d44bbe053e71c9edbf2b23c726",
+            "selected_copies": [
+              {
+                "included_file": "sources/EXP-SDHC-NAV-SLIDES-excerpt.pdf",
+                "included_sha256": "61ecd7b4066bc0f58c41ef679044f8d387a2b7e132bec8ed264fef695ba97b4a",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 8
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 9
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 10
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 11
+                  },
+                  {
+                    "included_pdf_page": 5,
+                    "original_pdf_page": 13
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "HF-SHELTER-READY",
+            "title": "District Attorney: regional Shelter Ready launch, June 9, 2025",
+            "publisher_original": "https://www.sdcda.org/content/office/newsroom/tempDownloads/5b048a6d-fcf6-4e5e-85c6-ab10567ed5c4_Shelter%20Ready%20App%20News%20Release%206-8-25.pdf",
+            "original_sha256": "5c15e92256f02a62283bcefd1478239b93210d0ddf396a5f867b353de8942059",
+            "selected_copies": [
+              {
+                "included_file": "sources/HF-SHELTER-READY.pdf",
+                "included_sha256": "5c15e92256f02a62283bcefd1478239b93210d0ddf396a5f867b353de8942059",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 2
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 3
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "IBA-26-11",
+            "title": "Independent Budget Analyst. Report 26-11: Review of the FY2027 Proposed Budget; April 2026.",
+            "publisher_original": "https://www.sandiego.gov/sites/default/files/2026-04/iba-report-26-11-review-of-the-fiscal-year-2027-proposed-budget_0.pdf",
+            "original_sha256": "6b4b28acb206c566450237f69baf38574044a4cae7611f3dcbdfc0819e3923bb",
+            "selected_copies": [
+              {
+                "included_file": "sources/IBA-26-11-excerpt.pdf",
+                "included_sha256": "bd55408287f97a273b26c17030482bc3c9eb78ce0361e55640527d11048357c5",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 205
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "NR57670753",
+            "title": "FY 25 Progress Report - SBCS_Redacted (DRAFT).pdf",
+            "publisher_original": "https://sandiego.nextrequest.com/documents/57670753",
+            "original_sha256": "c14a78daa13c34867a1293b5c936561fa44320683f3eebf2b564c3644888dc41",
+            "selected_copies": [
+              {
+                "included_file": "sources/NR57670753-excerpt.pdf",
+                "included_sha256": "eb7a7a1e562944f31def6c98bc44e0e075285707542fdb704843311b1ada480a",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "NR57670754",
+            "title": "FY 26 YTD Progress Report - SBCS_Redacted (DRAFT).pdf",
+            "publisher_original": "https://sandiego.nextrequest.com/documents/57670754",
+            "original_sha256": "6ed7e1d5e350a1981915db1fb7243d00741e485677d7b196ce8168e7410ae4b2",
+            "selected_copies": [
+              {
+                "included_file": "sources/NR57670754-excerpt.pdf",
+                "included_sha256": "06575e9ea9e2728b9d0a6c47afa406abe32fc9d7393822c2f23449132fec1942",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "O46",
+            "title": "SDHC meeting minutes, May 8, 2026: unique shelter demand",
+            "publisher_original": "https://sdhc.org/wp-content/uploads/2026/05/5-8-2026-SDHC-Regular-Meeting-Minutes-final.pdf",
+            "original_sha256": "7c59b6d434e8e69e4f8b2f3148e1d5931b7d4a440ebc54cc427069a78b45c98c",
+            "selected_copies": [
+              {
+                "included_file": "sources/O46-excerpt.pdf",
+                "included_sha256": "b43e84ff2777ef7b61a38f07a15f545afa74abab40693d69e1a150905473b28f",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 3
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 4
+                  }
+                ]
+              },
+              {
+                "included_file": "sources/O46-expansion-excerpt.pdf",
+                "included_sha256": "2cffc54aa6b79bad35fa1dc3be9f9a0b149675c98ac659f8943308a4700c1a2a",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 2
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "S01",
+            "title": "City Auditor, Performance Audit of the City’s Response to Homeless Encampments, 26-07, April 2026",
+            "publisher_original": "https://www.sandiego.gov/sites/default/files/2026-04/performance-audit-of-the-city-s-response-to-homeless-encampments-since-the-unsafe-camping-ordinance.pdf",
+            "original_sha256": "f1380ba3cc650087bc307e3434ce160c8903b3fb8bc6155fefdc7a0814142759",
+            "selected_copies": [
+              {
+                "included_file": "sources/S01-excerpt.pdf",
+                "included_sha256": "238d43d7b3224cc78788ecb37e943a9b6cf0c8eff2efa088a3c8b308fd178afc",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 10
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 39
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 42
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 43
+                  },
+                  {
+                    "included_pdf_page": 5,
+                    "original_pdf_page": 44
+                  },
+                  {
+                    "included_pdf_page": 6,
+                    "original_pdf_page": 45
+                  },
+                  {
+                    "included_pdf_page": 7,
+                    "original_pdf_page": 48
+                  },
+                  {
+                    "included_pdf_page": 8,
+                    "original_pdf_page": 49
+                  },
+                  {
+                    "included_pdf_page": 9,
+                    "original_pdf_page": 50
+                  },
+                  {
+                    "included_pdf_page": 10,
+                    "original_pdf_page": 51
+                  },
+                  {
+                    "included_pdf_page": 11,
+                    "original_pdf_page": 52
+                  },
+                  {
+                    "included_pdf_page": 12,
+                    "original_pdf_page": 58
+                  },
+                  {
+                    "included_pdf_page": 13,
+                    "original_pdf_page": 60
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "SDHC-2025-06-20",
+            "title": "San Diego Housing Commission Regular Meeting Minutes June20,2025",
+            "publisher_original": "https://sdhc.org/wp-content/uploads/2025/07/06.20.2025-SDHC-Regular-Meeting-Minutes.pdf",
+            "original_sha256": "01d2088e676319e045414f18a9e1b02bfbea28043cdfc7984b20c4359c1e3ff6",
+            "selected_copies": [
+              {
+                "included_file": "sources/SDHC-2025-06-20-excerpt.pdf",
+                "included_sha256": "23c2955c44195a96d2b591b9a97ac7a9a6aaea3cb3c71bfd827c3d00aa6e2958",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 2
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "SDHC-2025-07-18",
+            "title": "SDHC-2025-07-18 official original",
+            "publisher_original": "https://sdhc.org/wp-content/uploads/2025/09/07.18.2025-SDHC-Regular-Meeting-Minutes_final.pdf",
+            "original_sha256": "1c4b8b445f150d43e862631037bca41904085ee3dc53298197fe4ca33d9dd41c",
+            "selected_copies": [
+              {
+                "included_file": "sources/SDHC-2025-07-18-excerpt.pdf",
+                "included_sha256": "ef8c8f623072a72666780ba7ca166b6a1d18bd3a389364a44a2f763c3b4ca6ba",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 3
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "SDHC-CENTRAL-PARKING-HCR25-069",
+            "title": "SDHC. HCR25-069: Safe Parking Program at Central Elementary; October 30, 2025.",
+            "publisher_original": "https://sdhc.org/wp-content/uploads/2025/10/HCR25-069-Safe-Parking-Program.pdf",
+            "original_sha256": "58bfbf6aabdf4c4790fb221a02a9215731d826f94e74844a2fc665a556abd824",
+            "selected_copies": [
+              {
+                "included_file": "sources/SDHC-CENTRAL-PARKING-HCR25-069-excerpt.pdf",
+                "included_sha256": "b7ea43968fa37c545915e9e38eab7d28ec0d63f43d982a3f219641e5c87abbf5",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 3
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 5
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 6
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "SDHC-CSIP-2026-08",
+            "title": "SDHC. At-a-Glance Homelessness Solutions. August 31, 2026 update.",
+            "publisher_original": "https://sdhc.org/wp-content/uploads/2022/12/SDHC-at-a-glance-homelessness-solutions.pdf",
+            "original_sha256": "d0b0ba69371765c1164898bca3d86e66b66717afdb85d30987eb18e81034f587",
+            "selected_copies": [
+              {
+                "included_file": "sources/SDHC-CSIP-2026-08.pdf",
+                "included_sha256": "d0b0ba69371765c1164898bca3d86e66b66717afdb85d30987eb18e81034f587",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

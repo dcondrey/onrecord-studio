@@ -1,0 +1,80 @@
+{
+  "source": "Council-Decision-Brief.pdf",
+  "original_sha256": "da9c2fd79154497f83688ba352141ea22e4f7e67a96945ec88d48146ea7f4242",
+  "signed_sha256": "52853804e5cefc50757e34b4e1edc8d3d79dafb5b29c7f39cab255ccaf7a773f",
+  "signed_file": "Council-Decision-Brief.pdf",
+  "pages": [
+    {
+      "page": 1,
+      "pixels_sha256": "49e8fe2e0c95d7efc61e812e6a9f66de082518dd3adc1f4c5b2e2840cd4aa8b1",
+      "content_sha256": "3e8bc18e92e36dbb8e6ee6fcdd517a0ee78fdd26d13c111d580671d274ee44f6"
+    },
+    {
+      "page": 2,
+      "pixels_sha256": "aaac1c953c36df9de5048524d1278b340084f66b474df552b40309e3807231ef",
+      "content_sha256": "fb186c6f52c818971c1eb8b10c54c7b26e8f169d05f1997ddba8e63955e65d6d"
+    }
+  ],
+  "manifest_sha256": "90a4245f961533acce69a61d55ab3106cda76986639e097ac467335eab813440",
+  "manifest_definition_sha256": "da0a96e36d6d9e51d90ac136350189053a242d54821214b2035193f3d246428b",
+  "status": "passed",
+  "validation": {
+    "default-trust": {
+      "state": "Valid",
+      "successes": [
+        "assertion.dataHash.match",
+        "assertion.hashedURI.match",
+        "cawg.identity.well-formed",
+        "claimSignature.insideValidity",
+        "claimSignature.validated",
+        "timeStamp.validated"
+      ],
+      "trust_failures": [
+        {
+          "code": "signingCredential.untrusted",
+          "url": "self#jumbf=/c2pa/urn:c2pa:95f99539-1441-431b-832b-f2d2478e3058/c2pa.signature",
+          "explanation": "signing certificate untrusted"
+        },
+        {
+          "code": "signingCredential.untrusted",
+          "url": "self#jumbf=/c2pa/urn:c2pa:95f99539-1441-431b-832b-f2d2478e3058/c2pa.assertions/cawg.identity",
+          "explanation": "signing certificate untrusted"
+        }
+      ],
+      "informational": [
+        {
+          "code": "timeStamp.untrusted",
+          "url": "self#jumbf=/c2pa/urn:c2pa:95f99539-1441-431b-832b-f2d2478e3058/c2pa.signature",
+          "explanation": "timestamp cert untrusted: DigiCert SHA256 RSA4096 Timestamp Responder 2026 1"
+        }
+      ]
+    },
+    "publisher-trust": {
+      "state": "Valid",
+      "successes": [
+        "assertion.dataHash.match",
+        "assertion.hashedURI.match",
+        "cawg.identity.well-formed",
+        "claimSignature.insideValidity",
+        "claimSignature.validated",
+        "signingCredential.trusted",
+        "timeStamp.validated"
+      ],
+      "trust_failures": [
+        {
+          "code": "signingCredential.untrusted",
+          "url": "self#jumbf=/c2pa/urn:c2pa:95f99539-1441-431b-832b-f2d2478e3058/c2pa.assertions/cawg.identity",
+          "explanation": "signing certificate untrusted"
+        }
+      ],
+      "informational": [
+        {
+          "code": "timeStamp.untrusted",
+          "url": "self#jumbf=/c2pa/urn:c2pa:95f99539-1441-431b-832b-f2d2478e3058/c2pa.signature",
+          "explanation": "timestamp cert untrusted: DigiCert SHA256 RSA4096 Timestamp Responder 2026 1"
+        }
+      ]
+    },
+    "tamper_detection": "assertion.dataHash.mismatch"
+  }
+}

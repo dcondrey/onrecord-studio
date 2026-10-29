@@ -1,0 +1,700 @@
+{
+  "claim_generator_info": [
+    {
+      "name": "OnRecord research report publisher",
+      "version": "1.3",
+      "specVersion": "2.4.0"
+    }
+  ],
+  "title": "What Homelessness Outcome Numbers Actually Measure",
+  "format": "application/pdf",
+  "assertions": [
+    {
+      "label": "c2pa.actions",
+      "created": true,
+      "data": {
+        "actions": [
+          {
+            "action": "c2pa.created",
+            "when": "2026-10-19T08:21:54.905832Z",
+            "softwareAgent": {
+              "name": "OnRecord report release signing tool",
+              "version": "0.1.0"
+            },
+            "digitalSourceType": "http://cv.iptc.org/newscodes/digitalsourcetype/compositeWithTrainedAlgorithmicMedia",
+            "description": "Assembled an author-directed, AI-assisted research publication from the identified reviewed render and documentary evidence. Earlier unsignaled editing history is not reconstructed."
+          }
+        ],
+        "allActionsIncluded": false
+      }
+    },
+    {
+      "label": "cawg.metadata",
+      "data": {
+        "@context": {
+          "dc": "http://purl.org/dc/elements/1.1/",
+          "dcterms": "http://purl.org/dc/terms/",
+          "schema": "https://schema.org/"
+        },
+        "dc:title": [
+          "What Homelessness Outcome Numbers Actually Measure"
+        ],
+        "dc:creator": [
+          "David L. Condrey"
+        ],
+        "dc:identifier": [
+          "SDHA-2026-01-B/v1.0/Outcome-Numbers"
+        ],
+        "dc:language": [
+          "en-US"
+        ],
+        "dc:rights": "Original report text, figures and analysis: David L. Condrey, CC BY 4.0. Third-party records retain their own rights and status.",
+        "dcterms:license": "https://creativecommons.org/licenses/by/4.0/",
+        "schema:version": "1.0",
+        "schema:author": {
+          "@id": "did:web:writerslogic.com:executives:dcondrey",
+          "schema:name": "David L. Condrey"
+        },
+        "schema:publisher": {
+          "@id": "did:web:writerslogic.com",
+          "schema:name": "WritersLogic Inc."
+        }
+      }
+    },
+    {
+      "label": "com.writerslogic.research-provenance",
+      "data": {
+        "version": 1,
+        "report_id": "SDHA-2026-01-B",
+        "edition": "1.0",
+        "physical_pages": 8,
+        "unsigned_render_sha256": "e408c2871a76baebab72f7427437c8d8581c8577f2067a7c05ee2bb1d88a16be",
+        "reading_edition_sha256": "6569f7e06b91fbf8a7e5975ca496034558b74a827ffac5ef1671c1423f235f87",
+        "normalized_text_sha256": "d24b02ea60d220dd6af206ef8f67d6513e92e1c2139003bc0488db0a5738307d",
+        "text_digest_method": "PyMuPDF extracted page text in order; Unicode NFKC; whitespace collapsed to single spaces; UTF-8; SHA-256. This is a custom research digest, not a registered C2PA soft-binding algorithm.",
+        "source_directory_sha256": "f27f061a2ad734f323a766f1076c2b4f722a4ecbc3984d40cf3e23ec73eac8ed",
+        "publisher_identity_document": "https://writerslogic.com/.well-known/did.json",
+        "author_identity_document": "https://writerslogic.com/executives/dcondrey/did.json",
+        "publisher_did_document_sha256": "2c0ef7a1d192b92a0b1868d4922c13de6be7198a23032a2446ec85446890d874",
+        "executive_did_document_sha256": "5cfcf4401b3588959d81fb804c29d87a72522fcb5f056d77fb2e05a2abaff1da",
+        "published_issuing_certificate": "https://writerslogic.com/.well-known/c2pa/issuing-ca.crt",
+        "published_root_certificate": "https://writerslogic.com/.well-known/c2pa/root-ca.crt",
+        "evidence_scope": "Selected public records, attributed source statements, reproducible calculations and bounded interpretations.",
+        "ai_assistance": {
+          "tool": "OpenAI Codex",
+          "roles": [
+            "research assistance",
+            "drafting",
+            "software generation",
+            "automated verification"
+          ],
+          "human_direction": "David L. Condrey",
+          "human_only_authorship_attestation": false
+        },
+        "release_status": "Prepared with the author manual Zenodo v1.3 upload; no edition DOI assigned at signing.",
+        "current_edition_doi": null,
+        "prior_published_edition": "https://doi.org/10.5281/zenodo.23405739",
+        "report_policy": "Fixed edition; subsequent dataset supplements do not amend this PDF.",
+        "limitations": [
+          "Signatures bind bytes and assertions; they do not establish underlying accounting truth, fraud or a legal conclusion.",
+          "The signed provenance starts at release assembly; earlier unsignaled history and independent human review are not certified.",
+          "Software-held publisher and executive keys are used; hardware attestation and C2PA generator conformance are not claimed."
+        ]
+      }
+    },
+    {
+      "label": "com.writerslogic.source-register",
+      "data": {
+        "version": 1,
+        "hash_algorithm": "sha256",
+        "cited_source_count": 26,
+        "sources": [
+          {
+            "id": "ADC03",
+            "title": "HSSDOutreach_APR._07012022to01312024.pdf",
+            "publisher_original": "https://sandiego.nextrequest.com/documents/31337029",
+            "original_sha256": "413b2268da8e34b53d0debdd35672abf7deee8012a1ba8e0d1e0604dd01e610d",
+            "selected_copies": [
+              {
+                "included_file": "sources/ADC03-excerpt.pdf",
+                "included_sha256": "b45654471002f82789144abdacfc35ed7fc0027d696a3d7018c533e98b4e9167",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 28
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 29
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 30
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "BITFOCUS-APR-PARAMETERS",
+            "title": "Bitfocus. Clarity Human Services: APR report parameters and Enrollment CoC Filter.",
+            "publisher_original": "https://help.bitfocus.com/hudx-227-annual-performance-report",
+            "original_sha256": "975e1667ed93631bb806f6cd5cdb2444cba39f890cd4c717ea12de51cdc6ff1a",
+            "selected_copies": [
+              {
+                "included_file": "sources/BITFOCUS-APR-PARAMETERS.html",
+                "included_sha256": "975e1667ed93631bb806f6cd5cdb2444cba39f890cd4c717ea12de51cdc6ff1a",
+                "original_page_map": []
+              }
+            ]
+          },
+          {
+            "id": "CITY-FRP-FY24",
+            "title": "Outreach Efforts Are Changing Lives For San Diegans Experiencing Homelessness (City News Team, September13,2024)",
+            "publisher_original": "https://www.insidesandiego.org/outreach-efforts-are-changing-lives-san-diegans-experiencing-homelessness",
+            "original_sha256": "b036f3515dc7c101046bb5f74a74f86239c03e91962f351a2004ac62a5bb3f7a",
+            "selected_copies": [
+              {
+                "included_file": "sources/CITY-FRP-FY24.html",
+                "included_sha256": "b036f3515dc7c101046bb5f74a74f86239c03e91962f351a2004ac62a5bb3f7a",
+                "original_page_map": []
+              }
+            ]
+          },
+          {
+            "id": "CITY-FY25-CAPER",
+            "title": "FY25 CAPER",
+            "publisher_original": "https://www.sandiego.gov/sites/default/files/2025-09/city-of-san-diego-fy-2025-caper.pdf",
+            "original_sha256": "f5a713989a4809eda3f25608192e23b7c765225c8506e22d85ef7d72a5abcbc3",
+            "selected_copies": [
+              {
+                "included_file": "sources/CITY-FY25-CAPER-excerpt.pdf",
+                "included_sha256": "0a653f1ae3e2fd2ce2968300fe1056f14248adadb1a170bf1112a666e1714df5",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 23
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 24
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "CITY-FY26-CAPER",
+            "title": "FY26 CAPER",
+            "publisher_original": "https://www.sandiego.gov/sites/default/files/2026-09/fy26caper.pdf",
+            "original_sha256": "68c296e942a1c21f0f77d8208240befec33bf97ca93c176e7027af0b13137d31",
+            "selected_copies": [
+              {
+                "included_file": "sources/CITY-FY26-CAPER-excerpt.pdf",
+                "included_sha256": "b5f47a130e5997206ce5e236de5e57f3b75850be9e73a17b4621dc345bcc3e30",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 19
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "DFC-2025-REPORT",
+            "title": "Dreams for Change. 2025 Annual Report; public provider publication.",
+            "publisher_original": "https://www.dreamsforchange.org/wp-content/uploads/2025-DFC-Annual-Report-1-2.pdf",
+            "original_sha256": "23ad03ce44b41dcc444963fa9e03f8412b3e91011630a3dcb6fe4f1da0ddb3c8",
+            "selected_copies": [
+              {
+                "included_file": "sources/DFC-2025-REPORT-excerpt.pdf",
+                "included_sha256": "737b6ed6dbc46759fe4097eed85b956b6457a1b8a5792a18a16a5191a61749cf",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 8
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "DR05",
+            "title": "City of San Diego, Homelessness Strategies and Solutions Department. (2025, July 16). Combined HUD Annual Performance Report: July 1, 2024–June 30, 2025 [Mixed-project system report; cover template says FY 2024].",
+            "publisher_original": "https://sandiego.nextrequest.com/documents/65937080",
+            "original_sha256": "04eca6c4745432376c0d47ba5369485ca835d72378f886a3ab5574c337cd9cd3",
+            "selected_copies": [
+              {
+                "included_file": "sources/DR05-excerpt.pdf",
+                "included_sha256": "9dd4632bc4f94c5a046669e31e8355e516c11f8a3b5bda8609554446f64ad840",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 2
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 42
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "DR07",
+            "title": "Regional Task Force on Homelessness. (2026, June). Homelessness crisis response system: 2025 data and performance report. San Diego City and County Continuum of Care.",
+            "publisher_original": "https://www.rtfhsd.org/wp-content/uploads/2026/07/2025-Data-Performance-Report_Email.pdf",
+            "original_sha256": "f4488ac5485b40b85fc0a3267fff4f67d443fa6bcb90541a7b564fa51b0350c5",
+            "selected_copies": [
+              {
+                "included_file": "sources/DR07-excerpt.pdf",
+                "included_sha256": "96cd524315b538aeb06780f7bb49606c08bfc80e74972e00019a5ac1d1369536",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 3
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 4
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 5
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 15
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "DR15",
+            "title": "CA System Performance Measures, Statewide and by CoC",
+            "publisher_original": "https://publish.data.ca.gov/dataset/d3f9ca4d-3e60-434b-9fa3-91ee0befd34d/resource/e02178d9-1d34-4798-9979-f50af9f1742e/download/ca-spms-prior-years-and-last-twelve-months-cy2025.csv",
+            "original_sha256": "d2cfc0ee93b161d45e5360d9f974d0dc9661d0e5e527f3d03c52091751da268d",
+            "selected_copies": [
+              {
+                "included_file": "sources/DR15.csv",
+                "included_sha256": "d2cfc0ee93b161d45e5360d9f974d0dc9661d0e5e527f3d03c52091751da268d",
+                "original_page_map": []
+              }
+            ]
+          },
+          {
+            "id": "DR17",
+            "title": "California System Performance Measures Guide",
+            "publisher_original": "https://calich.ca.gov/documents/california_system_performance_measures_guide.pdf",
+            "original_sha256": "bdf812e1c2e3454d14ba6ee3d91bdb4bd0dc36e8fd758ab1f24b5bab5148116d",
+            "selected_copies": [
+              {
+                "included_file": "sources/DR17-excerpt.pdf",
+                "included_sha256": "42a574ab6edd0e8eec110506c1d27b244d1f697ea1acaf85325379f4c7bd8ec9",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 3
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 7
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 10
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 11
+                  },
+                  {
+                    "included_pdf_page": 5,
+                    "original_pdf_page": 12
+                  },
+                  {
+                    "included_pdf_page": 6,
+                    "original_pdf_page": 13
+                  },
+                  {
+                    "included_pdf_page": 7,
+                    "original_pdf_page": 14
+                  },
+                  {
+                    "included_pdf_page": 8,
+                    "original_pdf_page": 16
+                  },
+                  {
+                    "included_pdf_page": 9,
+                    "original_pdf_page": 18
+                  }
+                ]
+              },
+              {
+                "included_file": "sources/DR17-expansion-excerpt.pdf",
+                "included_sha256": "4d4f4c56949cbd023b5f5021dd62a997b81c7e554a5c968eb53d9b6d8bc134cd",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 3
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 4
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "DSDP-FY24",
+            "title": "July 16, 2024 PBID Advisory Board Agenda Packet",
+            "publisher_original": "https://downtownsandiego.org/wp-content/uploads/2025/08/2024.07.16-PBID-Advisory-Board-Agenda-Packet.pdf",
+            "original_sha256": "11ea5a2997edbea5e5223089923d803598c94861ff5479d35d8ac52ccd625c47",
+            "selected_copies": []
+          },
+          {
+            "id": "EXP-HHAP3-FINAL-GOALS",
+            "title": "HHAP3 Final Goals",
+            "publisher_original": "https://www.hcd.ca.gov/sites/default/files/docs/grants-and-funding/calich/hhap3_unsheltered_goals.pdf",
+            "original_sha256": "feea08a976085c156fd8ca5f54d6708c89a6ba95e053127d1ac5d9ccdfc19099",
+            "selected_copies": [
+              {
+                "included_file": "sources/EXP-HHAP3-FINAL-GOALS-excerpt.pdf",
+                "included_sha256": "43ca97399c153e1f7359d25d16f5c8fef1a293bb2fb452ff9effe604bbf10afd",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 2
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "EXP-IBA25-06-MIDYEAR",
+            "title": "IBA25 06 Midyear",
+            "publisher_original": "https://www.sandiego.gov/sites/default/files/2025-02/25-06-iba-review-of-the-fy-2025-mid-year-budget-monitoring-report_2.pdf",
+            "original_sha256": "c40afafcc356aa837f17d9763d9a2b4156bad28f178579a7b3ef14d4c063ae95",
+            "selected_copies": [
+              {
+                "included_file": "sources/EXP-IBA25-06-MIDYEAR-excerpt.pdf",
+                "included_sha256": "9a36ef39501f0fee7675fd4bca0faeffade084872405657e6d962113f47aecb7",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 15
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 16
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 24
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "HF-RTFH-DIVERSION",
+            "title": "RTFH San Diego Homeless Diversion Fund and Resolution Strategies, 2024 final report, May 2025; updated August 2025",
+            "publisher_original": "https://www.rtfhsd.org/wp-content/uploads/2025/09/Revised_Diversion-Resolution-Strategies-Report_August2025.pdf",
+            "original_sha256": "125e7f718e54e6bda7431b31d5dce000344c103f32d68a6d165cf8462ed74102",
+            "selected_copies": [
+              {
+                "included_file": "sources/HF-RTFH-DIVERSION-excerpt.pdf",
+                "included_sha256": "4c0046d9239adafb67ff75f0f2363c2533560d2a6c8221bc133aba4056e0676e",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 4
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 5
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 8
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "NR24157936",
+            "title": "[EXTERNAL] RE_ PAST DUE MONITORING REPORT- FY 2018 Father Joe's Villages Project.pdf",
+            "publisher_original": "https://sandiego.nextrequest.com/requests/23-2288",
+            "original_sha256": "555ed3d35b9504011fbaf5bc234c17bf77d58923355a39395e42136300b67f99",
+            "selected_copies": []
+          },
+          {
+            "id": "NR24158003",
+            "title": "FOURTH REQUEST- PAST DUE MONITORING RPT- FY18 FJV Project (Data Verification).pdf",
+            "publisher_original": "https://sandiego.nextrequest.com/requests/23-2288",
+            "original_sha256": "0729e533fdf24361c529eaf49c6f30c2af5a34c4829a7f6ab1ed2768a529f767",
+            "selected_copies": []
+          },
+          {
+            "id": "NR35389136",
+            "title": "Executed_Third Amendment_DSDP Family Reunification and Outreach Program Svcs.pdf",
+            "publisher_original": "https://sandiego.nextrequest.com/documents/35389136",
+            "original_sha256": "cbc27bdf4fda5aadf9769a0218e045eba333fff7871be5ec76e17a41ce44159f",
+            "selected_copies": [
+              {
+                "included_file": "sources/NR35389136-excerpt.pdf",
+                "included_sha256": "afc3826547ccebd0c393114cf7553a4c13be490e67b8d993f0ebfd5230546f10",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 3
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 5
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 6
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 14
+                  },
+                  {
+                    "included_pdf_page": 5,
+                    "original_pdf_page": 15
+                  },
+                  {
+                    "included_pdf_page": 6,
+                    "original_pdf_page": 37
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "NR53645063-M06",
+            "title": "Signed HHI-21-03.4 Fourth Option and Fifth Amendment, FY2025 PMC Interim Housing",
+            "publisher_original": "https://sdhc.nextrequest.com/documents/53645063",
+            "original_sha256": "cb264d9f9b274292b2edc9c4a94ee3edaf3feac07515774f94037ac2b6dece64",
+            "selected_copies": [
+              {
+                "included_file": "sources/NR53645063-M06-excerpt.pdf",
+                "included_sha256": "e2e0c5f7da99ead1c972f19d518582aead0f1604c2f152ae255a19042797302f",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 2
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 4
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 5
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "NR53645063-M32",
+            "title": "HHI-23-35.3 Third Option and Third Amendment  Connections Housing - PATH  EXECUTED.pdf",
+            "publisher_original": "https://sdhc.nextrequest.com/documents/53645063",
+            "original_sha256": "0669cc90049999d4ebac31dabd494843b9f4d1043b2f5e715edc24f40c64e0a4",
+            "selected_copies": [
+              {
+                "included_file": "sources/NR53645063-M32-excerpt.pdf",
+                "included_sha256": "17388962b9701eb53867a77f9fb4409440336d0cb6e68e489a93f9788c2ca281",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 4
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 5
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 8
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "NR57670541",
+            "title": "FY25 APR - Safe Sleeping 20th&B.pdf",
+            "publisher_original": "https://sandiego.nextrequest.com/documents/57670541",
+            "original_sha256": "ac52bdb7c90a970256fd028c4f9ff9bb8a996c152a45733da9f5cc4449f20daa",
+            "selected_copies": [
+              {
+                "included_file": "sources/NR57670541-excerpt.pdf",
+                "included_sha256": "f8d68315e006bfa1b77328ad35a5c82f71c29c0e4186954885b35573bdb0045a",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "NR57670542",
+            "title": "FY25 APR - Safe Sleeping O Lot (DfC).pdf",
+            "publisher_original": "https://sandiego.nextrequest.com/documents/57670542",
+            "original_sha256": "7760e6cb9e4645ab8c60ffc7d34022f5185e5e6c2181d698f1a01cd54d1c155c",
+            "selected_copies": [
+              {
+                "included_file": "sources/NR57670542-excerpt.pdf",
+                "included_sha256": "a5ead52c343b094cd5d53a14c55c5e377b382c82f9b2189cb5604a5e4a3e5566",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "NR57670544",
+            "title": "FY25 APR - Safe Sleeping O Lot (DSDP).pdf",
+            "publisher_original": "https://sandiego.nextrequest.com/documents/57670544",
+            "original_sha256": "3a5a0285c2ba2f9b007b0979304f51b88eb0c664d500d256a0ef5a389aa50b97",
+            "selected_copies": [
+              {
+                "included_file": "sources/NR57670544-excerpt.pdf",
+                "included_sha256": "0793acb14d1bc034b50776d6334328f780076f64180dd31fe0b75d64135504ca",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "SDHC-CSIP-2026-08",
+            "title": "SDHC. At-a-Glance Homelessness Solutions. August 31, 2026 update.",
+            "publisher_original": "https://sdhc.org/wp-content/uploads/2022/12/SDHC-at-a-glance-homelessness-solutions.pdf",
+            "original_sha256": "d0b0ba69371765c1164898bca3d86e66b66717afdb85d30987eb18e81034f587",
+            "selected_copies": [
+              {
+                "included_file": "sources/SDHC-CSIP-2026-08.pdf",
+                "included_sha256": "d0b0ba69371765c1164898bca3d86e66b66717afdb85d30987eb18e81034f587",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "SDHC-DASHBOARD-WELCOME-2026-08",
+            "title": "SDHC and City homelessness programs dashboard: Welcome snapshot, data through August31,2026",
+            "publisher_original": "https://public.tableau.com/static/images/SD/SDHCandCityofSanDiegoHomelessServicesProgramsOverview/Welcome/1.png",
+            "original_sha256": "321346642bcad67a85e92737a5477929c529a69d9fa0cebcc43011701af75f10",
+            "selected_copies": [
+              {
+                "included_file": "sources/SDHC-DASHBOARD-WELCOME-2026-08.png",
+                "included_sha256": "321346642bcad67a85e92737a5477929c529a69d9fa0cebcc43011701af75f10",
+                "original_page_map": []
+              }
+            ]
+          },
+          {
+            "id": "SDHC-SHELTER-DASHBOARD-2026-08",
+            "title": "SDHC shelter dashboard: July1–August31,2026 published snapshot",
+            "publisher_original": "https://public.tableau.com/static/images/SD/SDHCandCityofSanDiegoHomelessServicesProgramsOverview/Shelters/1.png",
+            "original_sha256": "1324a9381128212c64b79863aea7c5deea82642e49284e3ec32bffa2f8c97638",
+            "selected_copies": [
+              {
+                "included_file": "sources/SDHC-SHELTER-DASHBOARD-2026-08.png",
+                "included_sha256": "1324a9381128212c64b79863aea7c5deea82642e49284e3ec32bffa2f8c97638",
+                "original_page_map": []
+              }
+            ]
+          },
+          {
+            "id": "UCSD26S",
+            "title": "Passing Through and Staying Put: Emergency Shelter Trajectories in San Diego County, 2018–2025, June 2026",
+            "publisher_original": "https://drive.google.com/uc?export=download&id=1VciWP7kGdHMzFUiLjXwIPEPSWtmLR6lU",
+            "original_sha256": "3709a2094518b1b57bfc435e5a4bba13356ea75f96ec13a09b4f08536527e575",
+            "selected_copies": [
+              {
+                "included_file": "sources/UCSD26S-excerpt.pdf",
+                "included_sha256": "c0ed487530a68e99c873c2d0b49cda1d42936b86e6fcdf63ad12d8ccb748503b",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 4
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 6
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 7
+                  },
+                  {
+                    "included_pdf_page": 5,
+                    "original_pdf_page": 20
+                  },
+                  {
+                    "included_pdf_page": 6,
+                    "original_pdf_page": 21
+                  },
+                  {
+                    "included_pdf_page": 7,
+                    "original_pdf_page": 25
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

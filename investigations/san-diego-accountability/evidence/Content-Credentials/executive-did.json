@@ -1,0 +1,22 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/did/v1",
+    "https://w3id.org/security/suites/ed25519-2020/v1"
+  ],
+  "id": "did:web:writerslogic.com:executives:dcondrey",
+  "controller": "did:web:writerslogic.com",
+  "verificationMethod": [
+    {
+      "id": "did:web:writerslogic.com:executives:dcondrey#key-exec-1",
+      "type": "Ed25519VerificationKey2020",
+      "controller": "did:web:writerslogic.com:executives:dcondrey",
+      "publicKeyMultibase": "z6MksvgMQ1DeeBhuZtbx8yp2eM8gxvxFAhonmJnZkAfQfaMK"
+    }
+  ],
+  "authentication": [
+    "did:web:writerslogic.com:executives:dcondrey#key-exec-1"
+  ],
+  "assertionMethod": [
+    "did:web:writerslogic.com:executives:dcondrey#key-exec-1"
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "status": "passed",
+  "modification": "Changed one PDF header version digit outside the manifest; no source evidence modified.",
+  "detected_code": "assertion.dataHash.mismatch"
+}

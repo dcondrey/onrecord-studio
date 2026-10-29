@@ -1,0 +1,23 @@
+[
+  {
+    "url": "https://timestamp.digicert.com",
+    "error": "URLError",
+    "reason": "ConnectionRefusedError: [Errno 61] Connection refused"
+  },
+  {
+    "url": "http://timestamp.digicert.com",
+    "status": 200,
+    "bytes": 6008,
+    "content_type": "application/timestamp-reply",
+    "openssl_parse_exit": 0,
+    "summary": "Status info:\nStatus: Granted.\nStatus description: unspecified\nFailure info: unspecified\n\nTST info:\nVersion: 1\nPolicy OID: 2.16.840.1.114412.7.1\nHash Algorithm: sha256\nMessage data:\n    0000 - d5 57 75 36 30 44 42 c8-43 d5 b6 27 fa e9 36 8a   .Wu60DB.C..'..6.\n    0010 - db 95 35 87 7b 91 c0 87-e3 e8 95 f6 c5 c7 e3 a8   ..5.{...........\nSerial number: 0xE896C34ABB2492504217D85A977EDA4F\nTime stamp: Oct 19 07:42:26 2026 GMT\nAccuracy: unspecified\nOrdering: no\nNonce: 0xB026844E1A71A3FD\nTSA: unspecified\nExtensions:\n"
+  },
+  {
+    "url": "https://freetsa.org/tsr",
+    "status": 200,
+    "bytes": 4645,
+    "content_type": "application/timestamp-reply",
+    "openssl_parse_exit": 0,
+    "summary": "Status info:\nStatus: Granted.\nStatus description: unspecified\nFailure info: unspecified\n\nTST info:\nVersion: 1\nPolicy OID: tsa_policy1\nHash Algorithm: sha256\nMessage data:\n    0000 - d5 57 75 36 30 44 42 c8-43 d5 b6 27 fa e9 36 8a   .Wu60DB.C..'..6.\n    0010 - db 95 35 87 7b 91 c0 87-e3 e8 95 f6 c5 c7 e3 a8   ..5.{...........\nSerial number: 0x094684BF\nTime stamp: Oct 19 07:42:26 2026 GMT\nAccuracy: unspecified\nOrdering: yes\nNonce: 0xB026844E1A71A3FD\nTSA: DirName:/O=Free TSA/OU=TSA/description=This certificate digitally signs documents and time stamp requests made using the freetsa.org online services/CN=www.freetsa.org/emailAddress=busilezas@mailbox.org/L=Wuerzburg/C=DE/ST=Bayern\nExtensions:\n"
+  }
+]

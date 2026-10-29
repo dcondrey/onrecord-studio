@@ -1,0 +1,2098 @@
+{
+  "active_manifest": "urn:c2pa:1fa43eeb-3092-49ee-a55c-034e4f19c6e7",
+  "manifests": {
+    "urn:c2pa:1fa43eeb-3092-49ee-a55c-034e4f19c6e7": {
+      "claim": {
+        "instanceID": "xmp:iid:6751791c-4aa6-4de5-ae04-c4b3c090a2bb",
+        "claim_generator_info": {
+          "name": "OnRecord research report publisher",
+          "version": "1.3",
+          "specVersion": "2.4.0",
+          "org.contentauth.c2pa_rs": "0.89.1"
+        },
+        "signature": "self#jumbf=/c2pa/urn:c2pa:1fa43eeb-3092-49ee-a55c-034e4f19c6e7/c2pa.signature",
+        "created_assertions": [
+          {
+            "url": "self#jumbf=c2pa.assertions/c2pa.actions.v2",
+            "hash": "bCe64mW8+uId99WF3haCechfSf3T75bo0XghEQySZ7o="
+          },
+          {
+            "url": "self#jumbf=c2pa.assertions/c2pa.hash.data",
+            "hash": "/xTdSrqEYx16Cy9PRB89uDkrIVxYK7W5o8BK1aA9N/g="
+          }
+        ],
+        "gathered_assertions": [
+          {
+            "url": "self#jumbf=c2pa.assertions/cawg.metadata",
+            "hash": "O8ByBD+NS+JSHdEUARMduDUqVF6lik4P2IQLJOkTIuU="
+          },
+          {
+            "url": "self#jumbf=c2pa.assertions/com.writerslogic.research-provenance",
+            "hash": "F1HIv2oU8M0B/YmBBmDv65q6bAIPP2wwHkQsCXoG/Jo="
+          },
+          {
+            "url": "self#jumbf=c2pa.assertions/com.writerslogic.source-register",
+            "hash": "O9hnYaIT6J5RB1UgKdODqdRFWc1BmPuV47jBOUmVUyo="
+          },
+          {
+            "url": "self#jumbf=c2pa.assertions/cawg.identity",
+            "hash": "jvEiwh9plGi7OD2ZBDxd+zZSQ0mi4xoqp9i4s6bQl4I="
+          }
+        ],
+        "dc:title": "Follow the Charge Before Calling It a Loss",
+        "alg": "sha256",
+        "claim_version": 2
+      },
+      "assertion_store": {
+        "cawg.metadata": {
+          "@context": {
+            "dc": "http://purl.org/dc/elements/1.1/",
+            "dcterms": "http://purl.org/dc/terms/",
+            "schema": "https://schema.org/"
+          },
+          "dc:creator": [
+            "David L. Condrey"
+          ],
+          "dc:identifier": [
+            "SDHA-2026-01-D/v1.0/Follow-the-Charge"
+          ],
+          "dc:language": [
+            "en-US"
+          ],
+          "dc:rights": "Original report text, figures and analysis: David L. Condrey, CC BY 4.0. Third-party records retain their own rights and status.",
+          "dc:title": [
+            "Follow the Charge Before Calling It a Loss"
+          ],
+          "dcterms:license": "https://creativecommons.org/licenses/by/4.0/",
+          "schema:author": {
+            "@id": "did:web:writerslogic.com:executives:dcondrey",
+            "schema:name": "David L. Condrey"
+          },
+          "schema:publisher": {
+            "@id": "did:web:writerslogic.com",
+            "schema:name": "WritersLogic Inc."
+          },
+          "schema:version": "1.0"
+        },
+        "com.writerslogic.source-register": {
+          "cited_source_count": 26,
+          "hash_algorithm": "sha256",
+          "sources": [
+            {
+              "id": "ABNR56369072",
+              "original_sha256": "429f21ebe0ea485c10e7c361a4b360850b3f65fc2e8016f8108b2590566f32a5",
+              "publisher_original": "https://sandiego.nextrequest.com/documents/56369072",
+              "selected_copies": [
+                {
+                  "included_file": "sources/ABNR56369072.xlsx",
+                  "included_sha256": "429f21ebe0ea485c10e7c361a4b360850b3f65fc2e8016f8108b2590566f32a5",
+                  "original_page_map": []
+                }
+              ],
+              "title": "Accounts Payable Transaction Detail_Urban Corps RFP 10089850-22-B.xlsx"
+            },
+            {
+              "id": "AP-Recovery-10090424-26-L",
+              "original_sha256": "484904890c3f262acf7b0783e9225cedde48ac3d5cb114638192426c6c78b552",
+              "publisher_original": "https://www.sandiego.gov/sites/default/files/2026-07/10090424-26-l.pdf",
+              "selected_copies": [
+                {
+                  "included_file": "sources/AP-Recovery-10090424-26-L-excerpt.pdf",
+                  "included_sha256": "45246610f1b6341d6f560b0e68eecd9102c6912138d2fd8caa6bdf8be0479d37",
+                  "original_page_map": [
+                    {
+                      "included_pdf_page": 1,
+                      "original_pdf_page": 1
+                    },
+                    {
+                      "included_pdf_page": 2,
+                      "original_pdf_page": 2
+                    },
+                    {
+                      "included_pdf_page": 3,
+                      "original_pdf_page": 3
+                    },
+                    {
+                      "included_pdf_page": 4,
+                      "original_pdf_page": 12
+                    },
+                    {
+                      "included_pdf_page": 5,
+                      "original_pdf_page": 13
+                    }
+                  ]
+                }
+              ],
+              "title": "Executed Moody Associates Accounts Payable Recovery Services contract 10090424-26-L"
+            },
+            {
+              "id": "BK36",
+              "original_sha256": "d6903bd613a4edd6e5825a018fdff45f46d74b185d1beb45bad5f49f618eaeb7",
+              "publisher_original": "https://sandiego.hylandcloud.com/211agendaonlinecomm/Documents/ViewDocument/recommendation-follow-up-report-period-ending-june-30-2026.pdf.pdf?meetingId=7196&documentType=Agenda&itemId=265947&publishId=1134063&isSection=false",
+              "selected_copies": [
+                {
+                  "included_file": "sources/BK36.pdf",
+                  "included_sha256": "d6903bd613a4edd6e5825a018fdff45f46d74b185d1beb45bad5f49f618eaeb7",
+                  "original_page_map": [
+                    {
+                      "included_pdf_page": 1,
+                      "original_pdf_page": 1
+                    },
+                    {
+                      "included_pdf_page": 2,
+                      "original_pdf_page": 2
+                    },
+                    {
+                      "included_pdf_page": 3,
+                      "original_pdf_page": 3
+                    },
+                    {
+                      "included_pdf_page": 4,
+                      "original_pdf_page": 4
+                    },
+                    {
+                      "included_pdf_page": 5,
+                      "original_pdf_page": 5
+                    },
+                    {
+                      "included_pdf_page": 6,
+                      "original_pdf_page": 6
+                    },
+                    {
+                      "included_pdf_page": 7,
+                      "original_pdf_page": 7
+                    },
+                    {
+                      "included_pdf_page": 8,
+                      "original_pdf_page": 8
+                    },
+                    {
+                      "included_pdf_page": 9,
+                      "original_pdf_page": 9
+                    },
+                    {
+                      "included_pdf_page": 10,
+                      "original_pdf_page": 10
+                    },
+                    {
+                      "included_pdf_page": 11,
+                      "original_pdf_page": 11
+                    },
+                    {
+                      "included_pdf_page": 12,
+                      "original_pdf_page": 12
+                    },
+                    {
+                      "included_pdf_page": 13,
+                      "original_pdf_page": 13
+                    },
+                    {
+                      "included_pdf_page": 14,
+                      "original_pdf_page": 14
+                    },
+                    {
+                      "included_pdf_page": 15,
+                      "original_pdf_page": 15
+                    },
+                    {
+                      "included_pdf_page": 16,
+                      "original_pdf_page": 16
+                    },
+                    {
+                      "included_pdf_page": 17,
+                      "original_pdf_page": 17
+                    },
+                    {
+                      "included_pdf_page": 18,
+                      "original_pdf_page": 18
+                    },
+                    {
+                      "included_pdf_page": 19,
+                      "original_pdf_page": 19
+                    },
+                    {
+                      "included_pdf_page": 20,
+                      "original_pdf_page": 20
+                    },
+                    {
+                      "included_pdf_page": 21,
+                      "original_pdf_page": 21
+                    },
+                    {
+                      "included_pdf_page": 22,
+                      "original_pdf_page": 22
+                    },
+                    {
+                      "included_pdf_page": 23,
+                      "original_pdf_page": 23
+                    },
+                    {
+                      "included_pdf_page": 24,
+                      "original_pdf_page": 24
+                    },
+                    {
+                      "included_pdf_page": 25,
+                      "original_pdf_page": 25
+                    },
+                    {
+                      "included_pdf_page": 26,
+                      "original_pdf_page": 26
+                    },
+                    {
+                      "included_pdf_page": 27,
+                      "original_pdf_page": 27
+                    },
+                    {
+                      "included_pdf_page": 28,
+                      "original_pdf_page": 28
+                    },
+                    {
+                      "included_pdf_page": 29,
+                      "original_pdf_page": 29
+                    },
+                    {
+                      "included_pdf_page": 30,
+                      "original_pdf_page": 30
+                    },
+                    {
+                      "included_pdf_page": 31,
+                      "original_pdf_page": 31
+                    },
+                    {
+                      "included_pdf_page": 32,
+                      "original_pdf_page": 32
+                    },
+                    {
+                      "included_pdf_page": 33,
+                      "original_pdf_page": 33
+                    },
+                    {
+                      "included_pdf_page": 34,
+                      "original_pdf_page": 34
+                    },
+                    {
+                      "included_pdf_page": 35,
+                      "original_pdf_page": 35
+                    },
+                    {
+                      "included_pdf_page": 36,
+                      "original_pdf_page": 36
+                    },
+                    {
+                      "included_pdf_page": 37,
+                      "original_pdf_page": 37
+                    },
+                    {
+                      "included_pdf_page": 38,
+                      "original_pdf_page": 38
+                    },
+                    {
+                      "included_pdf_page": 39,
+                      "original_pdf_page": 39
+                    },
+                    {
+                      "included_pdf_page": 40,
+                      "original_pdf_page": 40
+                    },
+                    {
+                      "included_pdf_page": 41,
+                      "original_pdf_page": 41
+                    },
+                    {
+                      "included_pdf_page": 42,
+                      "original_pdf_page": 42
+                    },
+                    {
+                      "included_pdf_page": 43,
+                      "original_pdf_page": 43
+                    },
+                    {
+                      "included_pdf_page": 44,
+                      "original_pdf_page": 44
+                    },
+                    {
+                      "included_pdf_page": 45,
+                      "original_pdf_page": 45
+                    },
+                    {
+                      "included_pdf_page": 46,
+                      "original_pdf_page": 46
+                    },
+                    {
+                      "included_pdf_page": 47,
+                      "original_pdf_page": 47
+                    },
+                    {
+                      "included_pdf_page": 48,
+                      "original_pdf_page": 48
+                    },
+                    {
+                      "included_pdf_page": 49,
+                      "original_pdf_page": 49
+                    },
+                    {
+                      "included_pdf_page": 50,
+                      "original_pdf_page": 50
+                    },
+                    {
+                      "included_pdf_page": 51,
+                      "original_pdf_page": 51
+                    },
+                    {
+                      "included_pdf_page": 52,
+                      "original_pdf_page": 52
+                    },
+                    {
+                      "included_pdf_page": 53,
+                      "original_pdf_page": 53
+                    },
+                    {
+                      "included_pdf_page": 54,
+                      "original_pdf_page": 54
+                    },
+                    {
+                      "included_pdf_page": 55,
+                      "original_pdf_page": 55
+                    },
+                    {
+                      "included_pdf_page": 56,
+                      "original_pdf_page": 56
+                    },
+                    {
+                      "included_pdf_page": 57,
+                      "original_pdf_page": 57
+                    },
+                    {
+                      "included_pdf_page": 58,
+                      "original_pdf_page": 58
+                    },
+                    {
+                      "included_pdf_page": 59,
+                      "original_pdf_page": 59
+                    },
+                    {
+                      "included_pdf_page": 60,
+                      "original_pdf_page": 60
+                    },
+                    {
+                      "included_pdf_page": 61,
+                      "original_pdf_page": 61
+                    },
+                    {
+                      "included_pdf_page": 62,
+                      "original_pdf_page": 62
+                    },
+                    {
+                      "included_pdf_page": 63,
+                      "original_pdf_page": 63
+                    },
+                    {
+                      "included_pdf_page": 64,
+                      "original_pdf_page": 64
+                    },
+                    {
+                      "included_pdf_page": 65,
+                      "original_pdf_page": 65
+                    },
+                    {
+                      "included_pdf_page": 66,
+                      "original_pdf_page": 66
+                    },
+                    {
+                      "included_pdf_page": 67,
+                      "original_pdf_page": 67
+                    },
+                    {
+                      "included_pdf_page": 68,
+                      "original_pdf_page": 68
+                    },
+                    {
+                      "included_pdf_page": 69,
+                      "original_pdf_page": 69
+                    },
+                    {
+                      "included_pdf_page": 70,
+                      "original_pdf_page": 70
+                    },
+                    {
+                      "included_pdf_page": 71,
+                      "original_pdf_page": 71
+                    },
+                    {
+                      "included_pdf_page": 72,
+                      "original_pdf_page": 72
+                    },
+                    {
+                      "included_pdf_page": 73,
+                      "original_pdf_page": 73
+                    },
+                    {
+                      "included_pdf_page": 74,
+                      "original_pdf_page": 74
+                    },
+                    {
+                      "included_pdf_page": 75,
+                      "original_pdf_page": 75
+                    },
+                    {
+                      "included_pdf_page": 76,
+                      "original_pdf_page": 76
+                    },
+                    {
+                      "included_pdf_page": 77,
+                      "original_pdf_page": 77
+                    },
+                    {
+                      "included_pdf_page": 78,
+                      "original_pdf_page": 78
+                    },
+                    {
+                      "included_pdf_page": 79,
+                      "original_pdf_page": 79
+                    },
+                    {
+                      "included_pdf_page": 80,
+                      "original_pdf_page": 80
+                    },
+                    {
+                      "included_pdf_page": 81,
+                      "original_pdf_page": 81
+                    },
+                    {
+                      "included_pdf_page": 82,
+                      "original_pdf_page": 82
+                    },
+                    {
+                      "included_pdf_page": 83,
+                      "original_pdf_page": 83
+                    },
+                    {
+                      "included_pdf_page": 84,
+                      "original_pdf_page": 84
+                    },
+                    {
+                      "included_pdf_page": 85,
+                      "original_pdf_page": 85
+                    },
+                    {
+                      "included_pdf_page": 86,
+                      "original_pdf_page": 86
+                    },
+                    {
+                      "included_pdf_page": 87,
+                      "original_pdf_page": 87
+                    },
+                    {
+                      "included_pdf_page": 88,
+                      "original_pdf_page": 88
+                    },
+                    {
+                      "included_pdf_page": 89,
+                      "original_pdf_page": 89
+                    },
+                    {
+                      "included_pdf_page": 90,
+                      "original_pdf_page": 90
+                    },
+                    {
+                      "included_pdf_page": 91,
+                      "original_pdf_page": 91
+                    },
+                    {
+                      "included_pdf_page": 92,
+                      "original_pdf_page": 92
+                    },
+                    {
+                      "included_pdf_page": 93,
+                      "original_pdf_page": 93
+                    },
+                    {
+                      "included_pdf_page": 94,
+                      "original_pdf_page": 94
+                    },
+                    {
+                      "included_pdf_page": 95,
+                      "original_pdf_page": 95
+                    },
+                    {
+                      "included_pdf_page": 96,
+                      "original_pdf_page": 96
+                    },
+                    {
+                      "included_pdf_page": 97,
+                      "original_pdf_page": 97
+                    },
+                    {
+                      "included_pdf_page": 98,
+                      "original_pdf_page": 98
+                    },
+                    {
+                      "included_pdf_page": 99,
+                      "original_pdf_page": 99
+                    },
+                    {
+                      "included_pdf_page": 100,
+                      "original_pdf_page": 100
+                    },
+                    {
+                      "included_pdf_page": 101,
+                      "original_pdf_page": 101
+                    },
+                    {
+                      "included_pdf_page": 102,
+                      "original_pdf_page": 102
+                    },
+                    {
+                      "included_pdf_page": 103,
+                      "original_pdf_page": 103
+                    },
+                    {
+                      "included_pdf_page": 104,
+                      "original_pdf_page": 104
+                    },
+                    {
+                      "included_pdf_page": 105,
+                      "original_pdf_page": 105
+                    },
+                    {
+                      "included_pdf_page": 106,
+                      "original_pdf_page": 106
+                    },
+                    {
+                      "included_pdf_page": 107,
+                      "original_pdf_page": 107
+                    },
+                    {
+                      "included_pdf_page": 108,
+                      "original_pdf_page": 108
+                    },
+                    {
+                      "included_pdf_page": 109,
+                      "original_pdf_page": 109
+                    },
+                    {
+                      "included_pdf_page": 110,
+                      "original_pdf_page": 110
+                    },
+                    {
+                      "included_pdf_page": 111,
+                      "original_pdf_page": 111
+                    },
+                    {
+                      "included_pdf_page": 112,
+                      "original_pdf_page": 112
+                    },
+                    {
+                      "included_pdf_page": 113,
+                      "original_pdf_page": 113
+                    },
+                    {
+                      "included_pdf_page": 114,
+                      "original_pdf_page": 114
+                    },
+                    {
+                      "included_pdf_page": 115,
+                      "original_pdf_page": 115
+                    },
+                    {
+                      "included_pdf_page": 116,
+                      "original_pdf_page": 116
+                    },
+                    {
+                      "included_pdf_page": 117,
+                      "original_pdf_page": 117
+                    },
+                    {
+                      "included_pdf_page": 118,
+                      "original_pdf_page": 118
+                    },
+                    {
+                      "included_pdf_page": 119,
+                      "original_pdf_page": 119
+                    },
+                    {
+                      "included_pdf_page": 120,
+                      "original_pdf_page": 120
+                    },
+                    {
+                      "included_pdf_page": 121,
+                      "original_pdf_page": 121
+                    },
+                    {
+                      "included_pdf_page": 122,
+                      "original_pdf_page": 122
+                    },
+                    {
+                      "included_pdf_page": 123,
+                      "original_pdf_page": 123
+                    },
+                    {
+                      "included_pdf_page": 124,
+                      "original_pdf_page": 124
+                    },
+                    {
+                      "included_pdf_page": 125,
+                      "original_pdf_page": 125
+                    },
+                    {
+                      "included_pdf_page": 126,
+                      "original_pdf_page": 126
+                    },
+                    {
+                      "included_pdf_page": 127,
+                      "original_pdf_page": 127
+                    },
+                    {
+                      "included_pdf_page": 128,
+                      "original_pdf_page": 128
+                    },
+                    {
+                      "included_pdf_page": 129,
+                      "original_pdf_page": 129
+                    },
+                    {
+                      "included_pdf_page": 130,
+                      "original_pdf_page": 130
+                    },
+                    {
+                      "included_pdf_page": 131,
+                      "original_pdf_page": 131
+                    },
+                    {
+                      "included_pdf_page": 132,
+                      "original_pdf_page": 132
+                    },
+                    {
+                      "included_pdf_page": 133,
+                      "original_pdf_page": 133
+                    },
+                    {
+                      "included_pdf_page": 134,
+                      "original_pdf_page": 134
+                    },
+                    {
+                      "included_pdf_page": 135,
+                      "original_pdf_page": 135
+                    },
+                    {
+                      "included_pdf_page": 136,
+                      "original_pdf_page": 136
+                    },
+                    {
+                      "included_pdf_page": 137,
+                      "original_pdf_page": 137
+                    },
+                    {
+                      "included_pdf_page": 138,
+                      "original_pdf_page": 138
+                    },
+                    {
+                      "included_pdf_page": 139,
+                      "original_pdf_page": 139
+                    },
+                    {
+                      "included_pdf_page": 140,
+                      "original_pdf_page": 140
+                    },
+                    {
+                      "included_pdf_page": 141,
+                      "original_pdf_page": 141
+                    },
+                    {
+                      "included_pdf_page": 142,
+                      "original_pdf_page": 142
+                    },
+                    {
+                      "included_pdf_page": 143,
+                      "original_pdf_page": 143
+                    },
+                    {
+                      "included_pdf_page": 144,
+                      "original_pdf_page": 144
+                    },
+                    {
+                      "included_pdf_page": 145,
+                      "original_pdf_page": 145
+                    },
+                    {
+                      "included_pdf_page": 146,
+                      "original_pdf_page": 146
+                    },
+                    {
+                      "included_pdf_page": 147,
+                      "original_pdf_page": 147
+                    },
+                    {
+                      "included_pdf_page": 148,
+                      "original_pdf_page": 148
+                    },
+                    {
+                      "included_pdf_page": 149,
+                      "original_pdf_page": 149
+                    },
+                    {
+                      "included_pdf_page": 150,
+                      "original_pdf_page": 150
+                    },
+                    {
+                      "included_pdf_page": 151,
+                      "original_pdf_page": 151
+                    },
+                    {
+                      "included_pdf_page": 152,
+                      "original_pdf_page": 152
+                    },
+                    {
+                      "included_pdf_page": 153,
+                      "original_pdf_page": 153
+                    },
+                    {
+                      "included_pdf_page": 154,
+                      "original_pdf_page": 154
+                    },
+                    {
+                      "included_pdf_page": 155,
+                      "original_pdf_page": 155
+                    },
+                    {
+                      "included_pdf_page": 156,
+                      "original_pdf_page": 156
+                    },
+                    {
+                      "included_pdf_page": 157,
+                      "original_pdf_page": 157
+                    },
+                    {
+                      "included_pdf_page": 158,
+                      "original_pdf_page": 158
+                    },
+                    {
+                      "included_pdf_page": 159,
+                      "original_pdf_page": 159
+                    },
+                    {
+                      "included_pdf_page": 160,
+                      "original_pdf_page": 160
+                    },
+                    {
+                      "included_pdf_page": 161,
+                      "original_pdf_page": 161
+                    },
+                    {
+                      "included_pdf_page": 162,
+                      "original_pdf_page": 162
+                    },
+                    {
+                      "included_pdf_page": 163,
+                      "original_pdf_page": 163
+                    },
+                    {
+                      "included_pdf_page": 164,
+                      "original_pdf_page": 164
+                    },
+                    {
+                      "included_pdf_page": 165,
+                      "original_pdf_page": 165
+                    },
+                    {
+                      "included_pdf_page": 166,
+                      "original_pdf_page": 166
+                    },
+                    {
+                      "included_pdf_page": 167,
+                      "original_pdf_page": 167
+                    },
+                    {
+                      "included_pdf_page": 168,
+                      "original_pdf_page": 168
+                    },
+                    {
+                      "included_pdf_page": 169,
+                      "original_pdf_page": 169
+                    },
+                    {
+                      "included_pdf_page": 170,
+                      "original_pdf_page": 170
+                    },
+                    {
+                      "included_pdf_page": 171,
+                      "original_pdf_page": 171
+                    },
+                    {
+                      "included_pdf_page": 172,
+                      "original_pdf_page": 172
+                    },
+                    {
+                      "included_pdf_page": 173,
+                      "original_pdf_page": 173
+                    },
+                    {
+                      "included_pdf_page": 174,
+                      "original_pdf_page": 174
+                    },
+                    {
+                      "included_pdf_page": 175,
+                      "original_pdf_page": 175
+                    },
+                    {
+                      "included_pdf_page": 176,
+                      "original_pdf_page": 176
+                    },
+                    {
+                      "included_pdf_page": 177,
+                      "original_pdf_page": 177
+                    },
+                    {
+                      "included_pdf_page": 178,
+                      "original_pdf_page": 178
+                    },
+                    {
+                      "included_pdf_page": 179,
+                      "original_pdf_page": 179
+                    },
+                    {
+                      "included_pdf_page": 180,
+                      "original_pdf_page": 180
+                    },
+                    {
+                      "included_pdf_page": 181,
+                      "original_pdf_page": 181
+                    },
+                    {
+                      "included_pdf_page": 182,
+                      "original_pdf_page": 182
+                    },
+                    {
+                      "included_pdf_page": 183,
+                      "original_pdf_page": 183
+                    },
+                    {
+                      "included_pdf_page": 184,
+                      "original_pdf_page": 184
+                    },
+                    {
+                      "included_pdf_page": 185,
+                      "original_pdf_page": 185
+                    },
+                    {
+                      "included_pdf_page": 186,
+                      "original_pdf_page": 186
+                    },
+                    {
+                      "included_pdf_page": 187,
+                      "original_pdf_page": 187
+                    },
+                    {
+                      "included_pdf_page": 188,
+                      "original_pdf_page": 188
+                    },
+                    {
+                      "included_pdf_page": 189,
+                      "original_pdf_page": 189
+                    },
+                    {
+                      "included_pdf_page": 190,
+                      "original_pdf_page": 190
+                    },
+                    {
+                      "included_pdf_page": 191,
+                      "original_pdf_page": 191
+                    },
+                    {
+                      "included_pdf_page": 192,
+                      "original_pdf_page": 192
+                    },
+                    {
+                      "included_pdf_page": 193,
+                      "original_pdf_page": 193
+                    },
+                    {
+                      "included_pdf_page": 194,
+                      "original_pdf_page": 194
+                    },
+                    {
+                      "included_pdf_page": 195,
+                      "original_pdf_page": 195
+                    },
+                    {
+                      "included_pdf_page": 196,
+                      "original_pdf_page": 196
+                    },
+                    {
+                      "included_pdf_page": 197,
+                      "original_pdf_page": 197
+                    },
+                    {
+                      "included_pdf_page": 198,
+                      "original_pdf_page": 198
+                    },
+                    {
+                      "included_pdf_page": 199,
+                      "original_pdf_page": 199
+                    },
+                    {
+                      "included_pdf_page": 200,
+                      "original_pdf_page": 200
+                    },
+                    {
+                      "included_pdf_page": 201,
+                      "original_pdf_page": 201
+                    },
+                    {
+                      "included_pdf_page": 202,
+                      "original_pdf_page": 202
+                    },
+                    {
+                      "included_pdf_page": 203,
+                      "original_pdf_page": 203
+                    },
+                    {
+                      "included_pdf_page": 204,
+                      "original_pdf_page": 204
+                    },
+                    {
+                      "included_pdf_page": 205,
+                      "original_pdf_page": 205
+                    },
+                    {
+                      "included_pdf_page": 206,
+                      "original_pdf_page": 206
+                    },
+                    {
+                      "included_pdf_page": 207,
+                      "original_pdf_page": 207
+                    },
+                    {
+                      "included_pdf_page": 208,
+                      "original_pdf_page": 208
+                    },
+                    {
+                      "included_pdf_page": 209,
+                      "original_pdf_page": 209
+                    },
+                    {
+                      "included_pdf_page": 210,
+                      "original_pdf_page": 210
+                    },
+                    {
+                      "included_pdf_page": 211,
+                      "original_pdf_page": 211
+                    },
+                    {
+                      "included_pdf_page": 212,
+                      "original_pdf_page": 212
+                    },
+                    {
+                      "included_pdf_page": 213,
+                      "original_pdf_page": 213
+                    },
+                    {
+                      "included_pdf_page": 214,
+                      "original_pdf_page": 214
+                    },
+                    {
+                      "included_pdf_page": 215,
+                      "original_pdf_page": 215
+                    },
+                    {
+                      "included_pdf_page": 216,
+                      "original_pdf_page": 216
+                    },
+                    {
+                      "included_pdf_page": 217,
+                      "original_pdf_page": 217
+                    },
+                    {
+                      "included_pdf_page": 218,
+                      "original_pdf_page": 218
+                    },
+                    {
+                      "included_pdf_page": 219,
+                      "original_pdf_page": 219
+                    },
+                    {
+                      "included_pdf_page": 220,
+                      "original_pdf_page": 220
+                    },
+                    {
+                      "included_pdf_page": 221,
+                      "original_pdf_page": 221
+                    },
+                    {
+                      "included_pdf_page": 222,
+                      "original_pdf_page": 222
+                    },
+                    {
+                      "included_pdf_page": 223,
+                      "original_pdf_page": 223
+                    },
+                    {
+                      "included_pdf_page": 224,
+                      "original_pdf_page": 224
+                    },
+                    {
+                      "included_pdf_page": 225,
+                      "original_pdf_page": 225
+                    },
+                    {
+                      "included_pdf_page": 226,
+                      "original_pdf_page": 226
+                    },
+                    {
+                      "included_pdf_page": 227,
+                      "original_pdf_page": 227
+                    },
+                    {
+                      "included_pdf_page": 228,
+                      "original_pdf_page": 228
+                    },
+                    {
+                      "included_pdf_page": 229,
+                      "original_pdf_page": 229
+                    },
+                    {
+                      "included_pdf_page": 230,
+                      "original_pdf_page": 230
+                    },
+                    {
+                      "included_pdf_page": 231,
+                      "original_pdf_page": 231
+                    },
+                    {
+                      "included_pdf_page": 232,
+                      "original_pdf_page": 232
+                    },
+                    {
+                      "included_pdf_page": 233,
+                      "original_pdf_page": 233
+                    }
+                  ]
+                }
+              ],
+              "title": "City Auditor. Recommendation follow-up report, period ending June 30, 2026."
+            },
+            {
+              "id": "BNR56369076",
+              "original_sha256": "239d1b2306eb6c45b88b6c59d29245d850aabe8c90f7e593ee1c4d4ada22a2aa",
+              "publisher_original": "https://sandiego.nextrequest.com/documents/56369076",
+              "selected_copies": [
+                {
+                  "included_file": "sources/BNR56369076-excerpt.pdf",
+                  "included_sha256": "9bf576bce2401b94673c7dae7b24eb7d5c8333dddde7daa8efc35cef6160538e",
+                  "original_page_map": [
+                    {
+                      "included_pdf_page": 1,
+                      "original_pdf_page": 26
+                    },
+                    {
+                      "included_pdf_page": 2,
+                      "original_pdf_page": 27
+                    },
+                    {
+                      "included_pdf_page": 3,
+                      "original_pdf_page": 28
+                    },
+                    {
+                      "included_pdf_page": 4,
+                      "original_pdf_page": 29
+                    },
+                    {
+                      "included_pdf_page": 5,
+                      "original_pdf_page": 30
+                    },
+                    {
+                      "included_pdf_page": 6,
+                      "original_pdf_page": 31
+                    },
+                    {
+                      "included_pdf_page": 7,
+                      "original_pdf_page": 32
+                    },
+                    {
+                      "included_pdf_page": 8,
+                      "original_pdf_page": 33
+                    },
+                    {
+                      "included_pdf_page": 9,
+                      "original_pdf_page": 36
+                    },
+                    {
+                      "included_pdf_page": 10,
+                      "original_pdf_page": 37
+                    },
+                    {
+                      "included_pdf_page": 11,
+                      "original_pdf_page": 39
+                    },
+                    {
+                      "included_pdf_page": 12,
+                      "original_pdf_page": 41
+                    },
+                    {
+                      "included_pdf_page": 13,
+                      "original_pdf_page": 43
+                    },
+                    {
+                      "included_pdf_page": 14,
+                      "original_pdf_page": 45
+                    },
+                    {
+                      "included_pdf_page": 15,
+                      "original_pdf_page": 47
+                    }
+                  ]
+                },
+                {
+                  "included_file": "sources/BNR56369076-controls.pdf",
+                  "included_sha256": "d434e66584e6352b4500d81ddd7b2c19628823b4de0ff16bffba582ad7bc96a6",
+                  "original_page_map": [
+                    {
+                      "included_pdf_page": 1,
+                      "original_pdf_page": 26
+                    },
+                    {
+                      "included_pdf_page": 2,
+                      "original_pdf_page": 27
+                    },
+                    {
+                      "included_pdf_page": 3,
+                      "original_pdf_page": 28
+                    },
+                    {
+                      "included_pdf_page": 4,
+                      "original_pdf_page": 29
+                    },
+                    {
+                      "included_pdf_page": 5,
+                      "original_pdf_page": 30
+                    },
+                    {
+                      "included_pdf_page": 6,
+                      "original_pdf_page": 31
+                    },
+                    {
+                      "included_pdf_page": 7,
+                      "original_pdf_page": 32
+                    },
+                    {
+                      "included_pdf_page": 8,
+                      "original_pdf_page": 33
+                    },
+                    {
+                      "included_pdf_page": 9,
+                      "original_pdf_page": 36
+                    },
+                    {
+                      "included_pdf_page": 10,
+                      "original_pdf_page": 37
+                    },
+                    {
+                      "included_pdf_page": 11,
+                      "original_pdf_page": 39
+                    },
+                    {
+                      "included_pdf_page": 12,
+                      "original_pdf_page": 41
+                    },
+                    {
+                      "included_pdf_page": 13,
+                      "original_pdf_page": 43
+                    },
+                    {
+                      "included_pdf_page": 14,
+                      "original_pdf_page": 45
+                    },
+                    {
+                      "included_pdf_page": 15,
+                      "original_pdf_page": 47
+                    },
+                    {
+                      "included_pdf_page": 16,
+                      "original_pdf_page": 51
+                    },
+                    {
+                      "included_pdf_page": 17,
+                      "original_pdf_page": 53
+                    }
+                  ]
+                }
+              ],
+              "title": "Approved Urban Corps CleanSD invoices, January2023–September2025"
+            },
+            {
+              "id": "C51883083",
+              "original_sha256": "c8dd153e91e1694b3c148ac48d145686bfd62bcb44e5b08be1813ff89d8107c3",
+              "publisher_original": "https://sandiego.nextrequest.com/documents/51883083",
+              "selected_copies": [
+                {
+                  "included_file": "sources/C51883083.zip",
+                  "included_sha256": "c8dd153e91e1694b3c148ac48d145686bfd62bcb44e5b08be1813ff89d8107c3",
+                  "original_page_map": []
+                }
+              ],
+              "title": "HSSD_Unites Site Services_ Invoices.zip"
+            },
+            {
+              "id": "C55177499",
+              "original_sha256": "c873529b1008ef1f328f3b3cb168cda173ace8fd6e3789a9e7357bf0e78d05a0",
+              "publisher_original": "https://sandiego.nextrequest.com/documents/55177499",
+              "selected_copies": [
+                {
+                  "included_file": "sources/C55177499-excerpt.pdf",
+                  "included_sha256": "7a1e2bc9676c19438b5c3f5261dc432e7b5bce18a26969384a2803c6f492eba3",
+                  "original_page_map": [
+                    {
+                      "included_pdf_page": 1,
+                      "original_pdf_page": 1
+                    }
+                  ]
+                }
+              ],
+              "title": "FY25_Circut_GF_Invoice_3379_from_Circuit_Transit_Inc.pdf"
+            },
+            {
+              "id": "C55177515",
+              "original_sha256": "42e24215e1a3938de25f3ad43d46a4029a47618c7c488e68b4d9a9531d53e00e",
+              "publisher_original": "https://sandiego.nextrequest.com/documents/55177515",
+              "selected_copies": [
+                {
+                  "included_file": "sources/C55177515-excerpt.pdf",
+                  "included_sha256": "c9aa4d6577e42181708324b2d9913a9c54dfd2d785ef58abfe0b18aee15b51a4",
+                  "original_page_map": [
+                    {
+                      "included_pdf_page": 1,
+                      "original_pdf_page": 1
+                    }
+                  ]
+                }
+              ],
+              "title": "Paid_FY24_Circut_Inv3162 $35,979.24.pdf"
+            },
+            {
+              "id": "C55184122",
+              "original_sha256": "6084c81af18af1d255c432e5a4475141a40f93ca1362068609837e5a29764f11",
+              "publisher_original": "https://sandiego.nextrequest.com/documents/55184122",
+              "selected_copies": [
+                {
+                  "included_file": "sources/C55184122-excerpt.pdf",
+                  "included_sha256": "9a69419cbfa5f00b8b1e354c80a3261c20aaaf8a6078b5c98cf72b808307562e",
+                  "original_page_map": [
+                    {
+                      "included_pdf_page": 1,
+                      "original_pdf_page": 1
+                    }
+                  ]
+                }
+              ],
+              "title": "FY 25_Rowe_May inv 18_$212,383.33_GR5001681019.pdf"
+            },
+            {
+              "id": "C64725401",
+              "original_sha256": "d94c248dfdf966f940204acf1df598dd3ff4a18bd188c2ca2eb6a44262c15070",
+              "publisher_original": "https://sandiego.nextrequest.com/documents/64725401",
+              "selected_copies": [
+                {
+                  "included_file": "sources/C64725401-excerpt.pdf",
+                  "included_sha256": "636e18f1698e9170197a223c147fa89e695e288bcb89a0c335e8db419c28d2d1",
+                  "original_page_map": [
+                    {
+                      "included_pdf_page": 1,
+                      "original_pdf_page": 28
+                    },
+                    {
+                      "included_pdf_page": 2,
+                      "original_pdf_page": 29
+                    },
+                    {
+                      "included_pdf_page": 3,
+                      "original_pdf_page": 38
+                    },
+                    {
+                      "included_pdf_page": 4,
+                      "original_pdf_page": 39
+                    }
+                  ]
+                }
+              ],
+              "title": "DFC Invoices FY23_Present.pdf"
+            },
+            {
+              "id": "CR316360",
+              "original_sha256": "a8fd7e4b0c90f1896dd91a306c2f9c6d09fb75486d5199c978d13158a19250f3",
+              "publisher_original": "https://docs.sandiego.gov/council_reso_ordinance/rao2025/R-316360.pdf",
+              "selected_copies": [
+                {
+                  "included_file": "sources/CR316360-excerpt.pdf",
+                  "included_sha256": "18c439db01ceea32341f7eb9a5189e0c0ea000b07e8d234bb84b2bc99c9cccec",
+                  "original_page_map": [
+                    {
+                      "included_pdf_page": 1,
+                      "original_pdf_page": 1
+                    },
+                    {
+                      "included_pdf_page": 2,
+                      "original_pdf_page": 2
+                    },
+                    {
+                      "included_pdf_page": 3,
+                      "original_pdf_page": 5
+                    }
+                  ]
+                }
+              ],
+              "title": "City of San Diego. (2025, July 31). Resolution R-316360: First amendment to the Rowe Solutions meal-delivery contract."
+            },
+            {
+              "id": "DR09",
+              "original_sha256": "7d73e44be81290612ec8b5e642f21d33ebcb69cad2f3b42af1fc25ed00889bee",
+              "publisher_original": "https://sandiego.nextrequest.com/documents/56369073",
+              "selected_copies": [
+                {
+                  "included_file": "sources/DR09-excerpt.pdf",
+                  "included_sha256": "d97812f6f2deca3279623acd8b4f5624a8af1c1f5977909585aa3cd65b0eaf33",
+                  "original_page_map": [
+                    {
+                      "included_pdf_page": 1,
+                      "original_pdf_page": 1
+                    },
+                    {
+                      "included_pdf_page": 2,
+                      "original_pdf_page": 2
+                    },
+                    {
+                      "included_pdf_page": 3,
+                      "original_pdf_page": 11
+                    },
+                    {
+                      "included_pdf_page": 4,
+                      "original_pdf_page": 12
+                    },
+                    {
+                      "included_pdf_page": 5,
+                      "original_pdf_page": 13
+                    },
+                    {
+                      "included_pdf_page": 6,
+                      "original_pdf_page": 14
+                    },
+                    {
+                      "included_pdf_page": 7,
+                      "original_pdf_page": 15
+                    },
+                    {
+                      "included_pdf_page": 8,
+                      "original_pdf_page": 18
+                    },
+                    {
+                      "included_pdf_page": 9,
+                      "original_pdf_page": 19
+                    },
+                    {
+                      "included_pdf_page": 10,
+                      "original_pdf_page": 86
+                    },
+                    {
+                      "included_pdf_page": 11,
+                      "original_pdf_page": 87
+                    },
+                    {
+                      "included_pdf_page": 12,
+                      "original_pdf_page": 88
+                    }
+                  ]
+                },
+                {
+                  "included_file": "sources/DR09-controls.pdf",
+                  "included_sha256": "70c01465398575d6b83f806eda27041de5957f2188ed29dd842b0765dfd1ce1a",
+                  "original_page_map": [
+                    {
+                      "included_pdf_page": 1,
+                      "original_pdf_page": 19
+                    },
+                    {
+                      "included_pdf_page": 2,
+                      "original_pdf_page": 85
+                    },
+                    {
+                      "included_pdf_page": 3,
+                      "original_pdf_page": 86
+                    }
+                  ]
+                }
+              ],
+              "title": "City of San Diego & Urban Corps of San Diego County, Inc. (2022). Clean San Diego services: Fully executed contract, RFP 10089850-22-B [Includes Resolution R-314408]."
+            },
+            {
+              "id": "EXP-CITY-FY25-MIDYEAR",
+              "original_sha256": "042d1f926579063182ba9c4e7b520dc02cf8c970b8df3673e0b9435c443469b8",
+              "publisher_original": "https://www.sandiego.gov/sites/default/files/2025-01/fy2025-mid-year-budget-monitoring-report.pdf",
+              "selected_copies": [
+                {
+                  "included_file": "sources/EXP-CITY-FY25-MIDYEAR-excerpt.pdf",
+                  "included_sha256": "3c5309235d3a2627bcc598cef9a5d845580e2b7821a428198366edce09ff01b8",
+                  "original_page_map": [
+                    {
+                      "included_pdf_page": 1,
+                      "original_pdf_page": 22
+                    },
+                    {
+                      "included_pdf_page": 2,
+                      "original_pdf_page": 80
+                    },
+                    {
+                      "included_pdf_page": 3,
+                      "original_pdf_page": 82
+                    }
+                  ]
+                }
+              ],
+              "title": "HSSD FY2025 Midyear Memo"
+            },
+            {
+              "id": "EXP-CITY-FY25-YEAREND",
+              "original_sha256": "8747bdaa875e4e2bcadcfea84f8849e090af86cc288097ef8f4f9ce678ad2b86",
+              "publisher_original": "https://www.sandiego.gov/sites/default/files/2025-10/fy25-year-end-financial-performance-report.pdf",
+              "selected_copies": [
+                {
+                  "included_file": "sources/EXP-CITY-FY25-YEAREND-excerpt.pdf",
+                  "included_sha256": "690a4d41d3d980124a682bc90b757e28d4138783dc5fef87a01fe5eff747ab20",
+                  "original_page_map": [
+                    {
+                      "included_pdf_page": 1,
+                      "original_pdf_page": 62
+                    },
+                    {
+                      "included_pdf_page": 2,
+                      "original_pdf_page": 63
+                    },
+                    {
+                      "included_pdf_page": 3,
+                      "original_pdf_page": 64
+                    },
+                    {
+                      "included_pdf_page": 4,
+                      "original_pdf_page": 65
+                    }
+                  ]
+                }
+              ],
+              "title": "CITY FY2025 YEAREND"
+            },
+            {
+              "id": "EXP-CITY-FY26-MIDYEAR",
+              "original_sha256": "4b2725a4b5dbe7ac41179144ad444be2281da43d0a8b7359209c2ad1a5dc6787",
+              "publisher_original": "https://www.sandiego.gov/sites/default/files/2026-01/fy2026-mid-year-budget-monitoring-report.pdf",
+              "selected_copies": [
+                {
+                  "included_file": "sources/EXP-CITY-FY26-MIDYEAR-excerpt.pdf",
+                  "included_sha256": "c16edd53e87d9e84f4159db0c9fd1dc17750d64b53c52ebb8821868539658193",
+                  "original_page_map": [
+                    {
+                      "included_pdf_page": 1,
+                      "original_pdf_page": 79
+                    },
+                    {
+                      "included_pdf_page": 2,
+                      "original_pdf_page": 81
+                    }
+                  ]
+                }
+              ],
+              "title": "CITY FY2026 MIDYEAR"
+            },
+            {
+              "id": "EXP-CITY-FY26-Q3",
+              "original_sha256": "9b5b10ba67793bdb4a2bcadf25bcc725cbbc313599112457aa21998454b1b361",
+              "publisher_original": "https://www.sandiego.gov/sites/default/files/2026-05/fy2026-third-quarter-budget-monitoring-report.pdf",
+              "selected_copies": [
+                {
+                  "included_file": "sources/EXP-CITY-FY26-Q3-excerpt.pdf",
+                  "included_sha256": "dce164246fe7804a4b680717c15b2a921d2035bdd3ec0ad590ee5c8662a988ca",
+                  "original_page_map": [
+                    {
+                      "included_pdf_page": 1,
+                      "original_pdf_page": 80
+                    },
+                    {
+                      "included_pdf_page": 2,
+                      "original_pdf_page": 81
+                    },
+                    {
+                      "included_pdf_page": 3,
+                      "original_pdf_page": 82
+                    }
+                  ]
+                }
+              ],
+              "title": "CITY FY2026 Q3"
+            },
+            {
+              "id": "EXP-HC2040-SWIFT",
+              "original_sha256": "eb6d5f1bbe3a32421169d055f8fd5703d661d8807bc913f63521e3ebe00f82d4",
+              "publisher_original": "https://sdhc.org/wp-content/uploads/2025/07/HC-2040_Swift-Avenue-Resolution_final.pdf",
+              "selected_copies": [
+                {
+                  "included_file": "sources/EXP-HC2040-SWIFT-excerpt.pdf",
+                  "included_sha256": "6e84cdec6796f1b45cd1a9e79d7136549db8847b36dfbedc07d5c6fca7c015be",
+                  "original_page_map": [
+                    {
+                      "included_pdf_page": 1,
+                      "original_pdf_page": 1
+                    },
+                    {
+                      "included_pdf_page": 2,
+                      "original_pdf_page": 2
+                    },
+                    {
+                      "included_pdf_page": 3,
+                      "original_pdf_page": 4
+                    },
+                    {
+                      "included_pdf_page": 4,
+                      "original_pdf_page": 5
+                    }
+                  ]
+                }
+              ],
+              "title": "HC2040 Swift"
+            },
+            {
+              "id": "EXP-IBA25-09-SWIFT",
+              "original_sha256": "04f2900494f84547498eabfac84e918d29ba97c8237154874293701f6ad3bb35",
+              "publisher_original": "https://www.sandiego.gov/sites/default/files/2025-03/25-09-review-of-swift-apartments-bridge-to-home-loan-recommendation-increase_1.pdf",
+              "selected_copies": [
+                {
+                  "included_file": "sources/EXP-IBA25-09-SWIFT-excerpt.pdf",
+                  "included_sha256": "d94b9a1dc1a8917233b462291b139c1c37a3e4b1fbb20e98fd104973b52d135f",
+                  "original_page_map": [
+                    {
+                      "included_pdf_page": 1,
+                      "original_pdf_page": 1
+                    },
+                    {
+                      "included_pdf_page": 2,
+                      "original_pdf_page": 2
+                    },
+                    {
+                      "included_pdf_page": 3,
+                      "original_pdf_page": 3
+                    },
+                    {
+                      "included_pdf_page": 4,
+                      "original_pdf_page": 4
+                    },
+                    {
+                      "included_pdf_page": 5,
+                      "original_pdf_page": 5
+                    },
+                    {
+                      "included_pdf_page": 6,
+                      "original_pdf_page": 6
+                    }
+                  ]
+                }
+              ],
+              "title": "IBA25 09 Swift"
+            },
+            {
+              "id": "EXP-R316132-SWIFT",
+              "original_sha256": "bacd9481556daf54a5c639b9147e919c9ae084a5fb3521310069fb207846a03f",
+              "publisher_original": "https://docs.sandiego.gov/council_reso_ordinance/rao2025/R-316132.pdf",
+              "selected_copies": [
+                {
+                  "included_file": "sources/EXP-R316132-SWIFT-excerpt.pdf",
+                  "included_sha256": "9bb5734da4f556796fec22cc35f767bb22a15aab1815a599c9d04b513de6b2cd",
+                  "original_page_map": [
+                    {
+                      "included_pdf_page": 1,
+                      "original_pdf_page": 1
+                    },
+                    {
+                      "included_pdf_page": 2,
+                      "original_pdf_page": 4
+                    },
+                    {
+                      "included_pdf_page": 3,
+                      "original_pdf_page": 5
+                    },
+                    {
+                      "included_pdf_page": 4,
+                      "original_pdf_page": 6
+                    }
+                  ]
+                }
+              ],
+              "title": "R 316132 Swift"
+            },
+            {
+              "id": "FPPC-NEIL-APPROVAL",
+              "original_sha256": "a14f00ee0e2cb242a20493d87287db53e426407a8d3637d6f9c92f8b0621c92c",
+              "publisher_original": "https://www.fppc.ca.gov/siteassets/documents/media_center/2023/Enf_Decisions_021623.pdf",
+              "selected_copies": [
+                {
+                  "included_file": "sources/FPPC-NEIL-APPROVAL-excerpt.pdf",
+                  "included_sha256": "c54b16af777fac58fbadfd84d066a9362c80ce1c047ac8cf34aed7fd7e130d23",
+                  "original_page_map": [
+                    {
+                      "included_pdf_page": 1,
+                      "original_pdf_page": 1
+                    },
+                    {
+                      "included_pdf_page": 2,
+                      "original_pdf_page": 2
+                    }
+                  ]
+                }
+              ],
+              "title": "FPPC. Enforcement decisions approved February 16, 2023."
+            },
+            {
+              "id": "FPPC-NEIL-STIP",
+              "original_sha256": "f09043b3894af7a13ad32dc52eaafbc6f71e923880758da66d09b4a74e4fae7f",
+              "publisher_original": "https://www.fppc.ca.gov/content/dam/fppc/documents/Stipulations/2023/february/4-Jim-Neil-Stip.pdf",
+              "selected_copies": [
+                {
+                  "included_file": "sources/FPPC-NEIL-STIP-excerpt.pdf",
+                  "included_sha256": "07ffbbe1aa0958f8c7379e8193cba9b44ae16c2279e7f5e4c4df457d81a373af",
+                  "original_page_map": [
+                    {
+                      "included_pdf_page": 1,
+                      "original_pdf_page": 1
+                    },
+                    {
+                      "included_pdf_page": 2,
+                      "original_pdf_page": 2
+                    },
+                    {
+                      "included_pdf_page": 3,
+                      "original_pdf_page": 3
+                    },
+                    {
+                      "included_pdf_page": 4,
+                      "original_pdf_page": 4
+                    },
+                    {
+                      "included_pdf_page": 5,
+                      "original_pdf_page": 5
+                    },
+                    {
+                      "included_pdf_page": 6,
+                      "original_pdf_page": 6
+                    },
+                    {
+                      "included_pdf_page": 7,
+                      "original_pdf_page": 7
+                    },
+                    {
+                      "included_pdf_page": 8,
+                      "original_pdf_page": 8
+                    },
+                    {
+                      "included_pdf_page": 9,
+                      "original_pdf_page": 9
+                    }
+                  ]
+                }
+              ],
+              "title": "FPPC. James N. Neil, case 2022-00716: conflict-of-interest stipulation; February 2023."
+            },
+            {
+              "id": "NR53645063-M14",
+              "original_sha256": "4170e281b6cc45393cd1ca8a851edaf4bcb71876b05a4bd2a50d8e20aa03ad3d",
+              "publisher_original": "https://sandiegohousingcommission.nextrequest.com/requests/25-182",
+              "selected_copies": [
+                {
+                  "included_file": "sources/NR53645063-M14-excerpt.pdf",
+                  "included_sha256": "098322f7b0fdb84346bdde72111dd247ce08e9fe840e91c6e09fae3129a47720",
+                  "original_page_map": [
+                    {
+                      "included_pdf_page": 1,
+                      "original_pdf_page": 1
+                    },
+                    {
+                      "included_pdf_page": 2,
+                      "original_pdf_page": 3
+                    },
+                    {
+                      "included_pdf_page": 3,
+                      "original_pdf_page": 4
+                    },
+                    {
+                      "included_pdf_page": 4,
+                      "original_pdf_page": 5
+                    },
+                    {
+                      "included_pdf_page": 5,
+                      "original_pdf_page": 6
+                    },
+                    {
+                      "included_pdf_page": 6,
+                      "original_pdf_page": 7
+                    }
+                  ]
+                }
+              ],
+              "title": "HHI-22-57.2 Fourth Amendment City AdultsSeniors Shelter Program_Executed.pdf"
+            },
+            {
+              "id": "NR53645063-M15",
+              "original_sha256": "1c1d428af1f151c756b2a95ff204a80e05eeea05c79bb5476bf5259013e6784c",
+              "publisher_original": "https://sandiegohousingcommission.nextrequest.com/requests/25-182",
+              "selected_copies": [
+                {
+                  "included_file": "sources/NR53645063-M15-excerpt.pdf",
+                  "included_sha256": "14aed9b7522c70da5a21d2790b7664c448c1f0d984cc4473a44d918d26d6a414",
+                  "original_page_map": [
+                    {
+                      "included_pdf_page": 1,
+                      "original_pdf_page": 1
+                    },
+                    {
+                      "included_pdf_page": 2,
+                      "original_pdf_page": 2
+                    },
+                    {
+                      "included_pdf_page": 3,
+                      "original_pdf_page": 3
+                    },
+                    {
+                      "included_pdf_page": 4,
+                      "original_pdf_page": 15
+                    }
+                  ]
+                }
+              ],
+              "title": "HHI-22-57.2 Second Option & Second Amendment  Golden Hall Shelter - FJV.pdf"
+            },
+            {
+              "id": "NR71540521",
+              "original_sha256": "62f4c4075fd8e9cff87a53356cfe4234f60923acb367d366a6f0d5fac82cd64d",
+              "publisher_original": "https://sandiego.nextrequest.com/documents/71540521",
+              "selected_copies": [
+                {
+                  "included_file": "sources/NR71540521.xlsx",
+                  "included_sha256": "62f4c4075fd8e9cff87a53356cfe4234f60923acb367d366a6f0d5fac82cd64d",
+                  "original_page_map": []
+                }
+              ],
+              "title": "PRA_26-10308.xlsx"
+            },
+            {
+              "id": "OCA25-02",
+              "original_sha256": "99e921ff26960022504625b0abebbfddf5de8bfe9b0f56066020d053b0b67743",
+              "publisher_original": "https://www.sandiego.gov/sites/default/files/2024-07/25-02-performance-audit-of-the-city-s-contract-management-process.pdf",
+              "selected_copies": [
+                {
+                  "included_file": "sources/OCA25-02-excerpt.pdf",
+                  "included_sha256": "0e4bf3d2e4ed52a50c09957d6545d4b3e5ce3ba7e00bd01ef6883ea1ac2c2ba2",
+                  "original_page_map": [
+                    {
+                      "included_pdf_page": 1,
+                      "original_pdf_page": 3
+                    },
+                    {
+                      "included_pdf_page": 2,
+                      "original_pdf_page": 4
+                    },
+                    {
+                      "included_pdf_page": 3,
+                      "original_pdf_page": 10
+                    },
+                    {
+                      "included_pdf_page": 4,
+                      "original_pdf_page": 11
+                    },
+                    {
+                      "included_pdf_page": 5,
+                      "original_pdf_page": 30
+                    },
+                    {
+                      "included_pdf_page": 6,
+                      "original_pdf_page": 31
+                    },
+                    {
+                      "included_pdf_page": 7,
+                      "original_pdf_page": 32
+                    },
+                    {
+                      "included_pdf_page": 8,
+                      "original_pdf_page": 33
+                    },
+                    {
+                      "included_pdf_page": 9,
+                      "original_pdf_page": 34
+                    },
+                    {
+                      "included_pdf_page": 10,
+                      "original_pdf_page": 35
+                    },
+                    {
+                      "included_pdf_page": 11,
+                      "original_pdf_page": 36
+                    },
+                    {
+                      "included_pdf_page": 12,
+                      "original_pdf_page": 38
+                    },
+                    {
+                      "included_pdf_page": 13,
+                      "original_pdf_page": 40
+                    },
+                    {
+                      "included_pdf_page": 14,
+                      "original_pdf_page": 41
+                    },
+                    {
+                      "included_pdf_page": 15,
+                      "original_pdf_page": 42
+                    },
+                    {
+                      "included_pdf_page": 16,
+                      "original_pdf_page": 43
+                    }
+                  ]
+                }
+              ],
+              "title": "City Auditor. Performance Audit of the City’s Contract Management Process, OCA-25-02; July 2024."
+            },
+            {
+              "id": "ROWE999688",
+              "original_sha256": "963c5ad2227a3007af564e6c271c6217bdbee0a39eb413a22858b9e1b7e79c24",
+              "publisher_original": "https://sandiego.hylandcloud.com/211agendaonlinecouncil/Documents/DownloadFile/Staff%20Report%20for%20-%20%20().pdf?documentType=1&meetingId=6599&itemId=248272&publishId=999688&isSection=False&isAttachment=True",
+              "selected_copies": [
+                {
+                  "included_file": "sources/ROWE999688-excerpt.pdf",
+                  "included_sha256": "227e9c0cc875a38edd2f1aab6091fb36c36a5e682a8497e217449f9757521a31",
+                  "original_page_map": [
+                    {
+                      "included_pdf_page": 1,
+                      "original_pdf_page": 1
+                    },
+                    {
+                      "included_pdf_page": 2,
+                      "original_pdf_page": 2
+                    },
+                    {
+                      "included_pdf_page": 3,
+                      "original_pdf_page": 3
+                    }
+                  ]
+                }
+              ],
+              "title": "Staff Report for -  ()"
+            },
+            {
+              "id": "SDHC-HAR22-026",
+              "original_sha256": "fae5cfc9f4f7ef6d694d3161df1b5a85f66ee976495154b011ba4812f950739f",
+              "publisher_original": "https://sdhc.org/wp-content/uploads/2022/09/HAR22-026-Litigation-Settlement.pdf",
+              "selected_copies": [
+                {
+                  "included_file": "sources/SDHC-HAR22-026-excerpt.pdf",
+                  "included_sha256": "d13a9346a99776f5ba88cb5a8df82193cd4c17eb9dbeaf8ed9ff33d0a0781de2",
+                  "original_page_map": [
+                    {
+                      "included_pdf_page": 1,
+                      "original_pdf_page": 2
+                    },
+                    {
+                      "included_pdf_page": 2,
+                      "original_pdf_page": 3
+                    },
+                    {
+                      "included_pdf_page": 3,
+                      "original_pdf_page": 4
+                    }
+                  ]
+                }
+              ],
+              "title": "SDHC. HAR22-026: Hotel-acquisition litigation settlement; August 15, 2022."
+            }
+          ],
+          "version": 1
+        },
+        "c2pa.hash.data": {
+          "exclusions": [
+            {
+              "start": 83963,
+              "length": 75927
+            }
+          ],
+          "name": "jumbf manifest",
+          "alg": "sha256",
+          "hash": "mtiXHls6/Vl9waLI6DX7hY78QyL9Cv4kv+prlD82MNo=",
+          "pad": []
+        },
+        "com.writerslogic.research-provenance": {
+          "ai_assistance": {
+            "human_direction": "David L. Condrey",
+            "human_only_authorship_attestation": false,
+            "roles": [
+              "research assistance",
+              "drafting",
+              "software generation",
+              "automated verification"
+            ],
+            "tool": "OpenAI Codex"
+          },
+          "author_identity_document": "https://writerslogic.com/executives/dcondrey/did.json",
+          "current_edition_doi": null,
+          "edition": "1.0",
+          "evidence_scope": "Selected public records, attributed source statements, reproducible calculations and bounded interpretations.",
+          "executive_did_document_sha256": "5cfcf4401b3588959d81fb804c29d87a72522fcb5f056d77fb2e05a2abaff1da",
+          "limitations": [
+            "Signatures bind bytes and assertions; they do not establish underlying accounting truth, fraud or a legal conclusion.",
+            "The signed provenance starts at release assembly; earlier unsignaled history and independent human review are not certified.",
+            "Software-held publisher and executive keys are used; hardware attestation and C2PA generator conformance are not claimed."
+          ],
+          "normalized_text_sha256": "23f20ae21e03602a73b79879a8a3acffd1df74628c6af955111a1b02d5ffecda",
+          "physical_pages": 9,
+          "prior_published_edition": "https://doi.org/10.5281/zenodo.23405739",
+          "published_issuing_certificate": "https://writerslogic.com/.well-known/c2pa/issuing-ca.crt",
+          "published_root_certificate": "https://writerslogic.com/.well-known/c2pa/root-ca.crt",
+          "publisher_did_document_sha256": "2c0ef7a1d192b92a0b1868d4922c13de6be7198a23032a2446ec85446890d874",
+          "publisher_identity_document": "https://writerslogic.com/.well-known/did.json",
+          "reading_edition_sha256": "6d92591635f68f4ee0f35bd490aa592ae47b017679a3c44bdc57a13ab23274a5",
+          "release_status": "Prepared with the author manual Zenodo v1.3 upload; no edition DOI assigned at signing.",
+          "report_id": "SDHA-2026-01-D",
+          "report_policy": "Fixed edition; subsequent dataset supplements do not amend this PDF.",
+          "source_directory_sha256": "f27f061a2ad734f323a766f1076c2b4f722a4ecbc3984d40cf3e23ec73eac8ed",
+          "text_digest_method": "PyMuPDF extracted page text in order; Unicode NFKC; whitespace collapsed to single spaces; UTF-8; SHA-256. This is a custom research digest, not a registered C2PA soft-binding algorithm.",
+          "unsigned_render_sha256": "4df44476e1388159e234bc84aa41ddf3827e1b3f054948aebba72b1679c62ce2",
+          "version": 1
+        },
+        "c2pa.actions.v2": {
+          "actions": [
+            {
+              "action": "c2pa.created",
+              "when": "2026-10-19T10:30:58.269662Z",
+              "softwareAgent": {
+                "name": "OnRecord report release signing tool",
+                "version": "0.1.0"
+              },
+              "digitalSourceType": "http://cv.iptc.org/newscodes/digitalsourcetype/compositeWithTrainedAlgorithmicMedia",
+              "description": "Assembled an author-directed, AI-assisted research publication from the identified reviewed render and documentary evidence. Earlier unsignaled editing history is not reconstructed."
+            }
+          ],
+          "allActionsIncluded": false
+        },
+        "cawg.identity": {
+          "signer_payload": {
+            "referenced_assertions": [
+              {
+                "url": "self#jumbf=c2pa.assertions/cawg.metadata",
+                "hash": "O8ByBD+NS+JSHdEUARMduDUqVF6lik4P2IQLJOkTIuU="
+              },
+              {
+                "url": "self#jumbf=c2pa.assertions/com.writerslogic.research-provenance",
+                "hash": "F1HIv2oU8M0B/YmBBmDv65q6bAIPP2wwHkQsCXoG/Jo="
+              },
+              {
+                "url": "self#jumbf=c2pa.assertions/com.writerslogic.source-register",
+                "hash": "O9hnYaIT6J5RB1UgKdODqdRFWc1BmPuV47jBOUmVUyo="
+              },
+              {
+                "url": "self#jumbf=c2pa.assertions/c2pa.hash.data",
+                "hash": "/xTdSrqEYx16Cy9PRB89uDkrIVxYK7W5o8BK1aA9N/g="
+              }
+            ],
+            "sig_type": "cawg.x509.cose",
+            "role": [
+              "cawg.creator",
+              "cawg.publisher"
+            ]
+          },
+          "signature": "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",
+          "pad1": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "pad2": "AAAAAAAAAA=="
+        }
+      },
+      "signature": {
+        "alg": "ed25519",
+        "issuer": "WritersLogic Inc.",
+        "common_name": "WritersLogic San Diego Report Release Generator",
+        "time": "2026-10-19T10:30:58+00:00"
+      }
+    }
+  },
+  "validation_results": {
+    "activeManifest": {
+      "success": [
+        {
+          "code": "timeStamp.validated",
+          "url": "self#jumbf=/c2pa/urn:c2pa:1fa43eeb-3092-49ee-a55c-034e4f19c6e7/c2pa.signature",
+          "explanation": "timestamp message digest matched: DigiCert SHA256 RSA4096 Timestamp Responder 2026 1"
+        },
+        {
+          "code": "signingCredential.trusted",
+          "url": "self#jumbf=/c2pa/urn:c2pa:1fa43eeb-3092-49ee-a55c-034e4f19c6e7/c2pa.signature",
+          "explanation": "signing certificate trusted, found in System trust anchors"
+        },
+        {
+          "code": "claimSignature.insideValidity",
+          "url": "self#jumbf=/c2pa/urn:c2pa:1fa43eeb-3092-49ee-a55c-034e4f19c6e7/c2pa.signature",
+          "explanation": "claim signature valid"
+        },
+        {
+          "code": "claimSignature.validated",
+          "url": "self#jumbf=/c2pa/urn:c2pa:1fa43eeb-3092-49ee-a55c-034e4f19c6e7/c2pa.signature",
+          "explanation": "claim signature valid"
+        },
+        {
+          "code": "assertion.hashedURI.match",
+          "url": "self#jumbf=/c2pa/urn:c2pa:1fa43eeb-3092-49ee-a55c-034e4f19c6e7/c2pa.assertions/c2pa.actions.v2",
+          "explanation": "hashed uri matched: self#jumbf=c2pa.assertions/c2pa.actions.v2"
+        },
+        {
+          "code": "assertion.hashedURI.match",
+          "url": "self#jumbf=/c2pa/urn:c2pa:1fa43eeb-3092-49ee-a55c-034e4f19c6e7/c2pa.assertions/c2pa.hash.data",
+          "explanation": "hashed uri matched: self#jumbf=c2pa.assertions/c2pa.hash.data"
+        },
+        {
+          "code": "assertion.hashedURI.match",
+          "url": "self#jumbf=/c2pa/urn:c2pa:1fa43eeb-3092-49ee-a55c-034e4f19c6e7/c2pa.assertions/cawg.metadata",
+          "explanation": "hashed uri matched: self#jumbf=c2pa.assertions/cawg.metadata"
+        },
+        {
+          "code": "assertion.hashedURI.match",
+          "url": "self#jumbf=/c2pa/urn:c2pa:1fa43eeb-3092-49ee-a55c-034e4f19c6e7/c2pa.assertions/com.writerslogic.research-provenance",
+          "explanation": "hashed uri matched: self#jumbf=c2pa.assertions/com.writerslogic.research-provenance"
+        },
+        {
+          "code": "assertion.hashedURI.match",
+          "url": "self#jumbf=/c2pa/urn:c2pa:1fa43eeb-3092-49ee-a55c-034e4f19c6e7/c2pa.assertions/com.writerslogic.source-register",
+          "explanation": "hashed uri matched: self#jumbf=c2pa.assertions/com.writerslogic.source-register"
+        },
+        {
+          "code": "assertion.hashedURI.match",
+          "url": "self#jumbf=/c2pa/urn:c2pa:1fa43eeb-3092-49ee-a55c-034e4f19c6e7/c2pa.assertions/cawg.identity",
+          "explanation": "hashed uri matched: self#jumbf=c2pa.assertions/cawg.identity"
+        },
+        {
+          "code": "assertion.dataHash.match",
+          "url": "self#jumbf=/c2pa/urn:c2pa:1fa43eeb-3092-49ee-a55c-034e4f19c6e7/c2pa.assertions/c2pa.hash.data",
+          "explanation": "data hash valid"
+        },
+        {
+          "code": "cawg.identity.well-formed",
+          "url": "self#jumbf=/c2pa/urn:c2pa:1fa43eeb-3092-49ee-a55c-034e4f19c6e7/c2pa.assertions/cawg.identity",
+          "explanation": "CAWG X.509 identity signature valid"
+        }
+      ],
+      "informational": [
+        {
+          "code": "timeStamp.untrusted",
+          "url": "self#jumbf=/c2pa/urn:c2pa:1fa43eeb-3092-49ee-a55c-034e4f19c6e7/c2pa.signature",
+          "explanation": "timestamp cert untrusted: DigiCert SHA256 RSA4096 Timestamp Responder 2026 1"
+        }
+      ],
+      "failure": [
+        {
+          "code": "signingCredential.untrusted",
+          "url": "self#jumbf=/c2pa/urn:c2pa:1fa43eeb-3092-49ee-a55c-034e4f19c6e7/c2pa.assertions/cawg.identity",
+          "explanation": "signing certificate untrusted"
+        }
+      ]
+    }
+  },
+  "validation_state": "Valid"
+}

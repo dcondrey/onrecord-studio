@@ -1,0 +1,143 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/did/v1",
+    "https://w3id.org/security/suites/ed25519-2020/v1",
+    "https://w3id.org/security/suites/jws-2020/v1"
+  ],
+  "id": "did:web:writerslogic.com",
+  "verificationMethod": [
+    {
+      "id": "did:web:writerslogic.com#key-1",
+      "type": "Ed25519VerificationKey2020",
+      "controller": "did:web:writerslogic.com",
+      "publicKeyMultibase": "z6Mkusw22GSygT5T5tFqNvZgmumpq4unJTgyekVvomHvsdcq"
+    },
+    {
+      "id": "did:web:writerslogic.com#ark-1",
+      "type": "Ed25519VerificationKey2020",
+      "controller": "did:web:writerslogic.com",
+      "publicKeyMultibase": "z6Mku9enghacZwUc69TvXF8v7WVdHVfvpPEtTHRX15o4K5Pd"
+    },
+    {
+      "id": "did:web:writerslogic.com#key-2",
+      "type": "JsonWebKey2020",
+      "controller": "did:web:writerslogic.com",
+      "publicKeyJwk": {
+        "kty": "EC",
+        "crv": "P-384",
+        "x": "s58ljyFr90VYUeHq65SvOB1LiszVC4DWYrPn5XWK_7HHfAKXwL9olqJuh14jp3KS",
+        "y": "TJMt8NxupGD4fgRBy4QKV8ya3iHGeNaOJ01YAia2OoXkuj4f6WywleHXlNqsIGuO"
+      }
+    },
+    {
+      "id": "did:web:writerslogic.com#ark-5a31b718",
+      "type": "Ed25519VerificationKey2020",
+      "controller": "did:web:writerslogic.com",
+      "publicKeyMultibase": "z6MksBUEzG3XkZbWqcz6WRnHMwFTJucnBUehJXY7on44AREx"
+    },
+    {
+      "id": "did:web:writerslogic.com#ark-ce68c8b8",
+      "type": "Ed25519VerificationKey2020",
+      "controller": "did:web:writerslogic.com",
+      "publicKeyMultibase": "z6Mkqv1zM29CJjGZKbwuKCqs6sf3nXWLBWLMjB2AVRPTvXwR"
+    }
+  ],
+  "authentication": [
+    "did:web:writerslogic.com#key-1"
+  ],
+  "assertionMethod": [
+    "did:web:writerslogic.com#key-1",
+    "did:web:writerslogic.com#ark-1",
+    "did:web:writerslogic.com#key-2",
+    "did:web:writerslogic.com#ark-5a31b718",
+    "did:web:writerslogic.com#ark-ce68c8b8"
+  ],
+  "service": [
+    {
+      "id": "did:web:writerslogic.com#platform-ca",
+      "type": "WritersProofPlatformCA",
+      "serviceEndpoint": "https://writerslogic.com/.well-known/platform-ca",
+      "description": "WritersProof Platform Root CA (Ed25519) — certificate issuance for platform credentials; CRL at https://writerslogic.com/.well-known/platform-ca/crl"
+    },
+    {
+      "id": "did:web:writerslogic.com#notarization",
+      "type": "WritersProofNotarizationCA",
+      "serviceEndpoint": "https://writerslogic.com/.well-known/notarization",
+      "description": "Notarization countersignature identity (did:web:api.writersproof.com)"
+    },
+    {
+      "id": "did:web:writerslogic.com#ark",
+      "type": "ARKNamespace",
+      "serviceEndpoint": "https://writerslogic.com/ark:56439/",
+      "description": "ARK assigning authority for NAAN 56439; append an assigned name to resolve. Policy at https://writerslogic.com/ark-policy"
+    },
+    {
+      "id": "did:web:writerslogic.com#c2pa-text-binding",
+      "type": "C2PATextSoftBindingEngine",
+      "serviceEndpoint": "https://writerslogic.com/.well-known/c2pa-text-binding/",
+      "description": "WritersLogic core text binding engine — soft-binding computation, aggregation, and manifest recovery",
+      "supportedAlgorithms": [
+        "com.writerslogic.zwc-watermark.1",
+        "com.writerslogic.text-fingerprint.1",
+        "com.writerslogic.zwc-watermark.2",
+        "com.writerslogic.text-structure.1",
+        "com.writerslogic.text-minhash.1",
+        "com.writerslogic.text-watermark-semantic.1"
+      ]
+    },
+    {
+      "id": "did:web:writerslogic.com#c2pa-structured-text",
+      "type": "C2PAStructuredTextHardBinding",
+      "serviceEndpoint": "https://writerslogic.com/.well-known/c2pa-structured-text/",
+      "description": "Structured ASCII armour delimiters and file block bindings"
+    },
+    {
+      "id": "did:web:writerslogic.com#c2pa-unstructured-text",
+      "type": "C2PAUnstructuredTextBinding",
+      "serviceEndpoint": "https://writerslogic.com/.well-known/c2pa-unstructured-text/",
+      "description": "Hard binding for unstructured natural-language text"
+    },
+    {
+      "id": "did:web:writerslogic.com#c2pa-fonts",
+      "type": "C2PAFontGlyphWatermarking",
+      "serviceEndpoint": "https://writerslogic.com/.well-known/c2pa-fonts/",
+      "description": "Font and glyph provenance bindings"
+    },
+    {
+      "id": "did:web:writerslogic.com#c2pa-html",
+      "type": "C2PAHtmlDOMProvenance",
+      "serviceEndpoint": "https://writerslogic.com/.well-known/c2pa-html/",
+      "description": "C2PA A.7 HTML embedding (script/link manifest transport)"
+    },
+    {
+      "id": "did:web:writerslogic.com#c2pa-http",
+      "type": "C2PAHttpHeaderProvenance",
+      "serviceEndpoint": "https://writerslogic.com/.well-known/c2pa-http/",
+      "description": "HTTP transport and header-level provenance delivery"
+    },
+    {
+      "id": "did:web:writerslogic.com#c2pa-ml",
+      "type": "C2PAMachineLearningTextTelemetry",
+      "serviceEndpoint": "https://writerslogic.com/.well-known/c2pa-ml/",
+      "description": "Machine-learning text telemetry and watermark tooling"
+    },
+    {
+      "id": "did:web:writerslogic.com#c2pa-vtt",
+      "type": "C2PAVttSubtitleBinding",
+      "serviceEndpoint": "https://writerslogic.com/.well-known/c2pa-vtt/",
+      "description": "WebVTT caption and subtitle track binding"
+    },
+    {
+      "id": "did:web:writerslogic.com#c2pa-warc",
+      "type": "C2PAWarcWebArchiveTracking",
+      "serviceEndpoint": "https://writerslogic.com/.well-known/c2pa-warc/",
+      "description": "ISO 28500 WARC web-archive capture provenance"
+    },
+    {
+      "id": "did:web:writerslogic.com#c2pa-zip",
+      "type": "C2PAZipArchiveEncapsulation",
+      "serviceEndpoint": "https://writerslogic.com/.well-known/c2pa-zip/",
+      "description": "ZIP container binding and manifest routing"
+    }
+  ]
+}

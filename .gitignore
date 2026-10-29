@@ -7,3 +7,8 @@ node_modules/
 
 # MCP and tooling scratch
 .playwright-mcp/
+
+# Investigation working data stays local; only the curated keep-set under
+# investigations/san-diego-accountability/ is tracked.
+investigations/*
+!investigations/san-diego-accountability/

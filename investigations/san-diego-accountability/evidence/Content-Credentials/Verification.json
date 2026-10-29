@@ -1,0 +1,84 @@
+{
+  "status": "passed",
+  "verified_at": "2026-10-19T10:31:36.339598+00:00",
+  "assets": [
+    {
+      "file": "Council-Decision-Brief.pdf",
+      "signed_sha256": "52853804e5cefc50757e34b4e1edc8d3d79dafb5b29c7f39cab255ccaf7a773f",
+      "original_sha256": "da9c2fd79154497f83688ba352141ea22e4f7e67a96945ec88d48146ea7f4242",
+      "physical_pages": 2,
+      "manifest_sha256": "90a4245f961533acce69a61d55ab3106cda76986639e097ac467335eab813440",
+      "proof": "Council-Decision-Brief/Signing-Verification.json"
+    },
+    {
+      "file": "Targeted-Series/Follow-the-Charge.pdf",
+      "signed_sha256": "2a6475a5d76e077c5f3e4e0abf60ea5ee7f1acef94b116ec6d9b3a634ff40d50",
+      "original_sha256": "4df44476e1388159e234bc84aa41ddf3827e1b3f054948aebba72b1679c62ce2",
+      "physical_pages": 9,
+      "manifest_sha256": "ca77e0164f405f8219250ff49f941d86ade72a9d94ac932714cb2f4530e1d0c8",
+      "proof": "Follow-the-Charge/Signing-Verification.json"
+    },
+    {
+      "file": "Targeted-Series/Funded-Handoff.pdf",
+      "signed_sha256": "922165469b354d9363656464e58e9cdd678709f224c6d08446af133e09fc4de3",
+      "original_sha256": "25f9f4b5b4896f233c3c9113f9cbcabc2bf576e9b80706fefd43763dbde6370e",
+      "physical_pages": 7,
+      "manifest_sha256": "5cd69691b20679d4ecdc107a825e649ef82f80ce976f2151d21ec1432aa6fbc5",
+      "proof": "Funded-Handoff/Signing-Verification.json"
+    },
+    {
+      "file": "Targeted-Series/Outcome-Numbers.pdf",
+      "signed_sha256": "d852d9d3469da4a71bb19b37f4214525f2f97f4565e6407cdda1cdbfbfcaf2f6",
+      "original_sha256": "e408c2871a76baebab72f7427437c8d8581c8577f2067a7c05ee2bb1d88a16be",
+      "physical_pages": 8,
+      "manifest_sha256": "d25b86bfbb2a584c7296f7edc3579fc1b5eddac9407f770b2e69c9efd1293d01",
+      "proof": "Outcome-Numbers/Signing-Verification.json"
+    },
+    {
+      "file": "San-Diego-Homelessness-Accountability.pdf",
+      "signed_sha256": "5c81aba50ab8d785655ef0f678f7561f4230ad6764bb8010a949f2f83d5cd8e8",
+      "original_sha256": "37377fad3aa526899369f40f67f6283428ced64f0dd51aa48408e0716303d7e8",
+      "physical_pages": 92,
+      "manifest_sha256": "b585ea00668dcb287cc062941f6df2ea0c4786697d8bf6f0d1a996ac252490e9",
+      "proof": "San-Diego-Homelessness-Accountability/Signing-Verification.json"
+    },
+    {
+      "file": "Structural-Budget-Recovery/San-Diego-Structural-Budget-Recovery-Plan.pdf",
+      "signed_sha256": "4b777d68628eb20e04f266ec00ef16e524462a1cb3c557fa8aba644c86fe0a7b",
+      "original_sha256": "9ddfa26e9c531a20d3e86e528793394cd34bc0d9ce706a5a21e720532fb87c1f",
+      "physical_pages": 26,
+      "manifest_sha256": "6ef3f5288e28f3e4ee8441749757494172d396babc7417b0819a1632d94b485a",
+      "proof": "San-Diego-Structural-Budget-Recovery-Plan/Signing-Verification.json"
+    },
+    {
+      "file": "Targeted-Series/Service-Quality.pdf",
+      "signed_sha256": "bd2bcceb7dd5707c559c03376ed5a4e0671bc2e191db2197d7202642327a80a4",
+      "original_sha256": "42dc5bf3159be2c7893ddb97c9e4e3749c635cd5c3198f089b1e92439122c849",
+      "physical_pages": 8,
+      "manifest_sha256": "b9dd9bd7cd279b657ed6e67bfe69a69b5ccc059bfb97b1a30d6684c5ba67924a",
+      "proof": "Service-Quality/Signing-Verification.json"
+    },
+    {
+      "file": "Targeted-Series/Shelter-Access.pdf",
+      "signed_sha256": "7ccc2f2405e54b2b84fe6fef3550aec030795a33a471dbc288dce749a76f7be7",
+      "original_sha256": "9f7c85643ce400c8c2056f02d3a13bd1ca018ad9a289c2f3fd35f6ddd0eae43f",
+      "physical_pages": 8,
+      "manifest_sha256": "370d36ea1d73ddd956aec649ad2b33850244728236b735a3905f952e153b5a8a",
+      "proof": "Shelter-Access/Signing-Verification.json"
+    }
+  ],
+  "declared_c2pa_specification": "2.4.0",
+  "sdk": "c2pa-rs 0.89.1",
+  "independent_reader": "c2patool 0.26.68",
+  "standards": [
+    "C2PA 2.4",
+    "CAWG identity assertion (X.509 COSE; roles and bound assertion references)",
+    "CAWG metadata assertion",
+    "RFC3161 timestamps",
+    "did:web publisher and executive identities"
+  ],
+  "check_scope": "Every authored report PDF: both cryptographic signatures, PDF byte binding, assertion hashes, valid timestamp, unchanged original page text/streams/pixels/links/bookmarks and a deliberate byte-tamper rejection.",
+  "trust_scope": "WritersLogic CA is publisher-controlled and absent from the retrieved official C2PA trust list. Default readers report signer trust warnings; DigiCert timestamp signatures validate with a separate timestamp-trust warning. These are preserved, not relabeled as public accreditation.",
+  "exclusions": "Preserved third-party source PDFs are unchanged originals/excerpts; no author signature is added to agency records. No human-only composition, typing proof, hardware custody or formal C2PA generator conformance is asserted.",
+  "current_revision_check": "Four revised PDFs re-signed with timestamp, identity, preservation and tamper checks; four unchanged PDFs retain their verified signatures and current reading-edition hashes."
+}

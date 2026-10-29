@@ -1,0 +1,200 @@
+{
+  "source": "Structural-Budget-Recovery/San-Diego-Structural-Budget-Recovery-Plan.pdf",
+  "original_sha256": "9ddfa26e9c531a20d3e86e528793394cd34bc0d9ce706a5a21e720532fb87c1f",
+  "signed_sha256": "4b777d68628eb20e04f266ec00ef16e524462a1cb3c557fa8aba644c86fe0a7b",
+  "signed_file": "Structural-Budget-Recovery/San-Diego-Structural-Budget-Recovery-Plan.pdf",
+  "pages": [
+    {
+      "page": 1,
+      "pixels_sha256": "b5a0782d81e82aef43ccd0094bf0f1450d91651a459ecb5a8eaa24df779155c1",
+      "content_sha256": "fee597591418c8b39ddf6aba1edea20fdba0b0272b200337e51b1f6d999604f7"
+    },
+    {
+      "page": 2,
+      "pixels_sha256": "1b2aca3670df03cdeb050161cec176d3ff34e8a803e29418cf629a01dba1a358",
+      "content_sha256": "092bca2553a094aa66ccd6a8a14315a70f8594d4c94d3436320b59be7408cc59"
+    },
+    {
+      "page": 3,
+      "pixels_sha256": "eb1a449040813525933dd5ed15c9f40f4db5806bd3e13be4d0971b3bb0256cb5",
+      "content_sha256": "0645ae85f48c5f7bc853073eb84e76b9e8306321086ce683bdd1bbd0852e774c"
+    },
+    {
+      "page": 4,
+      "pixels_sha256": "9a15c084eb5e461df1c3ed0f724a7f76e0ad417b8351df028f7f685c9b065901",
+      "content_sha256": "16a292f7fde484feb1ad8a3bc57cf669f281b53d061921a3547bca8ecd664c81"
+    },
+    {
+      "page": 5,
+      "pixels_sha256": "904a97ae10ff45ac82a18a6ec133e53d4d3ab7076e97ac68ebe57ca0af7c7587",
+      "content_sha256": "c9a2f27018c007319bbd4870aef7e34083b238066926a2857b4f2e535e24227b"
+    },
+    {
+      "page": 6,
+      "pixels_sha256": "a5103f0d58d4a7915151edab62fe5d822e16c1d1de9921ef111d49e385dfdea4",
+      "content_sha256": "78a28179d18e0a63a8b6552d7dc4a95d3ac2421a5af202ae70a306752038e3ac"
+    },
+    {
+      "page": 7,
+      "pixels_sha256": "a5660cf1cd7f9b18710720dbca49c580fc0fe0f72a6d982cf55fc4fa520bc659",
+      "content_sha256": "bf7b90ce530021d198359fb41a3da9a75264057c88736651dabd46016240aa20"
+    },
+    {
+      "page": 8,
+      "pixels_sha256": "41c7963784071c3413863e19693bcc2e8a90b1065b8f84e9e43eee97444e5949",
+      "content_sha256": "3f0a0f88eddceaf28ecc6d9a3d8364942be547f1f12da14aa3243f1316cb68ea"
+    },
+    {
+      "page": 9,
+      "pixels_sha256": "0a79fa6694eb90f2cadfc2833bbb2b0cd278b72c4cf85933bb69d6cfcf6af199",
+      "content_sha256": "8c9a38657112074dc836b45847a5a7d52df15b2ad27cc90dfc468b7993fe9a2e"
+    },
+    {
+      "page": 10,
+      "pixels_sha256": "8bd15467f9552d4c8dd138b8254b79f7ce5641e1f194fb2b22c342f0017d8475",
+      "content_sha256": "7aadbb38c3f211387a10ebb562d4b6883dd19a89203043ac67e96f73c1934e0a"
+    },
+    {
+      "page": 11,
+      "pixels_sha256": "e4bc3e890fca8796d26a49c5d66bdfc69c5a7cf003753537d38d0c096795b5cb",
+      "content_sha256": "52d3c961736ce4b60ce2c84efe490b5e4e1da7646061d845517b8bbb46b091a8"
+    },
+    {
+      "page": 12,
+      "pixels_sha256": "b05e7ee1d52568afd5b0315991a4e7b889456085c97bfdb8da30eab47a0db8a7",
+      "content_sha256": "49a534373eb0f79b787584c7ebd6b52c0d4f9e4f203cccdaedf9c064a7a4da30"
+    },
+    {
+      "page": 13,
+      "pixels_sha256": "1559ed847db73e8dfca51cf0f2817fe8a91fecae042d368061b3297ffef46579",
+      "content_sha256": "ce7b8ba1d3527d894245b3699b85cbe86f157e711b58a90f82a9a4bf678361af"
+    },
+    {
+      "page": 14,
+      "pixels_sha256": "4084a68f4024f7cf25d82733084ed0ce0959dd2ed0d169ed702abe38e2469030",
+      "content_sha256": "f9df831020ef8cb44619123e3f451428ce4f6bb3b0f9d2ddb021f7e7aad38bd8"
+    },
+    {
+      "page": 15,
+      "pixels_sha256": "3faca952f12df136aec51006be350479d5da6e06688ef6f77c53ca1bedeadc7b",
+      "content_sha256": "fcf7dba137f05d264050ef8e22ae97fd14d434c64b0d340dcae33ac80638f8c6"
+    },
+    {
+      "page": 16,
+      "pixels_sha256": "ce8fc10b71b9f1252b531da82e883c23a8f6a9b4f2af87b9d4b0cb301a368760",
+      "content_sha256": "ba340b393235d981f58c7cb1bf832c6e5a85df421aaa705f97b682b535a7f199"
+    },
+    {
+      "page": 17,
+      "pixels_sha256": "6b544dd90138cb58b5dd6302a1cb96a23fefc0dfab924e82b8b6ec3bf93cbac1",
+      "content_sha256": "8dc40d4b008e22f847f474193cd94b097b7c00729d6abb8655ee212dd02d04be"
+    },
+    {
+      "page": 18,
+      "pixels_sha256": "b6f557fad8ce1761791bbe845000931f6a670f4235a93072e07bac00a1f688ba",
+      "content_sha256": "0efcbef4eda3b52a5ff1f383e506c006b9da5412468e227aa3f449ac0cd70748"
+    },
+    {
+      "page": 19,
+      "pixels_sha256": "547df3cc4e27f61e4b0c6170187d543b56c8a73cbcfbdad411a2cc0665a4666c",
+      "content_sha256": "be5e1281e7ef90e529ace442983e103e939fdfd7fc6fddcb78bd6365090d17af"
+    },
+    {
+      "page": 20,
+      "pixels_sha256": "4df997cb756ee82851500963222e9c4e96ce7951283fcf9a6e1fecb50280d67c",
+      "content_sha256": "9ab6fb448d16fdfc191d9ca26f6f46157cf1cf5f90240bfd118eaf4a0f52d1ea"
+    },
+    {
+      "page": 21,
+      "pixels_sha256": "e0894621d35591528a4d1b7abe0ab3464b075a6106fe74d46173764440cd72e3",
+      "content_sha256": "181bd4704445eb368e89988e6d1d8ac9917d1ff7b86d1a97431f4074c7dd3158"
+    },
+    {
+      "page": 22,
+      "pixels_sha256": "f1bc8a07e61d6f147b5fb01d512378ec49dca3d2ead64bf4bef5485f56a50234",
+      "content_sha256": "d4452ce1a5bf5ea1e7a6cf1a2d12b46bb714563ba671be513fad42fe797db360"
+    },
+    {
+      "page": 23,
+      "pixels_sha256": "7f03509b29ad01c7afb0d0c259f53253d49f86af7a74d7ac5506bccd2bfa9348",
+      "content_sha256": "92e5a285deb00780c489b058748960111d56b5acbb97fa169df8c46e56314dfd"
+    },
+    {
+      "page": 24,
+      "pixels_sha256": "89ee23f32ba4384b5e26078c17efa54976f913b0878560c8b81aa4d35d4c91cb",
+      "content_sha256": "1b64c52da7576a2b209fd7ab784ea6750ed719c1a5bf56e7361d56e2d1fa3d60"
+    },
+    {
+      "page": 25,
+      "pixels_sha256": "f949bf79905748e8b01b18a5ebf616668562646475fa7a94fcf4695837d16314",
+      "content_sha256": "98494b6f31d4a91356a0e48994179096650cd87a6786fec3caae553d4d8f8b0a"
+    },
+    {
+      "page": 26,
+      "pixels_sha256": "2dd9cac515d9106861a3d9ca166bab2e0ab696db4261bc3f141047e22177b1fe",
+      "content_sha256": "65adbcd1807c85c827aa2f1e05a9271787e54f0eee9d2debea087b6e1c314b5a"
+    }
+  ],
+  "manifest_sha256": "6ef3f5288e28f3e4ee8441749757494172d396babc7417b0819a1632d94b485a",
+  "manifest_definition_sha256": "53d1ffb88e0d9c5a35c3483f36696b62eb7ab27ac132af52d45be758bb8852a9",
+  "status": "passed",
+  "validation": {
+    "default-trust": {
+      "state": "Valid",
+      "successes": [
+        "assertion.dataHash.match",
+        "assertion.hashedURI.match",
+        "cawg.identity.well-formed",
+        "claimSignature.insideValidity",
+        "claimSignature.validated",
+        "timeStamp.validated"
+      ],
+      "trust_failures": [
+        {
+          "code": "signingCredential.untrusted",
+          "url": "self#jumbf=/c2pa/urn:c2pa:5629962b-7976-4892-9cd9-cc84a3b618c5/c2pa.signature",
+          "explanation": "signing certificate untrusted"
+        },
+        {
+          "code": "signingCredential.untrusted",
+          "url": "self#jumbf=/c2pa/urn:c2pa:5629962b-7976-4892-9cd9-cc84a3b618c5/c2pa.assertions/cawg.identity",
+          "explanation": "signing certificate untrusted"
+        }
+      ],
+      "informational": [
+        {
+          "code": "timeStamp.untrusted",
+          "url": "self#jumbf=/c2pa/urn:c2pa:5629962b-7976-4892-9cd9-cc84a3b618c5/c2pa.signature",
+          "explanation": "timestamp cert untrusted: DigiCert SHA256 RSA4096 Timestamp Responder 2026 1"
+        }
+      ]
+    },
+    "publisher-trust": {
+      "state": "Valid",
+      "successes": [
+        "assertion.dataHash.match",
+        "assertion.hashedURI.match",
+        "cawg.identity.well-formed",
+        "claimSignature.insideValidity",
+        "claimSignature.validated",
+        "signingCredential.trusted",
+        "timeStamp.validated"
+      ],
+      "trust_failures": [
+        {
+          "code": "signingCredential.untrusted",
+          "url": "self#jumbf=/c2pa/urn:c2pa:5629962b-7976-4892-9cd9-cc84a3b618c5/c2pa.assertions/cawg.identity",
+          "explanation": "signing certificate untrusted"
+        }
+      ],
+      "informational": [
+        {
+          "code": "timeStamp.untrusted",
+          "url": "self#jumbf=/c2pa/urn:c2pa:5629962b-7976-4892-9cd9-cc84a3b618c5/c2pa.signature",
+          "explanation": "timestamp cert untrusted: DigiCert SHA256 RSA4096 Timestamp Responder 2026 1"
+        }
+      ]
+    },
+    "tamper_detection": "assertion.dataHash.mismatch"
+  }
+}

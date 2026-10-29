@@ -8,3 +8,6 @@ onrecord-studio/src-tauri/fixtures/** -text
 
 # Vendored upstream sources stay byte-identical to upstream.
 onrecord-studio/vendor/** -text
+
+# Published investigation deliverables stay byte-identical to the released files.
+investigations/** -text

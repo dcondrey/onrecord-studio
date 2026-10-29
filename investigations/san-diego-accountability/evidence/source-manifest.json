@@ -1,0 +1,209 @@
+[
+  {
+    "id": "S02",
+    "title": "OCA 24-08: Police overtime",
+    "public_url": "https://www.sandiego.gov/sites/default/files/2024-02/24-08_performance_audit_sdpd_ot.pdf",
+    "retrieved_at": "2026-10-12T22:08:32.523489+00:00",
+    "sha256": "163b9cd057b29b05b8242b10c8bb674549d258cb4e2225ec7e5bc8771c0dd664",
+    "bytes": 3910824,
+    "pages": 51
+  },
+  {
+    "id": "S01",
+    "title": "OCA-26-07: Response to homeless encampments",
+    "public_url": "https://www.sandiego.gov/sites/default/files/2026-04/performance-audit-of-the-city-s-response-to-homeless-encampments-since-the-unsafe-camping-ordinance.pdf",
+    "retrieved_at": "2026-10-12T22:08:33.023984+00:00",
+    "sha256": "f1380ba3cc650087bc307e3434ce160c8903b3fb8bc6155fefdc7a0814142759",
+    "bytes": 7508082,
+    "pages": 69
+  },
+  {
+    "id": "S04",
+    "title": "City encampment cleanup and abatement procedures, current webpage",
+    "public_url": "https://www.sandiego.gov/homelessness-strategies-and-solutions/services/abatement",
+    "retrieved_at": "2026-10-12T22:08:33.426683+00:00",
+    "sha256": "16fd0365a34797f4b7f35a1928474abf26458f78833b54cabe8f84ef00279df9",
+    "bytes": 145428,
+    "pages": ""
+  },
+  {
+    "id": "S05",
+    "title": "City statement: FY2026 midyear overtime projection",
+    "public_url": "https://www.insidesandiego.org/san-diego-police-department-brings-overtime-budget-mid-year-report",
+    "retrieved_at": "2026-10-12T22:08:33.673581+00:00",
+    "sha256": "0b0b3991c4038e68bbd72707656c72a720405f05f82c9c83752bccc85d63dc83",
+    "bytes": 32104,
+    "pages": ""
+  },
+  {
+    "id": "S03",
+    "title": "IBA 26-09: Police FY2026 budget analysis",
+    "public_url": "https://www.sandiego.gov/sites/default/files/2026-03/26-09-analysis-of-the-police-department-s-fiscal-year-2026-budget.pdf",
+    "retrieved_at": "2026-10-12T22:08:34.009023+00:00",
+    "sha256": "2192c3580131731f5625ebe2caa73171f1289cca49e23c0042fa0493412576d5",
+    "bytes": 5314948,
+    "pages": 101
+  },
+  {
+    "id": "S07",
+    "title": "Police overtime reporting internal orders, March 2025 release",
+    "public_url": "https://www.sandiego.gov/sites/default/files/2025-03/tb-25-01-updated-internal-orders-for-overtime-reporting-redacted.pdf",
+    "retrieved_at": "2026-10-12T22:08:34.504674+00:00",
+    "sha256": "818f134fadfe28992ea982fe5224de84dd352d8d55e12a958a4b1f2256ed95cf",
+    "bytes": 274744,
+    "pages": 10
+  },
+  {
+    "id": "S06",
+    "title": "State Auditor 2023-102.2",
+    "public_url": "https://www.auditor.ca.gov/reports/2023-102-2/",
+    "retrieved_at": "2026-10-12T22:08:34.561708+00:00",
+    "sha256": "c4fe308243500143beb73777278a2ac0d8fd75e22ac95ef3f710b0fcf9d7d6b9",
+    "bytes": 469847,
+    "pages": ""
+  },
+  {
+    "id": "S09",
+    "title": "FY2027 adopted Homelessness Strategies and Solutions budget",
+    "public_url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v2hssd.pdf",
+    "retrieved_at": "2026-10-12T22:09:03.400769+00:00",
+    "sha256": "2f5492c8928363253b953bb56803c2ef30b3b27c0aea5d15682586cb33871f55",
+    "bytes": 1698863,
+    "pages": 9
+  },
+  {
+    "id": "S08",
+    "title": "FY2027 adopted Police budget",
+    "public_url": "https://www.sandiego.gov/sites/default/files/2026-08/fy27ab_v2police.pdf",
+    "retrieved_at": "2026-10-12T22:09:03.756339+00:00",
+    "sha256": "fcd3fc8d233c21f4c09a568db0e13b14e5460be4366000e77e03c151c2d6283d",
+    "bytes": 1363148,
+    "pages": 21
+  },
+  {
+    "id": "S11",
+    "title": "City Attorney 2022 homelessness litigation status memorandum",
+    "public_url": "https://docs.sandiego.gov/memooflaw/MS-2022-6.pdf",
+    "retrieved_at": "2026-10-12T22:10:21.095522+00:00",
+    "sha256": "64524b3981161e35292da659faa35efa882d288aeafd92f6b9e18739ebf8a2a8",
+    "bytes": 66476,
+    "pages": 4
+  },
+  {
+    "id": "S10",
+    "title": "Unsafe camping ordinance as adopted 2023",
+    "public_url": "https://docs.sandiego.gov/council_reso_ordinance/rao2023/O-21674.pdf",
+    "retrieved_at": "2026-10-12T22:10:21.607477+00:00",
+    "sha256": "e391d27b29e0c8b2f1997c189bd1e399e386f85e28f88efdb1dc57e6ff46ead1",
+    "bytes": 1972867,
+    "pages": 52
+  },
+  {
+    "id": "NR36242342",
+    "title": "ESD Abatement Impound Log 2022-07-01 to 2023-10-04",
+    "public_url": "https://sandiego.nextrequest.com/documents/36242342",
+    "retrieved_at": "2026-10-12T22:13:50.586836+00:00",
+    "sha256": "6e4fe3c3c87f1440c4e1e626ed4a37a9d23c3f94d515887dfdd11530f255b0df",
+    "bytes": 196394,
+    "pages": 2
+  },
+  {
+    "id": "NR36242343",
+    "title": "ESD Abatement Impound Logs 2023-10-01 to release",
+    "public_url": "https://sandiego.nextrequest.com/documents/36242343",
+    "retrieved_at": "2026-10-12T22:13:50.745444+00:00",
+    "sha256": "69adbcb5400a7184cc3efc5de5e63a84223fae1a523c2c8ece63a0d4a08c3404",
+    "bytes": 140663,
+    "pages": 1
+  },
+  {
+    "id": "NR25010772",
+    "title": "ESD Impound Log FY18-23",
+    "public_url": "https://sandiego.nextrequest.com/documents/25010772",
+    "retrieved_at": "2026-10-12T22:13:51.201648+00:00",
+    "sha256": "134cf5ccb8f82e701c71f8fc112be441c020a948cfd6b3279c8ea0e5a173116d",
+    "bytes": 527669,
+    "pages": 30
+  },
+  {
+    "id": "NR37418616",
+    "title": "ESD 24 Hour Posting Notice 2023-08-03",
+    "public_url": "https://sandiego.nextrequest.com/documents/37418616",
+    "retrieved_at": "2026-10-12T22:13:51.528113+00:00",
+    "sha256": "bbfb9699583dd460f5c54b61a4f289578f6fab12837d091d8d99a80bd69a8059",
+    "bytes": 104574,
+    "pages": 1
+  },
+  {
+    "id": "NR37418617",
+    "title": "ESD Encampment Abatement Procedures 2023-08-08",
+    "public_url": "https://sandiego.nextrequest.com/documents/37418617",
+    "retrieved_at": "2026-10-12T22:13:52.014076+00:00",
+    "sha256": "0ee94108c9e915cde9c5b173f2a3a33765246d31a262cc360f0723e6a7ee6520",
+    "bytes": 1057875,
+    "pages": 10
+  },
+  {
+    "id": "NR37418618",
+    "title": "ESD Impounded Property Notice 2023-08-03",
+    "public_url": "https://sandiego.nextrequest.com/documents/37418618",
+    "retrieved_at": "2026-10-12T22:13:52.152539+00:00",
+    "sha256": "5fa45da21775ef9160f36e9e5c0a48f3ddea2e9890cb806483e3b778d46d2d28",
+    "bytes": 96297,
+    "pages": 1
+  },
+  {
+    "id": "S13",
+    "title": "Dee and Pyne (2022): Denver STAR quasi-experimental evaluation",
+    "public_url": "https://tom-dee.github.io/files/sciadv.abm2106.pdf",
+    "retrieved_at": "2026-10-12T22:19:36.427551+00:00",
+    "sha256": "022352f4eb70aa3af604beb278204301ef143786804f60349772d043c63782fa",
+    "bytes": 1437354,
+    "pages": 10
+  },
+  {
+    "id": "S12",
+    "title": "SDPD Neighborhood Policing Operations Manual 2019 (redacted)",
+    "public_url": "https://www.sandiego.gov/sites/default/files/neighborhood_policing_operations_manual_2019_redacted.pdf",
+    "retrieved_at": "2026-10-12T22:19:36.642586+00:00",
+    "sha256": "0fb20df8bdf366e0cd1cf0f7838be4e5852473b2f825c909434149e1dd6eba0b",
+    "bytes": 514085,
+    "pages": 60
+  },
+  {
+    "id": "S14",
+    "title": "County of San Diego Mobile Crisis Response Teams",
+    "public_url": "https://www.sandiegocounty.gov/mcrt/",
+    "retrieved_at": "2026-10-12T22:19:36.845532+00:00",
+    "sha256": "fbc14978900d34cde47d8ce4239a5923acd9e028841766a2fe4278880c3a6384",
+    "bytes": 84242,
+    "pages": ""
+  },
+  {
+    "id": "DATA-BUDGET",
+    "title": "City operating budget export, archived 2026-10-07",
+    "public_url": "https://seshat.datasd.org/operating_budget/budget_operating_datasd.csv",
+    "retrieved_at": "2026-10-07T21:42:35.742381Z",
+    "sha256": "4ad8a734cb351a7ccae7939ea9c8076cf7e30a4d4f2a8c10f45852cb042c5fe5",
+    "bytes": "",
+    "pages": ""
+  },
+  {
+    "id": "DATA-ACTUAL",
+    "title": "City operating actuals export, archived 2026-10-07; partial archive",
+    "public_url": "https://seshat.datasd.org/operating_actuals/actuals_operating_datasd.csv",
+    "retrieved_at": "2026-10-07T21:46:33.422899Z",
+    "sha256": "53cfc7488c40c2d3b654c64ba8599bc11a4086fa5efe403371c38eff78dd2143",
+    "bytes": "",
+    "pages": ""
+  },
+  {
+    "id": "NR58632019",
+    "title": "Abatements completed 2023-07-31 to 2026-01-28: metadata only, contents not acquired",
+    "public_url": "https://sandiego.nextrequest.com/requests/26-772",
+    "retrieved_at": "",
+    "sha256": "NOT ACQUIRED",
+    "bytes": "",
+    "pages": ""
+  }
+]

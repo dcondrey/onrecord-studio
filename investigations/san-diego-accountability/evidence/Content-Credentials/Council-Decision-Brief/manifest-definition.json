@@ -1,0 +1,464 @@
+{
+  "claim_generator_info": [
+    {
+      "name": "OnRecord research report publisher",
+      "version": "1.3",
+      "specVersion": "2.4.0"
+    }
+  ],
+  "title": "Council decision brief · How Help Is Offered Matters · SDHA-2026-01 v1.3",
+  "format": "application/pdf",
+  "assertions": [
+    {
+      "label": "c2pa.actions",
+      "created": true,
+      "data": {
+        "actions": [
+          {
+            "action": "c2pa.created",
+            "when": "2026-10-19T08:21:11.790369Z",
+            "softwareAgent": {
+              "name": "OnRecord report release signing tool",
+              "version": "0.1.0"
+            },
+            "digitalSourceType": "http://cv.iptc.org/newscodes/digitalsourcetype/compositeWithTrainedAlgorithmicMedia",
+            "description": "Assembled an author-directed, AI-assisted research publication from the identified reviewed render and documentary evidence. Earlier unsignaled editing history is not reconstructed."
+          }
+        ],
+        "allActionsIncluded": false
+      }
+    },
+    {
+      "label": "cawg.metadata",
+      "data": {
+        "@context": {
+          "dc": "http://purl.org/dc/elements/1.1/",
+          "dcterms": "http://purl.org/dc/terms/",
+          "schema": "https://schema.org/"
+        },
+        "dc:title": [
+          "Council decision brief · How Help Is Offered Matters · SDHA-2026-01 v1.3"
+        ],
+        "dc:creator": [
+          "David L. Condrey"
+        ],
+        "dc:identifier": [
+          "SDHA-2026-01/v1.3/Council-Decision-Brief"
+        ],
+        "dc:language": [
+          "en-US"
+        ],
+        "dc:rights": "Original report text, figures and analysis: David L. Condrey, CC BY 4.0. Third-party records retain their own rights and status.",
+        "dcterms:license": "https://creativecommons.org/licenses/by/4.0/",
+        "schema:version": "1.3",
+        "schema:author": {
+          "@id": "did:web:writerslogic.com:executives:dcondrey",
+          "schema:name": "David L. Condrey"
+        },
+        "schema:publisher": {
+          "@id": "did:web:writerslogic.com",
+          "schema:name": "WritersLogic Inc."
+        }
+      }
+    },
+    {
+      "label": "com.writerslogic.research-provenance",
+      "data": {
+        "version": 1,
+        "report_id": "SDHA-2026-01",
+        "edition": "1.3",
+        "physical_pages": 2,
+        "unsigned_render_sha256": "da9c2fd79154497f83688ba352141ea22e4f7e67a96945ec88d48146ea7f4242",
+        "reading_edition_sha256": "1b4ab18ff551df32cff1beadb2cee23fd93d24543e291a08aca6545d0b99e9a4",
+        "normalized_text_sha256": "a1bcf386441cb883e38142e82241b06e385f8b6ca74d24de85be871248c5a54d",
+        "text_digest_method": "PyMuPDF extracted page text in order; Unicode NFKC; whitespace collapsed to single spaces; UTF-8; SHA-256. This is a custom research digest, not a registered C2PA soft-binding algorithm.",
+        "source_directory_sha256": "f27f061a2ad734f323a766f1076c2b4f722a4ecbc3984d40cf3e23ec73eac8ed",
+        "publisher_identity_document": "https://writerslogic.com/.well-known/did.json",
+        "author_identity_document": "https://writerslogic.com/executives/dcondrey/did.json",
+        "publisher_did_document_sha256": "2c0ef7a1d192b92a0b1868d4922c13de6be7198a23032a2446ec85446890d874",
+        "executive_did_document_sha256": "5cfcf4401b3588959d81fb804c29d87a72522fcb5f056d77fb2e05a2abaff1da",
+        "published_issuing_certificate": "https://writerslogic.com/.well-known/c2pa/issuing-ca.crt",
+        "published_root_certificate": "https://writerslogic.com/.well-known/c2pa/root-ca.crt",
+        "evidence_scope": "Selected public records, attributed source statements, reproducible calculations and bounded interpretations.",
+        "ai_assistance": {
+          "tool": "OpenAI Codex",
+          "roles": [
+            "research assistance",
+            "drafting",
+            "software generation",
+            "automated verification"
+          ],
+          "human_direction": "David L. Condrey",
+          "human_only_authorship_attestation": false
+        },
+        "release_status": "Prepared with the author manual Zenodo v1.3 upload; no edition DOI assigned at signing.",
+        "current_edition_doi": null,
+        "prior_published_edition": "https://doi.org/10.5281/zenodo.23405739",
+        "report_policy": "Fixed edition; subsequent dataset supplements do not amend this PDF.",
+        "limitations": [
+          "Signatures bind bytes and assertions; they do not establish underlying accounting truth, fraud or a legal conclusion.",
+          "The signed provenance starts at release assembly; earlier unsignaled history and independent human review are not certified.",
+          "Software-held publisher and executive keys are used; hardware attestation and C2PA generator conformance are not claimed."
+        ]
+      }
+    },
+    {
+      "label": "com.writerslogic.source-register",
+      "data": {
+        "version": 1,
+        "hash_algorithm": "sha256",
+        "cited_source_count": 12,
+        "sources": [
+          {
+            "id": "CITY-FY25-CAPER",
+            "title": "FY25 CAPER",
+            "publisher_original": "https://www.sandiego.gov/sites/default/files/2025-09/city-of-san-diego-fy-2025-caper.pdf",
+            "original_sha256": "f5a713989a4809eda3f25608192e23b7c765225c8506e22d85ef7d72a5abcbc3",
+            "selected_copies": [
+              {
+                "included_file": "sources/CITY-FY25-CAPER-excerpt.pdf",
+                "included_sha256": "0a653f1ae3e2fd2ce2968300fe1056f14248adadb1a170bf1112a666e1714df5",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 23
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 24
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "CITY-FY26-CAPER",
+            "title": "FY26 CAPER",
+            "publisher_original": "https://www.sandiego.gov/sites/default/files/2026-09/fy26caper.pdf",
+            "original_sha256": "68c296e942a1c21f0f77d8208240befec33bf97ca93c176e7027af0b13137d31",
+            "selected_copies": [
+              {
+                "included_file": "sources/CITY-FY26-CAPER-excerpt.pdf",
+                "included_sha256": "b5f47a130e5997206ce5e236de5e57f3b75850be9e73a17b4621dc345bcc3e30",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 19
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "EXP-CITY-FY26-MIDYEAR",
+            "title": "CITY FY2026 MIDYEAR",
+            "publisher_original": "https://www.sandiego.gov/sites/default/files/2026-01/fy2026-mid-year-budget-monitoring-report.pdf",
+            "original_sha256": "4b2725a4b5dbe7ac41179144ad444be2281da43d0a8b7359209c2ad1a5dc6787",
+            "selected_copies": [
+              {
+                "included_file": "sources/EXP-CITY-FY26-MIDYEAR-excerpt.pdf",
+                "included_sha256": "c16edd53e87d9e84f4159db0c9fd1dc17750d64b53c52ebb8821868539658193",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 79
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 81
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "EXP-CITY-FY26-Q3",
+            "title": "CITY FY2026 Q3",
+            "publisher_original": "https://www.sandiego.gov/sites/default/files/2026-05/fy2026-third-quarter-budget-monitoring-report.pdf",
+            "original_sha256": "9b5b10ba67793bdb4a2bcadf25bcc725cbbc313599112457aa21998454b1b361",
+            "selected_copies": [
+              {
+                "included_file": "sources/EXP-CITY-FY26-Q3-excerpt.pdf",
+                "included_sha256": "dce164246fe7804a4b680717c15b2a921d2035bdd3ec0ad590ee5c8662a988ca",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 80
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 81
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 82
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "EXP-IBA25-06-MIDYEAR",
+            "title": "IBA25 06 Midyear",
+            "publisher_original": "https://www.sandiego.gov/sites/default/files/2025-02/25-06-iba-review-of-the-fy-2025-mid-year-budget-monitoring-report_2.pdf",
+            "original_sha256": "c40afafcc356aa837f17d9763d9a2b4156bad28f178579a7b3ef14d4c063ae95",
+            "selected_copies": [
+              {
+                "included_file": "sources/EXP-IBA25-06-MIDYEAR-excerpt.pdf",
+                "included_sha256": "9a36ef39501f0fee7675fd4bca0faeffade084872405657e6d962113f47aecb7",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 15
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 16
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 24
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "EXP-IBA25-09-SWIFT",
+            "title": "IBA25 09 Swift",
+            "publisher_original": "https://www.sandiego.gov/sites/default/files/2025-03/25-09-review-of-swift-apartments-bridge-to-home-loan-recommendation-increase_1.pdf",
+            "original_sha256": "04f2900494f84547498eabfac84e918d29ba97c8237154874293701f6ad3bb35",
+            "selected_copies": [
+              {
+                "included_file": "sources/EXP-IBA25-09-SWIFT-excerpt.pdf",
+                "included_sha256": "d94b9a1dc1a8917233b462291b139c1c37a3e4b1fbb20e98fd104973b52d135f",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 2
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 3
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 4
+                  },
+                  {
+                    "included_pdf_page": 5,
+                    "original_pdf_page": 5
+                  },
+                  {
+                    "included_pdf_page": 6,
+                    "original_pdf_page": 6
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "EXP-R316132-SWIFT",
+            "title": "R 316132 Swift",
+            "publisher_original": "https://docs.sandiego.gov/council_reso_ordinance/rao2025/R-316132.pdf",
+            "original_sha256": "bacd9481556daf54a5c639b9147e919c9ae084a5fb3521310069fb207846a03f",
+            "selected_copies": [
+              {
+                "included_file": "sources/EXP-R316132-SWIFT-excerpt.pdf",
+                "included_sha256": "9bb5734da4f556796fec22cc35f767bb22a15aab1815a599c9d04b513de6b2cd",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 4
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 5
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 6
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "FPB02",
+            "title": "IBA26-19 REV FY2027 Homelessness Programs and Funding",
+            "publisher_original": "https://www.sandiego.gov/sites/default/files/2026-09/26-19-fy-2027-homelessness-programs-and-funding_rev.pdf",
+            "original_sha256": "08555a64852d27c8871a8ff3a94fb1d73870fd206cf40dcba91e29697f6a772a",
+            "selected_copies": [
+              {
+                "included_file": "sources/FPB02-excerpt.pdf",
+                "included_sha256": "fcd070c666afe547b4fa8936001fa75c535188eb6e287ac6ea74c2fed5c05148",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 4
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 5
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 7
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "NR53645063-M06",
+            "title": "Signed HHI-21-03.4 Fourth Option and Fifth Amendment, FY2025 PMC Interim Housing",
+            "publisher_original": "https://sdhc.nextrequest.com/documents/53645063",
+            "original_sha256": "cb264d9f9b274292b2edc9c4a94ee3edaf3feac07515774f94037ac2b6dece64",
+            "selected_copies": [
+              {
+                "included_file": "sources/NR53645063-M06-excerpt.pdf",
+                "included_sha256": "e2e0c5f7da99ead1c972f19d518582aead0f1604c2f152ae255a19042797302f",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 2
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 4
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 5
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "S01",
+            "title": "City Auditor, Performance Audit of the City’s Response to Homeless Encampments, 26-07, April 2026",
+            "publisher_original": "https://www.sandiego.gov/sites/default/files/2026-04/performance-audit-of-the-city-s-response-to-homeless-encampments-since-the-unsafe-camping-ordinance.pdf",
+            "original_sha256": "f1380ba3cc650087bc307e3434ce160c8903b3fb8bc6155fefdc7a0814142759",
+            "selected_copies": [
+              {
+                "included_file": "sources/S01-excerpt.pdf",
+                "included_sha256": "238d43d7b3224cc78788ecb37e943a9b6cf0c8eff2efa088a3c8b308fd178afc",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 10
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 39
+                  },
+                  {
+                    "included_pdf_page": 3,
+                    "original_pdf_page": 42
+                  },
+                  {
+                    "included_pdf_page": 4,
+                    "original_pdf_page": 43
+                  },
+                  {
+                    "included_pdf_page": 5,
+                    "original_pdf_page": 44
+                  },
+                  {
+                    "included_pdf_page": 6,
+                    "original_pdf_page": 45
+                  },
+                  {
+                    "included_pdf_page": 7,
+                    "original_pdf_page": 48
+                  },
+                  {
+                    "included_pdf_page": 8,
+                    "original_pdf_page": 49
+                  },
+                  {
+                    "included_pdf_page": 9,
+                    "original_pdf_page": 50
+                  },
+                  {
+                    "included_pdf_page": 10,
+                    "original_pdf_page": 51
+                  },
+                  {
+                    "included_pdf_page": 11,
+                    "original_pdf_page": 52
+                  },
+                  {
+                    "included_pdf_page": 12,
+                    "original_pdf_page": 58
+                  },
+                  {
+                    "included_pdf_page": 13,
+                    "original_pdf_page": 60
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "S03",
+            "title": "Independent Budget Analyst, Analysis of Police FY2026 Budget, report 26-09",
+            "publisher_original": "https://www.sandiego.gov/sites/default/files/2026-03/26-09-analysis-of-the-police-department-s-fiscal-year-2026-budget.pdf",
+            "original_sha256": "2192c3580131731f5625ebe2caa73171f1289cca49e23c0042fa0493412576d5",
+            "selected_copies": [
+              {
+                "included_file": "sources/S03-excerpt.pdf",
+                "included_sha256": "ac06c976dec6f287e6653c6ec58e2f3e30ccb08d27bcec871043a13334bde9f9",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 61
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "SDHC-JUL9-2026-LANDING",
+            "title": "SDHC-JUL9-2026-LANDING",
+            "publisher_original": "https://sdhc.org/07092026-sdhc-special-meeting-minutes-final/",
+            "original_sha256": "096153602e4d52880b10bc44c4e5635cd7899fcbe5daa09b41283de5321b6d0f",
+            "selected_copies": [
+              {
+                "included_file": "sources/SDHC-JUL9-2026-LANDING-excerpt.pdf",
+                "included_sha256": "a4232fa33021130ff405c18967b87de5bf68755fcca8192271b001cc3a4b69de",
+                "original_page_map": [
+                  {
+                    "included_pdf_page": 1,
+                    "original_pdf_page": 1
+                  },
+                  {
+                    "included_pdf_page": 2,
+                    "original_pdf_page": 2
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
