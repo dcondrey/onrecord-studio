@@ -1,5 +1,8 @@
 # OnRecord Studio roadmap and handoff ledger
 
+> **Status: archived October 2026.** Development stopped at version 1.0.0. Open items below are
+> preserved as they stood; nothing here is scheduled.
+
 > Renamed from `docs/TODO.md`, which matched a `todo.md` pattern in a contributor's
 > personal global gitignore and was therefore invisible to every clone.
 

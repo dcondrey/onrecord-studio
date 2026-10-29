@@ -133,7 +133,7 @@ Reading that text shows what it actually is:
 ```
 fill=0.19  |Chief Regional Officer Jonathan Castillo, LCSW|      <- org-chart box
 fill=0.24  |PERFORMANCE OUTCOMES|                                 <- shaded table header
-fill=0.17  |Piedad.Garcia@sdcounty.ca.gov|  |858-514-3191|        <- shaded contact table
+fill=0.17  |first.last@sdcounty.ca.gov|      |858-555-0100|        <- shaded contact table
 ```
 
 Every one is visible content in a shaded cell. The false-positive rate is effectively total, and

@@ -1,6 +1,6 @@
 Final gate output excerpts — September 27, 2026
 
-All listed commands exited successfully. Native commands used CARGO_HOME=/Users/davidcondrey/.local/share/cargo. Native test detail is abbreviated below; the final count is preserved.
+All listed commands exited successfully. Native commands used CARGO_HOME=~/.local/share/cargo. Native test detail is abbreviated below; the final count is preserved.
 
 $ cargo +stable fmt --manifest-path src-tauri/Cargo.toml --check
 (no output)

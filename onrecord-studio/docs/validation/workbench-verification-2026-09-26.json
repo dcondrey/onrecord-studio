@@ -4,7 +4,7 @@
   "gates": [
     {
       "name": "native_tests",
-      "command": "CARGO_HOME=/Users/davidcondrey/.local/share/cargo cargo +stable test --manifest-path src-tauri/Cargo.toml --lib",
+      "command": "CARGO_HOME=~/.local/share/cargo cargo +stable test --manifest-path src-tauri/Cargo.toml --lib",
       "exit_code": 0,
       "details": {
         "passed": 434,
@@ -41,7 +41,7 @@
     },
     {
       "name": "clippy",
-      "command": "CARGO_HOME=/Users/davidcondrey/.local/share/cargo cargo +stable clippy --manifest-path src-tauri/Cargo.toml --lib --all-targets",
+      "command": "CARGO_HOME=~/.local/share/cargo cargo +stable clippy --manifest-path src-tauri/Cargo.toml --lib --all-targets",
       "exit_code": 0,
       "details": {
         "warnings": 0
@@ -61,7 +61,7 @@
     },
     {
       "name": "format",
-      "command": "CARGO_HOME=/Users/davidcondrey/.local/share/cargo cargo +stable fmt --manifest-path src-tauri/Cargo.toml --check",
+      "command": "CARGO_HOME=~/.local/share/cargo cargo +stable fmt --manifest-path src-tauri/Cargo.toml --check",
       "exit_code": 0,
       "details": {},
       "local_log": "/tmp/onrecord-overhaul-fmt-final.log",

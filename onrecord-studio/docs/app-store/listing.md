@@ -197,7 +197,7 @@ FOIA,CPRA,records request,sunshine,open data,journalism,investigative,evidence,a
 | Support URL | `https://github.com/writerslogic/support` (the Help "Support" button opens it; the opener permission already allows it) |
 | Marketing URL | `https://writerslogic.com/onrecord/` |
 | Version | `1.0.0` |
-| Copyright | `2026 WritersLogic` (the bundle says "Copyright © 2026 WritersLogic"; Apple adds the ©). **OWNER:** this holder must match the seller shown on the store. If WritersLogic isn't your legal seller name, use `2026 David Condrey`. |
+| Copyright | `2026 WritersLogic` (the bundle says "Copyright © 2026 WritersLogic"; Apple adds the ©). **OWNER:** this holder must match the seller shown on the store. If WritersLogic is not your legal seller name, use your own legal name. |
 | What's New | Not shown for a first version |
 
 ## 7. Screenshots and icon
@@ -256,10 +256,10 @@ The previous edge-to-edge icon was removed.
 | Field | Value |
 |---|---|
 | Sign-in required | **No.** Untick "Sign-in required". |
-| Contact first name | David |
-| Contact last name | Condrey |
+| Contact first name | **OWNER** |
+| Contact last name | **OWNER** |
 | Contact phone | **OWNER** |
-| Contact email | **OWNER** (`davidcondrey@me.com` is the Apple ID; use the address you read daily) |
+| Contact email | **OWNER** (use an address that is read daily) |
 | Attachment | Optional: a small public PDF so the reviewer can try a local import without network access |
 
 Notes (paste as is; under the 4000 limit):

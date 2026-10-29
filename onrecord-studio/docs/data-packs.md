@@ -179,7 +179,7 @@ column or table here before anything is published.
   `verify_package` over canonical manifest bytes. The private seed is kept in the macOS Keychain
   (service `com.onrecord.pack-publisher`), never in the repository; the public key is pinned in the
   app as `PACK_PUBLIC_KEYS`, separate from the per-installation export key and the entitlement keys.
-- **Hugging Face.** Account `davidcondrey`, organisation `Writerslogic`; packs publish to
+- **Hugging Face.** Organisation `Writerslogic`; packs publish to
   `Writerslogic/onrecord-<pack>` (public datasets; all four packs' manifests resolved on
   2026-10-07: money, reports, enforcement and capacity, each checked file by file against its
   manifest after upload). The app fetches a pack's manifest from
