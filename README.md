@@ -100,5 +100,5 @@ direct download. Store listing material is in `onrecord-studio/docs/app-store/`.
 
 ## Licence
 
-No licence file is present. Until one is added, treat the application source as all-rights-reserved.
+The application source is under the MIT Licence; see [`LICENSE`](LICENSE).
 The published reports under `investigations/` carry their own CC BY 4.0 notice.
